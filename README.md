@@ -15,7 +15,7 @@ The full design is in [docs/spec.md](docs/spec.md). Each phase has an implementa
 |---|---|---|
 | 0 | Skeleton: accounts, projects, job queue, design system, memory test | Done |
 | 1 | Deploy Docker images with domains, HTTPS, storage, live logs and rolling updates | Done |
-| 2 | Deploy from Git, including private GitHub repositories | Planned |
+| 2 | Deploy from Git: Dockerfile and static builds, GitHub App, deploy keys, push webhooks, deploy token | Done |
 | 3 | Databases | Planned |
 | 4 | One-click services | Planned |
 | 5–9 | Backups, multi-server, previews, teams, extras | Planned |
@@ -110,6 +110,29 @@ If any step before 5 fails, the new container is removed and the previous one ke
 
 Apps in one environment reach each other by name (`web:80`) on that network. From outside, the only way in is the proxy.
 
+### Deploying from Git
+
+An app can be built from a repository instead of pulling an image. Step 1 above becomes: clone the branch, then `docker build`. Builds run one at a time per server.
+
+| Repository | How musdash reads it |
+|---|---|
+| Public | Its `https://` address, nothing to set up |
+| Private, on GitHub | A GitHub App: create one under **Sources**, then install it on the repositories |
+| Private, anywhere | A deploy key: generate one under **Sources** and add its public half to the repository |
+
+Two build packs: **Dockerfile** (a path inside the repository) and **Static site** (a directory served by nginx, with an optional single-page-app fallback). Variables marked build-time on the Environment tab are passed as build arguments.
+
+A push deploys the app when auto-deploy is on:
+
+- Through a GitHub App, pushes arrive on their own; nothing to add.
+- Otherwise add a webhook to the repository. The app's Settings page shows the address and the secret; use content type `application/json` and the push event.
+
+A CI pipeline can start a deployment with the app's deploy token, created on the same page:
+
+```bash
+curl -X POST -H "Authorization: Bearer $MUSDASH_DEPLOY_TOKEN" "https://musdash.example.com/api/v1/deploy?uuid=APP_ID"
+```
+
 ## Tests
 
 ```bash
@@ -121,6 +144,12 @@ MUSDASH_DOCKER_TEST=1 go test ./test -run TestDeployWithDocker -v
 ```
 
 The second command runs the end-to-end test against your local Docker: it deploys `nginx:alpine`, fetches it through the proxy, redeploys while sending requests continuously and fails if any request is dropped.
+
+```bash
+MUSDASH_DOCKER_TEST=1 go test ./internal/deploy -run TestGitDeployWithDocker -v
+```
+
+This one clones a local repository with the real `git`, builds it with Docker and serves two commits in turn.
 
 ## Memory
 

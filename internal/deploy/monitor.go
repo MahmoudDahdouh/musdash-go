@@ -41,10 +41,17 @@ func (d *Deployer) applyEvent(ctx context.Context, line []byte) {
 	}
 	status := statusFor(ev.Action)
 	attrs := ev.Actor.Attributes
-	if status == "" || attrs[docker.LabelKind] != db.KindApp {
+	if status == "" {
 		return
 	}
-	if err := d.DB.SetAppStatusIf(ctx, attrs[docker.LabelResource], attrs["name"], status); err != nil {
+	var err error
+	switch attrs[docker.LabelKind] {
+	case db.KindApp:
+		err = d.DB.SetAppStatusIf(ctx, attrs[docker.LabelResource], attrs["name"], status)
+	case db.KindDatabase:
+		err = d.DB.SetDatabaseStatusIf(ctx, attrs[docker.LabelResource], attrs["name"], status)
+	}
+	if err != nil {
 		d.Log.Error("record container event", "err", err)
 	}
 }
@@ -131,6 +138,22 @@ func (d *Deployer) Reconcile(ctx context.Context, server db.Server, dk docker.Cl
 			status = db.AppRunning
 		}
 		if err := d.DB.SetAppStatusIf(ctx, app.ID, app.Container, status); err != nil {
+			return err
+		}
+	}
+	databases, err := d.DB.DatabasesOnServer(ctx, server.ID)
+	if err != nil {
+		return err
+	}
+	for _, m := range databases {
+		if m.Container == "" {
+			continue
+		}
+		status := db.AppExited
+		if state[m.Container] == "running" {
+			status = db.AppRunning
+		}
+		if err := d.DB.SetDatabaseStatusIf(ctx, m.ID, m.Container, status); err != nil {
 			return err
 		}
 	}

@@ -70,6 +70,16 @@
     }, 1500);
   });
 
+  // data-fill="<input id>" with data-value puts the value into that input,
+  // for pick lists such as the repository browser.
+  on("click", "[data-fill]", (el) => {
+    const input = document.getElementById(el.dataset.fill);
+    if (!input) return;
+    input.value = el.dataset.value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.focus();
+  });
+
   // Toasts that confirm an action leave on their own; errors stay until closed.
   const armToasts = (root) =>
     root.querySelectorAll("[data-autodismiss]").forEach((t) => {

@@ -220,15 +220,26 @@ func (d *DB) CreateApp(ctx context.Context, teamID string, a App) (App, error) {
 	if a.HealthTimeout == 0 {
 		a.HealthTimeout = 60
 	}
-	_, err := d.ExecContext(ctx, `INSERT INTO apps (id, environment_id, server_id, name, source, image, port, memory_mb, cpus,
-			health_path, health_cmd, health_timeout, status, created_at, updated_at,
-			repo_url, repo_name, branch, build_pack, dockerfile_path, base_dir, publish_dir, spa_fallback,
-			git_source_id, ssh_key_id, auto_deploy, webhook_secret)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.EnvironmentID, a.ServerID, a.Name, a.Source, a.Image, a.Port, a.MemoryMB, a.CPUs,
-		a.HealthPath, a.HealthCmd, a.HealthTimeout, a.Status, a.CreatedAt, a.UpdatedAt,
-		a.RepoURL, a.RepoName, a.Branch, a.BuildPack, a.DockerfilePath, a.BaseDir, a.PublishDir, a.SPAFallback,
-		a.GitSourceID, a.SSHKeyID, a.AutoDeploy, a.WebhookSecret)
+	err := d.Tx(ctx, func(tx *sql.Tx) error {
+		// Apps and databases share the environment's network names.
+		taken, err := nameTaken(ctx, tx, a.EnvironmentID, a.Name, "")
+		if err != nil {
+			return err
+		}
+		if taken {
+			return ErrNameTaken
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO apps (id, environment_id, server_id, name, source, image, port, memory_mb, cpus,
+				health_path, health_cmd, health_timeout, status, created_at, updated_at,
+				repo_url, repo_name, branch, build_pack, dockerfile_path, base_dir, publish_dir, spa_fallback,
+				git_source_id, ssh_key_id, auto_deploy, webhook_secret)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			a.ID, a.EnvironmentID, a.ServerID, a.Name, a.Source, a.Image, a.Port, a.MemoryMB, a.CPUs,
+			a.HealthPath, a.HealthCmd, a.HealthTimeout, a.Status, a.CreatedAt, a.UpdatedAt,
+			a.RepoURL, a.RepoName, a.Branch, a.BuildPack, a.DockerfilePath, a.BaseDir, a.PublishDir, a.SPAFallback,
+			a.GitSourceID, a.SSHKeyID, a.AutoDeploy, a.WebhookSecret)
+		return err
+	})
 	return a, err
 }
 
@@ -294,13 +305,23 @@ func (d *DB) AppsOnServer(ctx context.Context, serverID string) ([]App, error) {
 const teamApps = ` AND environment_id IN (
 	SELECT e.id FROM environments e JOIN projects p ON p.id = e.project_id WHERE p.team_id = ?)`
 
-// UpdateAppSettings saves the general fields a person edits.
+// UpdateAppSettings saves the general fields a person edits. A new name must
+// be free among the environment's apps and databases.
 func (d *DB) UpdateAppSettings(ctx context.Context, teamID string, a App) error {
-	return affected(d.ExecContext(ctx, `UPDATE apps SET name = ?, image = ?, port = ?, memory_mb = ?, cpus = ?,
-			health_path = ?, health_cmd = ?, health_timeout = ?, start_command = ?, docker_options = ?, updated_at = ?
-		WHERE id = ?`+teamApps,
-		a.Name, a.Image, a.Port, a.MemoryMB, a.CPUs, a.HealthPath, a.HealthCmd, a.HealthTimeout,
-		a.StartCommand, a.DockerOptions, now(), a.ID, teamID))
+	return d.Tx(ctx, func(tx *sql.Tx) error {
+		taken, err := nameTaken(ctx, tx, a.EnvironmentID, a.Name, a.ID)
+		if err != nil {
+			return err
+		}
+		if taken {
+			return ErrNameTaken
+		}
+		return affected(tx.ExecContext(ctx, `UPDATE apps SET name = ?, image = ?, port = ?, memory_mb = ?, cpus = ?,
+				health_path = ?, health_cmd = ?, health_timeout = ?, start_command = ?, docker_options = ?, updated_at = ?
+			WHERE id = ?`+teamApps,
+			a.Name, a.Image, a.Port, a.MemoryMB, a.CPUs, a.HealthPath, a.HealthCmd, a.HealthTimeout,
+			a.StartCommand, a.DockerOptions, now(), a.ID, teamID))
+	})
 }
 
 // UpdateAppSource saves where a Git app's code comes from and how it is
@@ -309,11 +330,13 @@ func (d *DB) UpdateAppSource(ctx context.Context, teamID string, a App) error {
 	if err := d.checkSourceOwnership(ctx, teamID, a); err != nil {
 		return err
 	}
+	// The port is saved with the source: the build pack decides it for a
+	// static site.
 	return affected(d.ExecContext(ctx, `UPDATE apps SET repo_url = ?, repo_name = ?, branch = ?, build_pack = ?, dockerfile_path = ?,
-			base_dir = ?, publish_dir = ?, spa_fallback = ?, git_source_id = ?, ssh_key_id = ?, auto_deploy = ?, updated_at = ?
+			base_dir = ?, publish_dir = ?, spa_fallback = ?, git_source_id = ?, ssh_key_id = ?, auto_deploy = ?, port = ?, updated_at = ?
 		WHERE id = ? AND source = 'git'`+teamApps,
 		a.RepoURL, a.RepoName, a.Branch, a.BuildPack, a.DockerfilePath, a.BaseDir, a.PublishDir, a.SPAFallback,
-		a.GitSourceID, a.SSHKeyID, a.AutoDeploy, now(), a.ID, teamID))
+		a.GitSourceID, a.SSHKeyID, a.AutoDeploy, a.Port, now(), a.ID, teamID))
 }
 
 // SetAppWebhookSecret stores the (sealed) secret of the app's own push
@@ -325,6 +348,15 @@ func (d *DB) SetAppWebhookSecret(ctx context.Context, teamID, id, sealed string)
 // SetAppDeployToken stores the hash of the app's deploy token; "" revokes it.
 func (d *DB) SetAppDeployToken(ctx context.Context, teamID, id, hash string) error {
 	return affected(d.ExecContext(ctx, `UPDATE apps SET deploy_token_hash = ?, updated_at = ? WHERE id = ?`+teamApps, hash, now(), id, teamID))
+}
+
+// AppByDeployToken finds the app whose deploy token has this hash.
+func (d *DB) AppByDeployToken(ctx context.Context, id, hash string) (App, error) {
+	if hash == "" {
+		return App{}, ErrNotFound
+	}
+	a, err := scanApp(d.QueryRowContext(ctx, `SELECT `+appColumns+` FROM apps a WHERE a.id = ? AND a.deploy_token_hash = ?`, id, hash))
+	return a, notFound(err)
 }
 
 // AppsForPush returns the apps that a push to the given repository and

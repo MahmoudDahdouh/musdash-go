@@ -291,8 +291,8 @@ func TestAppsAreTeamScopedAndBlockDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.CreateApp(ctx, team, App{EnvironmentID: envs[0].ID, ServerID: server.ID, Name: "web", Image: "nginx", Port: 80}); !IsUnique(err) {
-		t.Fatalf("duplicate name in one environment: want unique violation, got %v", err)
+	if _, err := d.CreateApp(ctx, team, App{EnvironmentID: envs[0].ID, ServerID: server.ID, Name: "web", Image: "nginx", Port: 80}); !errors.Is(err, ErrNameTaken) {
+		t.Fatalf("duplicate name in one environment: want ErrNameTaken, got %v", err)
 	}
 	// Another team cannot place an app in this environment, on this server,
 	// or read or change the app.

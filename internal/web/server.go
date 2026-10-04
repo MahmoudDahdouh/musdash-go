@@ -19,6 +19,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
+	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 	"github.com/MahmoudDahdouh/musdash-go/internal/sysmem"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/static"
@@ -41,7 +42,14 @@ type Server struct {
 	// streams end with it. Nil means streams end only with their request.
 	Closing context.Context
 
+	// GitHub is the client for GitHub's API. Nil uses github.com.
+	GitHub *source.GitHub
+
 	logins *auth.Limiter
+	// hooks limits the endpoints other machines call; hookBodies lets one
+	// webhook body be read at a time.
+	hooks      *auth.Limiter
+	hookBodies chan struct{}
 	// hashing bounds how many password hashes run at once. Each costs about
 	// a quarter of a second of CPU; without a bound a burst of sign-in
 	// requests would pile them up.
@@ -53,6 +61,11 @@ type Server struct {
 // Handler builds the route table.
 func (s *Server) Handler() http.Handler {
 	s.logins = auth.NewLimiter(5, 15*time.Minute)
+	s.hooks = auth.NewLimiter(120, time.Minute)
+	if s.GitHub == nil {
+		s.GitHub = source.NewGitHub()
+	}
+	s.hookBodies = make(chan struct{}, 1)
 	s.hashing = make(chan struct{}, 2)
 	s.streams = make(chan struct{}, maxStreams)
 	mux := http.NewServeMux()
@@ -60,6 +73,11 @@ func (s *Server) Handler() http.Handler {
 	// Open to everyone.
 	mux.Handle("GET /static/{name}", static.Handler())
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
+
+	// Called by other machines: authenticated by signature or bearer token.
+	mux.HandleFunc("POST /webhooks/github/{id}", s.githubWebhook)
+	mux.HandleFunc("POST /webhooks/git/{id}", s.gitWebhook)
+	mux.HandleFunc("POST /api/v1/deploy", s.apiDeploy)
 
 	// Signed-out pages.
 	mux.Handle("GET /setup", s.anon(s.setupForm))
@@ -108,6 +126,18 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /apps/{id}/domains", s.authed(s.appDomainAdd))
 	mux.Handle("POST /apps/{id}/domains/{did}/delete", s.authed(s.appDomainDelete))
 	mux.Handle("POST /apps/{id}/delete", s.authed(s.appDelete))
+	mux.Handle("POST /apps/{id}/source", s.authed(s.appSourceSave))
+	mux.Handle("POST /apps/{id}/webhook-secret", s.authed(s.appWebhookSecret))
+	mux.Handle("POST /apps/{id}/deploy-token", s.authed(s.appDeployToken))
+
+	mux.Handle("GET /sources", s.authed(s.sourcesPage))
+	mux.Handle("POST /sources/github", s.authed(s.githubStart))
+	mux.Handle("GET /sources/github/callback", s.authed(s.githubCallback))
+	mux.Handle("GET /sources/github/installed", s.authed(s.githubInstalled))
+	mux.Handle("GET /sources/github/{id}/repos", s.authed(s.githubRepos))
+	mux.Handle("POST /sources/github/{id}/delete", s.authed(s.githubDelete))
+	mux.Handle("POST /sources/keys", s.authed(s.sshKeyCreate))
+	mux.Handle("POST /sources/keys/{id}/delete", s.authed(s.sshKeyDelete))
 
 	mux.Handle("GET /servers", s.authed(s.serverList))
 	mux.Handle("POST /servers/{id}", s.authed(s.serverUpdate))

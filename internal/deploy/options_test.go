@@ -25,7 +25,7 @@ func TestParseRunOptionsAllows(t *testing.T) {
 		"--read-only --pids-limit 200":                 {"--read-only", "--pids-limit", "200"},
 		"--sysctl net.core.somaxconn=1024":             {"--sysctl", "net.core.somaxconn=1024"},
 		"--cap-add NET_BIND_SERVICE":                   {"--cap-add", "NET_BIND_SERVICE"},
-		"--cap-add CAP_SYS_NICE":                       {"--cap-add", "CAP_SYS_NICE"},
+		"--cap-add CAP_IPC_LOCK":                       {"--cap-add", "CAP_IPC_LOCK"},
 		"--cap-drop ALL":                               {"--cap-drop", "ALL"},
 		"--security-opt no-new-privileges":             {"--security-opt", "no-new-privileges"},
 		"--hostname 'quoted-name'":                     {"--hostname", "quoted-name"},
@@ -62,6 +62,9 @@ func TestParseRunOptionsRefuses(t *testing.T) {
 		"--tmpfs /tmp:size=1m --privileged", "--user $(id)", "--add-host evil", "--dns example.com",
 		"nginx", "--hostname 'unterminated",
 		"--ulimit nofile=1 -v /:/host",
+		// These would loosen the limits musdash sets on the container.
+		"--memory-swap 64g", "--memory-swap=-1", "--cpu-shares 262144", "--cap-add SYS_NICE", "--cap-add CAP_SYS_NICE",
+		"--memory 64g", "--cpus 64", "--oom-kill-disable", "--oom-score-adj -1000",
 	}
 	for _, in := range bad {
 		if got, err := ParseRunOptions(in); err == nil {

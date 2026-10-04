@@ -1,0 +1,172 @@
+package pages
+
+import (
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/source"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+func installURL(g db.GitSource) string {
+	return "https://github.com/apps/" + g.Slug + "/installations/new"
+}
+
+templ Sources(s ui.Shell, sources []db.GitSource, keys []db.SSHKey, appForm, keyForm ui.Form, newKey *db.SSHKey) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Sources", "How musdash reads your private repositories. Public repositories need nothing here.")
+		<div class="grid max-w-3xl gap-6">
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">GitHub Apps</h2>
+						<p class="muted text-sm">A GitHub App gives musdash read access to the repositories you choose, and tells it when you push.</p>
+					</div>
+				</div>
+				if len(sources) > 0 {
+					<div class="rows">
+						for _, g := range sources {
+							<div class="row">
+								@ui.Icon("git-branch", "text-ink-mute")
+								<div class="min-w-0 flex-1">
+									<p class="truncate font-semibold">{ g.Name }</p>
+									<a class="fact truncate text-ink-mute" href={ templ.SafeURL(g.HTMLURL) } target="_blank" rel="noopener">{ g.Slug }</a>
+								</div>
+								@ui.LinkButton(installURL(g), ui.ButtonProps{Small: true, Icon: "external", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener"}}) {
+									Choose repositories
+								}
+								<form method="post" action={ templ.SafeURL("/sources/github/" + g.ID + "/delete") }>
+									@ui.CSRF(s.CSRF)
+									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+										Remove
+									}
+								</form>
+							</div>
+						}
+					</div>
+				}
+				<form class="card-body grid gap-4 border-t border-line" method="post" action="/sources/github">
+					@ui.CSRF(s.CSRF)
+					<p class="text-sm text-ink-soft">
+						Creating the App takes two steps on GitHub: confirm its name, then choose which repositories it may read. You come back here in between.
+					</p>
+					@ui.TextField(appForm, "App name", "Shown on GitHub. It must be unique across GitHub.", ui.InputProps{ID: "name", Required: true, Attrs: templ.Attributes{"maxlength": "34"}})
+					@ui.TextField(appForm, "Organisation", "Leave empty to create the App under your own account.", ui.InputProps{ID: "organization", Mono: true, Placeholder: "acme"})
+					@ui.TextField(appForm, "This dashboard's address", "GitHub sends you back here, and sends push events here. It must be reachable from the internet for pushes to deploy.", ui.InputProps{ID: "base", Mono: true, Required: true})
+					<div>
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "plus"}) {
+							Create GitHub App
+						}
+					</div>
+				</form>
+			</section>
+			<section class="card" id="keys">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Deploy keys</h2>
+						<p class="muted text-sm">For repositories on any Git host. Add the public key to the repository as a read-only deploy key.</p>
+					</div>
+				</div>
+				if newKey != nil {
+					<div class="card-body border-b border-line">
+						@ui.Notice(ui.ToneOK) {
+							<p class="font-semibold">Key created. Add this public key to the repository's deploy keys:</p>
+							<p class="code mt-2 block break-all">{ newKey.PublicKey }</p>
+							<p class="mt-2">
+								<button type="button" class="btn btn-secondary btn-sm" data-copy={ newKey.PublicKey }>
+									@ui.Icon("copy")
+									<span data-copy-label>Copy public key</span>
+								</button>
+							</p>
+						}
+					</div>
+				}
+				if len(keys) > 0 {
+					<div class="rows">
+						for _, k := range keys {
+							<div class="row">
+								@ui.Icon("key", "text-ink-mute")
+								<div class="min-w-0 flex-1">
+									<p class="truncate font-semibold">{ k.Name }</p>
+									<p class="fact truncate text-ink-mute">{ k.PublicKey }</p>
+								</div>
+								<button type="button" class="btn btn-ghost btn-sm" data-copy={ k.PublicKey }>
+									@ui.Icon("copy")
+									<span data-copy-label>Copy</span>
+								</button>
+								<form method="post" action={ templ.SafeURL("/sources/keys/" + k.ID + "/delete") }>
+									@ui.CSRF(s.CSRF)
+									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+										Delete
+									}
+								</form>
+							</div>
+						}
+					</div>
+				}
+				<form class="card-foot" method="post" action="/sources/keys">
+					@ui.CSRF(s.CSRF)
+					<div class="min-w-0 flex-1">
+						<label class="sr-only" for="key_name">Name for the new deploy key</label>
+						@ui.Input(ui.InputProps{ID: "key_name", Placeholder: "shop repository", Required: true, Value: keyForm.V("key_name"), Invalid: keyForm.E("key_name") != "", Attrs: templ.Attributes{"maxlength": "60"}})
+						if keyForm.E("key_name") != "" {
+							<p class="field-error mt-1" id="key_name-error" role="alert">{ keyForm.E("key_name") }</p>
+						}
+					</div>
+					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}) {
+						Create deploy key
+					}
+				</form>
+			</section>
+		</div>
+	}
+}
+
+// GitHubHandoff sends the App manifest to GitHub. The form posts to
+// github.com, which this page's Content-Security-Policy allows.
+templ GitHubHandoff(s ui.Shell, name, action, manifest string) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Connect GitHub", "")
+		<div class="max-w-xl">
+			<form class="card" method="post" action={ templ.SafeURL(action) }>
+				<input type="hidden" name="manifest" value={ manifest }/>
+				<div class="card-body grid gap-3">
+					<h2 class="card-title">Continue on GitHub</h2>
+					<p class="text-ink-soft">
+						GitHub will ask you to confirm creating an App called <strong>{ name }</strong>. It can read the code of the repositories you choose and nothing else, and it belongs to you: you can remove it from GitHub at any time.
+					</p>
+					<p class="muted text-sm">After you confirm, GitHub sends you back here.</p>
+				</div>
+				<div class="card-foot">
+					@ui.LinkButton("/sources", ui.ButtonProps{}) {
+						Cancel
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "external"}) {
+						Continue to GitHub
+					}
+				</div>
+			</form>
+		</div>
+	}
+}
+
+// RepoList is the repository picker's content. Choosing a row fills the
+// repository field of the form it was loaded into.
+templ RepoList(repos []source.RepoInfo, problem string) {
+	<div id="repo-list" class="card rows max-h-64 overflow-y-auto">
+		if problem != "" {
+			<p class="card-body text-sm text-danger">{ problem }</p>
+		} else if len(repos) == 0 {
+			<p class="card-body muted text-sm">This App is not installed on any repository yet. Use Choose repositories on the Sources page.</p>
+		} else {
+			for _, repo := range repos {
+				<button type="button" class="row w-full cursor-pointer text-left hover:bg-canvas" data-fill="repo" data-value={ "https://github.com/" + repo.FullName }>
+					@ui.Icon("git-branch", "text-ink-mute")
+					<span class="fact min-w-0 flex-1 truncate">{ repo.FullName }</span>
+					if repo.Private {
+						@ui.Badge("Private", ui.ToneNeutral)
+					}
+					<span class="muted text-sm">{ repo.DefaultBranch }</span>
+				</button>
+			}
+		}
+	</div>
+}

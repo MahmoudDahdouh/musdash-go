@@ -222,6 +222,15 @@ func (d *DB) ListDeployments(ctx context.Context, appID string, limit int) ([]De
 	return out, rows.Err()
 }
 
+// QueuedDeployment returns the app's deployment that is waiting to start,
+// or ErrNotFound. A burst of pushes then results in one more deployment,
+// which builds the newest commit, rather than one per push.
+func (d *DB) QueuedDeployment(ctx context.Context, appID string) (Deployment, error) {
+	m, err := scanDeployment(d.QueryRowContext(ctx, `SELECT `+deploymentColumns+` FROM deployments
+		WHERE app_id = ? AND status = 'queued' ORDER BY created_at DESC, rowid DESC LIMIT 1`, appID))
+	return m, notFound(err)
+}
+
 // SetDeploymentBuild records what a Git deployment built.
 func (d *DB) SetDeploymentBuild(ctx context.Context, id, image, commit string) error {
 	_, err := d.ExecContext(ctx, `UPDATE deployments SET image = ?, commit_sha = ? WHERE id = ?`, image, commit, id)

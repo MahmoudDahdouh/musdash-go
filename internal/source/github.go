@@ -99,6 +99,13 @@ func (g *GitHub) call(ctx context.Context, method, path, bearer string, body, ou
 	}
 	res, err := g.HTTP.Do(req)
 	if err != nil {
+		// The client's error quotes the request's address, and the address
+		// of a manifest conversion contains its one-time code. Keep the
+		// cause, drop the address.
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
 		return fmt.Errorf("GitHub did not answer: %w", err)
 	}
 	defer res.Body.Close()

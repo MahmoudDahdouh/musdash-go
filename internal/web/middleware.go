@@ -59,12 +59,13 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 
 // secureHeaders sets the browser-side protections. The policy allows only
 // same-origin scripts and styles: pages carry no inline script or style.
+const contentPolicy = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; " +
+	"connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+
 func secureHeaders(next http.Handler) http.Handler {
-	const csp = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; " +
-		"connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", csp)
+		h.Set("Content-Security-Policy", contentPolicy)
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")

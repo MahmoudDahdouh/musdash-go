@@ -42,7 +42,7 @@ func (s *stubTokens) InstallationToken(_ context.Context, appID int64, _ []byte,
 type gitEnvRecorder struct {
 	mu       sync.Mutex
 	envs     map[string][]string // first word of the command → environment
-	lsFiles  string
+	links    map[string]bool
 	images   string
 	failWith map[string]error // command prefix → error
 }
@@ -65,8 +65,12 @@ func (g *gitEnvRecorder) handle(line string, c runner.Cmd) (string, error) {
 	switch {
 	case strings.Contains(line, "rev-parse HEAD"):
 		return testCommit + "\n", nil
-	case strings.Contains(line, "ls-files --stage"):
-		return g.lsFiles, nil
+	case strings.Contains(line, "ls-tree HEAD -- "):
+		_, p, _ := strings.Cut(line, "ls-tree HEAD -- ")
+		if g.links[p] {
+			return "120000 blob 9c3a0f1\t" + p + "\n", nil
+		}
+		return "100644 blob 1a2b3c4\t" + p + "\n", nil
 	case strings.HasPrefix(line, "docker images"):
 		return g.images, nil
 	case strings.HasPrefix(line, "docker inspect"):
@@ -124,7 +128,10 @@ func TestGitDeployBuildsThenRuns(t *testing.T) {
 	checkout := filepath.Join(work, "src")
 	wantClone := "git clone --depth 1 --single-branch --no-tags --branch main -- https://github.com/acme/shop " + checkout
 	wantBuild := "docker build --progress plain --tag " + image + " --file " + checkout + "/apps/web/docker/Dockerfile.prod --label musdash.managed=true --build-arg NPM_TOKEN -- " + checkout + "/apps/web"
-	order := []string{wantClone, "git -C " + checkout + " rev-parse HEAD", "git -C " + checkout + " ls-files --stage -- apps apps/web apps/web/docker apps/web/docker/Dockerfile.prod", wantBuild, "docker run"}
+	order := []string{wantClone, "git -C " + checkout + " rev-parse HEAD",
+		"git -C " + checkout + " ls-tree HEAD -- apps", "git -C " + checkout + " ls-tree HEAD -- apps/web",
+		"git -C " + checkout + " ls-tree HEAD -- apps/web/docker", "git -C " + checkout + " ls-tree HEAD -- apps/web/docker/Dockerfile.prod",
+		wantBuild, "docker run"}
 	last := -1
 	for _, want := range order {
 		i := indexOf(calls, want)
@@ -298,7 +305,7 @@ func TestFailedBuildKeepsOldContainerAndCleansUp(t *testing.T) {
 
 func TestBuildRefusesSymlinksOutOfTheRepository(t *testing.T) {
 	e := newEnv(t)
-	rec := &gitEnvRecorder{lsFiles: "120000 9c3a0f1 0\tDockerfile\n"}
+	rec := &gitEnvRecorder{links: map[string]bool{"Dockerfile": true}}
 	e.fake.Handle = rec.handle
 	e.gitApp(nil)
 	dep := e.deploy()
@@ -310,7 +317,7 @@ func TestBuildRefusesSymlinksOutOfTheRepository(t *testing.T) {
 	}
 
 	// A directory on the way to the build context.
-	rec.lsFiles = "120000 9c3a0f1 0\tapps\n100644 1a2b3c4 0\tapps/web/Dockerfile\n"
+	rec.links = map[string]bool{"apps": true}
 	e.gitApp(func(a *db.App) { a.BaseDir = "apps/web" })
 	if dep := e.deploy(); dep.Status != db.DeployFailed || !strings.Contains(dep.Error, "apps is a symbolic link") {
 		t.Fatalf("%s %q", dep.Status, dep.Error)
@@ -367,6 +374,77 @@ func TestOldImagesArePruned(t *testing.T) {
 	// The newest five stay (the current one among them); the rest go.
 	if strings.Join(removed, ",") != "t5,t6,t7" {
 		t.Fatalf("removed %v, want t5 t6 t7", removed)
+	}
+}
+
+func TestStalledCloneAndBuildAreStopped(t *testing.T) {
+	e := newEnv(t)
+	rec := &gitEnvRecorder{}
+	e.fake.Handle = rec.handle
+	e.d.cloneTimeout, e.d.buildTimeout = 100*time.Millisecond, 100*time.Millisecond
+	e.gitApp(nil)
+
+	e.fake.Hang = func(line string) bool { return strings.HasPrefix(line, "git clone") }
+	dep := e.deploy()
+	if dep.Status != db.DeployFailed || !strings.Contains(dep.Error, "clone acme/shop: stopped after 100ms") {
+		t.Fatalf("stalled clone: %s %q", dep.Status, dep.Error)
+	}
+
+	e.fake.Hang = func(line string) bool { return strings.HasPrefix(line, "docker build") }
+	dep = e.deploy()
+	if dep.Status != db.DeployFailed || !strings.Contains(dep.Error, "build: stopped after 100ms") {
+		t.Fatalf("stalled build: %s %q", dep.Status, dep.Error)
+	}
+	// The server's build lock is free again: the next deployment runs.
+	e.fake.Hang = nil
+	if dep := e.deploy(); dep.Status != db.DeploySuccess {
+		t.Fatalf("after a stalled build: %s %q", dep.Status, dep.Error)
+	}
+}
+
+func TestGitHubAppTokenOnlyGoesToGitHub(t *testing.T) {
+	e := newEnv(t)
+	rec := &gitEnvRecorder{}
+	e.fake.Handle = rec.handle
+	tokens := &stubTokens{token: "ghs_secret"}
+	e.d.Tokens = tokens
+	key, _ := e.d.Box.SealString("pem")
+	ctx := context.Background()
+	pending, err := e.db.StartGitSource(ctx, e.team, "musdash-test", "state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending.AppID, pending.PrivateKey = 777, key
+	if err := e.db.FinishGitSource(ctx, pending); err != nil {
+		t.Fatal(err)
+	}
+	// Saved by some other path than the form, which only accepts github.com.
+	e.gitApp(func(a *db.App) { a.RepoURL = "https://git.evil.test/acme/shop"; a.GitSourceID = pending.ID })
+	dep := e.deploy()
+	if dep.Status != db.DeployFailed || !strings.Contains(dep.Error, "only read repositories on github.com") {
+		t.Fatalf("%s %q", dep.Status, dep.Error)
+	}
+	if len(tokens.calls) != 0 || indexOf(e.fake.Calls(), "git clone") >= 0 {
+		t.Fatal("a token was minted, or a clone started, for a host that is not GitHub")
+	}
+}
+
+func TestDestroyRemovesBuiltImages(t *testing.T) {
+	e := newEnv(t)
+	rec := &gitEnvRecorder{images: testCommit[:12] + "\nolder1\n"}
+	e.fake.Handle = rec.handle
+	e.gitApp(nil)
+	if dep := e.deploy(); dep.Status != db.DeploySuccess {
+		t.Fatalf("%s %q", dep.Status, dep.Error)
+	}
+	if err := e.d.Destroy(context.Background(), e.app.ID); err != nil {
+		t.Fatal(err)
+	}
+	repo := ImageRepository(e.app.ID)
+	for _, tag := range []string{testCommit[:12], "older1"} {
+		if indexOf(e.fake.Calls(), "docker rmi "+repo+":"+tag) < 0 {
+			t.Errorf("image %s was left on the server", tag)
+		}
 	}
 }
 
@@ -499,6 +577,23 @@ func TestCloneWithRealGit(t *testing.T) {
 	}
 	if !strings.Contains(e.log(dep), "no-such-branch") {
 		t.Fatalf("git's explanation is not in the log:\n%s", e.log(dep))
+	}
+}
+
+func TestRealSymlinkElsewhereIsAllowed(t *testing.T) {
+	e := newEnv(t)
+	// A link that is neither the Dockerfile nor on the way to it, as in a
+	// monorepo that shares a LICENSE file.
+	_, gitEnv := makeRepo(t, "mono", map[string]string{
+		"LICENSE": "MIT", "apps/web/Dockerfile": "FROM scratch\n", "apps/web/LICENSE": "symlink:../../LICENSE",
+	})
+	rec := &gitEnvRecorder{}
+	e.fake.Handle = rec.handle
+	e.d.Runners = fixedRunners{gitOnly{Fake: e.fake, local: runner.NewLocal()}}
+	e.d.extraGitEnv = gitEnv
+	e.gitApp(func(a *db.App) { a.RepoURL = "https://git.test/acme/mono.git"; a.BaseDir = "apps/web" })
+	if dep := e.deploy(); dep.Status != db.DeploySuccess {
+		t.Fatalf("%s %q\n%s", dep.Status, dep.Error, e.log(dep))
 	}
 }
 

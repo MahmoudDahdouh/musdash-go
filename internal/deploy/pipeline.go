@@ -59,6 +59,13 @@ type Deployer struct {
 	drain       time.Duration // pause between switching traffic and stopping the old container
 	stopGrace   time.Duration // how long a container gets to exit after SIGTERM
 	pollWait    time.Duration // how long the proxy may take to notice a routes file it was not signalled about
+	// Databases get longer than apps on both ends: a first start
+	// initialises the data directory, and a stop must flush it.
+	dbStartTimeout time.Duration
+	dbStopGrace    time.Duration
+	// A clone and a build each get this long before they are stopped.
+	cloneTimeout time.Duration
+	buildTimeout time.Duration
 	// extraGitEnv is added to every clone's environment. Tests use it to
 	// point a repository address at a local repository.
 	extraGitEnv []string
@@ -99,12 +106,17 @@ func New(d *db.DB, box *secret.Box, q *jobs.Queue, r Runners, cfg *config.Config
 		drain:          3 * time.Second,
 		stopGrace:      30 * time.Second,
 		pollWait:       4 * time.Second,
+		dbStartTimeout: 120 * time.Second,
+		dbStopGrace:    60 * time.Second,
+		cloneTimeout:   10 * time.Minute,
+		buildTimeout:   30 * time.Minute,
 	}
 }
 
 // Register installs the deploy job handler on the queue.
 func (d *Deployer) Register() {
 	d.Queue.Register(JobDeploy, d.runJob)
+	d.Queue.Register(JobDatabase, d.runDatabaseJob)
 }
 
 type payload struct {
@@ -148,7 +160,13 @@ func (d *Deployer) Enqueue(ctx context.Context, app db.App, trigger string) (db.
 	// One attempt: a failed deploy is reported, not silently repeated.
 	_, err = d.Queue.Enqueue(ctx, JobDeploy, payload{DeploymentID: dep.ID}, jobs.WithLockKey(lock), jobs.WithMaxAttempts(1))
 	if err != nil {
-		d.DB.FinishDeployment(ctx, dep.ID, db.DeployFailed, "could not be queued: "+err.Error())
+		// Recorded even if the request that asked has gone away: a row left
+		// as "queued" would make later pushes think a deployment is waiting.
+		rec, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		defer cancel()
+		if ferr := d.DB.FinishDeployment(rec, dep.ID, db.DeployFailed, "could not be queued: "+err.Error()); ferr != nil {
+			d.Log.Error("record deployment", "deployment", dep.ID, "err", ferr)
+		}
 	}
 	return dep, err
 }
@@ -590,6 +608,20 @@ func (d *Deployer) Destroy(ctx context.Context, appID string) error {
 	}
 	if err := r.RemoveAll(ctx, d.Cfg.AppDir(app.ID)); err != nil {
 		return err
+	}
+	if app.Source == db.SourceGit {
+		// The images built for it are of no use to anything else.
+		dk := docker.Client{R: r}
+		repo := ImageRepository(app.ID)
+		tags, err := dk.ImageTags(ctx, repo)
+		if err != nil {
+			d.Log.Warn("list a deleted app's images", "app", app.ID, "err", err)
+		}
+		for _, tag := range tags {
+			if err := dk.RemoveImage(ctx, repo+":"+tag); err != nil {
+				d.Log.Warn("remove a deleted app's image", "image", repo+":"+tag, "err", err)
+			}
+		}
 	}
 	logs, err := d.DB.DeploymentIDs(ctx, app.ID)
 	if err != nil {

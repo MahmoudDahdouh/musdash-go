@@ -55,6 +55,11 @@ func (d *Deployer) cloneAccess(ctx context.Context, r runner.Runner, app db.App,
 		if err != nil {
 			return "", nil, fmt.Errorf("the GitHub App's key cannot be decrypted: was the master key changed?")
 		}
+		// The token is GitHub's; it is sent to GitHub and nowhere else,
+		// whatever address the app was saved with.
+		if repo.Host != "github.com" {
+			return "", nil, fmt.Errorf("a GitHub App can only read repositories on github.com, not %s", repo.Host)
+		}
 		token, err := d.Tokens.InstallationToken(ctx, src.AppID, key, repo.Owner, repo.Name)
 		if errors.Is(err, source.ErrNotInstalled) {
 			return "", nil, fmt.Errorf("the GitHub App %q has no access to %s: install it on that repository", src.Name, repo.FullName())
@@ -150,7 +155,15 @@ func (d *Deployer) build(ctx context.Context, r runner.Runner, app db.App, dep d
 		Env:    env,
 		Stdout: log, Stderr: log,
 	}
-	if err := r.Run(ctx, clone); err != nil {
+	// Bounded: a host that accepts the connection and then stalls would
+	// otherwise hold the server's build lock for good.
+	cloneCtx, cancelClone := context.WithTimeout(ctx, d.cloneTimeout)
+	err = r.Run(cloneCtx, clone)
+	cancelClone()
+	if err != nil {
+		if cloneCtx.Err() != nil && ctx.Err() == nil {
+			return "", "", fmt.Errorf("clone %s: stopped after %s without finishing", repo.FullName(), d.cloneTimeout)
+		}
 		return "", "", fmt.Errorf("clone %s: %w", repo.FullName(), err)
 	}
 
@@ -194,7 +207,15 @@ func (d *Deployer) build(ctx context.Context, r runner.Runner, app db.App, dep d
 	}
 	image = ImageRepository(app.ID) + ":" + commit[:12]
 	dk := docker.Client{R: r}
-	if err := dk.Build(ctx, docker.BuildSpec{Tag: image, ContextDir: contextDir, Dockerfile: dockerfile, BuildArgs: buildArgs}, log); err != nil {
+	// Bounded for the same reason as the clone: one build that never ends
+	// would keep every other build on the server waiting.
+	buildCtx, cancelBuild := context.WithTimeout(ctx, d.buildTimeout)
+	err = dk.Build(buildCtx, docker.BuildSpec{Tag: image, ContextDir: contextDir, Dockerfile: dockerfile, BuildArgs: buildArgs}, log)
+	cancelBuild()
+	if err != nil {
+		if buildCtx.Err() != nil && ctx.Err() == nil {
+			return "", "", fmt.Errorf("build: stopped after %s without finishing", d.buildTimeout)
+		}
 		return "", "", fmt.Errorf("build: %w", err)
 	}
 	log.Step("Built %s", image)
@@ -210,20 +231,19 @@ func (d *Deployer) refuseSymlinks(ctx context.Context, r runner.Runner, checkout
 	if rel == "" || rel == "." {
 		return nil
 	}
+	// Only the path's own components are looked at, one entry each. Links
+	// elsewhere in the repository are harmless: Docker copies a link inside
+	// the build context as a link and does not follow it.
 	parts := strings.Split(rel, "/")
-	args := []string{"-C", checkout, "ls-files", "--stage", "--"}
 	for i := range parts {
-		args = append(args, strings.Join(parts[:i+1], "/"))
-	}
-	out, err := r.Output(ctx, runner.Cmd{Name: "git", Args: args, Env: gitEnv()})
-	if err != nil {
-		return fmt.Errorf("inspect the repository: %w", err)
-	}
-	// Each line is "<mode> <object> <stage>\t<path>"; 120000 is a symlink.
-	for _, line := range strings.Split(string(out), "\n") {
-		meta, file, ok := strings.Cut(line, "\t")
-		if ok && strings.HasPrefix(meta, "120000 ") {
-			return fmt.Errorf("%s is a symbolic link in the repository, which a build may not follow", file)
+		prefix := strings.Join(parts[:i+1], "/")
+		out, err := r.Output(ctx, runner.Cmd{Name: "git", Args: []string{"-C", checkout, "ls-tree", "HEAD", "--", prefix}, Env: gitEnv()})
+		if err != nil {
+			return fmt.Errorf("inspect the repository: %w", err)
+		}
+		// The line is "<mode> <type> <object>\t<path>"; 120000 is a symlink.
+		if strings.HasPrefix(string(out), "120000 ") {
+			return fmt.Errorf("%s is a symbolic link in the repository, which a build may not follow", prefix)
 		}
 	}
 	return nil

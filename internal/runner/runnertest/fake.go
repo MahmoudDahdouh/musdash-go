@@ -22,6 +22,9 @@ type Fake struct {
 	Handle func(line string, c runner.Cmd) (stdout string, err error)
 	// FailWrite, when set, can refuse a file write.
 	FailWrite func(path string) error
+	// Hang, when set, makes the commands it reports true for run until
+	// their context ends, as a stalled process would.
+	Hang func(line string) bool
 
 	mu    sync.Mutex
 	calls []string
@@ -37,28 +40,32 @@ func Exit(name string, code int, stderr string) error {
 	return &runner.ExitError{Name: name, Code: code, Stderr: stderr}
 }
 
-func (f *Fake) answer(c runner.Cmd) (string, error) {
+func (f *Fake) answer(ctx context.Context, c runner.Cmd) (string, error) {
 	line := Line(c)
 	f.mu.Lock()
 	f.calls = append(f.calls, line)
-	h := f.Handle
+	h, hang := f.Handle, f.Hang
 	f.mu.Unlock()
+	if hang != nil && hang(line) {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
 	if h == nil {
 		return "", nil
 	}
 	return h(line, c)
 }
 
-func (f *Fake) Run(_ context.Context, c runner.Cmd) error {
-	out, err := f.answer(c)
+func (f *Fake) Run(ctx context.Context, c runner.Cmd) error {
+	out, err := f.answer(ctx, c)
 	if c.Stdout != nil && out != "" {
 		io.WriteString(c.Stdout, out)
 	}
 	return err
 }
 
-func (f *Fake) Output(_ context.Context, c runner.Cmd) ([]byte, error) {
-	out, err := f.answer(c)
+func (f *Fake) Output(ctx context.Context, c runner.Cmd) ([]byte, error) {
+	out, err := f.answer(ctx, c)
 	return []byte(out), err
 }
 

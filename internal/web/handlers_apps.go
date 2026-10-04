@@ -156,8 +156,17 @@ func (s *Server) appNew(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	src := db.SourceImage
+	if r.URL.Query().Get("source") == db.SourceGit {
+		src = db.SourceGit
+	}
+	choices, err := s.gitChoices(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
-	s.render(w, r, http.StatusOK, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, ui.Form{}, generatedDomain(server)))
+	s.render(w, r, http.StatusOK, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, ui.Form{}, generatedDomain(server), src, choices))
 }
 
 func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
@@ -182,22 +191,41 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	src := db.SourceImage
+	if r.PostFormValue("source") == db.SourceGit {
+		src = db.SourceGit
+	}
+	choices, err := s.gitChoices(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+
 	var f ui.Form
-	name := strings.ToLower(strings.TrimSpace(r.PostFormValue("name")))
-	image := strings.TrimSpace(r.PostFormValue("image"))
+	newApp := db.App{EnvironmentID: env.ID, ServerID: server.ID, Source: src}
+	newApp.Name = strings.ToLower(strings.TrimSpace(r.PostFormValue("name")))
 	rawDomain := strings.TrimSpace(r.PostFormValue("domain"))
-	f.Set("name", name)
-	f.Set("image", image)
+	f.Set("name", newApp.Name)
 	f.Set("port", r.PostFormValue("port"))
 	f.Set("domain", rawDomain)
 
-	if !envNameRE.MatchString(name) {
+	if !envNameRE.MatchString(newApp.Name) {
 		f.Fail("name", appNameRule)
 	}
-	if !docker.ValidImage(image) {
-		f.Fail("image", "Enter an image name such as nginx:alpine or ghcr.io/you/app:1.4.")
+	if src == db.SourceGit {
+		parseGitForm(r, &f, choices, &newApp)
+	} else {
+		newApp.Image = strings.TrimSpace(r.PostFormValue("image"))
+		f.Set("image", newApp.Image)
+		if !docker.ValidImage(newApp.Image) {
+			f.Fail("image", "Enter an image name such as nginx:alpine or ghcr.io/you/app:1.4.")
+		}
 	}
-	port := parsePort(&f, "port", r.PostFormValue("port"))
+	newApp.Port = parsePort(&f, "port", r.PostFormValue("port"))
+	if newApp.BuildPack == deploy.PackStatic {
+		// The generated static image always listens on 80.
+		newApp.Port = 80
+	}
 	host := ""
 	if rawDomain != "" {
 		host = s.checkDomain(ctx, &f, "domain", rawDomain)
@@ -205,16 +233,22 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 
 	rerender := func(status int) {
 		crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
-		s.render(w, r, status, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, f, rawDomain))
+		s.render(w, r, status, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, f, rawDomain, src, choices))
 	}
 	if !f.OK() {
 		rerender(http.StatusUnprocessableEntity)
 		return
 	}
 
-	app, err := s.DB.CreateApp(ctx, teamID, db.App{EnvironmentID: env.ID, ServerID: server.ID, Name: name, Image: image, Port: port})
-	if db.IsUnique(err) {
-		f.Fail("name", "This environment already has an app called "+name+".")
+	app, err := s.DB.CreateApp(ctx, teamID, newApp)
+	if db.IsUnique(err) || errors.Is(err, db.ErrNameTaken) {
+		f.Fail("name", "This environment already has an app or database called "+newApp.Name+".")
+		rerender(http.StatusUnprocessableEntity)
+		return
+	}
+	if errors.Is(err, db.ErrNotFound) {
+		// The GitHub App or deploy key is not this team's.
+		f.Fail("access", "Choose how the repository is read.")
 		rerender(http.StatusUnprocessableEntity)
 		return
 	}
@@ -474,17 +508,22 @@ func (s *Server) appEnvironment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	vars := make([]db.EnvVar, 0, len(sealed))
+	var runtime, build []db.EnvVar
 	for _, ev := range sealed {
 		plain, err := s.Box.OpenString(ev.Value)
 		if err != nil {
 			s.fail(w, r, errors.New("environment variable "+ev.Key+" cannot be decrypted"))
 			return
 		}
-		vars = append(vars, db.EnvVar{Key: ev.Key, Value: plain})
+		if ev.BuildTime {
+			build = append(build, db.EnvVar{Key: ev.Key, Value: plain})
+		} else {
+			runtime = append(runtime, db.EnvVar{Key: ev.Key, Value: plain})
+		}
 	}
 	var f ui.Form
-	f.Set("vars", deploy.FormatEnv(vars))
+	f.Set("vars", deploy.FormatEnv(runtime))
+	f.Set("build_vars", deploy.FormatEnv(build))
 	s.render(w, r, http.StatusOK, pages.AppEnvironment(s.appShell(w, r, v), v, f))
 }
 
@@ -494,25 +533,53 @@ func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var f ui.Form
-	text := r.PostFormValue("vars")
+	text, buildText := r.PostFormValue("vars"), r.PostFormValue("build_vars")
 	f.Set("vars", text)
+	f.Set("build_vars", buildText)
+
 	vars, err := deploy.ParseEnv(text)
 	if err != nil {
 		f.Fail("vars", sentence(err))
 	} else if _, err := deploy.EnvFile(vars); err != nil {
 		f.Fail("vars", sentence(err))
 	}
+	var buildVars []db.EnvVar
+	if v.App.Source == db.SourceGit {
+		if buildVars, err = deploy.ParseEnv(buildText); err != nil {
+			f.Fail("build_vars", sentence(err))
+		}
+		for _, bv := range buildVars {
+			// Build arguments reach the build through its environment.
+			if docker.ReservedBuildArg(bv.Key) {
+				f.Fail("build_vars", bv.Key+" cannot be a build-time variable: the build tools themselves read it. Choose another name.")
+			}
+		}
+	}
 	if !f.OK() {
 		s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironment(s.appShell(w, r, v), v, f))
 		return
 	}
-	for i := range vars {
-		if vars[i].Value, err = s.Box.SealString(vars[i].Value); err != nil {
+	// One name cannot be both: the table holds each name once per app.
+	runtimeKeys := make(map[string]bool, len(vars))
+	for _, rv := range vars {
+		runtimeKeys[rv.Key] = true
+	}
+	for i := range buildVars {
+		if runtimeKeys[buildVars[i].Key] {
+			f.Fail("build_vars", buildVars[i].Key+" is already a runtime variable. Use a different name for the build-time one.")
+			s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironment(s.appShell(w, r, v), v, f))
+			return
+		}
+		buildVars[i].BuildTime = true
+	}
+	all := append(vars, buildVars...)
+	for i := range all {
+		if all[i].Value, err = s.Box.SealString(all[i].Value); err != nil {
 			s.fail(w, r, err)
 			return
 		}
 	}
-	if err := s.DB.ReplaceEnvVars(r.Context(), db.KindApp, v.App.ID, vars); err != nil {
+	if err := s.DB.ReplaceEnvVars(r.Context(), db.KindApp, v.App.ID, all); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -617,7 +684,7 @@ func (s *Server) appStorageDelete(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) appSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadApp(w, r); ok {
-		s.render(w, r, http.StatusOK, pages.AppSettings(s.appShell(w, r, v), v, ui.Form{}, ui.Form{}))
+		s.renderAppSettings(w, r, http.StatusOK, v, ui.Form{}, ui.Form{}, ui.Form{}, "")
 	}
 }
 
@@ -634,12 +701,23 @@ func (s *Server) appSettingsSave(w http.ResponseWriter, r *http.Request) {
 	}
 	app := v.App
 	app.Name = strings.ToLower(form("name"))
-	app.Image = form("image")
 	if !envNameRE.MatchString(app.Name) {
 		f.Fail("name", appNameRule)
 	}
-	if !docker.ValidImage(app.Image) {
-		f.Fail("image", "Enter an image name such as nginx:alpine or ghcr.io/you/app:1.4.")
+	// A Git app's image is whatever its last build produced.
+	if app.Source != db.SourceGit {
+		app.Image = form("image")
+		if !docker.ValidImage(app.Image) {
+			f.Fail("image", "Enter an image name such as nginx:alpine or ghcr.io/you/app:1.4.")
+		}
+	}
+	app.StartCommand = form("start_command")
+	if len(app.StartCommand) > 1000 || strings.ContainsAny(app.StartCommand, "\n\r\x00") {
+		f.Fail("start_command", "Keep the command on one line, under 1000 characters.")
+	}
+	app.DockerOptions = form("docker_options")
+	if _, err := deploy.ParseRunOptions(app.DockerOptions); err != nil {
+		f.Fail("docker_options", sentence(err))
 	}
 	app.Port = parsePort(&f, "port", form("port"))
 
@@ -678,15 +756,15 @@ func (s *Server) appSettingsSave(w http.ResponseWriter, r *http.Request) {
 	if f.OK() {
 		err := s.DB.UpdateAppSettings(r.Context(), sessionFrom(r).TeamID, app)
 		switch {
-		case db.IsUnique(err):
-			f.Fail("name", "This environment already has an app called "+app.Name+".")
+		case db.IsUnique(err), errors.Is(err, db.ErrNameTaken):
+			f.Fail("name", "This environment already has an app or database called "+app.Name+".")
 		case err != nil:
 			s.fail(w, r, err)
 			return
 		}
 	}
 	if !f.OK() {
-		s.render(w, r, http.StatusUnprocessableEntity, pages.AppSettings(s.appShell(w, r, v), v, f, ui.Form{}))
+		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, f, ui.Form{}, ui.Form{}, "")
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Settings saved. Redeploy to apply them.")
@@ -743,7 +821,7 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.render(w, r, http.StatusUnprocessableEntity, pages.AppSettings(s.appShell(w, r, v), v, ui.Form{}, f))
+		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, f, ui.Form{}, "")
 		return
 	}
 	s.syncRoutes(r, v.App.ServerID)

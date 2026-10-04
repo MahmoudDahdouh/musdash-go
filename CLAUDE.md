@@ -62,6 +62,8 @@ How the existing packages fit together:
 - `internal/deploy` — the deploy job (`pipeline.go`): pull → network → env file → start on a fixed loopback port → health check → `SyncRoutes` → stop the old container. A failure before the switch removes the new container and leaves the old one serving. `monitor.go` holds one `docker events` stream per server and updates app status through `db.SetAppStatusIf`, which ignores containers that are not the app's serving one. `routes.go` regenerates a server's whole `routes.json` from the database and signals the proxy.
   - Health-check URLs are built by `HealthURL` with a fixed loopback host; never concatenate a user path onto a URL.
   - Unit tests script the server with `runner/runnertest.Fake` to inject failures; `test/deploy_test.go` runs the same flow against real Docker when `MUSDASH_DOCKER_TEST=1`.
+  - `build.go` is the Git path: clone → `git ls-tree` symlink check → `docker build`. Credentials reach git and docker through their environment (`GIT_CONFIG_*`, `GIT_SSH_COMMAND`, `--build-arg NAME`), never an argument or URL. Clone and build are bounded by `cloneTimeout` / `buildTimeout`. `options.go` is the allow-list for a person's extra `docker run` options: add a flag only if it can neither reach the host nor loosen a limit musdash sets.
+- `internal/source` — everything about a Git host that is not a process: `ParseRepo` / `ValidBranch` / `ValidRelPath` (the only validators for values that reach git), the GitHub App client, `ReadPush` (streaming signature check plus the four values a push needs), deploy-key generation.
 - `internal/proxy` — `Table` is an immutable, validated route set swapped atomically; targets must be loopback. Port 80 serves ACME challenges, redirects TLS hosts and proxies HTTP-only ones. Certificates are requested only for routed hosts with `tls: true`.
 - `internal/web` — templ + HTMX (SSE extension) with assets embedded in the binary; no JSON API for the UI.
   - `static/` serves embedded assets at `/static/{name}?v=<content hash>` with immutable caching and lazy gzip. Use `static.URL(name)` in templates; a new asset must be added to the `go:embed` line.
@@ -69,6 +71,7 @@ How the existing packages fit together:
   - `ui/` holds the reusable design-system components (props structs + templ); `pages/` holds pages built from them.
   - Handlers are wrapped in `s.authed(...)` or `s.anon(...)`, which load the session and check CSRF. A handler for a team-owned resource starts with a loader (`loadProject`, `loadApp`) that answers 404 itself when the resource is not the team's.
   - Tables shared across resource kinds (`domains`, `env_vars`, `storages`) are keyed by `(resource_kind, resource_id)`; their queries do not check the team, so only call them with a resource a loader returned.
+  - `handlers_webhooks.go` holds the three endpoints other machines call (`/webhooks/github/{id}`, `/webhooks/git/{id}`, `/api/v1/deploy`). They have no session or CSRF; each authenticates by signature or bearer token and is rate-limited by address. Unknown id, missing secret and bad signature must stay indistinguishable.
   - Live logs are Server-Sent Events (`sse.go`): output is HTML-escaped, streams are capped at 16, and the producing process dies with the request context.
 
 ## UI design system

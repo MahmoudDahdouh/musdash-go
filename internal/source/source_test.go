@@ -107,53 +107,76 @@ func TestGenerateDeployKey(t *testing.T) {
 	}
 }
 
-func TestVerifySignature(t *testing.T) {
-	secret, body := []byte("s3cret"), []byte(`{"ref":"refs/heads/main"}`)
-	good := Sign(secret, body)
-	if !VerifySignature(secret, body, good) {
-		t.Fatal("a correct signature was refused")
+func TestReadPushChecksTheSignature(t *testing.T) {
+	secret, body := []byte("s3cret"), `{"ref":"refs/heads/main","after":"a1b2c3d4e5f6","repository":{"full_name":"acme/shop"}}`
+	good := Sign(secret, []byte(body))
+	p, signed := ReadPush(strings.NewReader(body), secret, good)
+	if !signed || p != (Push{Repo: "acme/shop", Branch: "main", Commit: "a1b2c3d4e5f6"}) {
+		t.Fatalf("a correct signature was refused: %+v %v", p, signed)
 	}
-	cases := map[string]bool{
-		"":                               false,
-		"sha1=" + good[7:]:               false,
-		good[:len(good)-1] + "0":         VerifySignature(secret, body, good[:len(good)-1]+"0"), // only true if it happens to equal good
-		"sha256=nothex":                  false,
-		"sha256=":                        false,
-		Sign([]byte("other"), body):      false,
-		Sign(secret, []byte("tampered")): false,
+	flipped := good[:len(good)-1] + "0"
+	if flipped == good {
+		flipped = good[:len(good)-1] + "1"
 	}
-	for header, want := range cases {
-		if header == good {
-			continue
+	for _, header := range []string{
+		"", "sha1=" + good[7:], flipped, "sha256=nothex", "sha256=", "sha256=abcd",
+		Sign([]byte("other"), []byte(body)), Sign(secret, []byte("tampered")),
+	} {
+		if p, signed := ReadPush(strings.NewReader(body), secret, header); signed || p != (Push{}) {
+			t.Errorf("header %q was accepted: %+v", header, p)
 		}
-		if got := VerifySignature(secret, body, header); got != want && header != good[:len(good)-1]+"0" {
-			t.Errorf("header %q: %v", header, got)
-		}
+	}
+	// Bytes after the JSON value are part of what was signed.
+	if _, signed := ReadPush(strings.NewReader(body+" trailing"), secret, good); signed {
+		t.Fatal("a body with extra bytes passed with the signature of the shorter one")
 	}
 	// No secret configured means nothing verifies, even a "correct" MAC.
-	if VerifySignature(nil, body, Sign(nil, body)) || VerifySignature([]byte{}, body, Sign([]byte{}, body)) {
-		t.Fatal("an empty secret must verify nothing")
+	for _, empty := range [][]byte{nil, {}} {
+		if _, signed := ReadPush(strings.NewReader(body), empty, Sign(empty, []byte(body))); signed {
+			t.Fatal("an empty secret must verify nothing")
+		}
 	}
 }
 
-func TestParsePush(t *testing.T) {
-	push := `{"ref":"refs/heads/release/1.2","after":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2","repository":{"full_name":"acme/shop"}}`
-	got, ok := ParsePush([]byte(push))
-	if !ok || got != (Push{Repo: "acme/shop", Branch: "release/1.2", Commit: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"}) {
-		t.Fatalf("%+v %v", got, ok)
+func TestReadPushEvents(t *testing.T) {
+	secret := []byte("s3cret")
+	read := func(body string) Push {
+		t.Helper()
+		p, signed := ReadPush(strings.NewReader(body), secret, Sign(secret, []byte(body)))
+		if !signed {
+			t.Fatalf("a signed body was refused: %s", body)
+		}
+		return p
+	}
+	// The wanted values are found wherever they sit, and same-named keys
+	// deeper in the document are not mistaken for them.
+	push := `{"commits":[{"ref":"refs/heads/evil","repository":{"full_name":"evil/evil"},"added":["a",{"b":[1,2,{"c":null}]}]}],
+		"ref":"refs/heads/release/1.2","before":"0000","after":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2","deleted":false,
+		"repository":{"id":7,"owner":{"full_name":"nested/owner","login":"acme"},"full_name":"acme/shop","topics":["x"]},
+		"pusher":{"name":"sam"}}`
+	if got := read(push); got != (Push{Repo: "acme/shop", Branch: "release/1.2", Commit: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"}) {
+		t.Fatalf("%+v", got)
 	}
 	ignored := map[string]string{
 		"tag push":       `{"ref":"refs/tags/v1","after":"abc","repository":{"full_name":"acme/shop"}}`,
-		"branch deleted": `{"ref":"refs/heads/old","after":"0000000000000000000000000000000000000000","deleted":true,"repository":{"full_name":"acme/shop"}}`,
+		"branch deleted": `{"ref":"refs/heads/old","after":"abc","deleted":true,"repository":{"full_name":"acme/shop"}}`,
 		"zero after":     `{"ref":"refs/heads/old","after":"0000000000000000000000000000000000000000","repository":{"full_name":"acme/shop"}}`,
 		"ping event":     `{"zen":"Keep it logically awesome.","hook_id":1}`,
-		"no repository":  `{"ref":"refs/heads/main","after":"abc"}`,
+		"wrong types":    `{"ref":["refs/heads/main"],"after":{"x":1},"repository":"acme/shop"}`,
+		"not an object":  `["refs/heads/main"]`,
 		"not json":       `ref=refs/heads/main`,
+		"cut short":      `{"ref":"refs/heads/main","after":"abc","repository":{"full_name":`,
+		"empty":          ``,
 	}
 	for name, body := range ignored {
-		if p, ok := ParsePush([]byte(body)); ok {
+		if p := read(body); p.Branch != "" {
 			t.Errorf("%s: treated as a push: %+v", name, p)
 		}
+	}
+	// A large value that is not wanted is skipped, not kept.
+	big := `{"commits":"` + strings.Repeat("x", 1<<20) + `","ref":"refs/heads/main","after":"abc"}`
+	if got := read(big); got.Branch != "main" {
+		t.Fatalf("%+v", got)
 	}
 }
 
@@ -279,6 +302,19 @@ func newFakeGitHub(t *testing.T) (*GitHub, *fakeGitHub, []byte) {
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
 	return &GitHub{APIBase: srv.URL, HTTP: srv.Client()}, fake, pemBytes
+}
+
+func TestUnreachableGitHubDoesNotQuoteTheManifestCode(t *testing.T) {
+	// Nothing listens here, so the request fails before GitHub sees it and
+	// the one-time code is still good.
+	gh := &GitHub{APIBase: "http://127.0.0.1:1", HTTP: &http.Client{Timeout: 2 * time.Second}}
+	_, err := gh.ConvertManifest(context.Background(), "one-time-c0de")
+	if err == nil {
+		t.Fatal("no error from an unreachable API")
+	}
+	if strings.Contains(err.Error(), "one-time-c0de") || strings.Contains(err.Error(), "app-manifests") {
+		t.Fatalf("the error quotes the request address: %v", err)
+	}
 }
 
 func TestGitHubClient(t *testing.T) {

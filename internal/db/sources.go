@@ -198,6 +198,16 @@ func (d *DB) SeenDelivery(ctx context.Context, id string) (bool, error) {
 	return n == 0, err
 }
 
+// ForgetDelivery removes a delivery id, for a delivery that could not be
+// acted on and may be sent again.
+func (d *DB) ForgetDelivery(ctx context.Context, id string) error {
+	if id == "" {
+		return nil
+	}
+	_, err := d.ExecContext(ctx, `DELETE FROM webhook_deliveries WHERE id = ?`, id)
+	return err
+}
+
 // DeleteOldDeliveries forgets delivery ids older than the cutoff.
 func (d *DB) DeleteOldDeliveries(ctx context.Context, olderThan int64) error {
 	_, err := d.ExecContext(ctx, `DELETE FROM webhook_deliveries WHERE received_at < ?`, olderThan)

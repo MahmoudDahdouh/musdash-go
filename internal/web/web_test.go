@@ -44,6 +44,7 @@ const (
 // app is a running server with one browser-like client.
 type app struct {
 	t      *testing.T
+	server *Server
 	db     *db.DB
 	cfg    *config.Config
 	fake   *runnertest.Fake
@@ -101,7 +102,7 @@ func newAppWithLog(t *testing.T, dev bool, logTo io.Writer) *app {
 	s := &Server{Cfg: cfg, DB: d, Box: box, Queue: queue, Deploy: deployer, Pool: pool, Log: log}
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
-	a := &app{t: t, db: d, cfg: cfg, fake: fake, url: srv.URL}
+	a := &app{t: t, server: s, db: d, cfg: cfg, fake: fake, url: srv.URL}
 	a.client = a.newClient()
 	return a
 }
@@ -170,6 +171,16 @@ func (a *app) setup() {
 	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/" {
 		a.t.Fatalf("setup: %d %s\n%s", res.StatusCode, res.Header.Get("Location"), body)
 	}
+}
+
+// seal encrypts a value the way the server stores secrets.
+func (a *app) seal(plain string) string {
+	a.t.Helper()
+	sealed, err := a.server.Box.SealString(plain)
+	if err != nil {
+		a.t.Fatal(err)
+	}
+	return sealed
 }
 
 // okProbe passes every health check.

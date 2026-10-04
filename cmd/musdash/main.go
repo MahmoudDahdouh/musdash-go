@@ -185,6 +185,15 @@ func runServer(args []string) error {
 	if err != nil {
 		return fmt.Errorf("-listen %q: %w", *listen, err)
 	}
+	// No build is running yet, so anything in the work directory was left
+	// by a process that died mid-build. A checkout may hold a deploy key.
+	if left, err := os.ReadDir(cfg.WorkDir()); err == nil {
+		for _, e := range left {
+			if err := os.RemoveAll(filepath.Join(cfg.WorkDir(), e.Name())); err != nil {
+				log.Warn("remove a leftover build directory", "name", e.Name(), "err", err)
+			}
+		}
+	}
 	pool := servers.New()
 	queue := jobs.New(d.DB, log, *workers)
 	deployer := deploy.New(d, box, queue, pool, cfg, log, net.JoinHostPort("127.0.0.1", port))
@@ -281,13 +290,21 @@ func monitorServers(ctx context.Context, d *db.DB, deployer *deploy.Deployer, lo
 	}
 }
 
-// housekeeping removes expired sessions and reset tokens once an hour.
+// housekeeping removes expired and abandoned rows once an hour.
 func housekeeping(ctx context.Context, d *db.DB, log *slog.Logger) {
 	t := time.NewTicker(time.Hour)
 	defer t.Stop()
 	for {
 		if err := d.DeleteExpired(ctx); err != nil && ctx.Err() == nil {
 			log.Error("delete expired sessions", "err", err)
+		}
+		// GitHub App flows nobody finished, and webhook delivery ids past
+		// the window in which GitHub redelivers.
+		if err := d.DeleteStaleGitSources(ctx, time.Now().Add(-2*time.Hour).Unix()); err != nil && ctx.Err() == nil {
+			log.Error("delete stale git sources", "err", err)
+		}
+		if err := d.DeleteOldDeliveries(ctx, time.Now().Add(-72*time.Hour).Unix()); err != nil && ctx.Err() == nil {
+			log.Error("delete old webhook deliveries", "err", err)
 		}
 		select {
 		case <-ctx.Done():

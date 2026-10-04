@@ -23,6 +23,36 @@ type BuildSpec struct {
 
 var argNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
+// Build-arg values are handed to docker through its environment, so a
+// build-arg name is also the name of an environment variable of a process on
+// the server. Names that such a process acts on are refused: DOCKER_HOST
+// would send the build, with its secrets, to another daemon, and LD_PRELOAD
+// would load code from the checked-out repository into the docker CLI.
+var (
+	reservedArgPrefixes = []string{"DOCKER_", "BUILDKIT_", "BUILDX_", "COMPOSE_", "LD_", "DYLD_", "SSH_", "GIT_", "GODEBUG", "XDG_", "MUSDASH_"}
+	reservedArgNames    = map[string]bool{
+		"PATH": true, "HOME": true, "USER": true, "SHELL": true, "TMPDIR": true, "TMP": true, "TEMP": true, "IFS": true, "ENV": true, "BASH_ENV": true,
+		"HTTP_PROXY": true, "HTTPS_PROXY": true, "NO_PROXY": true, "ALL_PROXY": true, "FTP_PROXY": true,
+		"SSL_CERT_FILE": true, "SSL_CERT_DIR": true,
+	}
+)
+
+// ReservedBuildArg reports whether name may not be used as a build
+// argument because the docker CLI, or a program it starts, would itself act
+// on an environment variable of that name.
+func ReservedBuildArg(name string) bool {
+	upper := strings.ToUpper(name)
+	if reservedArgNames[upper] {
+		return true
+	}
+	for _, prefix := range reservedArgPrefixes {
+		if strings.HasPrefix(upper, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // Cmd builds the `docker build` command: the argument vector and the
 // environment that carries the build-arg values.
 func (s BuildSpec) Cmd() (runner.Cmd, error) {
@@ -43,6 +73,9 @@ func (s BuildSpec) Cmd() (runner.Cmd, error) {
 		value := s.BuildArgs[name]
 		if !argNameRE.MatchString(name) {
 			return runner.Cmd{}, fmt.Errorf("build argument name %q is not valid", name)
+		}
+		if ReservedBuildArg(name) {
+			return runner.Cmd{}, fmt.Errorf("%s cannot be a build-time variable: the build tools themselves read it", name)
 		}
 		if strings.ContainsAny(value, "\x00") {
 			return runner.Cmd{}, fmt.Errorf("build argument %s contains a NUL byte", name)

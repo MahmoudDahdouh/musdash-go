@@ -37,6 +37,14 @@ func appTabs(v AppView) []ui.Tab {
 	}
 }
 
+// appSourceLine says in one line where an app's image comes from.
+func appSourceLine(app db.App) string {
+	if app.Source == db.SourceGit {
+		return app.RepoName + " @ " + app.Branch
+	}
+	return app.Image
+}
+
 func headerPoll(app db.App) string {
 	// Fast while a deployment is running, slow otherwise: the header only
 	// changes on its own when a container starts, stops or is replaced.
@@ -62,7 +70,7 @@ templ AppHeader(csrf string, app db.App) {
 				<h1 class="text-xl font-semibold tracking-tight">{ app.Name }</h1>
 				@ui.StatusPill(app.Status)
 			</div>
-			<p class="fact mt-0.5 truncate text-ink-mute">{ app.Image }</p>
+			<p class="fact mt-0.5 truncate text-ink-mute">{ appSourceLine(app) }</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			if app.Container != "" {
@@ -104,7 +112,7 @@ templ AppRows(apps []db.App) {
 				@ui.Icon("box", "text-ink-mute")
 				<div class="min-w-0 flex-1">
 					<p class="truncate font-semibold">{ a.Name }</p>
-					<p class="fact truncate text-ink-mute">{ a.Image }</p>
+					<p class="fact truncate text-ink-mute">{ appSourceLine(a) }</p>
 				</div>
 				@ui.StatusPill(a.Status)
 				@ui.Icon("chevron-right", "text-ink-mute")
@@ -113,17 +121,113 @@ templ AppRows(apps []db.App) {
 	</div>
 }
 
-templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedDomain string) {
+// AccessOption is one way to reach a repository in the Git forms.
+type AccessOption struct {
+	Value string // "public", "source:<id>" or "key:<id>"
+	Label string
+}
+
+// GitChoices is what the Git forms offer for reaching a repository.
+type GitChoices struct {
+	Access  []AccessOption
+	Sources []db.GitSource
+}
+
+func accessOptions(c GitChoices) []ui.Option {
+	opts := make([]ui.Option, 0, len(c.Access))
+	for _, a := range c.Access {
+		opts = append(opts, ui.Option{Value: a.Value, Label: a.Label})
+	}
+	return opts
+}
+
+var buildPackOptions = []ui.Option{
+	{Value: "dockerfile", Label: "Dockerfile"},
+	{Value: "static", Label: "Static site"},
+}
+
+func newAppTabs(p db.Project, env db.Environment) []ui.Tab {
+	base := "/projects/" + p.ID + "/apps/new?env=" + env.ID
+	return []ui.Tab{
+		{Key: "image", Label: "Docker image", Href: base},
+		{Key: "git", Label: "Git repository", Href: base + "&source=git"},
+	}
+}
+
+// gitSourceFields are the fields describing a repository and how to build
+// it. The New app form and the app's Source settings share them.
+templ gitSourceFields(f ui.Form, c GitChoices, app db.App) {
+	@ui.Field(ui.FieldProps{Label: "Read the repository through", For: "access", Hint: "Private repositories need a GitHub App or a deploy key. Add them under Sources.", Error: f.E("access")}) {
+		@ui.Select("access", accessOptions(c), orDefault(f.V("access"), appAccess(app)), templ.Attributes{"aria-describedby": "access-hint"})
+	}
+	@ui.TextField(f, "Repository", "For example https://github.com/acme/shop, or git@github.com:acme/shop.git with a deploy key.", ui.InputProps{ID: "repo", Mono: true, Required: true, Value: app.RepoURL, Placeholder: "https://github.com/acme/shop"})
+	if len(c.Sources) > 0 {
+		<div class="grid gap-2">
+			<div class="flex flex-wrap gap-2">
+				for _, g := range c.Sources {
+					<button type="button" class="btn btn-secondary btn-sm" hx-get={ "/sources/github/" + g.ID + "/repos" } hx-target="#repo-list" hx-swap="outerHTML">
+						@ui.Icon("git-branch")
+						Browse { g.Name }
+					</button>
+				}
+			</div>
+			<div id="repo-list"></div>
+		</div>
+	}
+	@ui.TextField(f, "Branch", "", ui.InputProps{ID: "branch", Mono: true, Required: true, Value: orDefault(app.Branch, "main")})
+	@ui.Field(ui.FieldProps{Label: "Build with", For: "build_pack", Hint: "Dockerfile builds the repository's own Dockerfile. Static site serves a folder of ready-made files.", Error: f.E("build_pack")}) {
+		@ui.Select("build_pack", buildPackOptions, orDefault(f.V("build_pack"), orDefault(app.BuildPack, "dockerfile")), templ.Attributes{"aria-describedby": "build_pack-hint"})
+	}
+	@ui.TextField(f, "Base directory", "The folder inside the repository to build from. Empty for the repository root.", ui.InputProps{ID: "base_dir", Mono: true, Value: app.BaseDir, Placeholder: "apps/web"})
+	<div class="grid gap-4 sm:grid-cols-2">
+		@ui.TextField(f, "Dockerfile", "For the Dockerfile build. Relative to the base directory.", ui.InputProps{ID: "dockerfile_path", Mono: true, Value: app.DockerfilePath, Placeholder: "Dockerfile"})
+		@ui.TextField(f, "Folder to serve", "For a static site. Relative to the base directory.", ui.InputProps{ID: "publish_dir", Mono: true, Value: app.PublishDir, Placeholder: "dist"})
+	</div>
+	@ui.Checkbox("spa_fallback", checked(f, "spa_fallback", app.SPAFallback), nil) {
+		Static site: answer unknown paths with index.html (for single-page apps)
+	}
+	@ui.Checkbox("auto_deploy", checked(f, "auto_deploy", app.AutoDeploy), nil) {
+		Deploy automatically when the branch is pushed
+	}
+}
+
+// checked decides a checkbox's state: what was submitted, or the stored
+// value when the form has not been submitted.
+func checked(f ui.Form, key string, stored bool) bool {
+	if _, submitted := f.Values["_submitted"]; submitted {
+		return f.V(key) == "1"
+	}
+	return stored
+}
+
+// appAccess is the form value for how an app reaches its repository.
+func appAccess(app db.App) string {
+	switch {
+	case app.GitSourceID != "":
+		return "source:" + app.GitSourceID
+	case app.SSHKeyID != "":
+		return "key:" + app.SSHKeyID
+	}
+	return "public"
+}
+
+templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedDomain, source string, choices GitChoices) {
 	@ui.Layout(s) {
-		@ui.PageHeader("New app", "Runs a Docker image in "+env.Name+".")
+		@ui.PageHeader("New app", "Runs in "+env.Name+".")
+		@ui.Tabs(newAppTabs(p, env), source)
 		<div class="max-w-xl">
 			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/apps") }>
 				@ui.CSRF(s.CSRF)
 				<input type="hidden" name="env" value={ env.ID }/>
+				<input type="hidden" name="source" value={ source }/>
 				<div class="card-body grid gap-4">
 					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens. Other containers in this environment reach the app by this name.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: true, Placeholder: "web", Attrs: templ.Attributes{"maxlength": "32"}})
-					@ui.TextField(f, "Docker image", "For example nginx:alpine or ghcr.io/you/app:1.4.", ui.InputProps{ID: "image", Mono: true, Required: true, Placeholder: "nginx:alpine"})
-					@ui.TextField(f, "Port", "The port the app listens on inside its container.", ui.InputProps{ID: "port", Mono: true, Required: true, Value: "80", Attrs: templ.Attributes{"inputmode": "numeric"}})
+					if source == "git" {
+						@gitSourceFields(f, choices, db.App{AutoDeploy: true})
+					} else {
+						@ui.TextField(f, "Docker image", "For example nginx:alpine or ghcr.io/you/app:1.4.", ui.InputProps{ID: "image", Mono: true, Required: true, Placeholder: "nginx:alpine"})
+					}
+					@ui.TextField(f, "Port", "The port the app listens on inside its container. A static site listens on 80.", ui.InputProps{ID: "port", Mono: true, Required: true, Value: "80", Attrs: templ.Attributes{"inputmode": "numeric"}})
 					@ui.TextField(f, "Domain", "Leave the generated address, or enter a domain that points at this server. Your own domains get HTTPS.", ui.InputProps{ID: "domain", Mono: true, Value: suggestedDomain})
 					@ui.Checkbox("deploy", true, nil) {
 						Deploy as soon as the app is created
@@ -140,6 +244,15 @@ templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedD
 			</form>
 		</div>
 	}
+}
+
+// lastCommit is the commit of the latest deployment, shortened, or "none"
+// for image deployments.
+func lastCommit(d *db.Deployment) string {
+	if d == nil || len(d.CommitSHA) < 12 {
+		return "none"
+	}
+	return d.CommitSHA[:12]
 }
 
 func internalAddress(a db.App) string {
@@ -196,6 +309,7 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 				<div class="card-body">
 					@ui.KeyValue([]ui.KVItem{
 						{Key: "Image", Value: orNone(v.App.DeployedImage), Mono: true},
+						{Key: "Commit", Value: lastCommit(last), Mono: true},
 						{Key: "Server", Value: server.Name},
 						{Key: "Inside the environment", Value: internalAddress(v.App), Mono: true},
 						{Key: "On the server", Value: hostPort(v.App), Mono: true},
@@ -215,7 +329,7 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 				} else {
 					<a class="row rail" data-state={ last.Status } href={ templ.SafeURL(v.base() + "/deployments/" + last.ID) }>
 						<div class="min-w-0 flex-1">
-							<p class="fact truncate">{ last.Image }</p>
+							<p class="fact truncate">{ orDefault(last.Image, "building") }</p>
 							<p class="muted text-sm">{ ui.Ago(last.CreatedAt) }</p>
 							if last.Error != "" {
 								<p class="mt-1 text-sm text-danger">{ last.Error }</p>
@@ -240,7 +354,7 @@ templ AppDeployments(s ui.Shell, v AppView, list []db.Deployment) {
 					for _, d := range list {
 						<tr>
 							<td class="whitespace-nowrap">{ ui.Ago(d.CreatedAt) }</td>
-							<td class="fact">{ d.Image }</td>
+							<td class="fact">{ orDefault(d.Image, "building") }</td>
 							<td>{ ui.StateLabel(d.Trigger) }</td>
 							<td>
 								@ui.StatusPill(d.Status)
@@ -276,7 +390,7 @@ templ DeploymentStatus(appID string, d db.Deployment) {
 		}
 	>
 		@ui.StatusPill(d.Status)
-		<span class="fact">{ d.Image }</span>
+		<span class="fact">{ orDefault(d.Image, "building from "+ui.StateLabel(d.Trigger)) }</span>
 		<span class="muted text-sm">{ ui.Ago(d.CreatedAt) }</span>
 		if took := ui.Took(d.StartedAt, d.FinishedAt); took != "" {
 			<span class="muted text-sm">took { took }</span>
@@ -327,8 +441,13 @@ templ AppEnvironment(s ui.Shell, v AppView, f ui.Form) {
 	@appFrame(s, v, "environment") {
 		<div class="max-w-3xl">
 			@ui.FormCard("Environment variables", "Stored encrypted. Changes apply on the next deploy.", v.base()+"/environment", s.CSRF, "Save variables") {
-				@ui.Field(ui.FieldProps{Label: "Variables", For: "vars", Hint: "One NAME=value per line. Lines starting with # are ignored.", Error: f.E("vars")}) {
-					@ui.Textarea(ui.InputProps{ID: "vars", Mono: true, Rows: 14, Value: f.V("vars"), Invalid: f.E("vars") != "", Described: true, Placeholder: "DATABASE_URL=postgres://…\nNODE_ENV=production"})
+				@ui.Field(ui.FieldProps{Label: "Variables", For: "vars", Hint: "Given to the running app. One NAME=value per line. Lines starting with # are ignored.", Error: f.E("vars")}) {
+					@ui.Textarea(ui.InputProps{ID: "vars", Mono: true, Rows: 12, Value: f.V("vars"), Invalid: f.E("vars") != "", Described: true, Placeholder: "DATABASE_URL=postgres://…\nNODE_ENV=production"})
+				}
+				if v.App.Source == db.SourceGit {
+					@ui.Field(ui.FieldProps{Label: "Build-time variables", For: "build_vars", Hint: "Given to the image build as build arguments, where the Dockerfile reads them with ARG. They are not given to the running app.", Error: f.E("build_vars")}) {
+						@ui.Textarea(ui.InputProps{ID: "build_vars", Mono: true, Rows: 5, Value: f.V("build_vars"), Invalid: f.E("build_vars") != "", Described: true, Placeholder: "NPM_TOKEN=…"})
+					}
 				}
 			}
 		</div>
@@ -423,12 +542,33 @@ func cpusValue(c float64) string {
 	return strconv.FormatFloat(c, 'f', -1, 64)
 }
 
-templ AppSettings(s ui.Shell, v AppView, general, domain ui.Form) {
+// Triggers is what the Settings page shows about starting deployments from
+// outside.
+type Triggers struct {
+	WebhookURL    string
+	WebhookSecret string // "" until generated
+	DeployURL     string
+	HasToken      bool
+	NewToken      string // shown once, right after it was generated
+	ViaGitHubApp  bool
+}
+
+templ AppSettings(s ui.Shell, v AppView, general, domain, src ui.Form, choices GitChoices, tr Triggers) {
 	@appFrame(s, v, "settings") {
 		<div class="grid max-w-3xl gap-6">
+			if tr.NewToken != "" {
+				@ui.Notice(ui.ToneOK) {
+					<p class="font-semibold">Deploy token created. Copy it now: it is not shown again.</p>
+					<p class="mt-2">
+						@ui.Copyable(tr.NewToken)
+					</p>
+				}
+			}
 			@ui.FormCard("General", "Changes apply on the next deploy.", v.base()+"/settings", s.CSRF, "Save changes") {
 				@ui.TextField(general, "Name", "", ui.InputProps{ID: "name", Mono: true, Value: v.App.Name, Required: true, Attrs: templ.Attributes{"maxlength": "32"}})
-				@ui.TextField(general, "Docker image", "", ui.InputProps{ID: "image", Mono: true, Value: v.App.Image, Required: true})
+				if v.App.Source != db.SourceGit {
+					@ui.TextField(general, "Docker image", "", ui.InputProps{ID: "image", Mono: true, Value: v.App.Image, Required: true})
+				}
 				@ui.TextField(general, "Port", "The port the app listens on inside its container.", ui.InputProps{ID: "port", Mono: true, Value: strconv.Itoa(v.App.Port), Required: true, Attrs: templ.Attributes{"inputmode": "numeric"}})
 				<div class="grid gap-4 sm:grid-cols-2">
 					@ui.TextField(general, "Memory limit (MB)", "Empty for no limit.", ui.InputProps{ID: "memory_mb", Mono: true, Value: zeroBlank(v.App.MemoryMB), Attrs: templ.Attributes{"inputmode": "numeric"}})
@@ -437,7 +577,67 @@ templ AppSettings(s ui.Shell, v AppView, general, domain ui.Form) {
 				@ui.TextField(general, "Health check path", "A deploy waits for this path to answer before switching traffic. Empty checks only that the port accepts connections.", ui.InputProps{ID: "health_path", Mono: true, Value: v.App.HealthPath, Placeholder: "/healthz"})
 				@ui.TextField(general, "Health check command", "Used when no path is set. Runs inside the container and must exit 0.", ui.InputProps{ID: "health_cmd", Mono: true, Value: v.App.HealthCmd})
 				@ui.TextField(general, "Health check timeout (seconds)", "How long a deploy waits before giving up and keeping the previous version.", ui.InputProps{ID: "health_timeout", Mono: true, Value: strconv.Itoa(v.App.HealthTimeout), Attrs: templ.Attributes{"inputmode": "numeric"}})
+				@ui.TextField(general, "Start command", "Replaces the image's own command. Runs through the image's shell. Empty keeps the image's command.", ui.InputProps{ID: "start_command", Mono: true, Value: v.App.StartCommand, Placeholder: "node server.js"})
+				@ui.TextField(general, "Extra Docker options", "Such as --shm-size 256m or --ulimit nofile=65536:65536. Options that reach outside the container, such as --privileged or -v, are refused.", ui.InputProps{ID: "docker_options", Mono: true, Value: v.App.DockerOptions})
 			}
+			if v.App.Source == db.SourceGit {
+				@ui.FormCard("Source", "Where the code comes from and how it is built.", v.base()+"/source", s.CSRF, "Save source") {
+					<input type="hidden" name="_submitted" value="1"/>
+					@gitSourceFields(src, choices, v.App)
+				}
+			}
+			<section class="card" id="triggers">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Deploy from outside</h2>
+						<p class="muted text-sm">Ways for other systems to start a deployment of this app.</p>
+					</div>
+				</div>
+				if v.App.Source == db.SourceGit {
+					<div class="card-body grid gap-3 border-b border-line">
+						<h3 class="font-semibold">Push webhook</h3>
+						if tr.ViaGitHubApp {
+							<p class="muted text-sm">This app deploys through a GitHub App, which already tells musdash about pushes. Nothing to set up.</p>
+						} else {
+							<p class="muted text-sm">Add a webhook to the repository with this address, content type <span class="code">application/json</span>, the secret below, and the push event.</p>
+							@ui.Copyable(tr.WebhookURL)
+							if tr.WebhookSecret != "" {
+								@ui.Copyable(tr.WebhookSecret)
+							}
+							<form method="post" action={ templ.SafeURL(v.base() + "/webhook-secret") }>
+								@ui.CSRF(s.CSRF)
+								@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh"}) {
+									if tr.WebhookSecret == "" {
+										Create webhook secret
+									} else {
+										Replace webhook secret
+									}
+								}
+							</form>
+						}
+					</div>
+				}
+				<div class="card-body grid gap-3">
+					<h3 class="font-semibold">Deploy token</h3>
+					<p class="muted text-sm">For a CI pipeline: send a POST request with the token to start a deployment.</p>
+					<p class="code block break-all">curl -X POST -H "Authorization: Bearer TOKEN" "{ tr.DeployURL }"</p>
+					<form class="flex flex-wrap items-center gap-2" method="post" action={ templ.SafeURL(v.base() + "/deploy-token") }>
+						@ui.CSRF(s.CSRF)
+						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "key"}) {
+							if tr.HasToken {
+								Replace deploy token
+							} else {
+								Create deploy token
+							}
+						}
+						if tr.HasToken {
+							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Type: "submit", Attrs: templ.Attributes{"name": "revoke", "value": "1"}}) {
+								Revoke
+							}
+						}
+					</form>
+				</div>
+			</section>
 			<section class="card" id="domains">
 				<div class="card-head">
 					<div>

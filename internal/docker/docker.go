@@ -134,6 +134,16 @@ func (c Client) EnsureNetwork(ctx context.Context, name string) error {
 	return err
 }
 
+// RemoveVolume deletes a volume and the data in it. A volume that does not
+// exist is not an error.
+func (c Client) RemoveVolume(ctx context.Context, name string) error {
+	if !ValidName(name) {
+		return fmt.Errorf("bad volume name %q", name)
+	}
+	_, err := c.R.Output(ctx, cmd("volume", "rm", name))
+	return ignoreMissing(err)
+}
+
 // Logs streams a container's output to w. With follow it returns only when
 // ctx is cancelled or the container stops.
 func (c Client) Logs(ctx context.Context, container string, tail int, follow bool, w io.Writer) error {

@@ -11,6 +11,10 @@ import (
 // container the host: --privileged, --network host, --pid host, --device,
 // -v, --cap-add SYS_ADMIN. Only options that tune the container without
 // widening its reach are allowed.
+//
+// Options that loosen the limits musdash itself sets are left out too:
+// --memory-swap would lift the app's memory limit, and --cpu-shares or the
+// SYS_NICE capability would let one app starve the proxy and the dashboard.
 
 // optionRule validates the value of one allowed flag. A nil rule means the
 // flag takes no value.
@@ -37,7 +41,7 @@ func matches(re *regexp.Regexp) optionRule { return re.MatchString }
 // safeCaps are capabilities that do not let a container act on the host.
 var safeCaps = map[string]bool{
 	"NET_BIND_SERVICE": true, "CHOWN": true, "SETUID": true, "SETGID": true,
-	"DAC_OVERRIDE": true, "FOWNER": true, "KILL": true, "SYS_NICE": true, "IPC_LOCK": true,
+	"DAC_OVERRIDE": true, "FOWNER": true, "KILL": true, "IPC_LOCK": true,
 }
 
 var allowedOptions = map[string]optionRule{
@@ -54,9 +58,7 @@ var allowedOptions = map[string]optionRule{
 	"--dns":                matches(ipRE),
 	"--tmpfs":              matches(tmpfsRE),
 	"--pids-limit":         matches(intRE),
-	"--memory-swap":        matches(sizeRE),
 	"--memory-reservation": matches(sizeRE),
-	"--cpu-shares":         matches(intRE),
 	"--sysctl":             matches(sysctlRE),
 	"--cap-drop":           func(v string) bool { return regexp.MustCompile(`^[A-Z_]{2,24}$`).MatchString(v) },
 	"--cap-add":            func(v string) bool { return safeCaps[strings.TrimPrefix(v, "CAP_")] },

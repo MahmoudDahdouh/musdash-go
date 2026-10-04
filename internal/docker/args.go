@@ -34,11 +34,15 @@ type RunSpec struct {
 	Alias         string // DNS name on the network
 	HostPort      int    // published on 127.0.0.1; 0 publishes nothing
 	ContainerPort int
-	EnvFile       string
-	MemoryMB      int
-	CPUs          float64
-	Mounts        []Mount
-	Labels        map[string]string
+	// PublicPort publishes ContainerPort on every interface of the server.
+	// Only databases whose public port a person switched on use it; apps
+	// are reached through the proxy.
+	PublicPort int
+	EnvFile    string
+	MemoryMB   int
+	CPUs       float64
+	Mounts     []Mount
+	Labels     map[string]string
 	// ExtraArgs are further `docker run` options, placed before the image.
 	// They must already have been checked against the allow-list in
 	// deploy.ParseRunOptions; nothing here re-validates them.
@@ -151,6 +155,12 @@ func (s RunSpec) Args() ([]string, error) {
 		}
 		// Loopback only: the proxy is the single way in from outside.
 		args = append(args, "--publish", "127.0.0.1:"+strconv.Itoa(s.HostPort)+":"+strconv.Itoa(s.ContainerPort))
+	}
+	if s.PublicPort != 0 {
+		if !validPort(s.PublicPort) || !validPort(s.ContainerPort) {
+			return nil, fmt.Errorf("bad public port mapping %d:%d", s.PublicPort, s.ContainerPort)
+		}
+		args = append(args, "--publish", "0.0.0.0:"+strconv.Itoa(s.PublicPort)+":"+strconv.Itoa(s.ContainerPort))
 	}
 	if s.EnvFile != "" {
 		args = append(args, "--env-file", s.EnvFile)

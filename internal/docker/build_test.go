@@ -46,6 +46,28 @@ func TestBuildCmd(t *testing.T) {
 	}
 }
 
+func TestReservedBuildArgs(t *testing.T) {
+	reserved := []string{
+		"DOCKER_HOST", "docker_host", "DOCKER_CONFIG", "DOCKER_TLS_VERIFY", "BUILDKIT_HOST", "BUILDX_BUILDER",
+		"LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES", "PATH", "Path", "HOME", "TMPDIR",
+		"HTTP_PROXY", "https_proxy", "NO_PROXY", "ALL_PROXY", "SSH_AUTH_SOCK", "GIT_SSH_COMMAND", "MUSDASH_MASTER_KEY",
+	}
+	for _, name := range reserved {
+		if !ReservedBuildArg(name) {
+			t.Errorf("%s is not refused", name)
+		}
+		spec := BuildSpec{Tag: "musdash/a:t", ContextDir: "/w/src", Dockerfile: "/w/src/Dockerfile", BuildArgs: map[string]string{name: "x"}}
+		if cm, err := spec.Cmd(); err == nil {
+			t.Errorf("%s reached the docker CLI's environment: %q", name, cm.Env)
+		}
+	}
+	for _, name := range []string{"NPM_TOKEN", "API_URL", "NODE_ENV", "VERSION", "LDFLAGS", "DOCKERFILE_VERSION", "GITHUB_SHA", "PATHS"} {
+		if ReservedBuildArg(name) {
+			t.Errorf("%s is refused but is an ordinary name", name)
+		}
+	}
+}
+
 func TestImageTagsAndRemove(t *testing.T) {
 	ctx := context.Background()
 	r := &scripted{answers: map[string]answer{
