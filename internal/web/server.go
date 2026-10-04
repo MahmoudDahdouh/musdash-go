@@ -3,6 +3,7 @@
 package web
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/pprof"
@@ -14,8 +15,10 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/auth"
 	"github.com/MahmoudDahdouh/musdash-go/internal/config"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
+	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
 	"github.com/MahmoudDahdouh/musdash-go/internal/sysmem"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/static"
@@ -28,21 +31,30 @@ type Server struct {
 	DB    *db.DB
 	Box   *secret.Box
 	Queue *jobs.Queue
-	Log   *slog.Logger
+	// Deploy runs deployments and publishes routes; Pool reaches servers.
+	Deploy *deploy.Deployer
+	Pool   *servers.Pool
+	Log    *slog.Logger
 	// Pprof exposes /debug/pprof to loopback clients.
 	Pprof bool
+	// Closing is cancelled when the process begins to shut down. Live
+	// streams end with it. Nil means streams end only with their request.
+	Closing context.Context
 
 	logins *auth.Limiter
 	// hashing bounds how many password hashes run at once. Each costs about
 	// a quarter of a second of CPU; without a bound a burst of sign-in
 	// requests would pile them up.
 	hashing chan struct{}
+	// streams bounds the live log views open at once.
+	streams chan struct{}
 }
 
 // Handler builds the route table.
 func (s *Server) Handler() http.Handler {
 	s.logins = auth.NewLimiter(5, 15*time.Minute)
 	s.hashing = make(chan struct{}, 2)
+	s.streams = make(chan struct{}, maxStreams)
 	mux := http.NewServeMux()
 
 	// Open to everyone.
@@ -73,6 +85,34 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /projects/{id}/delete", s.authed(s.projectDelete))
 	mux.Handle("POST /projects/{id}/environments", s.authed(s.environmentCreate))
 	mux.Handle("POST /environments/{id}/delete", s.authed(s.environmentDelete))
+
+	mux.Handle("GET /projects/{id}/apps/new", s.authed(s.appNew))
+	mux.Handle("POST /projects/{id}/apps", s.authed(s.appCreate))
+	mux.Handle("GET /apps/{id}", s.authed(s.appOverview))
+	mux.Handle("GET /apps/{id}/status", s.authed(s.appStatus))
+	mux.Handle("POST /apps/{id}/deploy", s.authed(s.appDeploy))
+	mux.Handle("POST /apps/{id}/stop", s.authed(s.appStop))
+	mux.Handle("GET /apps/{id}/deployments", s.authed(s.appDeployments))
+	mux.Handle("GET /apps/{id}/deployments/{dep}", s.authed(s.appDeployment))
+	mux.Handle("GET /apps/{id}/deployments/{dep}/status", s.authed(s.appDeploymentStatus))
+	mux.Handle("GET /apps/{id}/deployments/{dep}/stream", s.authed(s.appDeploymentStream))
+	mux.Handle("GET /apps/{id}/logs", s.authed(s.appLogs))
+	mux.Handle("GET /apps/{id}/logs/stream", s.authed(s.appLogsStream))
+	mux.Handle("GET /apps/{id}/environment", s.authed(s.appEnvironment))
+	mux.Handle("POST /apps/{id}/environment", s.authed(s.appEnvironmentSave))
+	mux.Handle("GET /apps/{id}/storage", s.authed(s.appStorage))
+	mux.Handle("POST /apps/{id}/storage", s.authed(s.appStorageAdd))
+	mux.Handle("POST /apps/{id}/storage/{sid}/delete", s.authed(s.appStorageDelete))
+	mux.Handle("GET /apps/{id}/settings", s.authed(s.appSettings))
+	mux.Handle("POST /apps/{id}/settings", s.authed(s.appSettingsSave))
+	mux.Handle("POST /apps/{id}/domains", s.authed(s.appDomainAdd))
+	mux.Handle("POST /apps/{id}/domains/{did}/delete", s.authed(s.appDomainDelete))
+	mux.Handle("POST /apps/{id}/delete", s.authed(s.appDelete))
+
+	mux.Handle("GET /servers", s.authed(s.serverList))
+	mux.Handle("POST /servers/{id}", s.authed(s.serverUpdate))
+	mux.Handle("GET /settings", s.authed(s.settingsPage))
+	mux.Handle("POST /settings", s.authed(s.settingsSave))
 
 	if s.Cfg.Dev {
 		mux.Handle("GET /_ui", s.authed(s.gallery))

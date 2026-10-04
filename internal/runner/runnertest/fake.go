@@ -20,6 +20,8 @@ type Fake struct {
 	// Handle decides a command's stdout and error. A nil Handle succeeds
 	// with no output.
 	Handle func(line string, c runner.Cmd) (stdout string, err error)
+	// FailWrite, when set, can refuse a file write.
+	FailWrite func(path string) error
 
 	mu    sync.Mutex
 	calls []string
@@ -67,6 +69,11 @@ func (f *Fake) WriteFile(_ context.Context, path string, mode fs.FileMode, r io.
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.FailWrite != nil {
+		if err := f.FailWrite(path); err != nil {
+			return err
+		}
+	}
 	if f.files == nil {
 		f.files = make(map[string][]byte)
 		f.modes = make(map[string]fs.FileMode)

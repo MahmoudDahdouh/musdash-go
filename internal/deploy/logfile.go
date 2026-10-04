@@ -103,3 +103,24 @@ func Follow(ctx context.Context, path string, w io.Writer, finished func() bool)
 		}
 	}
 }
+
+// FollowWhenReady is Follow for a log that may not exist yet: a queued
+// deployment gets its file only when its job starts. It waits for the file,
+// and returns nil without output if the deployment finishes without one.
+func FollowWhenReady(ctx context.Context, path string, w io.Writer, finished func() bool) error {
+	ticker := time.NewTicker(400 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return Follow(ctx, path, w, finished)
+		}
+		if finished() {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}

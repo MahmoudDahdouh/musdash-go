@@ -137,7 +137,7 @@ func (c Client) EnsureNetwork(ctx context.Context, name string) error {
 // Logs streams a container's output to w. With follow it returns only when
 // ctx is cancelled or the container stops.
 func (c Client) Logs(ctx context.Context, container string, tail int, follow bool, w io.Writer) error {
-	args := []string{"logs", "--tail", strconv.Itoa(tail), "--timestamps"}
+	args := []string{"logs", "--tail", strconv.Itoa(tail)}
 	if follow {
 		args = append(args, "--follow")
 	}

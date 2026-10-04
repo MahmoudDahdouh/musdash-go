@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -113,6 +114,7 @@ func newEnv(t *testing.T) *env {
 	dep.Probe = probe
 	dep.healthEvery = 10 * time.Millisecond
 	dep.drain = 0
+	dep.pollWait = 20 * time.Millisecond
 	dep.Register()
 	if err := q.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -420,7 +422,7 @@ func TestStopRemovesRouteFirst(t *testing.T) {
 	e := newEnv(t)
 	dep := e.deploy()
 	app := e.reload()
-	if err := e.d.Stop(context.Background(), app); err != nil {
+	if err := e.d.Stop(context.Background(), app.ID); err != nil {
 		t.Fatal(err)
 	}
 	if got := e.reload(); got.Status != db.AppStopped || got.Container != "" || got.HostPort != 0 {
@@ -444,10 +446,13 @@ func TestStopRemovesRouteFirst(t *testing.T) {
 
 func TestDestroyKeepsNothingButVolumes(t *testing.T) {
 	e := newEnv(t)
-	e.deploy()
+	first := e.deploy()
 	app := e.reload()
-	if err := e.d.Destroy(context.Background(), app); err != nil {
+	if err := e.d.Destroy(context.Background(), app.ID); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.Stat(e.cfg.DeployLogPath(first.ID)); err == nil {
+		t.Fatal("a deployment log outlived its app")
 	}
 	if _, err := e.db.AppByID(context.Background(), app.ID); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("app row still exists: %v", err)
@@ -500,6 +505,39 @@ func TestEnvFileRejectsLineBreaks(t *testing.T) {
 	}
 }
 
+func TestHealthURLStaysOnLoopback(t *testing.T) {
+	good := map[string]string{
+		"/":                 "http://127.0.0.1:20417/",
+		"/healthz":          "http://127.0.0.1:20417/healthz",
+		"/api/ready?deep=1": "http://127.0.0.1:20417/api/ready?deep=1",
+		"/a%20b":            "http://127.0.0.1:20417/a%20b",
+	}
+	for path, want := range good {
+		if got, err := HealthURL(20417, path); err != nil || got != want {
+			t.Errorf("HealthURL(%q) = %q, %v; want %q", path, got, err, want)
+		}
+	}
+	// Each of these, glued after "http://127.0.0.1:<port>", would point the
+	// request at another host.
+	for _, path := range []string{"@evil.example.com/", "//evil.example.com/", "", "healthz", ":80@evil.example.com/", "/a b", "/a\nHost: evil", "http://evil.example.com/", "\\evil"} {
+		if got, err := HealthURL(20417, path); err == nil {
+			t.Errorf("HealthURL(%q) accepted: %s", path, got)
+		}
+	}
+}
+
+func TestBindMountOfProtectedPathFailsTheDeploy(t *testing.T) {
+	e := newEnv(t)
+	e.db.AddStorage(context.Background(), db.Storage{ResourceKind: db.KindApp, ResourceID: e.app.ID, Kind: db.StorageBind, Source: e.cfg.MasterKeyPath(), Target: "/key"})
+	dep := e.deploy()
+	if dep.Status != db.DeployFailed || !strings.Contains(dep.Error, "cannot be mounted") {
+		t.Fatalf("%s %q", dep.Status, dep.Error)
+	}
+	if indexOf(e.fake.Calls(), "docker run") >= 0 {
+		t.Fatal("a container was started with the master key mounted")
+	}
+}
+
 func TestParseEnv(t *testing.T) {
 	got, err := ParseEnv("# comment\n\nB=2\nA = spaced value \nexport C=\"quoted # not a comment\"\nD='single'\nE=\nB=override\nURL=postgres://u:p@h/db?x=1\n")
 	if err != nil {
@@ -534,7 +572,10 @@ func TestBuildRoutes(t *testing.T) {
 		{Host: "www.example.com", TLS: true, HostPort: 20003}, // already routed: no redirect over it
 		{Host: "abc.203.0.113.7.sslip.io", HostPort: 20004},
 	}
-	file := BuildRoutes(rows, "ops@example.com", "dash.example.com", "127.0.0.1:8000")
+	file, skipped := BuildRoutes(rows, "ops@example.com", "dash.example.com", "127.0.0.1:8000")
+	if len(skipped) != 0 {
+		t.Fatalf("skipped %v", skipped)
+	}
 	byHost := map[string]proxy.Route{}
 	for _, r := range file.Routes {
 		if _, dup := byHost[r.Host]; dup {
@@ -563,9 +604,328 @@ func TestBuildRoutes(t *testing.T) {
 		t.Fatalf("the proxy rejects the generated file: %v", err)
 	}
 	// An empty server still produces a valid file with an empty list.
-	raw, _ = json.Marshal(BuildRoutes(nil, "", "", ""))
+	empty, _ := BuildRoutes(nil, "", "", "")
+	raw, _ = json.Marshal(empty)
 	if string(raw) != `{"routes":[]}` {
 		t.Fatalf("empty file: %s", raw)
+	}
+}
+
+func TestBuildRoutesSkipsWhatTheProxyWouldRefuse(t *testing.T) {
+	// 250 characters is a valid host; with "www." in front it is not.
+	long := strings.Repeat("a", 60) + "." + strings.Repeat("b", 60) + "." + strings.Repeat("c", 60) + "." + strings.Repeat("d", 60) + ".example"
+	if len(long) != 251 || !proxy.ValidHost(long) {
+		t.Fatalf("test host is %d characters, valid=%v", len(long), proxy.ValidHost(long))
+	}
+	rows := []db.RouteRow{
+		{Host: long, RedirectWWW: true, HostPort: 20001},
+		{Host: "bad_host.example.com", HostPort: 20002},
+		{Host: "good.example.com", HostPort: 20003},
+	}
+	file, skipped := BuildRoutes(rows, "", "", "")
+	if len(skipped) != 2 || skipped[0] != "www."+long || skipped[1] != "bad_host.example.com" {
+		t.Fatalf("skipped %v", skipped)
+	}
+	raw, _ := json.Marshal(file)
+	tab, err := proxy.Parse(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("one bad domain broke the whole file: %v", err)
+	}
+	if _, ok := tab.Lookup("good.example.com"); !ok || tab.Len() != 2 {
+		t.Fatalf("the good routes were not published: %d routes", tab.Len())
+	}
+}
+
+func TestFailedSwitchRollsBackAndKeepsOldContainer(t *testing.T) {
+	e := newEnv(t)
+	first := e.deploy()
+	before := e.reload()
+	e.fake.FailWrite = func(path string) error {
+		if path == e.cfg.RoutesPath() {
+			return errors.New("disk full")
+		}
+		return nil
+	}
+	second := e.deploy()
+	if second.Status != db.DeployFailed || !strings.Contains(second.Error, "publish the new routes") {
+		t.Fatalf("%s %q", second.Status, second.Error)
+	}
+	after := e.reload()
+	if after.Container != before.Container || after.HostPort != before.HostPort || after.Status != db.AppRunning {
+		t.Fatalf("the app must be back on its previous container: %+v", after)
+	}
+	oldC, newC := ContainerName(e.app.ID, first.ID), ContainerName(e.app.ID, second.ID)
+	removedNew := false
+	for _, c := range e.fake.Calls() {
+		if c == "docker stop --time 30 "+oldC {
+			t.Fatal("the previous container was stopped although traffic never moved")
+		}
+		if c == "docker rm --force "+newC {
+			removedNew = true
+		}
+	}
+	if !removedNew {
+		t.Fatal("the new container was left running")
+	}
+}
+
+func TestProxyThatRefusesTheSignalStillGetsTheRoutes(t *testing.T) {
+	e := newEnv(t)
+	e.fake.Handle = func(line string, _ runner.Cmd) (string, error) {
+		if strings.HasPrefix(line, "kill -HUP") {
+			return "", runnertest.Exit("kill", 1, "kill: (4242) - Operation not permitted")
+		}
+		return running, nil
+	}
+	dep := e.deploy()
+	if dep.Status != db.DeploySuccess {
+		t.Fatalf("%s %q", dep.Status, dep.Error)
+	}
+	if len(e.routes().Routes) == 0 {
+		t.Fatal("routes were not written")
+	}
+	if strings.Contains(e.log(dep), "proxy is not running") {
+		t.Fatal("a live proxy that refused the signal was reported as not running")
+	}
+}
+
+func TestStalePIDFileIsNotSignalled(t *testing.T) {
+	e := newEnv(t)
+	// The pid in the file now belongs to some other program.
+	e.fake.PutFile("/proc/4242/comm", "postgres\n")
+	dep := e.deploy()
+	if dep.Status != db.DeploySuccess {
+		t.Fatalf("%s %q", dep.Status, dep.Error)
+	}
+	if indexOf(e.fake.Calls(), "kill -HUP") >= 0 {
+		t.Fatal("SIGHUP was sent to a process that is not musdash")
+	}
+	e.fake.PutFile("/proc/4242/comm", "musdash-linux-a\n")
+	e.deploy()
+	if indexOf(e.fake.Calls(), "kill -HUP 4242") < 0 {
+		t.Fatal("the real proxy was not signalled")
+	}
+}
+
+func TestStopThatFailsCanBeRunAgain(t *testing.T) {
+	e := newEnv(t)
+	dep := e.deploy()
+	container := ContainerName(e.app.ID, dep.ID)
+	failing := true
+	e.fake.Handle = func(line string, _ runner.Cmd) (string, error) {
+		if strings.HasPrefix(line, "docker stop") && failing {
+			return "", runnertest.Exit("docker", 1, "Cannot connect to the Docker daemon")
+		}
+		return running, nil
+	}
+	if err := e.d.Stop(context.Background(), e.app.ID); err == nil {
+		t.Fatal("want an error")
+	}
+	// The route is gone, but the container is still remembered.
+	if got := e.reload(); got.Container != container || got.Status != db.AppStopped || got.HostPort != 0 {
+		t.Fatalf("after a failed stop: %+v", got)
+	}
+	if len(e.routes().Routes) != 0 {
+		t.Fatal("the route must be withdrawn even though the container could not be stopped")
+	}
+	// A "die" event for a stopped app must not flip it to "exited".
+	e.d.applyEvent(context.Background(), []byte(`{"Action":"die","Actor":{"Attributes":{"musdash.kind":"app","musdash.resource":"`+e.app.ID+`","name":"`+container+`"}}}`))
+	if got := e.reload().Status; got != db.AppStopped {
+		t.Fatalf("status %s", got)
+	}
+	failing = false
+	if err := e.d.Stop(context.Background(), e.app.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.reload(); got.Container != "" {
+		t.Fatalf("container still recorded: %+v", got)
+	}
+}
+
+func TestStopAndDestroyAreRefusedDuringADeploy(t *testing.T) {
+	e := newEnv(t)
+	e.deploy()
+	// Hold the next deployment in its health check.
+	release := make(chan struct{})
+	entered := make(chan struct{}, 1)
+	e.probe.mu.Lock()
+	e.probe.fn = func() error {
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
+		select {
+		case <-release:
+			return nil
+		default:
+			return errors.New("not yet")
+		}
+	}
+	e.probe.mu.Unlock()
+	ctx := context.Background()
+	e.db.Exec(`UPDATE apps SET health_timeout = 30 WHERE id = ?`, e.app.ID)
+	app := e.reload()
+	dep, err := e.d.Enqueue(ctx, app, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	if err := e.d.Stop(ctx, e.app.ID); !errors.Is(err, ErrBusy) {
+		t.Fatalf("Stop during a deploy: %v", err)
+	}
+	if err := e.d.Destroy(ctx, e.app.ID); !errors.Is(err, ErrBusy) {
+		t.Fatalf("Destroy during a deploy: %v", err)
+	}
+	close(release)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if got, _ := e.db.DeploymentByID(ctx, dep.ID); got.Status == db.DeploySuccess {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := e.d.Stop(ctx, e.app.ID); err != nil {
+		t.Fatalf("Stop after the deploy: %v", err)
+	}
+}
+
+func TestDeployOfDeletedAppLeavesNoContainer(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	// The app is deleted while its deployment waits for the health check.
+	deleted := false
+	e.probe.mu.Lock()
+	e.probe.fn = func() error {
+		if !deleted {
+			deleted = true
+			e.db.DeleteApp(ctx, e.app.ID)
+		}
+		return nil
+	}
+	e.probe.mu.Unlock()
+	app, _ := e.db.AppByID(ctx, e.app.ID)
+	dep, err := e.d.Enqueue(ctx, app, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	container := ContainerName(e.app.ID, dep.ID)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		calls := e.fake.Calls()
+		run := indexOf(calls, "docker run")
+		if run >= 0 {
+			for _, c := range calls[run+1:] {
+				if c == "docker rm --force "+container {
+					return
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the container of a deleted app was left running")
+}
+
+func TestReconcileRemovesOrphans(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	dep := e.deploy()
+	current := ContainerName(e.app.ID, dep.ID)
+	// A deployment that is still running elsewhere in the queue.
+	active, _ := e.db.CreateDeployment(ctx, db.Deployment{AppID: e.app.ID, Image: "nginx"})
+	e.db.StartDeployment(ctx, active.ID)
+	// One that finished long ago, and one for an app that no longer exists.
+	old, _ := e.db.CreateDeployment(ctx, db.Deployment{AppID: e.app.ID, Image: "nginx"})
+	e.db.Exec(`UPDATE deployments SET status = 'success', finished_at = 100 WHERE id = ?`, old.ID)
+
+	rows := []string{
+		current + "\trunning\tapp\t" + e.app.ID + "\t" + dep.ID,
+		"musdash-" + e.app.ID + "-" + active.ID + "\trunning\tapp\t" + e.app.ID + "\t" + active.ID,
+		"musdash-" + e.app.ID + "-" + old.ID + "\trunning\tapp\t" + e.app.ID + "\t" + old.ID,
+		"musdash-gone-xyz\texited\tapp\tgone\txyz",
+		"musdash-db1-abc\trunning\tdatabase\tdb1\tabc",
+	}
+	e.fake.Handle = func(line string, _ runner.Cmd) (string, error) {
+		if strings.HasPrefix(line, "docker ps") {
+			return strings.Join(rows, "\n") + "\n", nil
+		}
+		return running, nil
+	}
+	r, _ := e.d.Runners.Runner(ctx, e.server)
+	before := len(e.fake.Calls())
+	if err := e.d.Reconcile(ctx, e.server, dockerClient(r)); err != nil {
+		t.Fatal(err)
+	}
+	var removed []string
+	for _, c := range e.fake.Calls()[before:] {
+		if name, ok := strings.CutPrefix(c, "docker rm --force "); ok {
+			removed = append(removed, name)
+		}
+	}
+	want := []string{"musdash-" + e.app.ID + "-" + old.ID, "musdash-gone-xyz"}
+	if len(removed) != 2 || removed[0] != want[0] || removed[1] != want[1] {
+		t.Fatalf("removed %v, want %v (the serving container, an active deployment's container and other kinds must stay)", removed, want)
+	}
+}
+
+func TestRestartingContainerFailsTheDeployAtOnce(t *testing.T) {
+	e := newEnv(t)
+	e.db.Exec(`UPDATE apps SET health_timeout = 30 WHERE id = ?`, e.app.ID)
+	e.fake.Handle = func(line string, _ runner.Cmd) (string, error) {
+		if strings.HasPrefix(line, "docker inspect") {
+			// Docker reports a crash-looping container as running.
+			return `{"Status":"restarting","Running":true,"ExitCode":1}`, nil
+		}
+		return "", nil
+	}
+	started := time.Now()
+	dep := e.deploy()
+	if dep.Status != db.DeployFailed || !strings.Contains(dep.Error, "exited with status 1") || time.Since(started) > 3*time.Second {
+		t.Fatalf("%s %q after %v", dep.Status, dep.Error, time.Since(started))
+	}
+}
+
+func TestTCPProbeNeedsARealListener(t *testing.T) {
+	probe := newLocalProbe()
+	ctx := context.Background()
+	serve := func(handle func(net.Conn)) int {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { ln.Close() })
+		go func() {
+			for {
+				c, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				go handle(c)
+			}
+		}()
+		return ln.Addr().(*net.TCPAddr).Port
+	}
+	// What Docker's port proxy does when nothing listens in the container:
+	// accept, then close.
+	closesAtOnce := serve(func(c net.Conn) { c.Close() })
+	// A server waiting for a request, such as an HTTP server.
+	waits := serve(func(c net.Conn) { time.Sleep(2 * time.Second); c.Close() })
+	// A server that speaks first, such as MySQL or SMTP.
+	greets := serve(func(c net.Conn) { c.Write([]byte("220 ready\r\n")); time.Sleep(time.Second); c.Close() })
+
+	if err := probe.TCP(ctx, closesAtOnce); err == nil {
+		t.Error("a connection that is dropped at once passed the check")
+	}
+	if err := probe.TCP(ctx, waits); err != nil {
+		t.Errorf("a waiting server failed the check: %v", err)
+	}
+	if err := probe.TCP(ctx, greets); err != nil {
+		t.Errorf("a greeting server failed the check: %v", err)
+	}
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	closed := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	if err := probe.TCP(ctx, closed); err == nil {
+		t.Error("a closed port passed the check")
 	}
 }
 

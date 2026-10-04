@@ -2,6 +2,7 @@ package web
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -43,6 +44,23 @@ func (s *Server) checkPassword(r *http.Request, hash, password string) bool {
 		return false
 	}
 	return auth.CheckPassword(hash, password)
+}
+
+// publicIP guesses this machine's public address: the source address the
+// system would use to reach the internet. No packet is sent. It returns ""
+// when that address is private or loopback (a home network, or a cloud
+// server behind NAT); the Servers page lets a person set it instead.
+func publicIP() string {
+	conn, err := net.Dial("udp", "192.0.2.1:9")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	addr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || addr.IP.IsPrivate() || addr.IP.IsLoopback() || addr.IP.IsLinkLocalUnicast() || addr.IP.IsUnspecified() {
+		return ""
+	}
+	return addr.IP.String()
 }
 
 // startSession creates a session and sets its cookie.
@@ -122,6 +140,10 @@ func (s *Server) setupSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if _, err := s.DB.EnsureLocalServer(r.Context(), teamID, publicIP()); err != nil {
 		s.fail(w, r, err)
 		return
 	}

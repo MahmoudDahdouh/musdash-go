@@ -78,16 +78,18 @@ func scanApp(row interface{ Scan(...any) error }) (App, error) {
 }
 
 // EnsureLocalServer returns the install's local server, creating it for the
-// team when it does not exist yet.
+// team when it does not exist yet. A unique index allows only one, so two
+// callers racing to create it end up with the same row.
 func (d *DB) EnsureLocalServer(ctx context.Context, teamID, ip string) (Server, error) {
 	s, err := d.localServer(ctx)
 	if err == nil || !errors.Is(err, ErrNotFound) {
 		return s, err
 	}
-	s = Server{ID: secret.RandomID(), TeamID: teamID, Name: "localhost", Kind: ServerLocal, IP: ip, CreatedAt: now()}
-	_, err = d.ExecContext(ctx, `INSERT INTO servers (id, team_id, name, kind, ip, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		s.ID, s.TeamID, s.Name, s.Kind, s.IP, s.CreatedAt)
-	return s, err
+	if _, err := d.ExecContext(ctx, `INSERT INTO servers (id, team_id, name, kind, ip, created_at) VALUES (?, ?, 'localhost', 'local', ?, ?)
+		ON CONFLICT DO NOTHING`, secret.RandomID(), teamID, ip, now()); err != nil {
+		return Server{}, err
+	}
+	return d.localServer(ctx)
 }
 
 const serverColumns = `id, team_id, name, kind, host, port, ssh_user, ip, created_at`
@@ -251,17 +253,44 @@ func (d *DB) SetAppStatus(ctx context.Context, id, status string) error {
 
 // SetAppStatusIf changes the status only when the app's serving container is
 // still the given one. The monitor uses it so an event from a container that
-// has since been replaced cannot overwrite the new container's status.
+// has since been replaced cannot overwrite the new container's status. It
+// also leaves alone an app that is being deployed or was stopped on purpose:
+// those statuses are set by the code doing the work, not by Docker events.
 func (d *DB) SetAppStatusIf(ctx context.Context, id, container, status string) error {
-	_, err := d.ExecContext(ctx, `UPDATE apps SET status = ?, updated_at = ? WHERE id = ? AND container = ? AND status <> ?`,
-		status, now(), id, container, AppDeploying)
+	_, err := d.ExecContext(ctx, `UPDATE apps SET status = ?, updated_at = ? WHERE id = ? AND container = ? AND status NOT IN (?, ?)`,
+		status, now(), id, container, AppDeploying, AppStopped)
 	return err
 }
 
-// SetAppRuntime records the container now serving the app.
+// SetAppRuntime records the container now serving the app. It returns
+// ErrNotFound when the app was deleted in the meantime, so a deployment
+// does not leave a container behind for an app that no longer exists.
 func (d *DB) SetAppRuntime(ctx context.Context, id, status, container string, hostPort int, image string) error {
-	_, err := d.ExecContext(ctx, `UPDATE apps SET status = ?, container = ?, host_port = ?, deployed_image = ?, updated_at = ? WHERE id = ?`,
-		status, container, hostPort, image, now(), id)
+	return affected(d.ExecContext(ctx, `UPDATE apps SET status = ?, container = ?, host_port = ?, deployed_image = ?, updated_at = ? WHERE id = ?`,
+		status, container, hostPort, image, now(), id))
+}
+
+// SetAppStopping marks an app stopped and takes its port out of the routes,
+// while still remembering its container until that has been removed.
+func (d *DB) SetAppStopping(ctx context.Context, id string) error {
+	return affected(d.ExecContext(ctx, `UPDATE apps SET status = ?, host_port = 0, updated_at = ? WHERE id = ?`, AppStopped, now(), id))
+}
+
+// ClearAppContainer forgets a container once it has been removed.
+func (d *DB) ClearAppContainer(ctx context.Context, id, container string) error {
+	_, err := d.ExecContext(ctx, `UPDATE apps SET container = '', updated_at = ? WHERE id = ? AND container = ?`, now(), id, container)
+	return err
+}
+
+// ResetStuckDeploying repairs apps left in "deploying" by a process that
+// died: with no deployment queued or running for them, nothing would ever
+// move them on. What was serving before is assumed to still be; the
+// monitor's reconcile corrects that from Docker right after.
+func (d *DB) ResetStuckDeploying(ctx context.Context) error {
+	_, err := d.ExecContext(ctx, `UPDATE apps
+		SET status = CASE WHEN container <> '' THEN ? ELSE ? END, updated_at = ?
+		WHERE status = ? AND id NOT IN (SELECT app_id FROM deployments WHERE status IN ('queued', 'running'))`,
+		AppRunning, AppFailed, now(), AppDeploying)
 	return err
 }
 

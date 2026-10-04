@@ -43,6 +43,9 @@ type Proxy struct {
 	rp     *httputil.ReverseProxy
 	log    *slog.Logger
 	routes string
+	// loaded identifies the routes file that was last read, so the poll can
+	// tell when it changed.
+	loaded atomic.Value // fileStamp
 	// https reports whether a TLS listener exists. Without one, hosts that
 	// ask for TLS are served over HTTP rather than redirected nowhere.
 	https bool
@@ -85,13 +88,44 @@ func New(routesPath string, https bool, logger *slog.Logger) (*Proxy, error) {
 // Reload reads routes.json again. On any error the current table stays in
 // place, so a half-written or invalid file never takes sites down.
 func (p *Proxy) Reload() error {
+	// Stamp first: if the file changes while it is being read, the next poll
+	// sees a different stamp and reads it again.
+	stamp := stampOf(p.routes)
 	t, err := Load(p.routes)
 	if err != nil {
 		return err
 	}
 	p.table.Store(t)
+	p.loaded.Store(stamp)
 	return nil
 }
+
+// fileStamp identifies one version of the routes file.
+type fileStamp struct {
+	modified time.Time
+	size     int64
+	exists   bool
+}
+
+func stampOf(path string) fileStamp {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fileStamp{}
+	}
+	return fileStamp{modified: info.ModTime(), size: info.Size(), exists: true}
+}
+
+// Changed reports whether the routes file differs from the one in use.
+func (p *Proxy) Changed() bool {
+	last, _ := p.loaded.Load().(fileStamp)
+	return stampOf(p.routes) != last
+}
+
+// pollEvery is how often the proxy checks the routes file on its own. The
+// control plane also sends SIGHUP for an immediate reload; the poll makes
+// sure a missed or refused signal delays a route change by seconds rather
+// than leaving it unapplied.
+const pollEvery = 3 * time.Second
 
 // Table returns the route table in use.
 func (p *Proxy) Table() *Table { return p.table.Load() }
@@ -232,7 +266,13 @@ func Run(ctx context.Context, o Options) error {
 	o.Log.Info("proxy listening", "http", ln.Addr().String(), "routes", p.Table().Len())
 
 	if o.PIDPath != "" {
-		if err := os.WriteFile(o.PIDPath, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
+		// Written whole and renamed into place, so the control plane never
+		// reads half a number.
+		tmp := o.PIDPath + ".tmp"
+		if err := os.WriteFile(tmp, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
+			return err
+		}
+		if err := os.Rename(tmp, o.PIDPath); err != nil {
 			return err
 		}
 		defer os.Remove(o.PIDPath)
@@ -241,14 +281,23 @@ func Run(ctx context.Context, o Options) error {
 	hup := make(chan os.Signal, 1)
 	signal.Notify(hup, syscall.SIGHUP)
 	defer signal.Stop(hup)
+	poll := time.NewTicker(pollEvery)
+	defer poll.Stop()
 
+	reload := func() {
+		if err := p.Reload(); err != nil {
+			o.Log.Error("reload failed; keeping the current routes", "err", err)
+		} else {
+			o.Log.Info("routes reloaded", "routes", p.Table().Len())
+		}
+	}
 	for {
 		select {
 		case <-hup:
-			if err := p.Reload(); err != nil {
-				o.Log.Error("reload failed; keeping the current routes", "err", err)
-			} else {
-				o.Log.Info("routes reloaded", "routes", p.Table().Len())
+			reload()
+		case <-poll.C:
+			if p.Changed() {
+				reload()
 			}
 		case err := <-errc:
 			return err

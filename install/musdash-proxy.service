@@ -1,0 +1,30 @@
+[Unit]
+Description=musdash edge proxy (ports 80 and 443)
+Documentation=https://github.com/MahmoudDahdouh/musdash-go
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# The same user as the control plane, which signals this process to reload
+# its routes.
+User=musdash
+Group=musdash
+Environment=MUSDASH_DATA=/var/lib/musdash
+ExecStart=/usr/local/bin/musdash proxy
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=1
+
+# Bind ports 80 and 443 without running as root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/musdash
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

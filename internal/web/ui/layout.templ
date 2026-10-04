@@ -31,6 +31,8 @@ type NavItem struct {
 // Nav is the sidebar's content. Later phases append their sections here.
 var Nav = []NavItem{
 	{Key: "projects", Label: "Projects", Href: "/", Icon: "folder"},
+	{Key: "servers", Label: "Servers", Href: "/servers", Icon: "server"},
+	{Key: "settings", Label: "Settings", Href: "/settings", Icon: "settings"},
 }
 
 func csrfHeader(token string) string {

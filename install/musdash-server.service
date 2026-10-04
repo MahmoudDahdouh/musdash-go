@@ -1,0 +1,30 @@
+[Unit]
+Description=musdash control plane (UI, webhooks, jobs)
+Documentation=https://github.com/MahmoudDahdouh/musdash-go
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=musdash
+Group=musdash
+# Access to the Docker socket. This is root-equivalent on the host, which is
+# why musdash runs as its own user and never passes raw input to a shell.
+SupplementaryGroups=docker
+Environment=MUSDASH_DATA=/var/lib/musdash
+Environment=MUSDASH_LISTEN=:8000
+ExecStart=/usr/local/bin/musdash server
+Restart=always
+RestartSec=2
+# Running deployments get this long to finish before shutdown.
+TimeoutStopSec=40
+
+StateDirectory=musdash
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

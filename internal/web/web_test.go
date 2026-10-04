@@ -22,8 +22,12 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/auth"
 	"github.com/MahmoudDahdouh/musdash-go/internal/config"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
+	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
+	"github.com/MahmoudDahdouh/musdash-go/internal/runner/runnertest"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
+	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
 	"github.com/MahmoudDahdouh/musdash-go/migrations"
 )
 
@@ -41,6 +45,8 @@ const (
 type app struct {
 	t      *testing.T
 	db     *db.DB
+	cfg    *config.Config
+	fake   *runnertest.Fake
 	url    string
 	client *http.Client
 }
@@ -62,10 +68,40 @@ func newAppWithLog(t *testing.T, dev bool, logTo io.Writer) *app {
 	}
 	box, _ := secret.New(secret.RandomBytes(secret.KeySize))
 	log := slog.New(slog.NewTextHandler(logTo, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	s := &Server{Cfg: &config.Config{DataDir: dir, Dev: dev}, DB: d, Box: box, Queue: jobs.New(d.DB, log, 1), Log: log}
+	cfg := &config.Config{DataDir: dir, Dev: dev}
+	if err := cfg.EnsureDirs(); err != nil {
+		t.Fatal(err)
+	}
+	// The server the tests deploy to is scripted: every docker command
+	// succeeds and containers report as running.
+	fake := &runnertest.Fake{Handle: func(line string, _ runner.Cmd) (string, error) {
+		switch {
+		case strings.HasPrefix(line, "docker inspect"):
+			return `{"Status":"running","Running":true,"ExitCode":0}`, nil
+		case strings.HasPrefix(line, "docker version"):
+			return "29.8.0\n", nil
+		case strings.HasPrefix(line, "docker logs"):
+			return "listening on :80\n<script>alert(1)</script>\n", nil
+		}
+		return "", nil
+	}}
+	pool := servers.NewWith(fake)
+	queue := jobs.New(d.DB, log, 2)
+	deployer := deploy.New(d, box, queue, pool, cfg, log, "127.0.0.1:8000")
+	deployer.Probe = okProbe{}
+	deployer.Register()
+	if err := queue.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		queue.Stop(ctx)
+	})
+	s := &Server{Cfg: cfg, DB: d, Box: box, Queue: queue, Deploy: deployer, Pool: pool, Log: log}
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
-	a := &app{t: t, db: d, url: srv.URL}
+	a := &app{t: t, db: d, cfg: cfg, fake: fake, url: srv.URL}
 	a.client = a.newClient()
 	return a
 }
@@ -135,6 +171,12 @@ func (a *app) setup() {
 		a.t.Fatalf("setup: %d %s\n%s", res.StatusCode, res.Header.Get("Location"), body)
 	}
 }
+
+// okProbe passes every health check.
+type okProbe struct{}
+
+func (okProbe) HTTP(context.Context, int, string) error { return nil }
+func (okProbe) TCP(context.Context, int) error          { return nil }
 
 func wantRedirect(t *testing.T, res *http.Response, to string) {
 	t.Helper()

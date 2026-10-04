@@ -22,6 +22,12 @@ func New() *Pool {
 	return &Pool{local: runner.NewLocal()}
 }
 
+// NewWith returns a pool whose local server is reached through r. Tests use
+// it to script what the server answers.
+func NewWith(r runner.Runner) *Pool {
+	return &Pool{local: r}
+}
+
 // Runner returns the Runner for a server.
 func (p *Pool) Runner(_ context.Context, s db.Server) (runner.Runner, error) {
 	switch s.Kind {

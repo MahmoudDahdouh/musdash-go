@@ -97,6 +97,37 @@ func TestRunArgsRejectInjection(t *testing.T) {
 	}
 }
 
+func TestCheckBindSource(t *testing.T) {
+	const dataDir = "/var/lib/musdash"
+	refused := []string{
+		"/", "/var/run/docker.sock", "/var/run", "/run/docker.sock", "/etc", "/etc/shadow", "/root/.ssh",
+		"/proc", "/sys/fs", "/dev/sda", "/var", "/var/lib", "/var/lib/docker/volumes", "/usr/bin",
+		dataDir, dataDir + "/master.key", dataDir + "/apps/other/env",
+		"/srv/../etc", "relative/path", "/srv/a,readonly",
+	}
+	for _, p := range refused {
+		if CheckBindSource(p, dataDir) == nil {
+			t.Errorf("accepted %q", p)
+		}
+	}
+	for _, p := range []string{"/srv/files", "/home/deploy/uploads", "/opt/app/config", "/mnt/storage", "/data", "/etcetera", "/var2/x"} {
+		if err := CheckBindSource(p, dataDir); err != nil {
+			t.Errorf("refused %q: %v", p, err)
+		}
+	}
+}
+
+func TestInternalBindSkipsDenyList(t *testing.T) {
+	spec := RunSpec{Name: "c", Image: "nginx", Mounts: []Mount{{Kind: MountBind, Source: "/run/musdash/apps/a1/files/f1", Target: "/etc/app.conf", Internal: true}}}
+	if _, err := spec.Args(); err != nil {
+		t.Fatalf("a file mount musdash wrote itself was refused: %v", err)
+	}
+	spec.Mounts[0].Internal = false
+	if _, err := spec.Args(); err == nil {
+		t.Fatal("a person's bind mount under /run was accepted")
+	}
+}
+
 // scripted is a Runner that answers from a table keyed by the command line.
 type scripted struct {
 	calls   []string

@@ -109,7 +109,12 @@ func (s *Server) projectShow(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	s.render(w, r, http.StatusOK, pages.ProjectShow(s.shell(w, r, p.Name, "projects", projectCrumbs(p)...), p, envs, current))
+	apps, err := s.DB.ListApps(r.Context(), current.ID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, pages.ProjectShow(s.shell(w, r, p.Name, "projects", projectCrumbs(p)...), p, envs, current, apps))
 }
 
 // renderSettings draws the project settings page with the given form states.
@@ -158,7 +163,13 @@ func (s *Server) projectDelete(w http.ResponseWriter, r *http.Request) {
 		redirect(w, r, "/projects/"+p.ID+"/settings")
 		return
 	}
-	if err := s.DB.DeleteProject(r.Context(), p.TeamID, p.ID); err != nil {
+	err := s.DB.DeleteProject(r.Context(), p.TeamID, p.ID)
+	if db.IsForeignKey(err) {
+		setFlash(w, r, ui.ToneDanger, "The project still has apps deployed in it. Delete them first.")
+		redirect(w, r, "/projects/"+p.ID+"/settings")
+		return
+	}
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -211,6 +222,8 @@ func (s *Server) environmentDelete(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, db.ErrLastEnvironment):
 		setFlash(w, r, ui.ToneDanger, "A project needs at least one environment.")
+	case db.IsForeignKey(err):
+		setFlash(w, r, ui.ToneDanger, "The environment still has apps deployed in it. Delete them first.")
 	case err != nil:
 		s.fail(w, r, err)
 		return

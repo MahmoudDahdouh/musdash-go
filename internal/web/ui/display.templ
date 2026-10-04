@@ -127,8 +127,15 @@ func stateTone(state string) string {
 
 // StateLabel is the human wording of a state: "running" → "Running".
 func StateLabel(state string) string {
-	if state == "" {
+	switch state {
+	case "":
 		return "Unknown"
+	case "created":
+		return "Not deployed"
+	case "exited":
+		return "Not running"
+	case "success":
+		return "Succeeded"
 	}
 	return strings.ToUpper(state[:1]) + strings.ReplaceAll(state[1:], "_", " ")
 }

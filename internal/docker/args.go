@@ -2,6 +2,7 @@ package docker
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -20,6 +21,9 @@ type Mount struct {
 	Source   string // volume name, or absolute host path
 	Target   string // absolute path inside the container
 	ReadOnly bool
+	// Internal marks a bind source that musdash itself created (a file
+	// mount it wrote), which is exempt from the host-path deny list.
+	Internal bool
 }
 
 // RunSpec describes a container to start.
@@ -67,6 +71,43 @@ func ValidMountPath(p string) bool {
 		}
 	}
 	return !strings.Contains(p, "/../") && !strings.HasSuffix(p, "/..")
+}
+
+// deniedBinds are host paths a container must never be given. Mounting any
+// of them, or a directory that contains them, hands the container control of
+// the host: the Docker socket is root, and the system directories hold
+// credentials and devices.
+var deniedBinds = []string{
+	"/var/run", "/run", "/var/lib/docker", "/var/lib/containerd",
+	"/etc", "/root", "/proc", "/sys", "/dev", "/boot", "/usr", "/bin", "/sbin", "/lib", "/lib64",
+}
+
+// CheckBindSource reports why a host path may not be bind-mounted, or nil.
+// protected lists further directories to keep out of containers; musdash
+// passes its own data directory, which holds the master key and database.
+//
+// A path is refused when it is a denied directory, lies inside one, or
+// contains one (mounting /var would expose /var/run/docker.sock). The check
+// is on the path as written: it cannot follow symlinks on a remote server,
+// so bind mounts remain a power reserved for people trusted with the host.
+func CheckBindSource(source string, protected ...string) error {
+	if !ValidMountPath(source) {
+		return fmt.Errorf("bind source %q must be an absolute path without commas", source)
+	}
+	clean := path.Clean(source)
+	if clean == "/" {
+		return fmt.Errorf("the whole filesystem cannot be mounted into a container")
+	}
+	for _, denied := range append(append([]string{}, deniedBinds...), protected...) {
+		if denied == "" {
+			continue
+		}
+		denied = path.Clean(denied)
+		if clean == denied || strings.HasPrefix(clean, denied+"/") || strings.HasPrefix(denied, clean+"/") {
+			return fmt.Errorf("%s cannot be mounted into a container: it would expose %s", source, denied)
+		}
+	}
+	return nil
 }
 
 // Args builds the argument vector for `docker run`. Every value is validated
@@ -148,7 +189,11 @@ func (m Mount) option() (string, error) {
 			return "", fmt.Errorf("bad volume name %q", m.Source)
 		}
 	case MountBind:
-		if !ValidMountPath(m.Source) {
+		if !m.Internal {
+			if err := CheckBindSource(m.Source); err != nil {
+				return "", err
+			}
+		} else if !ValidMountPath(m.Source) {
 			return "", fmt.Errorf("bind source %q must be an absolute path without commas", m.Source)
 		}
 	default:

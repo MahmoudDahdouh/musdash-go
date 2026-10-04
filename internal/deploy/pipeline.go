@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"math/rand/v2"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/config"
@@ -52,6 +55,31 @@ type Deployer struct {
 	healthEvery time.Duration // how often a starting container is checked
 	drain       time.Duration // pause between switching traffic and stopping the old container
 	stopGrace   time.Duration // how long a container gets to exit after SIGTERM
+	pollWait    time.Duration // how long the proxy may take to notice a routes file it was not signalled about
+
+	// routesMu makes each routes publication one step: read the database,
+	// write the file, signal. Without it a slower publication could write
+	// older data over a newer file.
+	routesMu sync.Mutex
+	// appLocks serialise everything that changes one app's container: a
+	// deployment, a stop, a delete. They are striped by app id so the set
+	// never grows.
+	appLocks [64]sync.Mutex
+}
+
+// ErrBusy is returned by Stop and Destroy while a deployment of the app is
+// running.
+var ErrBusy = errors.New("a deployment of this app is in progress")
+
+// keepDeployments is how many finished deployments, with their logs, are
+// kept per app.
+const keepDeployments = 50
+
+// lockFor returns the lock guarding one app's container.
+func (d *Deployer) lockFor(appID string) *sync.Mutex {
+	h := fnv.New32a()
+	h.Write([]byte(appID))
+	return &d.appLocks[h.Sum32()%uint32(len(d.appLocks))]
 }
 
 // New returns a Deployer with production timings.
@@ -63,6 +91,7 @@ func New(d *db.DB, box *secret.Box, q *jobs.Queue, r Runners, cfg *config.Config
 		healthEvery:    time.Second,
 		drain:          3 * time.Second,
 		stopGrace:      30 * time.Second,
+		pollWait:       4 * time.Second,
 	}
 }
 
@@ -116,8 +145,16 @@ func (d *Deployer) runJob(ctx context.Context, raw []byte) error {
 	if err != nil {
 		return jobs.Permanent(fmt.Errorf("deployment %s: %w", p.DeploymentID, err))
 	}
+	// Held for the whole deployment, so a stop or delete cannot interleave
+	// with it. The app is read after the lock is taken: it is the state this
+	// deployment starts from.
+	mu := d.lockFor(dep.AppID)
+	mu.Lock()
+	defer mu.Unlock()
 	app, err := d.DB.AppByID(ctx, dep.AppID)
 	if err != nil {
+		// The app was deleted while this deployment waited in the queue.
+		d.DB.FinishDeployment(ctx, dep.ID, db.DeployFailed, "the app no longer exists")
 		return jobs.Permanent(fmt.Errorf("app %s: %w", dep.AppID, err))
 	}
 
@@ -142,7 +179,11 @@ func (d *Deployer) runJob(ctx context.Context, raw []byte) error {
 	defer cancel()
 	if err == nil {
 		log.Step("Deployed.")
-		return d.DB.FinishDeployment(rec, dep.ID, db.DeploySuccess, "")
+		if ferr := d.DB.FinishDeployment(rec, dep.ID, db.DeploySuccess, ""); ferr != nil {
+			return ferr
+		}
+		d.pruneDeployments(rec, app.ID)
+		return nil
 	}
 
 	if ctx.Err() != nil {
@@ -251,39 +292,58 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 	}
 	log.Step("Healthy on port %d", port)
 
-	// Switch traffic. From this point the deployment has succeeded: the new
-	// container is recorded as serving, so a later error must not remove it.
-	if err := d.DB.SetAppRuntime(ctx, app.ID, db.AppRunning, container, port, image); err != nil {
-		return err
+	// Switch traffic. Once begun this must finish, even if musdash is being
+	// shut down: stopping halfway would leave the routes and the database
+	// disagreeing about which container serves.
+	sw, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	defer cancel()
+	if err := d.DB.SetAppRuntime(sw, app.ID, db.AppRunning, container, port, image); err != nil {
+		return fmt.Errorf("record the new container: %w", err)
 	}
-	switch serr := d.SyncRoutes(ctx, server); {
+	switch serr := d.SyncRoutes(sw, server); {
 	case errors.Is(serr, ErrProxyDown):
+		// Nothing is serving traffic on this server at all, so there is
+		// nothing to switch. The routes are written for when the proxy starts.
 		log.Step("Routes written, but the proxy is not running. Start it with: musdash proxy")
 	case serr != nil:
-		log.Step("Could not update the proxy's routes: %v", serr)
-		d.Log.Error("sync routes", "server", server.ID, "err", serr)
+		// The routes still point at the previous container. Put the record
+		// back and fail: stopping the previous container now would take the
+		// app offline.
+		if rerr := d.DB.SetAppRuntime(sw, app.ID, statusAfterFailure(app), app.Container, app.HostPort, app.DeployedImage); rerr != nil {
+			d.Log.Error("restore app after failed switch", "app", app.ID, "err", rerr)
+		}
+		return fmt.Errorf("publish the new routes: %w", serr)
 	default:
 		log.Step("Traffic switched to the new container")
 	}
 
 	if app.Container != "" && app.Container != container {
 		// Let requests already inside the old container finish.
-		select {
-		case <-time.After(d.drain):
-		case <-ctx.Done():
-		}
-		old, cancel := context.WithTimeout(context.WithoutCancel(ctx), d.stopGrace+30*time.Second)
-		defer cancel()
+		time.Sleep(d.drain)
 		log.Step("Stopping the previous container")
-		if serr := dk.Stop(old, app.Container, d.stopGrace); serr != nil {
+		if serr := dk.Stop(sw, app.Container, d.stopGrace); serr != nil {
 			d.Log.Error("stop old container", "container", app.Container, "err", serr)
 		}
-		if rerr := dk.Remove(old, app.Container); rerr != nil {
+		// If this fails the container is found and removed by the next
+		// reconcile, which clears containers no app points at.
+		if rerr := dk.Remove(sw, app.Container); rerr != nil {
 			d.Log.Error("remove old container", "container", app.Container, "err", rerr)
-			log.Step("The previous container could not be removed: %v", rerr)
+			log.Step("The previous container could not be removed yet: %v", rerr)
 		}
 	}
 	return nil
+}
+
+// pruneDeployments drops an app's oldest finished deployments and their logs.
+func (d *Deployer) pruneDeployments(ctx context.Context, appID string) {
+	ids, err := d.DB.PruneDeployments(ctx, appID, keepDeployments)
+	if err != nil {
+		d.Log.Error("prune deployments", "app", appID, "err", err)
+		return
+	}
+	for _, id := range ids {
+		os.Remove(d.Cfg.DeployLogPath(id))
+	}
 }
 
 // runOnFreePort starts the container on a host port nothing else uses,
@@ -376,6 +436,11 @@ func (d *Deployer) prepareMounts(ctx context.Context, r runner.Runner, app db.Ap
 		case db.StorageVolume:
 			mounts = append(mounts, docker.Mount{Kind: docker.MountVolume, Source: VolumeName(app.ID, s.Source), Target: s.Target})
 		case db.StorageBind:
+			// Checked again at deploy time, with the data directory this
+			// install actually uses.
+			if err := docker.CheckBindSource(s.Source, d.Cfg.DataDir); err != nil {
+				return nil, err
+			}
 			mounts = append(mounts, docker.Mount{Kind: docker.MountBind, Source: s.Source, Target: s.Target})
 		case db.StorageFile:
 			content, err := d.Box.OpenString(s.Content)
@@ -392,48 +457,85 @@ func (d *Deployer) prepareMounts(ctx context.Context, r runner.Runner, app db.Ap
 			if err := r.WriteFile(ctx, path, 0o644, strings.NewReader(content)); err != nil {
 				return nil, fmt.Errorf("write file mount %s: %w", s.Target, err)
 			}
-			mounts = append(mounts, docker.Mount{Kind: docker.MountBind, Source: path, Target: s.Target})
+			mounts = append(mounts, docker.Mount{Kind: docker.MountBind, Source: path, Target: s.Target, Internal: true})
 		}
 	}
 	return mounts, nil
 }
 
-// Stop takes an app offline: its route goes first, then its container.
-func (d *Deployer) Stop(ctx context.Context, app db.App) error {
-	server, err := d.DB.ServerByID(ctx, app.ServerID)
+// Stop takes an app offline: its route goes first, then its container. It
+// returns ErrBusy while a deployment of the app is running.
+//
+// Stopping is several steps that must not be abandoned halfway, so it does
+// not end when the caller's context does (a closed browser tab, a proxy
+// timeout); it has its own deadline.
+func (d *Deployer) Stop(ctx context.Context, appID string) error {
+	mu := d.lockFor(appID)
+	if !mu.TryLock() {
+		return ErrBusy
+	}
+	defer mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), d.stopGrace+90*time.Second)
+	defer cancel()
+	app, err := d.DB.AppByID(ctx, appID)
 	if err != nil {
 		return err
+	}
+	_, err = d.stopLocked(ctx, app)
+	return err
+}
+
+// stopLocked stops an app whose lock the caller holds.
+//
+// The order matters at each step. The route is withdrawn before the
+// container stops, so no request is sent to a dying container. The
+// container's name is forgotten only after it is really gone, so a stop
+// that fails partway can simply be run again.
+func (d *Deployer) stopLocked(ctx context.Context, app db.App) (db.Server, error) {
+	server, err := d.DB.ServerByID(ctx, app.ServerID)
+	if err != nil {
+		return server, err
 	}
 	r, err := d.Runners.Runner(ctx, server)
 	if err != nil {
-		return err
+		return server, err
 	}
 	dk := docker.Client{R: r}
-	// Clearing the container first also makes the status monitor ignore the
-	// "die" event this stop is about to cause.
-	if err := d.DB.SetAppRuntime(ctx, app.ID, db.AppStopped, "", 0, app.DeployedImage); err != nil {
-		return err
+	if err := d.DB.SetAppStopping(ctx, app.ID); err != nil {
+		return server, err
 	}
 	if err := d.SyncRoutes(ctx, server); err != nil && !errors.Is(err, ErrProxyDown) {
+		// The proxy also re-reads its file on its own; carry on.
 		d.Log.Error("sync routes", "server", server.ID, "err", err)
 	}
 	if app.Container == "" {
-		return nil
+		return server, nil
 	}
 	if err := dk.Stop(ctx, app.Container, d.stopGrace); err != nil {
-		return err
+		return server, fmt.Errorf("stop the container: %w", err)
 	}
-	return dk.Remove(ctx, app.Container)
+	if err := dk.Remove(ctx, app.Container); err != nil {
+		return server, fmt.Errorf("remove the container: %w", err)
+	}
+	return server, d.DB.ClearAppContainer(ctx, app.ID, app.Container)
 }
 
-// Destroy stops an app and deletes it, with its env file and file mounts.
-// Docker volumes are kept: they hold the person's data, and removing them is
-// a separate, explicit act.
-func (d *Deployer) Destroy(ctx context.Context, app db.App) error {
-	if err := d.Stop(ctx, app); err != nil {
+// Destroy stops an app and deletes it, with its env file, file mounts and
+// deployment logs. Docker volumes are kept: they hold the person's data,
+// and removing them is a separate, explicit act.
+func (d *Deployer) Destroy(ctx context.Context, appID string) error {
+	mu := d.lockFor(appID)
+	if !mu.TryLock() {
+		return ErrBusy
+	}
+	defer mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), d.stopGrace+90*time.Second)
+	defer cancel()
+	app, err := d.DB.AppByID(ctx, appID)
+	if err != nil {
 		return err
 	}
-	server, err := d.DB.ServerByID(ctx, app.ServerID)
+	server, err := d.stopLocked(ctx, app)
 	if err != nil {
 		return err
 	}
@@ -444,5 +546,15 @@ func (d *Deployer) Destroy(ctx context.Context, app db.App) error {
 	if err := r.RemoveAll(ctx, d.Cfg.AppDir(app.ID)); err != nil {
 		return err
 	}
-	return d.DB.DeleteApp(ctx, app.ID)
+	logs, err := d.DB.DeploymentIDs(ctx, app.ID)
+	if err != nil {
+		return err
+	}
+	if err := d.DB.DeleteApp(ctx, app.ID); err != nil {
+		return err
+	}
+	for _, id := range logs {
+		os.Remove(d.Cfg.DeployLogPath(id))
+	}
+	return nil
 }

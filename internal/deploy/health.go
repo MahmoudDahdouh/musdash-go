@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
@@ -38,7 +40,11 @@ func newLocalProbe() Probe {
 }
 
 func (p localProbe) HTTP(ctx context.Context, port int, path string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:"+strconv.Itoa(port)+path, nil)
+	u, err := HealthURL(port, path)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return err
 	}
@@ -53,6 +59,49 @@ func (p localProbe) HTTP(ctx context.Context, port int, path string) error {
 	return nil
 }
 
+// ValidHealthPath reports whether path can be used as a health check path:
+// it must start with a single "/" and contain no whitespace or control
+// characters.
+func ValidHealthPath(path string) bool {
+	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || len(path) > 512 {
+		return false
+	}
+	for _, c := range path {
+		if c <= ' ' || c == 0x7f || c == '\\' {
+			return false
+		}
+	}
+	return true
+}
+
+// HealthURL builds the probe URL for a container's published port. The host
+// is fixed to loopback and only the path and query come from the app's
+// settings. Joining strings instead would let a path such as
+// "@other-host/" turn "127.0.0.1:<port>" into URL userinfo and send the
+// request to another machine.
+func HealthURL(port int, path string) (string, error) {
+	if !ValidHealthPath(path) {
+		return "", fmt.Errorf("health check path %q must start with a single /", path)
+	}
+	ref, err := url.ParseRequestURI(path)
+	if err != nil {
+		return "", fmt.Errorf("health check path %q is not valid", path)
+	}
+	u := url.URL{Scheme: "http", Host: net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), Path: ref.Path, RawPath: ref.RawPath, RawQuery: ref.RawQuery}
+	if u.Hostname() != "127.0.0.1" || u.User != nil {
+		return "", errors.New("health check URL left the loopback address")
+	}
+	return u.String(), nil
+}
+
+// TCP passes when something behind the published port is really listening.
+//
+// Connecting is not enough. Docker publishes ports through its own proxy
+// process, which accepts every connection and only then tries the
+// container; when nothing listens inside, it closes the connection again.
+// So after connecting, the probe waits briefly: a closed connection means
+// nothing is there, while silence (a server waiting for a request) or data
+// (a server that speaks first) means the app is up.
 func (localProbe) TCP(ctx context.Context, port int) error {
 	var dialer net.Dialer
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -61,8 +110,19 @@ func (localProbe) TCP(ctx context.Context, port int) error {
 	if err != nil {
 		return err
 	}
-	return conn.Close()
+	defer conn.Close()
+	conn.SetReadDeadline(time.Now().Add(tcpSettle))
+	_, err = conn.Read(make([]byte, 1))
+	var timeout net.Error
+	if err == nil || (errors.As(err, &timeout) && timeout.Timeout()) {
+		return nil
+	}
+	return errors.New("the connection was closed at once: nothing is listening on the app's port inside the container")
 }
+
+// tcpSettle is how long TCP waits to see whether a new connection is
+// dropped.
+const tcpSettle = 500 * time.Millisecond
 
 // waitHealthy polls until the new container passes its check, exits, or the
 // app's health timeout runs out.
@@ -98,7 +158,9 @@ func (d *Deployer) waitHealthy(ctx context.Context, dk docker.Client, app db.App
 		switch {
 		case err != nil && ctx.Err() == nil:
 			return err
-		case err == nil && !st.Running && st.Status != "created":
+		// "restarting" is a container that exited and that Docker's restart
+		// policy is bringing back: it crashed on start.
+		case err == nil && st.Status != "created" && (!st.Running || st.Status == "restarting"):
 			return fmt.Errorf("%w with status %d before it became healthy", errExited, st.ExitCode)
 		case err == nil:
 			if last = check(); last == nil {

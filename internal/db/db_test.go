@@ -287,3 +287,75 @@ func TestSettings(t *testing.T) {
 		t.Fatalf("got %q", v)
 	}
 }
+
+func TestResetStuckDeployingAndPrune(t *testing.T) {
+	ctx := context.Background()
+	d := openTest(t)
+	_, team, _ := d.CreateFirstUser(ctx, "a@example.com", "A", "hash")
+	server, _ := d.EnsureLocalServer(ctx, team, "")
+	p, _ := d.CreateProject(ctx, team, "Shop", "")
+	envs, _ := d.ListEnvironments(ctx, p.ID)
+	mk := func(name, container string) App {
+		a, err := d.CreateApp(ctx, team, App{EnvironmentID: envs[0].ID, ServerID: server.ID, Name: name, Image: "nginx", Port: 80})
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.Exec(`UPDATE apps SET status = 'deploying', container = ? WHERE id = ?`, container, a.ID)
+		return a
+	}
+	hadContainer := mk("had", "musdash-had-1")
+	neverRan := mk("never", "")
+	stillDeploying := mk("busy", "")
+	if _, err := d.CreateDeployment(ctx, Deployment{AppID: stillDeploying.ID, Image: "nginx"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.ResetStuckDeploying(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string]string{hadContainer.ID: AppRunning, neverRan.ID: AppFailed, stillDeploying.ID: AppDeploying} {
+		if got, _ := d.AppByID(ctx, id); got.Status != want {
+			t.Errorf("app %s: status %s, want %s", got.Name, got.Status, want)
+		}
+	}
+
+	// Pruning keeps the newest finished deployments and never a live one.
+	var ids []string
+	for i := range 6 {
+		dep, _ := d.CreateDeployment(ctx, Deployment{AppID: hadContainer.ID, Image: "nginx"})
+		d.Exec(`UPDATE deployments SET status = 'success', created_at = ? WHERE id = ?`, 1000+i, dep.ID)
+		ids = append(ids, dep.ID)
+	}
+	live, _ := d.CreateDeployment(ctx, Deployment{AppID: hadContainer.ID, Image: "nginx"})
+	d.Exec(`UPDATE deployments SET created_at = 1 WHERE id = ?`, live.ID)
+	removed, err := d.PruneDeployments(ctx, hadContainer.ID, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 2 || (removed[0] != ids[1] && removed[0] != ids[0]) {
+		t.Fatalf("removed %v, want the two oldest finished of %v", removed, ids)
+	}
+	if _, err := d.DeploymentByID(ctx, live.ID); err != nil {
+		t.Fatal("a queued deployment was pruned")
+	}
+
+	// Stopped apps are not routed, and an event cannot un-stop them.
+	d.AddDomain(ctx, KindApp, hadContainer.ID, "had.example.com", true, false)
+	d.Exec(`UPDATE apps SET host_port = 20001 WHERE id = ?`, hadContainer.ID)
+	if rows, _ := d.RoutesForServer(ctx, server.ID); len(rows) != 1 {
+		t.Fatalf("%d routes for a running app", len(rows))
+	}
+	if err := d.SetAppStopping(ctx, hadContainer.ID); err != nil {
+		t.Fatal(err)
+	}
+	if rows, _ := d.RoutesForServer(ctx, server.ID); len(rows) != 0 {
+		t.Fatal("a stopped app is still routed")
+	}
+	d.SetAppStatusIf(ctx, hadContainer.ID, "musdash-had-1", AppExited)
+	if got, _ := d.AppByID(ctx, hadContainer.ID); got.Status != AppStopped || got.Container != "musdash-had-1" {
+		t.Fatalf("after stop: %+v", got)
+	}
+	if err := d.SetAppRuntime(ctx, "no-such-app", AppRunning, "c", 1, "i"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("SetAppRuntime on a deleted app: %v", err)
+	}
+}

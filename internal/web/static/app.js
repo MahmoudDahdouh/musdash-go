@@ -82,9 +82,13 @@
   document.addEventListener("htmx:afterSettle", (e) => armToasts(e.target));
 
   // Log views follow new output unless the reader has scrolled up.
+  // Old lines are dropped so a log left open for days stays small.
+  const maxLogNodes = 4000;
   document.addEventListener("htmx:sseMessage", (e) => {
     const log = e.target.closest?.("[data-follow]");
-    if (log && log.dataset.follow !== "paused") log.scrollTop = log.scrollHeight;
+    if (!log) return;
+    while (log.childNodes.length > maxLogNodes) log.firstChild.remove();
+    if (log.dataset.follow !== "paused") log.scrollTop = log.scrollHeight;
   });
   on("scroll", "[data-follow]", (el) => {
     el.dataset.follow = el.scrollHeight - el.scrollTop - el.clientHeight < 40 ? "on" : "paused";

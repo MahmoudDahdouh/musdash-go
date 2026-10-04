@@ -242,6 +242,71 @@ func (d *DB) FailStaleDeployments(ctx context.Context, reason string) error {
 	return err
 }
 
+// ProtectedDeployments returns the ids of deployments whose containers must
+// not be cleaned up: those queued or running, and those that finished after
+// the given time (their old container may still be draining).
+func (d *DB) ProtectedDeployments(ctx context.Context, finishedAfter int64) (map[string]bool, error) {
+	rows, err := d.QueryContext(ctx, `SELECT id FROM deployments WHERE status IN ('queued', 'running') OR finished_at > ?`, finishedAfter)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
+// DeploymentIDs returns every deployment id of an app.
+func (d *DB) DeploymentIDs(ctx context.Context, appID string) ([]string, error) {
+	return d.queryIDs(ctx, `SELECT id FROM deployments WHERE app_id = ?`, appID)
+}
+
+// PruneDeployments deletes an app's finished deployments beyond the newest
+// keep and returns the ids removed, so their log files can go too.
+func (d *DB) PruneDeployments(ctx context.Context, appID string, keep int) ([]string, error) {
+	ids, err := d.queryIDs(ctx, `SELECT id FROM deployments WHERE app_id = ? AND status IN ('success', 'failed')
+		ORDER BY created_at DESC, rowid DESC LIMIT -1 OFFSET ?`, appID, keep)
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+	for _, id := range ids {
+		if _, err := d.ExecContext(ctx, `DELETE FROM deployments WHERE id = ?`, id); err != nil {
+			return nil, err
+		}
+	}
+	return ids, nil
+}
+
+func (d *DB) queryIDs(ctx context.Context, query string, args ...any) ([]string, error) {
+	rows, err := d.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// CountDomains reports how many domains a resource has.
+func (d *DB) CountDomains(ctx context.Context, kind, id string) (int, error) {
+	var n int
+	err := d.QueryRowContext(ctx, `SELECT count(*) FROM domains WHERE resource_kind = ? AND resource_id = ?`, kind, id).Scan(&n)
+	return n, err
+}
+
 // RouteRow is one host to publish in a server's routes file.
 type RouteRow struct {
 	Host        string
@@ -255,7 +320,7 @@ type RouteRow struct {
 func (d *DB) RoutesForServer(ctx context.Context, serverID string) ([]RouteRow, error) {
 	rows, err := d.QueryContext(ctx, `SELECT m.host, m.tls, m.redirect_www, a.host_port
 		FROM domains m JOIN apps a ON m.resource_kind = 'app' AND m.resource_id = a.id
-		WHERE a.server_id = ? AND a.host_port > 0 AND a.container <> ''
+		WHERE a.server_id = ? AND a.host_port > 0 AND a.container <> '' AND a.status <> 'stopped'
 		ORDER BY m.host`, serverID)
 	if err != nil {
 		return nil, err

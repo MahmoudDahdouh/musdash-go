@@ -102,35 +102,35 @@ func (d *Deployer) SyncRoutes(ctx, serverID string) error
 Each task ends with vet and tests green, a self-review, an independent review at the end of the phase, and a commit pushed to `main`.
 
 ### Task 1 — Proxy
-- [ ] `table.go`: parse `routes.json`, validate, build a host map; `atomic.Pointer` swap; lookup is case-insensitive and ignores the port.
-- [ ] `proxy.go`: one `httputil.ReverseProxy` with a shared tuned `http.Transport`; preserves `Host`; sets `X-Forwarded-For/Proto/Host`; strips client-supplied `X-Forwarded-*`; 404 for unknown hosts, 502 page when the target is down; pid file; SIGHUP reload that keeps the old table when the new file is invalid.
-- [ ] `tls.go`: `autocert.Manager` with `DirCache` and a `HostPolicy` limited to routes with `tls: true`; port 80 serves ACME challenges, redirects TLS hosts to HTTPS and proxies HTTP-only hosts.
-- [ ] Tests: routing by host, unknown host, `www` redirect, HTTPS redirect, HTTP-only host proxied, forwarded headers, spoofed headers dropped, WebSocket upgrade passes, reload swaps routes, invalid file keeps old routes, `HostPolicy` refuses unknown hosts, 502 when the target is closed.
+- [x] `table.go`: parse `routes.json`, validate, build a host map; `atomic.Pointer` swap; lookup is case-insensitive and ignores the port.
+- [x] `proxy.go`: one `httputil.ReverseProxy` with a shared tuned `http.Transport`; preserves `Host`; sets `X-Forwarded-For/Proto/Host`; strips client-supplied `X-Forwarded-*`; 404 for unknown hosts, 502 page when the target is down; pid file; SIGHUP reload that keeps the old table when the new file is invalid.
+- [x] `tls.go`: `autocert.Manager` with `DirCache` and a `HostPolicy` limited to routes with `tls: true`; port 80 serves ACME challenges, redirects TLS hosts to HTTPS and proxies HTTP-only hosts.
+- [x] Tests: routing by host, unknown host, `www` redirect, HTTPS redirect, HTTP-only host proxied, forwarded headers, spoofed headers dropped, WebSocket upgrade passes, reload swaps routes, invalid file keeps old routes, `HostPolicy` refuses unknown hosts, 502 when the target is closed.
 
 ### Task 2 — Data model, Docker wrappers, deploy pipeline
-- [ ] Migration and queries, all team-scoped through environment → project.
-- [ ] `docker/args.go` with table tests for every flag; values are passed as separate arguments and image names are validated against the Docker reference grammar so a value can never be read as a flag.
-- [ ] Env file writer: `KEY=value` lines, mode `0600`; keys validated as `[A-Za-z_][A-Za-z0-9_]*`; values with newlines rejected (Docker's env-file format cannot carry them).
-- [ ] Pipeline as a job with lock key `deploy:<appID>`: pull → network → env file → file mounts → run on a fresh port → health → routes + reload → stop old → record.
-- [ ] Failure at any step removes the new container, leaves the old one and its route, and records the error.
-- [ ] Tests with a scripted fake Runner: happy path command order; failed pull; failed health check removes the new container and keeps the old route; port collision retries with another port; stop removes the route first.
+- [x] Migration and queries, all team-scoped through environment → project.
+- [x] `docker/args.go` with table tests for every flag; values are passed as separate arguments and image names are validated against the Docker reference grammar so a value can never be read as a flag.
+- [x] Env file writer: `KEY=value` lines, mode `0600`; keys validated as `[A-Za-z_][A-Za-z0-9_]*`; values with newlines rejected (Docker's env-file format cannot carry them).
+- [x] Pipeline as a job with lock key `deploy:<appID>`: pull → network → env file → file mounts → run on a fresh port → health → routes + reload → stop old → record.
+- [x] Failure at any step removes the new container, leaves the old one and its route, and records the error.
+- [x] Tests with a scripted fake Runner: happy path command order; failed pull; failed health check removes the new container and keeps the old route; port collision retries with another port; stop removes the route first.
 
 ### Task 3 — Monitor and logs
-- [ ] `monitor.go`: one `docker events` stream per server filtered by the `musdash.managed` label; `die`, `start` and `health_status` update `apps.status`; reconnect with back-off; reconcile from `docker ps -a` at start.
-- [ ] `logfile.go`: deployment log capped at 2 MB, with a "log truncated" line when the cap is hit.
-- [ ] SSE: deployment log follower and `docker logs -f` runtime stream; both stop when the browser disconnects; output is HTML-escaped.
-- [ ] Tests: event lines map to the right status; follower delivers appended lines and ends when the deployment finishes; cancelled request stops the `docker logs` process.
+- [x] `monitor.go`: one `docker events` stream per server filtered by the `musdash.managed` label; `die`, `start` and `health_status` update `apps.status`; reconnect with back-off; reconcile from `docker ps -a` at start.
+- [x] `logfile.go`: deployment log capped at 2 MB, with a "log truncated" line when the cap is hit.
+- [x] SSE: deployment log follower and `docker logs -f` runtime stream; both stop when the browser disconnects; output is HTML-escaped.
+- [x] Tests: event lines map to the right status; follower delivers appended lines and ends when the deployment finishes; cancelled request stops the `docker logs` process.
 
 ### Task 4 — UI
-- [ ] Project page lists the environment's apps with state rail and pill; "New app" form (name, image, port, domain prefilled with a generated one).
-- [ ] App page tabs: Overview (status, domains, actions Deploy / Stop / Restart), Deployments (list and live log), Logs, Environment, Storage, Settings (general, limits, health check, domains, delete).
-- [ ] Servers page (local server, public IP, Docker version, proxy state) and Instance settings (dashboard domain, ACME email).
-- [ ] Sidebar gains Servers and Settings.
-- [ ] Tests: validation of every form, team scoping of every new route, deploy button enqueues one job.
+- [x] Project page lists the environment's apps with state rail and pill; "New app" form (name, image, port, domain prefilled with a generated one).
+- [x] App page tabs: Overview (status, domains, actions Deploy / Stop / Restart), Deployments (list and live log), Logs, Environment, Storage, Settings (general, limits, health check, domains, delete).
+- [x] Servers page (local server, public IP, Docker version, proxy state) and Instance settings (dashboard domain, ACME email).
+- [x] Sidebar gains Servers and Settings.
+- [x] Tests: validation of every form, team scoping of every new route, deploy button enqueues one job.
 
 ### Task 5 — End-to-end check with real Docker
-- [ ] `test/deploy_test.go` (runs only with `MUSDASH_DOCKER_TEST=1`): start server and proxy, deploy `nginx:alpine` with a generated domain, fetch it through the proxy, redeploy while a client sends requests continuously and assert none fail, stop the app and assert the route is gone, then clean up every `musdash-` container and network the test made.
-- [ ] RSS test still passes with the real proxy.
+- [x] `test/deploy_test.go` (runs only with `MUSDASH_DOCKER_TEST=1`): start server and proxy, deploy `nginx:alpine` with a generated domain, fetch it through the proxy, redeploy while a client sends requests continuously and assert none fail, stop the app and assert the route is gone, then clean up every `musdash-` container and network the test made.
+- [x] RSS test still passes with the real proxy.
 
 ## Review focus
 
@@ -147,3 +147,29 @@ Each task ends with vet and tests green, a self-review, an independent review at
 - No placeholders.
 
 **Approved for implementation.**
+
+## Outcome
+
+- `test/deploy_test.go` against real Docker: `nginx:alpine` is served through the proxy by host name; a redeploy under load sent 6,908 requests with none failed; an app set to the wrong port fails its deploy and is cleaned up; stopping removes the route and the container.
+- Not verifiable here, to check on the VPS: certificate issuance for a real domain, the systemd units and `install/install.sh`, and behaviour after a server reboot.
+- Known limit: a new container joins the environment's network under the app's name as soon as it starts, so for the length of its health check other containers resolving that name may reach it before it is ready. Traffic from outside is not affected; it moves only after the health check.
+
+### Fixes from the automated security review of the first commit
+
+1. The health-check URL was built by joining strings, so a path such as `@other-host/` could send the probe to another machine. It is now built with a fixed loopback host (`HealthURL`), and the path is validated when saved.
+2. Bind mounts accepted any server path. `CheckBindSource` now refuses the Docker socket, system directories, anything containing them, and the musdash data directory.
+
+### Fixes from the independent review of the phase
+
+1. **Health check passed with nothing listening.** Docker's port proxy accepts connections on its own. The TCP check now waits briefly after connecting and fails if the connection is dropped.
+2. **A failed route publication was ignored.** The deploy now puts the app back on its previous container and fails, instead of stopping the container that is still receiving traffic. The switch itself can no longer be interrupted by shutdown. The proxy also re-reads its routes file every 3 seconds, so a missed or refused signal delays a change by seconds; routes are republished at start.
+3. **A killed process left apps stuck in "deploying" and containers orphaned.** At start, such apps are reset, and each reconcile removes app containers nothing refers to (sparing deployments that are queued, running or just finished).
+4. **One over-long domain could block all route publishing.** Such a domain is refused in the form, skipped (with a log line) when routes are built, and apps are limited to 20 domains.
+5. **Stop, delete and domain changes ended when the browser disconnected.** They now run to completion under their own deadline. A stop withdraws the route, removes the container, and only then forgets the container's name, so a failed stop can be repeated.
+6. **Concurrent route publications could overwrite each other.** They are serialised.
+7. A crash-looping container (`restarting`) fails the deploy at once, with its output in the log.
+8. Deploy, stop and delete of one app are serialised by a per-app lock; stop and delete answer "a deployment is in progress" instead of racing it. A deployment of an app deleted meanwhile removes its container.
+9. Log stream: the write deadline is set before writing; a carriage return in log output can no longer forge stream fields.
+10. Shutdown ends open log streams at once and gives running deployments their own time allowance.
+11. The proxy's pid file is written atomically, and on Linux a pid is signalled only if it is a musdash process.
+12. Finished deployments beyond the newest 50 are pruned with their logs; logs are deleted with their app; `NaN` is refused as a CPU limit; a domain taken during app creation is reported; only one local server can exist; long flash messages are truncated.

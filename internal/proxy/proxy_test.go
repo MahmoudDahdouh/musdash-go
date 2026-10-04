@@ -190,6 +190,30 @@ func TestReloadSwapsAndKeepsOldOnBadFile(t *testing.T) {
 	}
 }
 
+func TestChangedDetectsARewrittenFile(t *testing.T) {
+	a := backend(t, "a")
+	p, path := newProxy(t, false, Route{Host: "app.example.com", Target: a})
+	if p.Changed() {
+		t.Fatal("a file that was just loaded is reported as changed")
+	}
+	writeRoutes(t, path, Route{Host: "app.example.com", Target: a}, Route{Host: "second.example.com", Target: a})
+	if !p.Changed() {
+		t.Fatal("a rewritten file is not noticed")
+	}
+	if err := p.Reload(); err != nil || p.Changed() || p.Table().Len() != 2 {
+		t.Fatalf("after reload: err %v, changed %v, %d routes", err, p.Changed(), p.Table().Len())
+	}
+	// A bad file keeps the old table and is retried on the next poll.
+	os.WriteFile(path, []byte("{"), 0o600)
+	if !p.Changed() || p.Reload() == nil || p.Table().Len() != 2 {
+		t.Fatal("a bad file must leave the table alone")
+	}
+	os.Remove(path)
+	if !p.Changed() {
+		t.Fatal("a removed file is not noticed")
+	}
+}
+
 func TestHostPolicy(t *testing.T) {
 	p, _ := newProxy(t, true,
 		Route{Host: "secure.example.com", Target: "127.0.0.1:1", TLS: true},

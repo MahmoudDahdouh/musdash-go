@@ -43,7 +43,7 @@ These come from the spec and shape every change:
 
 ## Architecture
 
-One binary, two long-running processes: `musdash server` (UI, API, webhooks, jobs, SQLite) and `musdash proxy` (edge reverse proxy with autocert). They are separate so restarting the control plane never drops app traffic; the server rewrites `<data>/proxy/routes.json` atomically and signals the proxy with `SIGHUP`. Containers publish to `127.0.0.1:<random port>` and the proxy routes `Host` to that port. Remote servers are agentless, driven over SSH.
+One binary, two long-running processes: `musdash server` (UI, API, webhooks, jobs, SQLite) and `musdash proxy` (edge reverse proxy with autocert). They are separate so restarting the control plane never drops app traffic; the server rewrites `<data>/proxy/routes.json` atomically and signals the proxy with `SIGHUP`. Containers publish to a loopback port musdash assigns (20000–29999) and the proxy routes `Host` to that port; containers of one environment also share a Docker network and reach each other by app name. Remote servers are agentless, driven over SSH.
 
 How the existing packages fit together:
 
@@ -57,10 +57,19 @@ How the existing packages fit together:
 - `migrations/` — a tiny Go package exposing an `embed.FS` of `NNNN_name.sql` files (`go:embed` cannot reach parent directories). Add a new numbered file; never edit an applied one.
 - `internal/runner` — the `Runner` interface is the only way any package touches a server: commands (`Run` streams, `Output` is capped at 1 MiB and errors rather than truncating) and file operations (`WriteFile` is atomic). `LocalRunner` uses `os/exec` with its own process group so cancelling a context also kills children. `SSHRunner` arrives in phase 6; code written against `Runner` must not assume it is local.
 - `internal/jobs` — a persistent queue on the `jobs` table. One dispatcher goroutine claims work with a single `UPDATE … RETURNING` and runs up to N handlers. Jobs sharing a `lock_key` never overlap (this is how "one build per server" is enforced). Errors retry with back-off; wrap with `jobs.Permanent` to fail at once. Jobs left `running` by a crash are requeued in `Start`; a job interrupted by shutdown is requeued without spending an attempt.
+- `internal/servers` — `Pool.Runner(server)` is where every package gets its Runner; only this package knows whether a server is local or SSH.
+- `internal/docker` — builds argument vectors for the docker CLI. `RunSpec.Args()` validates every value (image names against the reference grammar, mounts, labels) so nothing a person typed can be read as a flag. Bind-mount sources go through `CheckBindSource`, which refuses the Docker socket, system directories and the musdash data directory.
+- `internal/deploy` — the deploy job (`pipeline.go`): pull → network → env file → start on a fixed loopback port → health check → `SyncRoutes` → stop the old container. A failure before the switch removes the new container and leaves the old one serving. `monitor.go` holds one `docker events` stream per server and updates app status through `db.SetAppStatusIf`, which ignores containers that are not the app's serving one. `routes.go` regenerates a server's whole `routes.json` from the database and signals the proxy.
+  - Health-check URLs are built by `HealthURL` with a fixed loopback host; never concatenate a user path onto a URL.
+  - Unit tests script the server with `runner/runnertest.Fake` to inject failures; `test/deploy_test.go` runs the same flow against real Docker when `MUSDASH_DOCKER_TEST=1`.
+- `internal/proxy` — `Table` is an immutable, validated route set swapped atomically; targets must be loopback. Port 80 serves ACME challenges, redirects TLS hosts and proxies HTTP-only ones. Certificates are requested only for routed hosts with `tls: true`.
 - `internal/web` — templ + HTMX (SSE extension) with assets embedded in the binary; no JSON API for the UI.
   - `static/` serves embedded assets at `/static/{name}?v=<content hash>` with immutable caching and lazy gzip. Use `static.URL(name)` in templates; a new asset must be added to the `go:embed` line.
   - `static/app.js` is driven entirely by `data-*` attributes (`data-open`, `data-close`, `data-match`, `data-copy`, `data-autodismiss`, `data-follow`, `data-nav-toggle`) so pages carry no inline script and the CSP can forbid it.
   - `ui/` holds the reusable design-system components (props structs + templ); `pages/` holds pages built from them.
+  - Handlers are wrapped in `s.authed(...)` or `s.anon(...)`, which load the session and check CSRF. A handler for a team-owned resource starts with a loader (`loadProject`, `loadApp`) that answers 404 itself when the resource is not the team's.
+  - Tables shared across resource kinds (`domains`, `env_vars`, `storages`) are keyed by `(resource_kind, resource_id)`; their queries do not check the team, so only call them with a resource a loader returned.
+  - Live logs are Server-Sent Events (`sse.go`): output is HTML-escaped, streams are capped at 16, and the producing process dies with the request context.
 
 ## UI design system
 

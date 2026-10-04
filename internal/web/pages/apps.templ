@@ -1,0 +1,584 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// AppView is what every app page needs for its frame.
+type AppView struct {
+	App     db.App
+	Project db.Project
+	Env     db.Environment
+	Domains []db.Domain
+}
+
+func (v AppView) base() string { return "/apps/" + v.App.ID }
+
+// URL is the address a domain is reached at.
+func domainURL(d db.Domain) string {
+	if d.TLS {
+		return "https://" + d.Host
+	}
+	return "http://" + d.Host
+}
+
+func appTabs(v AppView) []ui.Tab {
+	b := v.base()
+	return []ui.Tab{
+		{Key: "overview", Label: "Overview", Href: b},
+		{Key: "deployments", Label: "Deployments", Href: b + "/deployments"},
+		{Key: "logs", Label: "Logs", Href: b + "/logs"},
+		{Key: "environment", Label: "Environment", Href: b + "/environment"},
+		{Key: "storage", Label: "Storage", Href: b + "/storage"},
+		{Key: "settings", Label: "Settings", Href: b + "/settings"},
+	}
+}
+
+func headerPoll(app db.App) string {
+	// Fast while a deployment is running, slow otherwise: the header only
+	// changes on its own when a container starts, stops or is replaced.
+	if app.Status == db.AppDeploying {
+		return "every 2s"
+	}
+	return "every 15s"
+}
+
+// AppHeader is the app's name, status and actions. It refreshes itself, so
+// the page follows a deployment (and offers Stop and Redeploy once it is
+// running) without a reload.
+templ AppHeader(csrf string, app db.App) {
+	<header
+		id="app-header"
+		class="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3"
+		hx-get={ "/apps/" + app.ID + "/status" }
+		hx-trigger={ headerPoll(app) }
+		hx-swap="outerHTML"
+	>
+		<div class="min-w-0">
+			<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+				<h1 class="text-xl font-semibold tracking-tight">{ app.Name }</h1>
+				@ui.StatusPill(app.Status)
+			</div>
+			<p class="fact mt-0.5 truncate text-ink-mute">{ app.Image }</p>
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
+			if app.Container != "" {
+				<form method="post" action={ templ.SafeURL("/apps/" + app.ID + "/stop") }>
+					@ui.CSRF(csrf)
+					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop"}) {
+						Stop
+					}
+				</form>
+			}
+			<form method="post" action={ templ.SafeURL("/apps/" + app.ID + "/deploy") }>
+				@ui.CSRF(csrf)
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy"}) {
+					if app.Container != "" {
+						Redeploy
+					} else {
+						Deploy
+					}
+				}
+			</form>
+		</div>
+	</header>
+}
+
+// appFrame is the header and tabs shared by every app page.
+templ appFrame(s ui.Shell, v AppView, tab string) {
+	@ui.Layout(s) {
+		@AppHeader(s.CSRF, v.App)
+		@ui.Tabs(appTabs(v), tab)
+		{ children... }
+	}
+}
+
+// AppRows lists an environment's apps on the project page.
+templ AppRows(apps []db.App) {
+	<div class="card rows">
+		for _, a := range apps {
+			<a class="row rail" data-state={ a.Status } href={ templ.SafeURL("/apps/" + a.ID) }>
+				@ui.Icon("box", "text-ink-mute")
+				<div class="min-w-0 flex-1">
+					<p class="truncate font-semibold">{ a.Name }</p>
+					<p class="fact truncate text-ink-mute">{ a.Image }</p>
+				</div>
+				@ui.StatusPill(a.Status)
+				@ui.Icon("chevron-right", "text-ink-mute")
+			</a>
+		}
+	</div>
+}
+
+templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedDomain string) {
+	@ui.Layout(s) {
+		@ui.PageHeader("New app", "Runs a Docker image in "+env.Name+".")
+		<div class="max-w-xl">
+			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/apps") }>
+				@ui.CSRF(s.CSRF)
+				<input type="hidden" name="env" value={ env.ID }/>
+				<div class="card-body grid gap-4">
+					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens. Other containers in this environment reach the app by this name.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: true, Placeholder: "web", Attrs: templ.Attributes{"maxlength": "32"}})
+					@ui.TextField(f, "Docker image", "For example nginx:alpine or ghcr.io/you/app:1.4.", ui.InputProps{ID: "image", Mono: true, Required: true, Placeholder: "nginx:alpine"})
+					@ui.TextField(f, "Port", "The port the app listens on inside its container.", ui.InputProps{ID: "port", Mono: true, Required: true, Value: "80", Attrs: templ.Attributes{"inputmode": "numeric"}})
+					@ui.TextField(f, "Domain", "Leave the generated address, or enter a domain that points at this server. Your own domains get HTTPS.", ui.InputProps{ID: "domain", Mono: true, Value: suggestedDomain})
+					@ui.Checkbox("deploy", true, nil) {
+						Deploy as soon as the app is created
+					}
+				</div>
+				<div class="card-foot">
+					@ui.LinkButton("/projects/"+p.ID+"?env="+env.ID, ui.ButtonProps{}) {
+						Cancel
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+						Create app
+					}
+				</div>
+			</form>
+		</div>
+	}
+}
+
+func internalAddress(a db.App) string {
+	return a.Name + ":" + strconv.Itoa(a.Port)
+}
+
+func hostPort(a db.App) string {
+	if a.HostPort == 0 {
+		return "none"
+	}
+	return "127.0.0.1:" + strconv.Itoa(a.HostPort)
+}
+
+func orNone(v string) string {
+	if v == "" {
+		return "none"
+	}
+	return v
+}
+
+templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) {
+	@appFrame(s, v, "overview") {
+		<div class="grid gap-6 lg:grid-cols-2">
+			<section class="card">
+				<div class="card-head">
+					<h2 class="card-title">Domains</h2>
+					@ui.LinkButton(v.base()+"/settings#domains", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+						Manage
+					}
+				</div>
+				if len(v.Domains) == 0 {
+					<p class="card-body muted">No domain yet. Add one in Settings to reach the app from outside.</p>
+				} else {
+					<div class="rows">
+						for _, d := range v.Domains {
+							<a class="row" href={ templ.SafeURL(domainURL(d)) } target="_blank" rel="noopener">
+								@ui.Icon("globe", "text-ink-mute")
+								<span class="fact min-w-0 flex-1 truncate">{ d.Host }</span>
+								if d.TLS {
+									@ui.Badge("HTTPS", ui.ToneOK)
+								} else {
+									@ui.Badge("HTTP", ui.ToneNeutral)
+								}
+								@ui.Icon("external", "text-ink-mute")
+							</a>
+						}
+					</div>
+				}
+			</section>
+			<section class="card">
+				<div class="card-head">
+					<h2 class="card-title">Running now</h2>
+				</div>
+				<div class="card-body">
+					@ui.KeyValue([]ui.KVItem{
+						{Key: "Image", Value: orNone(v.App.DeployedImage), Mono: true},
+						{Key: "Server", Value: server.Name},
+						{Key: "Inside the environment", Value: internalAddress(v.App), Mono: true},
+						{Key: "On the server", Value: hostPort(v.App), Mono: true},
+						{Key: "Container", Value: orNone(v.App.Container), Mono: true},
+					})
+				</div>
+			</section>
+			<section class="card lg:col-span-2">
+				<div class="card-head">
+					<h2 class="card-title">Latest deployment</h2>
+					@ui.LinkButton(v.base()+"/deployments", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+						All deployments
+					}
+				</div>
+				if last == nil {
+					<p class="card-body muted">Not deployed yet. Choose Deploy to start the app.</p>
+				} else {
+					<a class="row rail" data-state={ last.Status } href={ templ.SafeURL(v.base() + "/deployments/" + last.ID) }>
+						<div class="min-w-0 flex-1">
+							<p class="fact truncate">{ last.Image }</p>
+							<p class="muted text-sm">{ ui.Ago(last.CreatedAt) }</p>
+							if last.Error != "" {
+								<p class="mt-1 text-sm text-danger">{ last.Error }</p>
+							}
+						</div>
+						@ui.StatusPill(last.Status)
+						@ui.Icon("chevron-right", "text-ink-mute")
+					</a>
+				}
+			</section>
+		</div>
+	}
+}
+
+templ AppDeployments(s ui.Shell, v AppView, list []db.Deployment) {
+	@appFrame(s, v, "deployments") {
+		if len(list) == 0 {
+			@ui.EmptyState("deploy", "No deployments yet", "Each deploy is listed here with its log.")
+		} else {
+			<section class="card">
+				@ui.Table("Started", "Image", "Trigger", "Status", "Took", "") {
+					for _, d := range list {
+						<tr>
+							<td class="whitespace-nowrap">{ ui.Ago(d.CreatedAt) }</td>
+							<td class="fact">{ d.Image }</td>
+							<td>{ ui.StateLabel(d.Trigger) }</td>
+							<td>
+								@ui.StatusPill(d.Status)
+							</td>
+							<td class="fact">{ ui.Took(d.StartedAt, d.FinishedAt) }</td>
+							<td class="text-right">
+								@ui.LinkButton(v.base()+"/deployments/"+d.ID, ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+									View log
+								}
+							</td>
+						</tr>
+					}
+				}
+			</section>
+		}
+	}
+}
+
+func deploymentDone(d db.Deployment) bool {
+	return d.Status == db.DeploySuccess || d.Status == db.DeployFailed
+}
+
+// DeploymentStatus is the status line above a deployment's log. While the
+// deployment runs it refreshes itself; once finished it stops.
+templ DeploymentStatus(appID string, d db.Deployment) {
+	<div
+		id="deployment-status"
+		class="flex flex-wrap items-center gap-x-3 gap-y-1"
+		if !deploymentDone(d) {
+			hx-get={ "/apps/" + appID + "/deployments/" + d.ID + "/status" }
+			hx-trigger="every 2s"
+			hx-swap="outerHTML"
+		}
+	>
+		@ui.StatusPill(d.Status)
+		<span class="fact">{ d.Image }</span>
+		<span class="muted text-sm">{ ui.Ago(d.CreatedAt) }</span>
+		if took := ui.Took(d.StartedAt, d.FinishedAt); took != "" {
+			<span class="muted text-sm">took { took }</span>
+		}
+	</div>
+}
+
+templ AppDeployment(s ui.Shell, v AppView, d db.Deployment) {
+	@appFrame(s, v, "deployments") {
+		<div class="grid gap-4">
+			@DeploymentStatus(v.App.ID, d)
+			if d.Error != "" {
+				@ui.Notice(ui.ToneDanger) {
+					{ d.Error }
+				}
+			}
+			@ui.LogView("deploy-log", templ.Attributes{
+				"hx-ext":      "sse",
+				"sse-connect": v.base() + "/deployments/" + d.ID + "/stream",
+				"sse-swap":    "line",
+				"sse-close":   "done",
+				"hx-swap":     "beforeend",
+			})
+		</div>
+	}
+}
+
+templ AppLogs(s ui.Shell, v AppView) {
+	@appFrame(s, v, "logs") {
+		if v.App.Container == "" {
+			@ui.EmptyState("terminal", "Nothing is running", "The app's output appears here once it is deployed.")
+		} else {
+			<div class="grid gap-2">
+				<p class="muted text-sm">The last 200 lines, then new output as it arrives.</p>
+				@ui.LogView("runtime-log", templ.Attributes{
+					"hx-ext":      "sse",
+					"sse-connect": v.base() + "/logs/stream",
+					"sse-swap":    "line",
+					"sse-close":   "done",
+					"hx-swap":     "beforeend",
+				})
+			</div>
+		}
+	}
+}
+
+templ AppEnvironment(s ui.Shell, v AppView, f ui.Form) {
+	@appFrame(s, v, "environment") {
+		<div class="max-w-3xl">
+			@ui.FormCard("Environment variables", "Stored encrypted. Changes apply on the next deploy.", v.base()+"/environment", s.CSRF, "Save variables") {
+				@ui.Field(ui.FieldProps{Label: "Variables", For: "vars", Hint: "One NAME=value per line. Lines starting with # are ignored.", Error: f.E("vars")}) {
+					@ui.Textarea(ui.InputProps{ID: "vars", Mono: true, Rows: 14, Value: f.V("vars"), Invalid: f.E("vars") != "", Described: true, Placeholder: "DATABASE_URL=postgres://…\nNODE_ENV=production"})
+				}
+			}
+		</div>
+	}
+}
+
+func storageKindLabel(kind string) string {
+	switch kind {
+	case db.StorageVolume:
+		return "Volume"
+	case db.StorageBind:
+		return "Server folder"
+	case db.StorageFile:
+		return "File"
+	}
+	return kind
+}
+
+func storageSource(st db.Storage) string {
+	if st.Kind == db.StorageFile {
+		return "written by musdash"
+	}
+	return st.Source
+}
+
+templ AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) {
+	@appFrame(s, v, "storage") {
+		<div class="grid max-w-3xl gap-6">
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Storage</h2>
+						<p class="muted text-sm">Data that survives a redeploy. Changes apply on the next deploy.</p>
+					</div>
+				</div>
+				if len(list) == 0 {
+					<p class="card-body muted">Nothing is mounted. Without storage, files the app writes are lost when it is redeployed.</p>
+				} else {
+					@ui.Table("Type", "Source", "Path in the container", "") {
+						for _, st := range list {
+							<tr>
+								<td>
+									@ui.Badge(storageKindLabel(st.Kind), ui.ToneNeutral)
+								</td>
+								<td class="fact">{ storageSource(st) }</td>
+								<td class="fact">{ st.Target }</td>
+								<td class="text-right">
+									<form method="post" action={ templ.SafeURL(v.base() + "/storage/" + st.ID + "/delete") }>
+										@ui.CSRF(s.CSRF)
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+											Remove
+										}
+									</form>
+								</td>
+							</tr>
+						}
+					}
+				}
+			</section>
+			@ui.FormCard("Add storage", "", v.base()+"/storage", s.CSRF, "Add storage") {
+				@ui.Field(ui.FieldProps{Label: "Type", For: "kind", Hint: "A volume is managed by Docker. A server folder is a directory you choose on the server. A file is one file whose content you enter here.", Error: f.E("kind")}) {
+					@ui.Select("kind", []ui.Option{{Value: db.StorageVolume, Label: "Volume"}, {Value: db.StorageBind, Label: "Server folder"}, {Value: db.StorageFile, Label: "File"}}, orDefault(f.V("kind"), db.StorageVolume), templ.Attributes{"aria-describedby": "kind-hint"})
+				}
+				@ui.TextField(f, "Volume name or server folder", "A name such as data for a volume, or a path such as /srv/uploads for a server folder. Leave empty for a file.", ui.InputProps{ID: "source", Mono: true})
+				@ui.TextField(f, "Path in the container", "Where the app sees it, for example /var/lib/app/data.", ui.InputProps{ID: "target", Mono: true, Required: true})
+				@ui.Field(ui.FieldProps{Label: "File content", For: "content", Hint: "Only for the File type. Stored encrypted.", Error: f.E("content")}) {
+					@ui.Textarea(ui.InputProps{ID: "content", Mono: true, Rows: 6, Value: f.V("content"), Invalid: f.E("content") != "", Described: true})
+				}
+			}
+		</div>
+	}
+}
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
+}
+
+func zeroBlank(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
+}
+
+func cpusValue(c float64) string {
+	if c == 0 {
+		return ""
+	}
+	return strconv.FormatFloat(c, 'f', -1, 64)
+}
+
+templ AppSettings(s ui.Shell, v AppView, general, domain ui.Form) {
+	@appFrame(s, v, "settings") {
+		<div class="grid max-w-3xl gap-6">
+			@ui.FormCard("General", "Changes apply on the next deploy.", v.base()+"/settings", s.CSRF, "Save changes") {
+				@ui.TextField(general, "Name", "", ui.InputProps{ID: "name", Mono: true, Value: v.App.Name, Required: true, Attrs: templ.Attributes{"maxlength": "32"}})
+				@ui.TextField(general, "Docker image", "", ui.InputProps{ID: "image", Mono: true, Value: v.App.Image, Required: true})
+				@ui.TextField(general, "Port", "The port the app listens on inside its container.", ui.InputProps{ID: "port", Mono: true, Value: strconv.Itoa(v.App.Port), Required: true, Attrs: templ.Attributes{"inputmode": "numeric"}})
+				<div class="grid gap-4 sm:grid-cols-2">
+					@ui.TextField(general, "Memory limit (MB)", "Empty for no limit.", ui.InputProps{ID: "memory_mb", Mono: true, Value: zeroBlank(v.App.MemoryMB), Attrs: templ.Attributes{"inputmode": "numeric"}})
+					@ui.TextField(general, "CPU limit", "In cores, such as 0.5. Empty for no limit.", ui.InputProps{ID: "cpus", Mono: true, Value: cpusValue(v.App.CPUs), Attrs: templ.Attributes{"inputmode": "decimal"}})
+				</div>
+				@ui.TextField(general, "Health check path", "A deploy waits for this path to answer before switching traffic. Empty checks only that the port accepts connections.", ui.InputProps{ID: "health_path", Mono: true, Value: v.App.HealthPath, Placeholder: "/healthz"})
+				@ui.TextField(general, "Health check command", "Used when no path is set. Runs inside the container and must exit 0.", ui.InputProps{ID: "health_cmd", Mono: true, Value: v.App.HealthCmd})
+				@ui.TextField(general, "Health check timeout (seconds)", "How long a deploy waits before giving up and keeping the previous version.", ui.InputProps{ID: "health_timeout", Mono: true, Value: strconv.Itoa(v.App.HealthTimeout), Attrs: templ.Attributes{"inputmode": "numeric"}})
+			}
+			<section class="card" id="domains">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Domains</h2>
+						<p class="muted text-sm">Point each domain's DNS at this server first, so its certificate can be issued.</p>
+					</div>
+				</div>
+				if len(v.Domains) > 0 {
+					<div class="rows">
+						for _, d := range v.Domains {
+							<div class="row">
+								<span class="fact min-w-0 flex-1 truncate">{ d.Host }</span>
+								if d.RedirectWWW {
+									@ui.Badge("www redirect", ui.ToneNeutral)
+								}
+								if d.TLS {
+									@ui.Badge("HTTPS", ui.ToneOK)
+								} else {
+									@ui.Badge("HTTP", ui.ToneNeutral)
+								}
+								<form method="post" action={ templ.SafeURL(v.base() + "/domains/" + d.ID + "/delete") }>
+									@ui.CSRF(s.CSRF)
+									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+										Remove
+									}
+								</form>
+							</div>
+						}
+					</div>
+				}
+				<form class="card-body grid gap-4 border-t border-line" method="post" action={ templ.SafeURL(v.base() + "/domains") }>
+					@ui.CSRF(s.CSRF)
+					@ui.TextField(domain, "Add a domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com"})
+					@ui.Checkbox("tls", domain.V("tls") != "0", nil) {
+						Serve over HTTPS with an automatic certificate
+					}
+					@ui.Checkbox("redirect_www", domain.V("redirect_www") == "1", nil) {
+						Also redirect the www form of the name to it (or the bare name, if this one starts with www)
+					}
+					<div>
+						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}) {
+							Add domain
+						}
+					</div>
+				</form>
+			</section>
+			<section class="card card-danger">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Delete app</h2>
+						<p class="muted text-sm">Stops the app and removes its settings, domains and variables. Volumes are kept.</p>
+					</div>
+					@ui.Confirm(ui.ConfirmProps{
+						ID:      "delete-app",
+						Title:   "Delete app",
+						Action:  v.base() + "/delete",
+						CSRF:    s.CSRF,
+						Match:   v.App.Name,
+						Submit:  "Delete app",
+						Trigger: "Delete app",
+					}) {
+						<p><strong>{ v.App.Name }</strong> is stopped and removed. Its deployment history goes with it. This cannot be undone.</p>
+					}
+				</div>
+			</section>
+		</div>
+	}
+}
+
+// ServerInfo is one server with what was learned by asking it.
+type ServerInfo struct {
+	Server        db.Server
+	DockerVersion string // "" when Docker did not answer
+	DockerError   string
+	ProxyRunning  bool
+	Apps          int
+}
+
+templ Servers(s ui.Shell, list []ServerInfo, f ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Servers", "The machines your apps run on.")
+		<div class="grid max-w-3xl gap-6">
+			for _, info := range list {
+				<section class="card">
+					<div class="card-head">
+						<div class="flex items-center gap-2.5">
+							@ui.Icon("server", "text-ink-mute")
+							<h2 class="card-title">{ info.Server.Name }</h2>
+							if info.Server.Kind == db.ServerLocal {
+								@ui.Badge("This machine", ui.ToneBrand)
+							}
+						</div>
+					</div>
+					<div class="card-body grid gap-4">
+						<dl class="kv">
+							<dt>Docker</dt>
+							<dd>
+								if info.DockerVersion != "" {
+									<span class="pill pill-ok">Running</span>
+									<span class="fact ml-2">{ info.DockerVersion }</span>
+								} else {
+									<span class="pill pill-danger">Not reachable</span>
+									<span class="ml-2 text-sm text-danger">{ info.DockerError }</span>
+								}
+							</dd>
+							<dt>Proxy</dt>
+							<dd>
+								if info.ProxyRunning {
+									<span class="pill pill-ok">Running</span>
+								} else {
+									<span class="pill pill-warn">Not running</span>
+									<span class="muted ml-2 text-sm">Domains are not served until it starts: <span class="code">musdash proxy</span></span>
+								}
+							</dd>
+							<dt>Apps</dt>
+							<dd class="fact">{ strconv.Itoa(info.Apps) }</dd>
+						</dl>
+						<form class="grid gap-3 border-t border-line pt-4" method="post" action={ templ.SafeURL("/servers/" + info.Server.ID) }>
+							@ui.CSRF(s.CSRF)
+							@ui.TextField(f, "Public IP address", "Used to build the generated address of new apps, such as abc123.203.0.113.7.sslip.io.", ui.InputProps{ID: "ip", Mono: true, Value: info.Server.IP, Placeholder: "203.0.113.7"})
+							<div>
+								@ui.Button(ui.ButtonProps{Type: "submit"}) {
+									Save address
+								}
+							</div>
+						</form>
+					</div>
+				</section>
+			}
+		</div>
+	}
+}
+
+templ InstanceSettings(s ui.Shell, f ui.Form, domain, email string) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Settings", "Settings for this musdash install.")
+		<div class="max-w-2xl">
+			@ui.FormCard("Dashboard address", "Reach this dashboard on its own domain, over HTTPS, through the musdash proxy.", "/settings", s.CSRF, "Save settings") {
+				@ui.TextField(f, "Dashboard domain", "Point the domain's DNS at this server first. Leave empty to keep using the server's address and port.", ui.InputProps{ID: "instance_domain", Mono: true, Value: domain, Placeholder: "musdash.example.com"})
+				@ui.TextField(f, "Email for certificates", "Let's Encrypt sends expiry warnings here. Optional.", ui.InputProps{ID: "acme_email", Type: "email", Value: email, Placeholder: "you@example.com"})
+			}
+		</div>
+	}
+}

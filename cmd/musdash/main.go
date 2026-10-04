@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -20,9 +21,11 @@ import (
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/config"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
 	"github.com/MahmoudDahdouh/musdash-go/internal/proxy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
+	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web"
 	"github.com/MahmoudDahdouh/musdash-go/migrations"
 )
@@ -82,9 +85,21 @@ func commonFlags(fs *flag.FlagSet) *config.Config {
 	return cfg
 }
 
+// prepareData makes the data directory path absolute and creates its tree.
+// Paths under it are handed to Docker as bind-mount sources, which must be
+// absolute.
+func prepareData(cfg *config.Config) error {
+	abs, err := filepath.Abs(cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	cfg.DataDir = abs
+	return cfg.EnsureDirs()
+}
+
 // openDB prepares the data directory and returns a migrated database.
 func openDB(ctx context.Context, cfg *config.Config) (*db.DB, error) {
-	if err := cfg.EnsureDirs(); err != nil {
+	if err := prepareData(cfg); err != nil {
 		return nil, err
 	}
 	d, err := db.Open(cfg.DBPath())
@@ -165,12 +180,30 @@ func runServer(args []string) error {
 		return err
 	}
 
+	// The proxy forwards the dashboard's own domain to this address.
+	_, port, err := net.SplitHostPort(*listen)
+	if err != nil {
+		return fmt.Errorf("-listen %q: %w", *listen, err)
+	}
+	pool := servers.New()
 	queue := jobs.New(d.DB, log, *workers)
+	deployer := deploy.New(d, box, queue, pool, cfg, log, net.JoinHostPort("127.0.0.1", port))
+	deployer.Register()
 	if err := queue.Start(ctx); err != nil {
 		return err
 	}
+	// Repair what a process that died mid-deploy left behind: deployments
+	// whose job is gone, and apps still marked as deploying.
+	if err := d.FailStaleDeployments(ctx, "musdash stopped before this deployment ran"); err != nil {
+		return err
+	}
+	if err := d.ResetStuckDeploying(ctx); err != nil {
+		return err
+	}
+	go republishRoutes(ctx, d, deployer, log)
+	go monitorServers(ctx, d, deployer, log)
 
-	app := &web.Server{Cfg: cfg, DB: d, Box: box, Queue: queue, Log: log, Pprof: *pprof}
+	app := &web.Server{Cfg: cfg, DB: d, Box: box, Queue: queue, Deploy: deployer, Pool: pool, Log: log, Pprof: *pprof, Closing: ctx}
 	srv := &http.Server{
 		Handler:           app.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -194,13 +227,58 @@ func runServer(args []string) error {
 	}
 
 	log.Info("shutting down")
-	shut, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(shut); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+	// Requests and jobs each get their own allowance: a slow page must not
+	// eat the time a running deployment needs to finish.
+	httpCtx, cancelHTTP := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelHTTP()
+	if err := srv.Shutdown(httpCtx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		log.Error("http shutdown", "err", err)
 	}
-	queue.Stop(shut)
+	work, cancelWork := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancelWork()
+	queue.Stop(work)
 	return nil
+}
+
+// republishRoutes writes every server's routes file once at start, so the
+// proxy agrees with the database even if the last process stopped between
+// changing one and publishing the other.
+func republishRoutes(ctx context.Context, d *db.DB, deployer *deploy.Deployer, log *slog.Logger) {
+	list, err := d.AllServers(ctx)
+	if err != nil {
+		log.Error("list servers", "err", err)
+		return
+	}
+	for _, server := range list {
+		if err := deployer.SyncRoutes(ctx, server); err != nil && !errors.Is(err, deploy.ErrProxyDown) && ctx.Err() == nil {
+			log.Warn("publish routes at start", "server", server.Name, "err", err)
+		}
+	}
+}
+
+// monitorServers runs one container monitor per server, starting monitors for
+// servers added while the process runs.
+func monitorServers(ctx context.Context, d *db.DB, deployer *deploy.Deployer, log *slog.Logger) {
+	watching := make(map[string]bool)
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for {
+		list, err := d.AllServers(ctx)
+		if err != nil && ctx.Err() == nil {
+			log.Error("list servers", "err", err)
+		}
+		for _, server := range list {
+			if !watching[server.ID] {
+				watching[server.ID] = true
+				go deployer.Monitor(ctx, server)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // housekeeping removes expired sessions and reset tokens once an hour.
@@ -227,7 +305,7 @@ func runProxy(args []string) error {
 	fs.Parse(args)
 	tuneMemory(32)
 
-	if err := cfg.EnsureDirs(); err != nil {
+	if err := prepareData(cfg); err != nil {
 		return err
 	}
 	ctx, stop := signalContext()

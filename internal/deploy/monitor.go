@@ -101,8 +101,13 @@ func (d *Deployer) monitorOnce(ctx context.Context, server db.Server) error {
 	return err
 }
 
-// Reconcile sets each app's status from what Docker reports right now.
+// Reconcile brings the database and Docker back into agreement: each app's
+// status is set from what Docker reports, and containers no app points at
+// are removed.
 func (d *Deployer) Reconcile(ctx context.Context, server db.Server, dk docker.Client) error {
+	// Docker is listed before the database is read. A container that became
+	// an app's serving container in between is then seen as current, never
+	// as an orphan.
 	listed, err := dk.List(ctx)
 	if err != nil {
 		return err
@@ -115,16 +120,43 @@ func (d *Deployer) Reconcile(ctx context.Context, server db.Server, dk docker.Cl
 	if err != nil {
 		return err
 	}
+	current := make(map[string]bool, len(apps))
 	for _, app := range apps {
 		if app.Container == "" {
 			continue
 		}
+		current[app.Container] = true
 		status := db.AppExited
 		if state[app.Container] == "running" {
 			status = db.AppRunning
 		}
 		if err := d.DB.SetAppStatusIf(ctx, app.ID, app.Container, status); err != nil {
 			return err
+		}
+	}
+	return d.removeOrphans(ctx, dk, listed, current)
+}
+
+// orphanGrace keeps the cleanup away from containers of deployments that
+// only just finished: the previous container may still be draining.
+const orphanGrace = 5 * time.Minute
+
+// removeOrphans deletes app containers that nothing refers to: left by a
+// process that died mid-deploy, or by a stop that could not finish. They
+// would otherwise hold memory and a port for ever. Containers of
+// deployments that are queued, running or just finished are left alone.
+func (d *Deployer) removeOrphans(ctx context.Context, dk docker.Client, listed []docker.Listed, current map[string]bool) error {
+	protected, err := d.DB.ProtectedDeployments(ctx, time.Now().Add(-orphanGrace).Unix())
+	if err != nil {
+		return err
+	}
+	for _, c := range listed {
+		if c.Kind != db.KindApp || current[c.Name] || protected[c.Deployment] {
+			continue
+		}
+		d.Log.Info("removing a container no app refers to", "container", c.Name)
+		if err := dk.Remove(ctx, c.Name); err != nil {
+			d.Log.Warn("remove orphaned container", "container", c.Name, "err", err)
 		}
 	}
 	return nil

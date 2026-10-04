@@ -70,11 +70,25 @@ func projectTabs(p db.Project, envs []db.Environment) []ui.Tab {
 }
 
 // ProjectShow lists what is deployed in one environment of a project.
-templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, current db.Environment) {
+templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, current db.Environment, apps []db.App) {
 	@ui.Layout(s) {
-		@ui.PageHeader(p.Name, p.Description)
+		@ui.PageHeader(p.Name, p.Description) {
+			if len(apps) > 0 {
+				@ui.LinkButton("/projects/"+p.ID+"/apps/new?env="+current.ID, ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					New app
+				}
+			}
+		}
 		@ui.Tabs(projectTabs(p, envs), current.ID)
-		@ui.EmptyState("box", "Nothing is deployed in "+current.Name, "Apps, databases and services you deploy to this environment appear here.")
+		if len(apps) == 0 {
+			@ui.EmptyState("box", "Nothing is deployed in "+current.Name, "Start with an app from a Docker image.") {
+				@ui.LinkButton("/projects/"+p.ID+"/apps/new?env="+current.ID, ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					New app
+				}
+			}
+		} else {
+			@AppRows(apps)
+		}
 	}
 }
 
@@ -108,7 +122,7 @@ templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, 
 									Submit:  "Delete environment",
 									Trigger: "Delete",
 								}) {
-									<p>Everything deployed in <strong>{ e.Name }</strong> is removed with it. This cannot be undone.</p>
+									<p>The environment <strong>{ e.Name }</strong> is removed. It must be empty: delete what is deployed in it first.</p>
 								}
 							} else {
 								<span class="muted text-sm">The only environment</span>
@@ -134,7 +148,7 @@ templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, 
 				<div class="card-head">
 					<div>
 						<h2 class="card-title">Delete project</h2>
-						<p class="muted text-sm">Removes the project, its environments and everything deployed in them.</p>
+						<p class="muted text-sm">A project can be deleted once nothing is deployed in it.</p>
 					</div>
 					@ui.Confirm(ui.ConfirmProps{
 						ID:      "delete-project",
@@ -145,7 +159,7 @@ templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, 
 						Submit:  "Delete project",
 						Trigger: "Delete project",
 					}) {
-						<p><strong>{ p.Name }</strong> and everything in it is removed. This cannot be undone.</p>
+						<p><strong>{ p.Name }</strong> and its environments are removed. This cannot be undone.</p>
 					}
 				</div>
 			</section>

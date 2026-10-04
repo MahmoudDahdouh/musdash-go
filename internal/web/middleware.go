@@ -262,6 +262,12 @@ func logRoute(r *http.Request) string {
 
 // setFlash stores a one-time message for the next page.
 func setFlash(w http.ResponseWriter, r *http.Request, tone, message string) {
+	// A cookie holds about 4 KB; an error that quotes a command's output can
+	// be longer, and an oversized cookie is dropped whole by the browser.
+	const maxFlash = 600
+	if len(message) > maxFlash {
+		message = strings.ToValidUTF8(message[:maxFlash], "") + "…"
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:  flashCookie,
 		Value: base64.RawURLEncoding.EncodeToString([]byte(tone + "|" + message)),
