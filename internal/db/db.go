@@ -98,6 +98,14 @@ func (d *DB) Migrate(ctx context.Context, files fs.FS) error {
 			return err
 		}
 		if err := d.Tx(ctx, func(tx *sql.Tx) error {
+			// Check again under the write lock: `musdash migrate` and
+			// `musdash server` may start at the same moment.
+			if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations WHERE version = ?`, version).Scan(&applied); err != nil {
+				return err
+			}
+			if applied > 0 {
+				return nil
+			}
 			if _, err := tx.ExecContext(ctx, string(body)); err != nil {
 				return err
 			}

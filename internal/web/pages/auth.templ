@@ -1,0 +1,91 @@
+package pages
+
+import "github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+
+templ authCard(title, intro, action, csrf, submit string) {
+	<form class="card" method="post" action={ templ.SafeURL(action) }>
+		@ui.CSRF(csrf)
+		<div class="card-body grid gap-4">
+			<div>
+				<h1 class="text-lg font-semibold">{ title }</h1>
+				if intro != "" {
+					<p class="muted mt-0.5">{ intro }</p>
+				}
+			</div>
+			{ children... }
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+				{ submit }
+			}
+		</div>
+	</form>
+}
+
+// Setup creates the first account on a fresh install.
+templ Setup(f ui.Form, csrf string) {
+	@ui.AuthLayout("Set up", nil) {
+		@authCard("Create the owner account", "This account manages the whole install. Setup closes once it exists.", "/setup", csrf, "Create account") {
+			if f.E("form") != "" {
+				@ui.Notice(ui.ToneDanger) {
+					{ f.E("form") }
+				}
+			}
+			@ui.TextField(f, "Name", "", ui.InputProps{ID: "name", Autocomplete: "name", Required: true, Autofocus: true})
+			@ui.TextField(f, "Email", "", ui.InputProps{ID: "email", Type: "email", Autocomplete: "email", Required: true})
+			@ui.TextField(f, "Password", "10 to 72 characters.", ui.InputProps{ID: "password", Type: "password", Autocomplete: "new-password", Required: true})
+		}
+	}
+}
+
+templ Login(f ui.Form, csrf string, flash *ui.Flash) {
+	@ui.AuthLayout("Sign in", flash) {
+		@authCard("Sign in", "", "/login", csrf, "Sign in") {
+			if f.E("form") != "" {
+				@ui.Notice(ui.ToneDanger) {
+					{ f.E("form") }
+				}
+			}
+			@ui.TextField(f, "Email", "", ui.InputProps{ID: "email", Type: "email", Autocomplete: "username", Required: true, Autofocus: true})
+			@ui.TextField(f, "Password", "", ui.InputProps{ID: "password", Type: "password", Autocomplete: "current-password", Required: true})
+		}
+		<p class="muted text-sm">
+			Forgot your password? On the server, run
+			<span class="code">musdash reset-password you@example.com</span>
+			and open the link it prints.
+		</p>
+	}
+}
+
+// Reset sets a new password from a one-time link.
+templ Reset(f ui.Form, csrf, token string) {
+	@ui.AuthLayout("Reset password", nil) {
+		@authCard("Choose a new password", "Signing in elsewhere with the old password stops working.", "/reset/"+token, csrf, "Save password") {
+			@ui.TextField(f, "New password", "10 to 72 characters.", ui.InputProps{ID: "password", Type: "password", Autocomplete: "new-password", Required: true, Autofocus: true})
+		}
+	}
+}
+
+// ResetInvalid is shown for an unknown, used or expired reset link.
+templ ResetInvalid() {
+	@ui.AuthLayout("Reset password", nil) {
+		@ui.Notice(ui.ToneWarn) {
+			<p class="font-semibold">This reset link has expired or was already used.</p>
+			<p class="muted mt-1">
+				Run <span class="code">musdash reset-password you@example.com</span> on the server for a new one.
+			</p>
+		}
+		<p><a href="/login">Back to sign in</a></p>
+	}
+}
+
+// Message is a plain page for errors outside the signed-in frame.
+templ Message(title, body string) {
+	@ui.AuthLayout(title, nil) {
+		<div class="card">
+			<div class="card-body">
+				<h1 class="text-lg font-semibold">{ title }</h1>
+				<p class="muted mt-1">{ body }</p>
+				<p class="mt-4"><a href="/">Go to projects</a></p>
+			</div>
+		</div>
+	}
+}

@@ -87,7 +87,7 @@ func (d *DB) DeleteProject(ctx context.Context, teamID, id string) error {
 }
 
 func (d *DB) ListEnvironments(ctx context.Context, projectID string) ([]Environment, error) {
-	rows, err := d.QueryContext(ctx, `SELECT id, project_id, name, created_at FROM environments WHERE project_id = ? ORDER BY created_at, id`, projectID)
+	rows, err := d.QueryContext(ctx, `SELECT id, project_id, name, created_at FROM environments WHERE project_id = ? ORDER BY created_at, rowid`, projectID)
 	if err != nil {
 		return nil, err
 	}

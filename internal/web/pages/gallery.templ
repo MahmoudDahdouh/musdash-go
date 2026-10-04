@@ -1,0 +1,238 @@
+package pages
+
+import "github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+
+templ swatch(name, class string) {
+	<div class="grid gap-1">
+		<div class={ "h-10 rounded-md border border-line", class }></div>
+		<span class="fact text-xs text-ink-mute">{ name }</span>
+	</div>
+}
+
+templ gallerySection(title string) {
+	<section class="grid gap-3">
+		<h2 class="eyebrow">{ title }</h2>
+		{ children... }
+	</section>
+}
+
+// Gallery shows every design-system component. It is served only in
+// development mode and is the reference when building new pages.
+templ Gallery(s ui.Shell) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Components", "Every token and component of the musdash design system.") {
+			@ui.Button(ui.ButtonProps{Icon: "refresh"}) {
+				Secondary
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				Primary action
+			}
+		}
+		<div class="grid gap-10">
+			@gallerySection("Brand scale") {
+				<div class="grid grid-cols-5 gap-3 sm:grid-cols-10">
+					@swatch("50", "bg-brand-50")
+					@swatch("100", "bg-brand-100")
+					@swatch("200", "bg-brand-200")
+					@swatch("300", "bg-brand-300")
+					@swatch("400", "bg-brand-400")
+					@swatch("500", "bg-brand-500")
+					@swatch("600", "bg-brand-600")
+					@swatch("700", "bg-brand-700")
+					@swatch("800", "bg-brand-800")
+					@swatch("900", "bg-brand-900")
+				</div>
+			}
+			@gallerySection("Surfaces, text and status") {
+				<div class="grid grid-cols-4 gap-3 sm:grid-cols-8">
+					@swatch("canvas", "bg-canvas")
+					@swatch("paper", "bg-paper")
+					@swatch("sunk", "bg-sunk")
+					@swatch("line-strong", "bg-line-strong")
+					@swatch("ink", "bg-ink")
+					@swatch("ink-soft", "bg-ink-soft")
+					@swatch("ink-mute", "bg-ink-mute")
+					@swatch("idle", "bg-idle")
+					@swatch("ok", "bg-ok")
+					@swatch("ok-soft", "bg-ok-soft")
+					@swatch("warn", "bg-warn")
+					@swatch("warn-soft", "bg-warn-soft")
+					@swatch("danger", "bg-danger")
+					@swatch("danger-soft", "bg-danger-soft")
+				</div>
+			}
+			@gallerySection("Type") {
+				<div class="card card-body grid gap-2">
+					<p class="text-2xl font-semibold tracking-tight">Deploy on your own servers</p>
+					<p class="text-xl font-semibold tracking-tight">Page title, 20 px semibold</p>
+					<p class="text-lg font-semibold">Section title, 16 px semibold</p>
+					<p>Body text, 14 px. A project groups the apps, databases and services of one product.</p>
+					<p class="muted text-sm">Secondary text, 13 px muted.</p>
+					<p class="eyebrow">Eyebrow label</p>
+					<p class="flex flex-wrap items-baseline gap-x-3">
+						<span>Machine facts are monospaced:</span>
+						@ui.Fact("shop.example.com")
+						@ui.Fact("nginx:1.29-alpine")
+						@ui.Fact("a1b2c3d")
+					</p>
+				</div>
+			}
+			@gallerySection("Buttons") {
+				<div class="flex flex-wrap items-center gap-2">
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary}) {
+						Deploy
+					}
+					@ui.Button(ui.ButtonProps{}) {
+						Cancel
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Ghost}) {
+						Ghost
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Danger}) {
+						Delete project
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Icon: "trash"}) {
+						Delete
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Disabled: true}) {
+						Disabled
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "deploy"}) {
+						Small
+					}
+					@ui.Button(ui.ButtonProps{Small: true}) {
+						Small
+					}
+					@ui.Button(ui.ButtonProps{IconOnly: true, Icon: "refresh", Label: "Refresh"})
+					@ui.Button(ui.ButtonProps{Variant: ui.Ghost, IconOnly: true, Icon: "settings", Label: "Settings"})
+				</div>
+			}
+			@gallerySection("Form controls") {
+				<div class="card card-body grid max-w-xl gap-4">
+					@ui.TextField(ui.Form{}, "Name", "", ui.InputProps{ID: "g-name", Placeholder: "Shop"})
+					@ui.TextField(ui.Form{}, "Docker image", "Registry, name and tag.", ui.InputProps{ID: "g-image", Mono: true, Value: "nginx:1.29-alpine"})
+					@ui.TextField(ui.Form{Values: map[string]string{"g-port": "eighty"}, Errors: map[string]string{"g-port": "Enter a port number between 1 and 65535."}}, "Port", "", ui.InputProps{ID: "g-port", Mono: true})
+					@ui.Field(ui.FieldProps{Label: "Build pack", For: "g-pack"}) {
+						@ui.Select("g-pack", []ui.Option{{Value: "dockerfile", Label: "Dockerfile"}, {Value: "static", Label: "Static site"}, {Value: "image", Label: "Docker image"}}, "static", nil)
+					}
+					@ui.Field(ui.FieldProps{Label: "Environment variables", For: "g-env", Hint: "One KEY=value per line."}) {
+						@ui.Textarea(ui.InputProps{ID: "g-env", Mono: true, Rows: 3, Described: true, Value: "NODE_ENV=production\nPORT=3000"})
+					}
+					@ui.Checkbox("g-auto", true, nil) {
+						Deploy automatically when the branch changes
+					}
+					@ui.TextField(ui.Form{}, "Disabled", "", ui.InputProps{ID: "g-disabled", Value: "Cannot be edited", Disabled: true})
+				</div>
+			}
+			@gallerySection("State: rail and pill") {
+				<div class="card rows">
+					for _, r := range galleryRows {
+						<div class="row rail" data-state={ r.state }>
+							@ui.Icon(r.icon, "text-ink-mute")
+							<div class="min-w-0 flex-1">
+								<p class="truncate font-semibold">{ r.name }</p>
+								<p class="fact truncate text-ink-mute">{ r.fact }</p>
+							</div>
+							@ui.StatusPill(r.state)
+						</div>
+					}
+				</div>
+				<div class="flex flex-wrap gap-2">
+					@ui.Badge("Docker image", ui.ToneNeutral)
+					@ui.Badge("production", ui.ToneBrand)
+					@ui.Badge("HTTPS", ui.ToneOK)
+					@ui.Badge("Build-time", ui.ToneWarn)
+					@ui.Badge("Public port", ui.ToneDanger)
+				</div>
+			}
+			@gallerySection("Table") {
+				@ui.Card("Deployments") {
+					@ui.Table("Commit", "Status", "Started", "Duration") {
+						<tr>
+							<td>
+								@ui.Fact("a1b2c3d")
+							</td>
+							<td>
+								@ui.StatusPill("success")
+							</td>
+							<td>2 minutes ago</td>
+							<td class="fact">48s</td>
+						</tr>
+						<tr>
+							<td>
+								@ui.Fact("9f8e7d6")
+							</td>
+							<td>
+								@ui.StatusPill("failed")
+							</td>
+							<td>1 hour ago</td>
+							<td class="fact">12s</td>
+						</tr>
+					}
+				}
+			}
+			@gallerySection("Tabs") {
+				@ui.Tabs([]ui.Tab{{Key: "a", Label: "production", Href: "#"}, {Key: "b", Label: "staging", Href: "#"}, {Key: "c", Label: "Settings", Href: "#"}}, "a")
+			}
+			@gallerySection("Notices") {
+				<div class="grid max-w-xl gap-2">
+					@ui.Notice(ui.ToneNeutral) {
+						The first deploy of an image pulls it, which can take a minute.
+					}
+					@ui.Notice(ui.ToneOK) {
+						Deployed. The app answers on its domain.
+					}
+					@ui.Notice(ui.ToneWarn) {
+						This server has 512 MB of memory. Build on a build server instead.
+					}
+					@ui.Notice(ui.ToneDanger) {
+						The health check did not pass within 60 seconds. The previous version is still serving.
+					}
+				</div>
+			}
+			@gallerySection("Key and value, copy") {
+				<div class="card card-body grid gap-4">
+					@ui.KeyValue([]ui.KVItem{{Key: "Image", Value: "postgres:17-alpine", Mono: true}, {Key: "Port", Value: "5432", Mono: true}, {Key: "Created", Value: "5 October 2026"}})
+					@ui.Copyable("postgres://app:••••••@db-k3j2:5432/app")
+				</div>
+			}
+			@gallerySection("Log view") {
+				@ui.LogView("g-log", nil) {
+					for _, l := range galleryLog {
+						<span class="dim">{ l.at }</span>
+						{ " " + l.text + "\n" }
+					}
+				}
+			}
+			@gallerySection("Dialog") {
+				<div>
+					@ui.Confirm(ui.ConfirmProps{ID: "g-confirm", Title: "Delete project", Action: "/_ui", CSRF: s.CSRF, Match: "Shop", Submit: "Delete project", Trigger: "Delete project"}) {
+						<p><strong>Shop</strong> and everything in it is removed. This cannot be undone.</p>
+					}
+				</div>
+			}
+			@gallerySection("Empty state") {
+				@ui.EmptyState("folder", "No projects yet", "Create a project, then deploy apps, databases and services into it.") {
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+						New project
+					}
+				}
+			}
+		</div>
+	}
+}
+
+var galleryRows = []struct{ name, fact, state, icon string }{
+	{"storefront", "shop.example.com", "running", "box"},
+	{"api", "api.example.com", "deploying", "box"},
+	{"postgres", "postgres:17-alpine", "degraded", "database"},
+	{"worker", "ghcr.io/acme/worker:4f2a91c", "failed", "box"},
+	{"n8n", "n8n.example.com", "stopped", "layers"},
+}
+
+var galleryLog = []struct{ at, text string }{
+	{"12:04:01", "Pulling nginx:1.29-alpine"},
+	{"12:04:09", "Starting container"},
+	{"12:04:10", "Health check passed"},
+	{"12:04:10", "Switched traffic to the new container"},
+}

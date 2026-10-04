@@ -91,7 +91,7 @@ func TestLocalRunEnvDirStdin(t *testing.T) {
 	err := r.Run(context.Background(), Cmd{
 		Name:   "sh",
 		Args:   []string{"-c", `printf '%s|%s|' "$MUSDASH_T" "$(pwd -P)"; cat`},
-		Env:    []string{"MUSDASH_T=value with space"},
+		Env:    []string{"MUSDASH_T=value with space"}, // explicit values pass even with this prefix
 		Dir:    dir,
 		Stdin:  strings.NewReader("stdin"),
 		Stdout: &out,
@@ -197,5 +197,46 @@ func TestLocalFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(dir); err == nil {
 		t.Fatal("directory still exists")
+	}
+}
+
+func TestLocalRunCancelKillsChildrenThatIgnoreTERM(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits for the kill delay")
+	}
+	r := NewLocal()
+	ctx, cancel := context.WithCancel(context.Background())
+	marker := filepath.Join(t.TempDir(), "survivor")
+
+	done := make(chan error, 1)
+	go func() {
+		// Both the shell and its child ignore SIGTERM.
+		done <- r.Run(ctx, Cmd{Name: "sh", Args: []string{"-c", `trap "" TERM; (trap "" TERM; sleep 8; touch ` + Quote(marker) + `) & wait`}})
+	}()
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run did not return")
+	}
+	time.Sleep(3500 * time.Millisecond)
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("a child that ignored SIGTERM survived cancellation")
+	}
+}
+
+func TestChildEnvHidesMusdashSettings(t *testing.T) {
+	t.Setenv("MUSDASH_MASTER_KEY", "secret-key-material")
+	t.Setenv("MUSDASH_T_KEEP", "no")
+	out, err := NewLocal().Output(context.Background(), Cmd{Name: "env", Env: []string{"EXPLICIT=yes"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "MUSDASH_") {
+		t.Fatal("musdash settings leaked into a child process")
+	}
+	if !strings.Contains(string(out), "EXPLICIT=yes") || !strings.Contains(string(out), "PATH=") {
+		t.Fatal("the rest of the environment must be passed on")
 	}
 }

@@ -1,0 +1,181 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return strconv.Itoa(n) + " " + many
+}
+
+templ ProjectList(s ui.Shell, projects []db.Project) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Projects", "A project groups the apps, databases and services of one product.") {
+			if len(projects) > 0 {
+				@ui.LinkButton("/projects/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					New project
+				}
+			}
+		}
+		if len(projects) == 0 {
+			@ui.EmptyState("folder", "No projects yet", "Create a project, then deploy apps, databases and services into it.") {
+				@ui.LinkButton("/projects/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					New project
+				}
+			}
+		} else {
+			<div class="card rows">
+				for _, p := range projects {
+					<a class="row" href={ templ.SafeURL("/projects/" + p.ID) }>
+						@ui.Icon("folder", "text-ink-mute")
+						<div class="min-w-0 flex-1">
+							<p class="truncate font-semibold">{ p.Name }</p>
+							if p.Description != "" {
+								<p class="muted truncate text-sm">{ p.Description }</p>
+							}
+						</div>
+						<span class="muted text-sm whitespace-nowrap">{ plural(p.EnvCount, "environment", "environments") }</span>
+						@ui.Icon("chevron-right", "text-ink-mute")
+					</a>
+				}
+			</div>
+		}
+	}
+}
+
+templ ProjectNew(s ui.Shell, f ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader("New project", "")
+		<div class="max-w-xl">
+			@ui.FormCard("Project details", "It starts with one environment called production.", "/projects", s.CSRF, "Create project") {
+				@ui.TextField(f, "Name", "", ui.InputProps{ID: "name", Required: true, Autofocus: true, Attrs: templ.Attributes{"maxlength": "60"}})
+				@ui.TextField(f, "Description", "Optional.", ui.InputProps{ID: "description", Attrs: templ.Attributes{"maxlength": "200"}})
+			}
+		</div>
+	}
+}
+
+func projectTabs(p db.Project, envs []db.Environment) []ui.Tab {
+	tabs := make([]ui.Tab, 0, len(envs)+1)
+	for _, e := range envs {
+		tabs = append(tabs, ui.Tab{Key: e.ID, Label: e.Name, Href: "/projects/" + p.ID + "?env=" + e.ID})
+	}
+	return append(tabs, ui.Tab{Key: "settings", Label: "Settings", Href: "/projects/" + p.ID + "/settings"})
+}
+
+// ProjectShow lists what is deployed in one environment of a project.
+templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, current db.Environment) {
+	@ui.Layout(s) {
+		@ui.PageHeader(p.Name, p.Description)
+		@ui.Tabs(projectTabs(p, envs), current.ID)
+		@ui.EmptyState("box", "Nothing is deployed in "+current.Name, "Apps, databases and services you deploy to this environment appear here.")
+	}
+}
+
+templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, envForm ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader(p.Name, p.Description)
+		@ui.Tabs(projectTabs(p, envs), "settings")
+		<div class="grid max-w-2xl gap-6">
+			@ui.FormCard("Project details", "", "/projects/"+p.ID, s.CSRF, "Save changes") {
+				@ui.TextField(details, "Name", "", ui.InputProps{ID: "name", Value: p.Name, Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
+				@ui.TextField(details, "Description", "Optional.", ui.InputProps{ID: "description", Value: p.Description, Attrs: templ.Attributes{"maxlength": "200"}})
+			}
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Environments</h2>
+						<p class="muted text-sm">Separate copies of the project, such as production and staging.</p>
+					</div>
+				</div>
+				<div class="rows">
+					for _, e := range envs {
+						<div class="row">
+							<span class="fact min-w-0 flex-1 truncate">{ e.Name }</span>
+							if len(envs) > 1 {
+								@ui.Confirm(ui.ConfirmProps{
+									ID:      "delete-env-" + e.ID,
+									Title:   "Delete environment",
+									Action:  "/environments/" + e.ID + "/delete",
+									CSRF:    s.CSRF,
+									Match:   e.Name,
+									Submit:  "Delete environment",
+									Trigger: "Delete",
+								}) {
+									<p>Everything deployed in <strong>{ e.Name }</strong> is removed with it. This cannot be undone.</p>
+								}
+							} else {
+								<span class="muted text-sm">The only environment</span>
+							}
+						</div>
+					}
+				</div>
+				<form class="card-foot" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/environments") }>
+					@ui.CSRF(s.CSRF)
+					<div class="min-w-0 flex-1">
+						<label class="sr-only" for="env-name">New environment name</label>
+						@ui.Input(ui.InputProps{ID: "env-name", Name: "name", Placeholder: "staging", Mono: true, Required: true, Value: envForm.V("name"), Invalid: envForm.E("name") != "", Attrs: templ.Attributes{"maxlength": "32"}})
+						if envForm.E("name") != "" {
+							<p class="field-error mt-1" id="env-name-error" role="alert">{ envForm.E("name") }</p>
+						}
+					</div>
+					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}) {
+						Add environment
+					}
+				</form>
+			</section>
+			<section class="card card-danger">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Delete project</h2>
+						<p class="muted text-sm">Removes the project, its environments and everything deployed in them.</p>
+					</div>
+					@ui.Confirm(ui.ConfirmProps{
+						ID:      "delete-project",
+						Title:   "Delete project",
+						Action:  "/projects/" + p.ID + "/delete",
+						CSRF:    s.CSRF,
+						Match:   p.Name,
+						Submit:  "Delete project",
+						Trigger: "Delete project",
+					}) {
+						<p><strong>{ p.Name }</strong> and everything in it is removed. This cannot be undone.</p>
+					}
+				</div>
+			</section>
+		</div>
+	}
+}
+
+templ Account(s ui.Shell, profile, password ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Account", "")
+		<div class="grid max-w-2xl gap-6">
+			@ui.FormCard("Profile", "", "/account/profile", s.CSRF, "Save changes") {
+				@ui.TextField(profile, "Name", "", ui.InputProps{ID: "name", Value: s.Name, Autocomplete: "name", Required: true})
+				@ui.TextField(profile, "Email", "You sign in with this address.", ui.InputProps{ID: "email", Type: "email", Value: s.Email, Autocomplete: "email", Required: true})
+			}
+			@ui.FormCard("Password", "Changing it signs you out everywhere else.", "/account/password", s.CSRF, "Change password") {
+				@ui.TextField(password, "Current password", "", ui.InputProps{ID: "current", Type: "password", Autocomplete: "current-password", Required: true})
+				@ui.TextField(password, "New password", "10 to 72 characters.", ui.InputProps{ID: "password", Type: "password", Autocomplete: "new-password", Required: true})
+			}
+		</div>
+	}
+}
+
+// NotFound is the signed-in 404 page.
+templ NotFound(s ui.Shell) {
+	@ui.Layout(s) {
+		@ui.EmptyState("alert", "Page not found", "It may have been deleted, or the address is wrong.") {
+			@ui.LinkButton("/", ui.ButtonProps{}) {
+				Go to projects
+			}
+		}
+	}
+}

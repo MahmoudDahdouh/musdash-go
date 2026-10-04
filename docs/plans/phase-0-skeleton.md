@@ -124,32 +124,32 @@ func (q *Queue) Enqueue(ctx context.Context, kind string, payload any, opts ...O
 Each task ends with `go vet ./... && go test ./...` green, a self-review of the diff, and a commit pushed to `main`.
 
 ### Task 1 — Core: module, config, secret, db, runner, jobs
-- [ ] `go mod init github.com/MahmoudDahdouh/musdash-go`; add the three modules; `go get -tool` templ.
-- [ ] `secret`: tests first — seal/open round trip, tampered ciphertext fails, wrong key fails, `RandomID` shape and uniqueness over 10 000 draws.
-- [ ] `config`: master key is read from `MUSDASH_MASTER_KEY` or `<data>/master.key`; created `0600` on first run; a key file with wider permissions is refused.
-- [ ] `db`: `Open` applies the five pragmas and `SetMaxOpenConns(2)`; `Migrate` applies numbered files once, in order, each in a transaction, recorded in `schema_migrations`. Tests: fresh migrate, re-run is a no-op, pragmas read back, foreign keys enforced.
-- [ ] `runner`: `Quote` table test including empty string, single quotes, newlines, `$()`, backticks, unicode; `LocalRunner` tests for streaming stdout, exit code, context cancel kills the process, `Output` cap.
-- [ ] `jobs`: tests — a job runs once; a failing job retries with back-off up to max attempts then is `failed`; two jobs with one `lock_key` never overlap; jobs left `running` by a crash are requeued at start; `Stop` waits for running jobs.
+- [x] `go mod init github.com/MahmoudDahdouh/musdash-go`; add the three modules; `go get -tool` templ.
+- [x] `secret`: tests first — seal/open round trip, tampered ciphertext fails, wrong key fails, `RandomID` shape and uniqueness over 10 000 draws.
+- [x] `config`: master key is read from `MUSDASH_MASTER_KEY` or `<data>/master.key`; created `0600` on first run; a key file with wider permissions is refused.
+- [x] `db`: `Open` applies the five pragmas and `SetMaxOpenConns(2)`; `Migrate` applies numbered files once, in order, each in a transaction, recorded in `schema_migrations`. Tests: fresh migrate, re-run is a no-op, pragmas read back, foreign keys enforced.
+- [x] `runner`: `Quote` table test including empty string, single quotes, newlines, `$()`, backticks, unicode; `LocalRunner` tests for streaming stdout, exit code, context cancel kills the process, `Output` cap.
+- [x] `jobs`: tests — a job runs once; a failing job retries with back-off up to max attempts then is `failed`; two jobs with one `lock_key` never overlap; jobs left `running` by a crash are requeued at start; `Stop` waits for running jobs.
 
 ### Task 2 — Design system and web shell
-- [ ] Vendor htmx, the SSE extension and Alpine; download the Tailwind CLI to `bin/` (git-ignored); `make generate`.
-- [ ] `input.css` with the tokens above; base layer for focus rings, form controls and reduced motion.
-- [ ] All components in `internal/web/ui`; `/_ui` gallery.
-- [ ] Static handler with hashed URLs, gzip, immutable caching. Test: correct `Content-Type`, `Content-Encoding`, 404 for unknown file.
-- [ ] Screenshot review of the gallery at 1440, 1024 and 375 px; fix what looks wrong.
+- [x] Vendor htmx, the SSE extension and Alpine; download the Tailwind CLI to `bin/` (git-ignored); `make generate`.
+- [x] `input.css` with the tokens above; base layer for focus rings, form controls and reduced motion.
+- [x] All components in `internal/web/ui`; `/_ui` gallery.
+- [x] Static handler with hashed URLs, gzip, immutable caching. Test: correct `Content-Type`, `Content-Encoding`, 404 for unknown file.
+- [x] Screenshot review of the gallery at 1440, 1024 and 375 px; fix what looks wrong.
 
 ### Task 3 — Accounts and projects
-- [ ] `auth`: bcrypt cost 12; passwords 10–72 bytes; sessions are 32-byte random tokens stored as SHA-256 hashes, 30-day sliding expiry; CSRF token per session; login limiter 5 failures per 15 minutes per IP + email.
-- [ ] Handlers: `/setup`, `/login`, `/logout`, `/reset/{token}`, `/account`, `/`, `/projects/new`, `/projects/{id}`, rename/delete project, add/delete environment. Deleting needs a typed confirmation.
-- [ ] Middleware order: recover → security headers → session → CSRF → route.
-- [ ] Tests (`httptest`): setup closes after the first user; wrong password does not reveal whether the email exists; POST without CSRF token is 403; a logged-out request to `/` redirects to `/login`; project and environment CRUD; a user cannot read another team's project (404).
+- [x] `auth`: bcrypt cost 12; passwords 10–72 bytes; sessions are 32-byte random tokens stored as SHA-256 hashes, 30-day sliding expiry; CSRF token per session; login limiter 5 failures per 15 minutes per IP + email.
+- [x] Handlers: `/setup`, `/login`, `/logout`, `/reset/{token}`, `/account`, `/`, `/projects/new`, `/projects/{id}`, rename/delete project, add/delete environment. Deleting needs a typed confirmation.
+- [x] Middleware order: recover → security headers → session → CSRF → route.
+- [x] Tests (`httptest`): setup closes after the first user; wrong password does not reveal whether the email exists; POST without CSRF token is 403; a logged-out request to `/` redirects to `/login`; project and environment CRUD; a user cannot read another team's project (404).
 
 ### Task 4 — Proxy stub, memory readout, RSS test, docs
-- [ ] `proxy` subcommand listens and answers 404 with a plain page (routing in phase 1).
-- [ ] `sysmem.RSS()` and the sidebar readout, refreshed every 30 s by htmx.
-- [ ] `test/rss_test.go`: build with the release flags, start `server` and `proxy` with `GOMEMLIMIT`/`GOGC` from spec section 8, request five pages, wait, read RSS, fail above 30 MB / 20 MB. Skipped under `-short`.
-- [ ] `make rss-linux` runs the same test inside a `golang` Linux container for the authoritative number.
-- [ ] README: build, run, data directory, environment variables.
+- [x] `proxy` subcommand listens and answers 404 with a plain page (routing in phase 1).
+- [x] `sysmem.RSS()` and the sidebar readout, refreshed every 30 s by htmx.
+- [x] `test/rss_test.go`: build with the release flags, start `server` and `proxy` with `GOMEMLIMIT`/`GOGC` from spec section 8, request five pages, wait, read RSS, fail above 30 MB / 20 MB. Skipped under `-short`.
+- [x] `make rss-linux` runs the same test inside a `golang` Linux container for the authoritative number.
+- [x] README: build, run, data directory, environment variables.
 
 ## Review focus
 
@@ -168,3 +168,22 @@ Inputs the spec implies but does not spell out; each has a test in the task that
 - No placeholders remain.
 
 **Approved for implementation.**
+
+## Outcome
+
+- Idle memory, measured by `test/rss_test.go`: server 19.9 MB and proxy 14.1 MB on Linux (arm64 container); 26.7 MB and 19.2 MB on macOS, which counts mapped binary pages differently.
+- Alpine.js was left out. The interactive behaviour the UI needs (dialogs, the mobile menu, typed confirmation, copy) is a 4 KB script driven by `data-` attributes. This saves 56 KB of JavaScript and lets the Content-Security-Policy forbid inline script and `unsafe-eval`, which Alpine's standard build needs.
+- An independent review of the phase found 13 issues; all were fixed before the commit:
+  1. The login limiter checked and counted in two steps, so parallel requests could all pass. It now counts the attempt atomically before the password is checked, and at most two password hashes run at once.
+  2. Limiter keys used the full IPv6 address; they now use the /64.
+  3. Limiter keys embedded the raw email; they now use a short hash, and an oversized email is truncated.
+  4. A signed-in browser got 403 on the reset and sign-in forms; signed-out forms now accept the session's token too.
+  5. Cancelling a command only killed the direct child after the grace period; the whole process group is now killed.
+  6. `Queue.Stop` could still claim a job; it now checks for stop before every claim.
+  7. `MUSDASH_*` variables, including the master key, were inherited by child processes; they are stripped, and the key is removed from the environment after it is read.
+  8. Request paths were logged, which would include a password-reset token; logs now carry the route pattern.
+  9. A job that crashed the process was requeued forever; one that is out of attempts is now failed at start.
+  10. Changing the password had no attempt limit; it shares the limiter, keyed by account.
+  11. Form bodies had no read deadline; they now have 30 seconds.
+  12. Two processes migrating at once could race; the applied check is repeated inside the transaction.
+  13. The memory test depended on the proxy's `-https` flag; both are in the same commit.

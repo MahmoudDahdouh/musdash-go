@@ -1,0 +1,220 @@
+package ui
+
+import "strconv"
+
+// Button variants.
+const (
+	Primary     = "primary"
+	Secondary   = "secondary"
+	Ghost       = "ghost"
+	Danger      = "danger"
+	DangerQuiet = "danger-quiet"
+)
+
+// ButtonProps configures Button and LinkButton.
+type ButtonProps struct {
+	Variant  string // defaults to Secondary
+	Small    bool
+	Type     string // defaults to "button"; forms pass "submit"
+	Icon     string // leading icon name
+	IconOnly bool   // square button; Label becomes the accessible name
+	Label    string // required when IconOnly
+	Disabled bool
+	Attrs    templ.Attributes
+}
+
+func buttonClass(p ButtonProps) string {
+	c := "btn btn-" + orDefault(p.Variant, Secondary)
+	if p.Small {
+		c += " btn-sm"
+	}
+	if p.IconOnly {
+		c += " btn-icon"
+	}
+	return c
+}
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
+}
+
+// Button renders a <button>. Its children are the label.
+templ Button(p ButtonProps) {
+	<button
+		type={ orDefault(p.Type, "button") }
+		class={ buttonClass(p) }
+		disabled?={ p.Disabled }
+		if p.IconOnly {
+			aria-label={ p.Label }
+			title={ p.Label }
+		}
+		{ p.Attrs... }
+	>
+		if p.Icon != "" {
+			@Icon(p.Icon)
+		}
+		{ children... }
+	</button>
+}
+
+// LinkButton renders a link that looks like a button, for navigation.
+templ LinkButton(href string, p ButtonProps) {
+	<a
+		href={ templ.SafeURL(href) }
+		class={ buttonClass(p) }
+		if p.IconOnly {
+			aria-label={ p.Label }
+			title={ p.Label }
+		}
+		{ p.Attrs... }
+	>
+		if p.Icon != "" {
+			@Icon(p.Icon)
+		}
+		{ children... }
+	</a>
+}
+
+// FieldProps describes the label, help and error around one control.
+type FieldProps struct {
+	Label string
+	For   string // id of the control
+	Hint  string
+	Error string
+}
+
+// Field wraps a control with its label, hint and error message. The error
+// sits directly under the control it belongs to.
+templ Field(p FieldProps) {
+	<div class="field">
+		<label class="field-label" for={ p.For }>{ p.Label }</label>
+		{ children... }
+		if p.Error != "" {
+			<p class="field-error" id={ p.For + "-error" } role="alert">{ p.Error }</p>
+		} else if p.Hint != "" {
+			<p class="field-hint" id={ p.For + "-hint" }>{ p.Hint }</p>
+		}
+	</div>
+}
+
+// InputProps configures Input and Textarea.
+type InputProps struct {
+	ID           string // also used as the name when Name is empty
+	Name         string
+	Type         string // defaults to "text"
+	Value        string
+	Placeholder  string
+	Autocomplete string
+	Required     bool
+	Autofocus    bool
+	Disabled     bool
+	Mono         bool // machine values: domains, images, commands
+	Invalid      bool
+	Described    bool // the surrounding Field shows a hint or error
+	Rows         int  // Textarea only
+	Attrs        templ.Attributes
+}
+
+func describedBy(p InputProps) string {
+	if p.Invalid {
+		return p.ID + "-error"
+	}
+	return p.ID + "-hint"
+}
+
+templ Input(p InputProps) {
+	<input
+		id={ p.ID }
+		name={ orDefault(p.Name, p.ID) }
+		type={ orDefault(p.Type, "text") }
+		value={ p.Value }
+		class={ "input", templ.KV("input-mono", p.Mono) }
+		placeholder={ p.Placeholder }
+		if p.Autocomplete != "" {
+			autocomplete={ p.Autocomplete }
+		}
+		required?={ p.Required }
+		autofocus?={ p.Autofocus }
+		disabled?={ p.Disabled }
+		if p.Invalid {
+			aria-invalid="true"
+		}
+		if p.Invalid || p.Described {
+			aria-describedby={ describedBy(p) }
+		}
+		{ p.Attrs... }
+	/>
+}
+
+templ Textarea(p InputProps) {
+	<textarea
+		id={ p.ID }
+		name={ orDefault(p.Name, p.ID) }
+		class={ "input", templ.KV("input-mono", p.Mono) }
+		placeholder={ p.Placeholder }
+		if p.Rows > 0 {
+			rows={ strconv.Itoa(p.Rows) }
+		}
+		required?={ p.Required }
+		disabled?={ p.Disabled }
+		spellcheck="false"
+		if p.Invalid {
+			aria-invalid="true"
+		}
+		if p.Invalid || p.Described {
+			aria-describedby={ describedBy(p) }
+		}
+		{ p.Attrs... }
+	>{ p.Value }</textarea>
+}
+
+// Option is one choice in a Select.
+type Option struct {
+	Value string
+	Label string
+}
+
+templ Select(id string, options []Option, selected string, attrs templ.Attributes) {
+	<select id={ id } name={ id } class="input" { attrs... }>
+		for _, o := range options {
+			<option value={ o.Value } selected?={ o.Value == selected }>{ o.Label }</option>
+		}
+	</select>
+}
+
+// Checkbox renders a labelled checkbox. Its children are the label.
+templ Checkbox(id string, checked bool, attrs templ.Attributes) {
+	<label class="check" for={ id }>
+		<input type="checkbox" id={ id } name={ id } value="1" checked?={ checked } { attrs... }/>
+		<span>
+			{ children... }
+		</span>
+	</label>
+}
+
+// CSRF is the hidden field every state-changing form carries.
+templ CSRF(token string) {
+	<input type="hidden" name="_csrf" value={ token }/>
+}
+
+// TextField is a labelled input bound to a Form: it shows the submitted value
+// and the field's error. p.ID names the field.
+templ TextField(f Form, label, hint string, p InputProps) {
+	@Field(FieldProps{Label: label, For: p.ID, Hint: hint, Error: f.E(p.ID)}) {
+		@Input(boundInput(f, hint, p))
+	}
+}
+
+func boundInput(f Form, hint string, p InputProps) InputProps {
+	// A submitted value wins over the stored one, so a rejected form shows
+	// what was typed. Passwords are never echoed back into the page.
+	if v, ok := f.Values[p.ID]; ok && p.Type != "password" {
+		p.Value = v
+	}
+	p.Invalid = f.E(p.ID) != ""
+	p.Described = hint != ""
+	return p
+}

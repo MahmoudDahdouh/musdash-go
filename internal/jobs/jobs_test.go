@@ -218,6 +218,58 @@ func TestCrashedJobIsRequeuedAtStart(t *testing.T) {
 	}
 }
 
+func TestCrashLoopingJobIsFailedAtStart(t *testing.T) {
+	q, d := newQueue(t, 1)
+	if _, err := d.Exec(`INSERT INTO jobs (id, kind, status, attempts, max_attempts, run_after, created_at) VALUES ('killer', 'resume', 'running', 3, 3, 0, 0)`); err != nil {
+		t.Fatal(err)
+	}
+	var ran atomic.Bool
+	q.Register("resume", func(context.Context, []byte) error { ran.Store(true); return nil })
+	start(t, q)
+	time.Sleep(100 * time.Millisecond)
+	if st, _, _ := status(t, d, "killer"); st != StatusFailed || ran.Load() {
+		t.Fatalf("status %s, ran %v: a job out of attempts must not run again", st, ran.Load())
+	}
+}
+
+func TestStopClaimsNothingNew(t *testing.T) {
+	q, d := newQueue(t, 1)
+	release := make(chan struct{})
+	var runs atomic.Int32
+	q.Register("work", func(context.Context, []byte) error {
+		runs.Add(1)
+		<-release
+		return nil
+	})
+	if err := q.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	for range 20 {
+		q.Enqueue(ctx, "work", nil)
+	}
+	waitFor(t, "a job to start", func() bool { return runs.Load() == 1 })
+
+	stopped := make(chan struct{})
+	go func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		q.Stop(stopCtx)
+		close(stopped)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	<-stopped
+	if runs.Load() != 1 {
+		t.Fatalf("%d jobs ran; the backlog must stay queued after Stop", runs.Load())
+	}
+	var queued int
+	d.QueryRow(`SELECT count(*) FROM jobs WHERE status = 'queued'`).Scan(&queued)
+	if queued != 19 {
+		t.Fatalf("%d jobs still queued, want 19", queued)
+	}
+}
+
 func TestStopWaitsThenCancels(t *testing.T) {
 	q, d := newQueue(t, 2)
 	var finished atomic.Bool

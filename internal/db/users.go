@@ -85,7 +85,7 @@ func (d *DB) UserByID(ctx context.Context, id string) (User, error) {
 // FirstTeamOf returns the team a user lands in after login.
 func (d *DB) FirstTeamOf(ctx context.Context, userID string) (string, error) {
 	var id string
-	err := d.QueryRowContext(ctx, `SELECT team_id FROM team_members WHERE user_id = ? ORDER BY created_at, team_id LIMIT 1`, userID).Scan(&id)
+	err := d.QueryRowContext(ctx, `SELECT team_id FROM team_members WHERE user_id = ? ORDER BY created_at, rowid LIMIT 1`, userID).Scan(&id)
 	return id, notFound(err)
 }
 

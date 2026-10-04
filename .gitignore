@@ -10,3 +10,6 @@
 *.swp
 .idea/
 .vscode/
+
+# Local preview configuration for Claude Code
+/.claude/

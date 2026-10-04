@@ -1,0 +1,79 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+musdash is a Coolify-style self-hosted PaaS written in Go, designed around one constraint: the control plane and proxy together idle under 50 MB RAM (server under 30 MB, proxy under 20 MB). It ships as one static binary with no Node, Postgres, Redis or separate proxy product.
+
+Two documents drive the work; read them before designing anything:
+
+- `docs/spec.md` — the full product spec: architecture, feature list by phase (0–9), data model, RAM rules, security checklist. It still uses the working name `litepaas`; the real name is `musdash` everywhere (binary, module, data dir, `MUSDASH_*` env vars).
+- `docs/plans/phase-N-*.md` — the implementation plan for each phase, with task checklists, the file map, and a table of decisions that override or extend the spec. Where plan and spec disagree, the plan wins.
+
+The build proceeds phase by phase, task by task. `git log` and the plan's task list show where it stands; packages named in the spec's layout (`auth`, `docker`, `deploy`, `proxy`, …) do not exist until their phase.
+
+## Commands
+
+```sh
+go vet ./... && go test -short ./...                   # required green before every commit
+go test ./internal/jobs -run TestLockKeySerialises -v  # one test
+
+make generate     # templ → *_templ.go, and input.css → static/app.css (run after editing either)
+make build        # release build into bin/musdash
+make build-linux  # dist/musdash-linux-{amd64,arm64}
+make dev          # server against ./data with the component gallery at /_ui
+make rss          # idle-memory test on this machine
+make rss-linux    # the same test in a Linux container: the authoritative figure
+```
+
+- `bin/` is git-ignored. `bin/tailwindcss` is the Tailwind v4 standalone CLI, downloaded by `make tools`; there is no Node toolchain.
+- Generated files (`*_templ.go`, `internal/web/static/app.css`) are committed so a plain `go build` needs only Go. Regenerate both after editing any `.templ` file, `input.css`, or class names in `app.js`. `internal/web/static` embeds `app.css` by name, so the package does not compile until that file exists.
+- Subcommand flags fall back to env vars: `--data` / `MUSDASH_DATA`, `--dev` / `MUSDASH_DEV=1`. `MUSDASH_MASTER_KEY` (base64, 32 bytes) overrides `<data>/master.key`.
+
+## Hard constraints
+
+These come from the spec and shape every change:
+
+- **Three external modules only**: `modernc.org/sqlite`, `golang.org/x/crypto`, `github.com/a-h/templ`. Everything else is the standard library (`net/http` mux, `log/slog`, `flag`, `embed`). Spec section 3 lists what is deliberately avoided (routers, Docker SDK, YAML, JWT, cron and session libraries). Do not add a dependency without the user's say.
+- **Shell out, don't import SDKs**: `docker`, `docker compose` and `git` are run as processes with `--format json` where output is parsed.
+- **RAM rules (spec section 8)**: stream with `io.Copy`, never buffer command output, logs or uploads; no in-memory caches of database rows; no goroutine per container; small fixed worker pool; bcrypt, not argon2; `CGO_ENABLED=0`.
+- **Injection safety**: local commands are argument vectors, never shell strings. Anything that reaches a shell (SSH) goes through `runner.Quote` / `runner.QuoteJoin`. User values passed as arguments are guarded with `--` against option injection.
+- **Secrets at rest** are AES-256-GCM sealed with the master key (`secret.Box`). Session and API tokens are stored only as SHA-256 hashes (`secret.HashToken`).
+
+## Architecture
+
+One binary, two long-running processes: `musdash server` (UI, API, webhooks, jobs, SQLite) and `musdash proxy` (edge reverse proxy with autocert). They are separate so restarting the control plane never drops app traffic; the server rewrites `<data>/proxy/routes.json` atomically and signals the proxy with `SIGHUP`. Containers publish to `127.0.0.1:<random port>` and the proxy routes `Host` to that port. Remote servers are agentless, driven over SSH.
+
+How the existing packages fit together:
+
+- `cmd/musdash` — subcommand dispatch with plain `flag` sets. `commonFlags` registers the shared flags; `openDB` creates the data directory tree and returns a migrated database.
+- `internal/config` — owns the data directory layout (every path under `DataDir` is a method here; add new paths here rather than joining strings elsewhere) and loads or creates the master key, refusing a key file readable by group or others.
+- `internal/secret` — `Box` (seal/open) plus all random generation. `RandomID()` is the id for every row: 12 chars of `[a-z2-7]` starting with a letter, safe as a URL segment, container name and DNS label. Named `secret`, not `crypto`, to avoid shadowing the stdlib.
+- `internal/db` — `Open` sets the pragmas the RAM budget depends on (WAL, 2 MB cache, 2 connections, `_txlock=immediate` so two connections cannot deadlock on a write upgrade). `Migrate` applies numbered files from the `migrations` package once each, in a transaction. Queries are hand-written methods on `*DB`, one file per area.
+  - Every query for a team-owned row takes `teamID` and filters on it; a miss returns `db.ErrNotFound` whether the row is absent or belongs to another team, so handlers answer 404 either way.
+  - Writes go through the `affected(...)` helper to turn zero rows into `ErrNotFound`; multi-statement writes use `d.Tx`.
+  - Tables are `STRICT`, timestamps are Unix seconds in `INTEGER`, text columns default to `''` rather than NULL.
+- `migrations/` — a tiny Go package exposing an `embed.FS` of `NNNN_name.sql` files (`go:embed` cannot reach parent directories). Add a new numbered file; never edit an applied one.
+- `internal/runner` — the `Runner` interface is the only way any package touches a server: commands (`Run` streams, `Output` is capped at 1 MiB and errors rather than truncating) and file operations (`WriteFile` is atomic). `LocalRunner` uses `os/exec` with its own process group so cancelling a context also kills children. `SSHRunner` arrives in phase 6; code written against `Runner` must not assume it is local.
+- `internal/jobs` — a persistent queue on the `jobs` table. One dispatcher goroutine claims work with a single `UPDATE … RETURNING` and runs up to N handlers. Jobs sharing a `lock_key` never overlap (this is how "one build per server" is enforced). Errors retry with back-off; wrap with `jobs.Permanent` to fail at once. Jobs left `running` by a crash are requeued in `Start`; a job interrupted by shutdown is requeued without spending an attempt.
+- `internal/web` — templ + HTMX (SSE extension) with assets embedded in the binary; no JSON API for the UI.
+  - `static/` serves embedded assets at `/static/{name}?v=<content hash>` with immutable caching and lazy gzip. Use `static.URL(name)` in templates; a new asset must be added to the `go:embed` line.
+  - `static/app.js` is driven entirely by `data-*` attributes (`data-open`, `data-close`, `data-match`, `data-copy`, `data-autodismiss`, `data-follow`, `data-nav-toggle`) so pages carry no inline script and the CSP can forbid it.
+  - `ui/` holds the reusable design-system components (props structs + templ); `pages/` holds pages built from them.
+
+## UI design system
+
+Defined in `internal/web/assets/input.css` and the "Design system" section of the phase 0 plan:
+
+- Light mode only, blue brand, no web fonts, no icon font (icons are inline SVG via `ui.Icon`).
+- Tailwind's default palette, type scale, radii and shadows are disabled (`--color-*: initial` etc.) and replaced with project tokens in `@theme`. Only token names exist as utilities (`brand-600`, `ink`, `ink-soft`, `canvas`, `paper`, `sunk`, `line`, `ok`/`warn`/`danger`/`idle` and their `-soft` tints). Never write a raw colour, size or radius.
+- Controls use component classes from `@layer components` (`.btn .btn-primary`, `.field`, `.input`, `.card`, …) so markup carries one class per control, not a utility pile. Extend these and the `ui` components rather than styling per page.
+- Machine facts (domains, image tags, ports, hashes, logs) use the mono stack. State is always written as text as well as colour.
+- Tailwind scans only `internal/web/ui`, `internal/web/pages` and `static/app.js` (`source(none)` plus explicit `@source` lines); classes used elsewhere will not be generated.
+
+## Workflow conventions
+
+- Each plan task ends with `go vet ./... && go test ./...` green, a self-review of the diff, and a commit to `main` (remote `origin`). Commit subjects follow `Phase N task M: …`.
+- New behaviour gets tests alongside it, written first where the plan says so. Tests use real SQLite files in `t.TempDir()` and real processes, not mocks.
+- Comments in this codebase explain why (the constraint or failure being avoided), not what; match that.

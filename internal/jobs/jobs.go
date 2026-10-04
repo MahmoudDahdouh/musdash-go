@@ -157,6 +157,12 @@ func (q *Queue) poke() {
 // dispatching. It returns immediately.
 func (q *Queue) Start(ctx context.Context) error {
 	// A job still marked running at start belonged to a process that died.
+	// One that has used all its attempts is failed rather than requeued:
+	// a job that takes the process down must not do so on every restart.
+	if _, err := q.db.ExecContext(ctx, `UPDATE jobs SET status = ?, finished_at = ?, last_error = ?
+		WHERE status = ? AND attempts >= max_attempts`, StatusFailed, time.Now().Unix(), "the process stopped while this job was running", StatusRunning); err != nil {
+		return err
+	}
 	if _, err := q.db.ExecContext(ctx, `UPDATE jobs SET status = ?, started_at = 0 WHERE status = ?`, StatusQueued, StatusRunning); err != nil {
 		return err
 	}
@@ -204,9 +210,15 @@ func (q *Queue) dispatch(ctx context.Context) {
 	lastPrune := time.Time{}
 
 	for {
-		// Claim until the workers are busy or nothing is ready.
+		// Claim until the workers are busy or nothing is ready. Once Stop
+		// has been called nothing new is claimed.
 	claim:
 		for {
+			select {
+			case <-q.stop:
+				return
+			default:
+			}
 			select {
 			case slots <- struct{}{}:
 			default:

@@ -22,9 +22,7 @@ func NewLocal() *LocalRunner { return &LocalRunner{} }
 func (LocalRunner) command(ctx context.Context, c Cmd) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, c.Name, c.Args...)
 	cmd.Dir = c.Dir
-	if len(c.Env) > 0 {
-		cmd.Env = append(os.Environ(), c.Env...)
-	}
+	cmd.Env = append(childEnv(os.Environ()), c.Env...)
 	cmd.Stdin = c.Stdin
 	cmd.Stdout = c.Stdout
 	cmd.Stderr = c.Stderr
@@ -34,13 +32,38 @@ func (LocalRunner) command(ctx context.Context, c Cmd) *exec.Cmd {
 	cmd.Cancel = func() error {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 	}
-	// After SIGTERM, give the group a moment, then Wait kills the child.
+	// After SIGTERM the group gets a moment to exit; then Wait kills the
+	// direct child and run kills whatever is left of the group.
 	cmd.WaitDelay = 5 * time.Second
 	return cmd
 }
 
+// childEnv removes musdash's own settings from the environment handed to
+// child processes. The master key may be among them, and tools such as
+// docker compose substitute environment variables into user-supplied files.
+func childEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, "MUSDASH_") {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
+// run executes cmd. When the context was cancelled it then kills the whole
+// process group: os/exec only kills the direct child, and a grandchild that
+// ignored SIGTERM would otherwise live on unnoticed.
+func run(ctx context.Context, cmd *exec.Cmd) error {
+	err := cmd.Run()
+	if ctx.Err() != nil && cmd.Process != nil {
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+	return err
+}
+
 func (r LocalRunner) Run(ctx context.Context, c Cmd) error {
-	return wrapExit(c.Name, r.command(ctx, c).Run(), ctx, "")
+	return wrapExit(c.Name, run(ctx, r.command(ctx, c)), ctx, "")
 }
 
 func (r LocalRunner) Output(ctx context.Context, c Cmd) ([]byte, error) {
@@ -52,7 +75,7 @@ func (r LocalRunner) Output(ctx context.Context, c Cmd) ([]byte, error) {
 	} else {
 		c.Stderr = io.MultiWriter(c.Stderr, tail)
 	}
-	err := wrapExit(c.Name, r.command(ctx, c).Run(), ctx, strings.TrimSpace(string(tail.buf)))
+	err := wrapExit(c.Name, run(ctx, r.command(ctx, c)), ctx, strings.TrimSpace(string(tail.buf)))
 	if err != nil {
 		return out.buf.Bytes(), err
 	}

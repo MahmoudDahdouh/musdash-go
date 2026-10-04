@@ -1,0 +1,331 @@
+package ui
+
+import "strings"
+
+// PageHeader is the title row at the top of a page. Its children are the
+// page's actions, shown on the right.
+templ PageHeader(title, description string) {
+	<header class="mb-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+		<div class="min-w-0">
+			<h1 class="text-xl font-semibold tracking-tight">{ title }</h1>
+			if description != "" {
+				<p class="muted mt-0.5">{ description }</p>
+			}
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
+			{ children... }
+		</div>
+	</header>
+}
+
+// Crumb is one step in the breadcrumb trail. The last one has no Href.
+type Crumb struct {
+	Label string
+	Href  string
+}
+
+templ Crumbs(items []Crumb) {
+	if len(items) > 0 {
+		<nav class="crumbs mb-3" aria-label="Breadcrumb">
+			for i, c := range items {
+				if i > 0 {
+					@Icon("chevron-right")
+				}
+				if c.Href != "" {
+					<a href={ templ.SafeURL(c.Href) }>{ c.Label }</a>
+				} else {
+					<span class="text-ink" aria-current="page">{ c.Label }</span>
+				}
+			}
+		</nav>
+	}
+}
+
+// Card is a bordered surface. Pass a title to get a header row.
+templ Card(title string) {
+	<section class="card">
+		if title != "" {
+			<div class="card-head">
+				<h2 class="card-title">{ title }</h2>
+			</div>
+		}
+		{ children... }
+	</section>
+}
+
+// FormCard is a card that holds one form: fields in the body and the submit
+// action in the footer, so every settings form reads the same way.
+templ FormCard(title, description, action, csrf, submit string) {
+	<form class="card" method="post" action={ templ.SafeURL(action) }>
+		@CSRF(csrf)
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">{ title }</h2>
+				if description != "" {
+					<p class="muted text-sm">{ description }</p>
+				}
+			</div>
+		</div>
+		<div class="card-body grid gap-4">
+			{ children... }
+		</div>
+		<div class="card-foot">
+			@Button(ButtonProps{Variant: Primary, Type: "submit"}) {
+				{ submit }
+			}
+		</div>
+	</form>
+}
+
+// Table renders a table with the given column headers inside a scroll
+// wrapper. Its children are the <tr> rows.
+templ Table(headers ...string) {
+	<div class="table-wrap">
+		<table class="table">
+			<thead>
+				<tr>
+					for _, h := range headers {
+						<th scope="col">{ h }</th>
+					}
+				</tr>
+			</thead>
+			<tbody>
+				{ children... }
+			</tbody>
+		</table>
+	</div>
+}
+
+// Tones shared by Badge, Notice and Pill.
+const (
+	ToneNeutral = ""
+	ToneBrand   = "brand"
+	ToneOK      = "ok"
+	ToneWarn    = "warn"
+	ToneDanger  = "danger"
+)
+
+templ Badge(text, tone string) {
+	<span class={ "badge", templ.KV("badge-"+tone, tone != "") }>{ text }</span>
+}
+
+// stateTone maps a resource state to the tone its pill is drawn in. The same
+// state names drive the .rail colour through the data-state attribute.
+func stateTone(state string) string {
+	switch state {
+	case "running", "healthy", "success", "done":
+		return "pill-ok"
+	case "deploying", "building", "queued", "starting", "restarting":
+		return "pill-busy"
+	case "degraded", "unhealthy":
+		return "pill-warn"
+	case "failed", "error", "exited":
+		return "pill-danger"
+	}
+	return ""
+}
+
+// StateLabel is the human wording of a state: "running" → "Running".
+func StateLabel(state string) string {
+	if state == "" {
+		return "Unknown"
+	}
+	return strings.ToUpper(state[:1]) + strings.ReplaceAll(state[1:], "_", " ")
+}
+
+// StatusPill writes a state out in words with a coloured dot.
+templ StatusPill(state string) {
+	<span class={ "pill", stateTone(state) }>{ StateLabel(state) }</span>
+}
+
+// Tab is one entry of a Tabs bar.
+type Tab struct {
+	Key   string
+	Label string
+	Href  string
+}
+
+templ Tabs(items []Tab, active string) {
+	<nav class="tabs mb-5" aria-label="Sections">
+		for _, t := range items {
+			<a
+				class="tab"
+				href={ templ.SafeURL(t.Href) }
+				if t.Key == active {
+					aria-current="page"
+				}
+			>{ t.Label }</a>
+		}
+	</nav>
+}
+
+// Modal is a native dialog. Open it with a control carrying data-open={ id }.
+templ Modal(id, title string) {
+	<dialog class="modal" id={ id } aria-labelledby={ id + "-title" }>
+		<div class="card-head">
+			<h2 class="card-title" id={ id + "-title" }>{ title }</h2>
+			@Button(ButtonProps{Variant: Ghost, Small: true, IconOnly: true, Icon: "x", Label: "Close", Attrs: templ.Attributes{"data-close": true}})
+		</div>
+		{ children... }
+	</dialog>
+}
+
+// ConfirmProps configures a destructive action guarded by typed confirmation.
+type ConfirmProps struct {
+	ID      string // dialog id, unique on the page
+	Title   string // "Delete project"
+	Action  string // form action
+	CSRF    string
+	Match   string // the exact text the person must type
+	Submit  string // "Delete project"
+	Trigger string // label of the button that opens the dialog
+}
+
+// Confirm renders a quiet danger button and the dialog it opens. The dialog's
+// submit button stays disabled until Match has been typed. Its children
+// explain what will be lost.
+templ Confirm(p ConfirmProps) {
+	@Button(ButtonProps{Variant: DangerQuiet, Icon: "trash", Attrs: templ.Attributes{"data-open": p.ID}}) {
+		{ p.Trigger }
+	}
+	@Modal(p.ID, p.Title) {
+		<form method="post" action={ templ.SafeURL(p.Action) }>
+			@CSRF(p.CSRF)
+			<div class="card-body grid gap-4">
+				<div class="text-ink-soft">
+					{ children... }
+				</div>
+				@Field(FieldProps{Label: "Type " + p.Match + " to confirm", For: p.ID + "-confirm"}) {
+					@Input(InputProps{ID: p.ID + "-confirm", Name: "confirm", Mono: true, Autocomplete: "off", Required: true, Attrs: templ.Attributes{"data-match": p.Match}})
+				}
+			</div>
+			<div class="card-foot">
+				@Button(ButtonProps{Attrs: templ.Attributes{"data-close": true}}) {
+					Cancel
+				}
+				@Button(ButtonProps{Variant: Danger, Type: "submit", Disabled: true}) {
+					{ p.Submit }
+				}
+			</div>
+		</form>
+	}
+}
+
+func noticeIcon(tone string) string {
+	switch tone {
+	case ToneOK:
+		return "check"
+	case ToneWarn, ToneDanger:
+		return "alert"
+	}
+	return "info"
+}
+
+func noticeIconClass(tone string) string {
+	switch tone {
+	case ToneOK:
+		return "mt-0.5 text-ok"
+	case ToneWarn:
+		return "mt-0.5 text-warn"
+	case ToneDanger:
+		return "mt-0.5 text-danger"
+	}
+	return "mt-0.5 text-brand-600"
+}
+
+// Notice is an inline message. Its children are the message.
+templ Notice(tone string) {
+	<div class={ "notice", templ.KV("notice-"+tone, tone != "") } role={ noticeRole(tone) }>
+		@Icon(noticeIcon(tone), noticeIconClass(tone))
+		<div class="min-w-0 flex-1">
+			{ children... }
+		</div>
+	</div>
+}
+
+func noticeRole(tone string) string {
+	if tone == ToneDanger {
+		return "alert"
+	}
+	return "status"
+}
+
+// Flash is a one-time message shown after a redirect.
+type Flash struct {
+	Tone    string
+	Message string
+}
+
+// Toasts renders the flash message, if any, as a toast. Confirmations leave
+// on their own; errors stay until dismissed.
+templ Toasts(f *Flash) {
+	<div class="toasts" id="toasts">
+		if f != nil {
+			<div
+				class={ "notice", templ.KV("notice-"+f.Tone, f.Tone != "") }
+				role={ noticeRole(f.Tone) }
+				if f.Tone != ToneDanger {
+					data-autodismiss
+				}
+			>
+				@Icon(noticeIcon(f.Tone), noticeIconClass(f.Tone))
+				<div class="min-w-0 flex-1">{ f.Message }</div>
+				@Button(ButtonProps{Variant: Ghost, Small: true, IconOnly: true, Icon: "x", Label: "Dismiss", Attrs: templ.Attributes{"data-dismiss": true}})
+			</div>
+		}
+	</div>
+}
+
+// EmptyState fills a list that has nothing in it yet. Its children are the
+// action that creates the first item.
+templ EmptyState(icon, title, description string) {
+	<div class="empty">
+		@Icon(icon, "icon-lg text-ink-mute")
+		<h2 class="font-semibold">{ title }</h2>
+		<p class="muted max-w-sm">{ description }</p>
+		<div class="mt-2 flex flex-wrap justify-center gap-2">
+			{ children... }
+		</div>
+	</div>
+}
+
+// Fact renders a machine-produced value (domain, tag, port, hash) in the
+// monospaced face.
+templ Fact(value string) {
+	<span class="fact">{ value }</span>
+}
+
+// Copyable is a Fact with a copy button.
+templ Copyable(value string) {
+	<span class="inline-flex max-w-full items-center gap-1.5">
+		<span class="code truncate">{ value }</span>
+		<button type="button" class="btn btn-ghost btn-sm" data-copy={ value }>
+			@Icon("copy")
+			<span data-copy-label>Copy</span>
+		</button>
+	</span>
+}
+
+// KVItem is one row of a KeyValue list.
+type KVItem struct {
+	Key   string
+	Value string
+	Mono  bool
+}
+
+templ KeyValue(items []KVItem) {
+	<dl class="kv">
+		for _, it := range items {
+			<dt>{ it.Key }</dt>
+			<dd class={ templ.KV("fact", it.Mono) }>{ it.Value }</dd>
+		}
+	</dl>
+}
+
+// LogView is a scrolling log panel that follows new output. Its children are
+// the log text.
+templ LogView(id string, attrs templ.Attributes) {
+	<pre class="logview" id={ id } data-follow="on" tabindex="0" aria-label="Log output" { attrs... }>
+		{ children... }
+	</pre>
+}

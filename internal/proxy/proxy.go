@@ -1,0 +1,266 @@
+// Package proxy is the edge proxy: it terminates HTTP(S) for every deployed
+// app and forwards each request to the container that serves its host.
+//
+// It runs as its own process so restarting or upgrading the control plane
+// never drops app traffic. It holds no state beyond the route table it loads
+// from routes.json; the control plane rewrites that file and sends SIGHUP.
+package proxy
+
+import (
+	"context"
+	"crypto/tls"
+	"errors"
+	"io"
+	"log"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"os"
+	"os/signal"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"time"
+
+	"golang.org/x/crypto/acme/autocert"
+)
+
+// Options configures the proxy process.
+type Options struct {
+	HTTPAddr   string // plain HTTP listener, ":80" in production
+	HTTPSAddr  string // TLS listener, ":443" in production; "" turns HTTPS off
+	RoutesPath string // routes.json
+	PIDPath    string // where the control plane finds the process to signal
+	CertDir    string // certificate cache
+	Log        *slog.Logger
+}
+
+// Proxy routes requests by host name.
+type Proxy struct {
+	table  atomic.Pointer[Table]
+	rp     *httputil.ReverseProxy
+	log    *slog.Logger
+	routes string
+	// https reports whether a TLS listener exists. Without one, hosts that
+	// ask for TLS are served over HTTP rather than redirected nowhere.
+	https bool
+}
+
+type targetKey struct{}
+
+// New returns a proxy serving the routes in routesPath.
+func New(routesPath string, https bool, logger *slog.Logger) (*Proxy, error) {
+	p := &Proxy{log: logger, routes: routesPath, https: https}
+	if err := p.Reload(); err != nil {
+		return nil, err
+	}
+	p.rp = &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			// Rewrite starts from a request with every client-supplied
+			// X-Forwarded-* and Forwarded header removed, so the values set
+			// here cannot be spoofed.
+			pr.Out.URL.Scheme = "http"
+			pr.Out.URL.Host = pr.In.Context().Value(targetKey{}).(string)
+			pr.Out.Host = pr.In.Host
+			pr.SetXForwarded()
+		},
+		Transport: &http.Transport{
+			DialContext:           (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+			MaxIdleConns:          128,
+			MaxIdleConnsPerHost:   16,
+			IdleConnTimeout:       60 * time.Second,
+			ExpectContinueTimeout: time.Second,
+			// Pass the app's own encoding through untouched.
+			DisableCompression: true,
+		},
+		BufferPool:   &bufferPool{},
+		ErrorHandler: p.upstreamError,
+		ErrorLog:     log.New(io.Discard, "", 0),
+	}
+	return p, nil
+}
+
+// Reload reads routes.json again. On any error the current table stays in
+// place, so a half-written or invalid file never takes sites down.
+func (p *Proxy) Reload() error {
+	t, err := Load(p.routes)
+	if err != nil {
+		return err
+	}
+	p.table.Store(t)
+	return nil
+}
+
+// Table returns the route table in use.
+func (p *Proxy) Table() *Table { return p.table.Load() }
+
+// HTTP is the handler for the plain HTTP listener: it redirects hosts that
+// have HTTPS and serves the rest directly.
+func (p *Proxy) HTTP() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rt, ok := p.Table().Lookup(r.Host)
+		if !ok {
+			noRoute(w)
+			return
+		}
+		if rt.TLS && p.https {
+			// Go straight to the final host when this one only redirects.
+			host := rt.Host
+			if rt.RedirectTo != "" {
+				host = rt.RedirectTo
+			}
+			http.Redirect(w, r, "https://"+host+r.URL.RequestURI(), http.StatusPermanentRedirect)
+			return
+		}
+		p.serve(w, r, rt, "http")
+	})
+}
+
+// HTTPS is the handler for the TLS listener.
+func (p *Proxy) HTTPS() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rt, ok := p.Table().Lookup(r.Host)
+		if !ok {
+			noRoute(w)
+			return
+		}
+		p.serve(w, r, rt, "https")
+	})
+}
+
+func (p *Proxy) serve(w http.ResponseWriter, r *http.Request, rt Route, scheme string) {
+	if rt.RedirectTo != "" {
+		http.Redirect(w, r, scheme+"://"+rt.RedirectTo+r.URL.RequestURI(), http.StatusPermanentRedirect)
+		return
+	}
+	p.rp.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), targetKey{}, rt.Target)))
+}
+
+// hostPolicy lets certificates be requested only for routed hosts that asked
+// for TLS, so nobody can make the proxy request certificates for other names.
+func (p *Proxy) hostPolicy(_ context.Context, host string) error {
+	if rt, ok := p.Table().Lookup(host); ok && rt.TLS {
+		return nil
+	}
+	return errors.New("proxy: no TLS route for host " + strconv.Quote(host))
+}
+
+// upstreamError answers when the app's container cannot be reached.
+func (p *Proxy) upstreamError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, context.Canceled) {
+		return // the client went away; there is nobody to answer
+	}
+	p.log.Debug("upstream error", "host", r.Host, "err", err)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Retry-After", "5")
+	w.WriteHeader(http.StatusBadGateway)
+	io.WriteString(w, "The app on this address is not responding. It may be starting or redeploying.\n")
+}
+
+// noRoute answers a request for a host nothing is deployed on.
+func noRoute(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	io.WriteString(w, "Nothing is deployed on this address.\n")
+}
+
+// bufferPool recycles the copy buffers of proxied responses.
+type bufferPool struct{ pool sync.Pool }
+
+func (b *bufferPool) Get() []byte {
+	if v := b.pool.Get(); v != nil {
+		return *(v.(*[]byte))
+	}
+	return make([]byte, 32<<10)
+}
+
+func (b *bufferPool) Put(buf []byte) { b.pool.Put(&buf) }
+
+// Run serves until ctx is cancelled.
+func Run(ctx context.Context, o Options) error {
+	p, err := New(o.RoutesPath, o.HTTPSAddr != "", o.Log)
+	if err != nil {
+		return err
+	}
+
+	// Handshake failures from scanners are not worth a log line each.
+	quiet := log.New(io.Discard, "", 0)
+	newServer := func(h http.Handler) *http.Server {
+		return &http.Server{
+			Handler:           h,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       120 * time.Second,
+			MaxHeaderBytes:    64 << 10,
+			ErrorLog:          quiet,
+		}
+	}
+
+	httpHandler := p.HTTP()
+	var servers []*http.Server
+	errc := make(chan error, 2)
+
+	if o.HTTPSAddr != "" {
+		manager := &autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			Cache:      autocert.DirCache(o.CertDir),
+			HostPolicy: p.hostPolicy,
+			Email:      p.Table().Email,
+		}
+		// Port 80 answers ACME HTTP-01 challenges before anything else.
+		httpHandler = manager.HTTPHandler(httpHandler)
+		tlsLn, err := net.Listen("tcp", o.HTTPSAddr)
+		if err != nil {
+			return err
+		}
+		cfg := manager.TLSConfig()
+		cfg.MinVersion = tls.VersionTLS12
+		srv := newServer(p.HTTPS())
+		servers = append(servers, srv)
+		go func() { errc <- srv.Serve(tls.NewListener(tlsLn, cfg)) }()
+		o.Log.Info("proxy listening", "https", tlsLn.Addr().String())
+	}
+
+	ln, err := net.Listen("tcp", o.HTTPAddr)
+	if err != nil {
+		return err
+	}
+	srv := newServer(httpHandler)
+	servers = append(servers, srv)
+	go func() { errc <- srv.Serve(ln) }()
+	o.Log.Info("proxy listening", "http", ln.Addr().String(), "routes", p.Table().Len())
+
+	if o.PIDPath != "" {
+		if err := os.WriteFile(o.PIDPath, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644); err != nil {
+			return err
+		}
+		defer os.Remove(o.PIDPath)
+	}
+
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	defer signal.Stop(hup)
+
+	for {
+		select {
+		case <-hup:
+			if err := p.Reload(); err != nil {
+				o.Log.Error("reload failed; keeping the current routes", "err", err)
+			} else {
+				o.Log.Info("routes reloaded", "routes", p.Table().Len())
+			}
+		case err := <-errc:
+			return err
+		case <-ctx.Done():
+			shut, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			for _, s := range servers {
+				if err := s.Shutdown(shut); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+					return err
+				}
+			}
+			return nil
+		}
+	}
+}
