@@ -151,6 +151,8 @@ Each task ends with vet and tests green, a self-review, an independent review at
 ## Outcome
 
 - `test/deploy_test.go` against real Docker: `nginx:alpine` is served through the proxy by host name; a redeploy under load sent 6,908 requests with none failed; an app set to the wrong port fails its deploy and is cleaned up; stopping removes the route and the container.
+- Idle memory on Linux after this phase: server 22.5 MB, proxy 16.1 MB (phase 0: 19.9 and 14.1). About 9 MB of the proxy's figure is the shared binary's mapped pages: it is one binary, so the proxy process also carries the control plane's code and data.
+- The memory test now enforces the targets exactly on Linux and applies a 30 % looser ceiling elsewhere; macOS read 20.3 MB for the proxy against the 20 MB Linux target.
 - Not verifiable here, to check on the VPS: certificate issuance for a real domain, the systemd units and `install/install.sh`, and behaviour after a server reboot.
 - Known limit: a new container joins the environment's network under the app's name as soon as it starts, so for the length of its health check other containers resolving that name may reach it before it is ready. Traffic from outside is not affected; it moves only after the health check.
 

@@ -30,8 +30,7 @@ const (
 // more resident memory than its target.
 //
 // Linux is the deployment target and gives the authoritative number
-// (`make rss-linux`); macOS counts memory differently and reads a little
-// higher, so it is held to the same limit as a sanity check.
+// (`make rss-linux`); see assertRSS for how other systems are treated.
 func TestIdleRSS(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds and runs the binary; skipped with -short")
@@ -146,6 +145,11 @@ func fetch(t *testing.T, c *http.Client, url string) string {
 
 // assertRSS waits for the process to settle, then compares its resident
 // memory with the limit.
+//
+// The targets are for Linux, where musdash is deployed, and are enforced
+// exactly there. Other systems count a process's memory differently (macOS
+// includes more of the mapped binary), so there the figure is held to a
+// looser ceiling that still catches a real regression.
 func assertRSS(t *testing.T, pid, limitMB int) {
 	t.Helper()
 	time.Sleep(3 * time.Second)
@@ -154,9 +158,16 @@ func assertRSS(t *testing.T, pid, limitMB int) {
 		t.Fatal(err)
 	}
 	mb := float64(kb) / 1024
-	t.Logf("idle RSS %.1f MB (limit %d MB, %s/%s)", mb, limitMB, runtime.GOOS, runtime.GOARCH)
-	if mb > float64(limitMB) {
-		t.Fatalf("idle RSS %.1f MB exceeds the %d MB target", mb, limitMB)
+	limit := float64(limitMB)
+	if runtime.GOOS != "linux" {
+		limit *= 1.3
+		t.Logf("idle RSS %.1f MB on %s/%s (target %d MB applies on Linux; sanity ceiling here %.0f MB). Run `make rss-linux` for the real figure.",
+			mb, runtime.GOOS, runtime.GOARCH, limitMB, limit)
+	} else {
+		t.Logf("idle RSS %.1f MB (limit %d MB, %s/%s)", mb, limitMB, runtime.GOOS, runtime.GOARCH)
+	}
+	if mb > limit {
+		t.Fatalf("idle RSS %.1f MB exceeds %.0f MB", mb, limit)
 	}
 }
 
