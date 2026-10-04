@@ -130,6 +130,11 @@ func newEnv(t *testing.T) *env {
 // deploy queues a deployment and waits for it to finish.
 func (e *env) deploy() db.Deployment {
 	e.t.Helper()
+	return e.deployWithin(15 * time.Second)
+}
+
+func (e *env) deployWithin(limit time.Duration) db.Deployment {
+	e.t.Helper()
 	ctx := context.Background()
 	app, err := e.db.AppByID(ctx, e.app.ID)
 	if err != nil {
@@ -139,7 +144,7 @@ func (e *env) deploy() db.Deployment {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(limit)
 	for time.Now().Before(deadline) {
 		got, _ := e.db.DeploymentByID(ctx, dep.ID)
 		if got.Status == db.DeploySuccess || got.Status == db.DeployFailed {

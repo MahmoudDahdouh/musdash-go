@@ -65,15 +65,46 @@ type App struct {
 	DeployedImage string
 	CreatedAt     int64
 	UpdatedAt     int64
+
+	// Git source. Empty for apps deployed from a prebuilt image.
+	RepoURL        string
+	RepoName       string // "owner/name", lower case
+	Branch         string
+	BuildPack      string
+	DockerfilePath string
+	BaseDir        string
+	PublishDir     string
+	SPAFallback    bool
+	GitSourceID    string // the GitHub App to clone through, if any
+	SSHKeyID       string // the deploy key to clone with, if any
+	AutoDeploy     bool
+	WebhookSecret  string // sealed
+	// DeployTokenHash is the SHA-256 of the token an external CI system
+	// uses to trigger a deployment.
+	DeployTokenHash string
+
+	// Runtime overrides.
+	StartCommand  string
+	DockerOptions string
 }
 
+// Sources of an app's image.
+const (
+	SourceImage = "image"
+	SourceGit   = "git"
+)
+
 const appColumns = `a.id, a.environment_id, a.server_id, a.name, a.source, a.image, a.port, a.memory_mb, a.cpus,
-	a.health_path, a.health_cmd, a.health_timeout, a.status, a.container, a.host_port, a.deployed_image, a.created_at, a.updated_at`
+	a.health_path, a.health_cmd, a.health_timeout, a.status, a.container, a.host_port, a.deployed_image, a.created_at, a.updated_at,
+	a.repo_url, a.repo_name, a.branch, a.build_pack, a.dockerfile_path, a.base_dir, a.publish_dir, a.spa_fallback,
+	a.git_source_id, a.ssh_key_id, a.auto_deploy, a.webhook_secret, a.deploy_token_hash, a.start_command, a.docker_options`
 
 func scanApp(row interface{ Scan(...any) error }) (App, error) {
 	var a App
 	err := row.Scan(&a.ID, &a.EnvironmentID, &a.ServerID, &a.Name, &a.Source, &a.Image, &a.Port, &a.MemoryMB, &a.CPUs,
-		&a.HealthPath, &a.HealthCmd, &a.HealthTimeout, &a.Status, &a.Container, &a.HostPort, &a.DeployedImage, &a.CreatedAt, &a.UpdatedAt)
+		&a.HealthPath, &a.HealthCmd, &a.HealthTimeout, &a.Status, &a.Container, &a.HostPort, &a.DeployedImage, &a.CreatedAt, &a.UpdatedAt,
+		&a.RepoURL, &a.RepoName, &a.Branch, &a.BuildPack, &a.DockerfilePath, &a.BaseDir, &a.PublishDir, &a.SPAFallback,
+		&a.GitSourceID, &a.SSHKeyID, &a.AutoDeploy, &a.WebhookSecret, &a.DeployTokenHash, &a.StartCommand, &a.DockerOptions)
 	return a, err
 }
 
@@ -167,7 +198,8 @@ const (
 	SettingACMEEmail      = "acme_email"
 )
 
-// CreateApp inserts an app into an environment the team owns.
+// CreateApp inserts an app into an environment the team owns. A Git source
+// or deploy key it names must belong to the same team.
 func (d *DB) CreateApp(ctx context.Context, teamID string, a App) (App, error) {
 	if _, err := d.Environment(ctx, teamID, a.EnvironmentID); err != nil {
 		return App{}, err
@@ -175,22 +207,44 @@ func (d *DB) CreateApp(ctx context.Context, teamID string, a App) (App, error) {
 	if _, err := d.Server(ctx, teamID, a.ServerID); err != nil {
 		return App{}, err
 	}
+	if err := d.checkSourceOwnership(ctx, teamID, a); err != nil {
+		return App{}, err
+	}
 	a.ID = secret.RandomID()
 	a.Status = AppCreated
 	a.CreatedAt = now()
 	a.UpdatedAt = a.CreatedAt
 	if a.Source == "" {
-		a.Source = "image"
+		a.Source = SourceImage
 	}
 	if a.HealthTimeout == 0 {
 		a.HealthTimeout = 60
 	}
 	_, err := d.ExecContext(ctx, `INSERT INTO apps (id, environment_id, server_id, name, source, image, port, memory_mb, cpus,
-			health_path, health_cmd, health_timeout, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			health_path, health_cmd, health_timeout, status, created_at, updated_at,
+			repo_url, repo_name, branch, build_pack, dockerfile_path, base_dir, publish_dir, spa_fallback,
+			git_source_id, ssh_key_id, auto_deploy, webhook_secret)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.ID, a.EnvironmentID, a.ServerID, a.Name, a.Source, a.Image, a.Port, a.MemoryMB, a.CPUs,
-		a.HealthPath, a.HealthCmd, a.HealthTimeout, a.Status, a.CreatedAt, a.UpdatedAt)
+		a.HealthPath, a.HealthCmd, a.HealthTimeout, a.Status, a.CreatedAt, a.UpdatedAt,
+		a.RepoURL, a.RepoName, a.Branch, a.BuildPack, a.DockerfilePath, a.BaseDir, a.PublishDir, a.SPAFallback,
+		a.GitSourceID, a.SSHKeyID, a.AutoDeploy, a.WebhookSecret)
 	return a, err
+}
+
+// checkSourceOwnership refuses a Git source or deploy key of another team.
+func (d *DB) checkSourceOwnership(ctx context.Context, teamID string, a App) error {
+	if a.GitSourceID != "" {
+		if _, err := d.GitSource(ctx, teamID, a.GitSourceID); err != nil {
+			return err
+		}
+	}
+	if a.SSHKeyID != "" {
+		if _, err := d.SSHKey(ctx, teamID, a.SSHKeyID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // teamJoin restricts an apps query (alias a) to one team.
@@ -236,13 +290,54 @@ func (d *DB) AppsOnServer(ctx context.Context, serverID string) ([]App, error) {
 	return d.queryApps(ctx, `SELECT `+appColumns+` FROM apps a WHERE a.server_id = ? ORDER BY a.created_at, a.rowid`, serverID)
 }
 
-// UpdateAppSettings saves the fields a person edits.
+// teamApps is the WHERE clause that limits an apps update to one team.
+const teamApps = ` AND environment_id IN (
+	SELECT e.id FROM environments e JOIN projects p ON p.id = e.project_id WHERE p.team_id = ?)`
+
+// UpdateAppSettings saves the general fields a person edits.
 func (d *DB) UpdateAppSettings(ctx context.Context, teamID string, a App) error {
 	return affected(d.ExecContext(ctx, `UPDATE apps SET name = ?, image = ?, port = ?, memory_mb = ?, cpus = ?,
-			health_path = ?, health_cmd = ?, health_timeout = ?, updated_at = ?
-		WHERE id = ? AND environment_id IN (
-			SELECT e.id FROM environments e JOIN projects p ON p.id = e.project_id WHERE p.team_id = ?)`,
-		a.Name, a.Image, a.Port, a.MemoryMB, a.CPUs, a.HealthPath, a.HealthCmd, a.HealthTimeout, now(), a.ID, teamID))
+			health_path = ?, health_cmd = ?, health_timeout = ?, start_command = ?, docker_options = ?, updated_at = ?
+		WHERE id = ?`+teamApps,
+		a.Name, a.Image, a.Port, a.MemoryMB, a.CPUs, a.HealthPath, a.HealthCmd, a.HealthTimeout,
+		a.StartCommand, a.DockerOptions, now(), a.ID, teamID))
+}
+
+// UpdateAppSource saves where a Git app's code comes from and how it is
+// built.
+func (d *DB) UpdateAppSource(ctx context.Context, teamID string, a App) error {
+	if err := d.checkSourceOwnership(ctx, teamID, a); err != nil {
+		return err
+	}
+	return affected(d.ExecContext(ctx, `UPDATE apps SET repo_url = ?, repo_name = ?, branch = ?, build_pack = ?, dockerfile_path = ?,
+			base_dir = ?, publish_dir = ?, spa_fallback = ?, git_source_id = ?, ssh_key_id = ?, auto_deploy = ?, updated_at = ?
+		WHERE id = ? AND source = 'git'`+teamApps,
+		a.RepoURL, a.RepoName, a.Branch, a.BuildPack, a.DockerfilePath, a.BaseDir, a.PublishDir, a.SPAFallback,
+		a.GitSourceID, a.SSHKeyID, a.AutoDeploy, now(), a.ID, teamID))
+}
+
+// SetAppWebhookSecret stores the (sealed) secret of the app's own push
+// webhook.
+func (d *DB) SetAppWebhookSecret(ctx context.Context, teamID, id, sealed string) error {
+	return affected(d.ExecContext(ctx, `UPDATE apps SET webhook_secret = ?, updated_at = ? WHERE id = ?`+teamApps, sealed, now(), id, teamID))
+}
+
+// SetAppDeployToken stores the hash of the app's deploy token; "" revokes it.
+func (d *DB) SetAppDeployToken(ctx context.Context, teamID, id, hash string) error {
+	return affected(d.ExecContext(ctx, `UPDATE apps SET deploy_token_hash = ?, updated_at = ? WHERE id = ?`+teamApps, hash, now(), id, teamID))
+}
+
+// AppsForPush returns the apps that a push to the given repository and
+// branch should redeploy. With sourceID set, only apps connected through
+// that GitHub App are returned.
+func (d *DB) AppsForPush(ctx context.Context, sourceID, repoName, branch string) ([]App, error) {
+	query := `SELECT ` + appColumns + ` FROM apps a WHERE a.source = 'git' AND a.auto_deploy = 1 AND a.repo_name = ? AND a.branch = ?`
+	args := []any{strings.ToLower(repoName), branch}
+	if sourceID != "" {
+		query += ` AND a.git_source_id = ?`
+		args = append(args, sourceID)
+	}
+	return d.queryApps(ctx, query+` ORDER BY a.created_at, a.rowid`, args...)
 }
 
 // SetAppStatus records what the app is doing.

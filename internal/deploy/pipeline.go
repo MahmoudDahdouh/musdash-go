@@ -22,6 +22,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
+	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 )
 
 // JobDeploy is the job kind of a deployment.
@@ -48,6 +49,8 @@ type Deployer struct {
 	Cfg     *config.Config
 	Log     *slog.Logger
 	Probe   Probe
+	// Tokens mints repository tokens for apps deployed through a GitHub App.
+	Tokens TokenSource
 	// InstanceTarget is the control plane's own loopback address, routed
 	// when a dashboard domain is set.
 	InstanceTarget string
@@ -56,6 +59,9 @@ type Deployer struct {
 	drain       time.Duration // pause between switching traffic and stopping the old container
 	stopGrace   time.Duration // how long a container gets to exit after SIGTERM
 	pollWait    time.Duration // how long the proxy may take to notice a routes file it was not signalled about
+	// extraGitEnv is added to every clone's environment. Tests use it to
+	// point a repository address at a local repository.
+	extraGitEnv []string
 
 	// routesMu makes each routes publication one step: read the database,
 	// write the file, signal. Without it a slower publication could write
@@ -87,6 +93,7 @@ func New(d *db.DB, box *secret.Box, q *jobs.Queue, r Runners, cfg *config.Config
 	return &Deployer{
 		DB: d, Box: box, Queue: q, Runners: r, Cfg: cfg, Log: log,
 		Probe:          newLocalProbe(),
+		Tokens:         source.NewGitHub(),
 		InstanceTarget: instanceTarget,
 		healthEvery:    time.Second,
 		drain:          3 * time.Second,
@@ -123,13 +130,23 @@ func VolumeName(resourceID, name string) string { return "musdash-" + resourceID
 // Enqueue records a deployment of the app's current settings and queues it.
 // Deployments of one app run one at a time, in order.
 func (d *Deployer) Enqueue(ctx context.Context, app db.App, trigger string) (db.Deployment, error) {
-	dep, err := d.DB.CreateDeployment(ctx, db.Deployment{AppID: app.ID, Trigger: trigger, Image: app.Image})
+	dep := db.Deployment{AppID: app.ID, Trigger: trigger, Image: app.Image}
+	// Deployments of one app never overlap. Builds additionally run one at
+	// a time per server: an image build can use a gigabyte or more of
+	// memory, and two at once would exhaust a small server. Every Git
+	// deployment of an app is on that app's one server, so the build lock
+	// also keeps them in order.
+	lock := "deploy:" + app.ID
+	if app.Source == db.SourceGit {
+		dep.Image = "" // known once the commit is built
+		lock = "build:" + app.ServerID
+	}
+	dep, err := d.DB.CreateDeployment(ctx, dep)
 	if err != nil {
 		return dep, err
 	}
 	// One attempt: a failed deploy is reported, not silently repeated.
-	_, err = d.Queue.Enqueue(ctx, JobDeploy, payload{DeploymentID: dep.ID},
-		jobs.WithLockKey("deploy:"+app.ID), jobs.WithMaxAttempts(1))
+	_, err = d.Queue.Enqueue(ctx, JobDeploy, payload{DeploymentID: dep.ID}, jobs.WithLockKey(lock), jobs.WithMaxAttempts(1))
 	if err != nil {
 		d.DB.FinishDeployment(ctx, dep.ID, db.DeployFailed, "could not be queued: "+err.Error())
 	}
@@ -233,9 +250,31 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 	image := dep.Image
 	container := ContainerName(app.ID, dep.ID)
 
-	log.Step("Pulling %s", image)
-	if err := dk.Pull(ctx, image, log); err != nil {
-		return fmt.Errorf("pull %s: %w", image, err)
+	// Checked before any work: a refused option should not cost a build.
+	extraArgs, err := ParseRunOptions(app.DockerOptions)
+	if err != nil {
+		return fmt.Errorf("custom Docker options: %w", err)
+	}
+
+	if app.Source == db.SourceGit {
+		var commit string
+		if image, commit, err = d.build(ctx, r, app, dep, log); err != nil {
+			return err
+		}
+		if err := d.DB.SetDeploymentBuild(ctx, dep.ID, image, commit); err != nil {
+			return err
+		}
+		// Old images go only once this one is serving.
+		defer func() {
+			if err == nil {
+				d.pruneImages(context.WithoutCancel(ctx), dk, app.ID, image)
+			}
+		}()
+	} else {
+		log.Step("Pulling %s", image)
+		if err := dk.Pull(ctx, image, log); err != nil {
+			return fmt.Errorf("pull %s: %w", image, err)
+		}
 	}
 
 	network := NetworkName(app.EnvironmentID)
@@ -246,12 +285,18 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 	spec := docker.RunSpec{
 		Name: container, Image: image, Network: network, Alias: app.Name,
 		ContainerPort: app.Port, MemoryMB: app.MemoryMB, CPUs: app.CPUs,
+		ExtraArgs: extraArgs,
 		Labels: map[string]string{
 			docker.ManagedLabel:    "true",
 			docker.LabelKind:       db.KindApp,
 			docker.LabelResource:   app.ID,
 			docker.LabelDeployment: dep.ID,
 		},
+	}
+	if app.StartCommand != "" {
+		// Run through the image's shell, so the command may use pipes,
+		// variables and the like as it would in a Dockerfile's CMD.
+		spec.Command = []string{"sh", "-c", app.StartCommand}
 	}
 	if spec.EnvFile, err = d.writeEnvFile(ctx, r, app); err != nil {
 		return err

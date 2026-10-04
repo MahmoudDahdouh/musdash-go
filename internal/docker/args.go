@@ -39,6 +39,12 @@ type RunSpec struct {
 	CPUs          float64
 	Mounts        []Mount
 	Labels        map[string]string
+	// ExtraArgs are further `docker run` options, placed before the image.
+	// They must already have been checked against the allow-list in
+	// deploy.ParseRunOptions; nothing here re-validates them.
+	ExtraArgs []string
+	// Command replaces the image's default command.
+	Command []string
 }
 
 var (
@@ -174,7 +180,9 @@ func (s RunSpec) Args() ([]string, error) {
 		}
 		args = append(args, "--label", k+"="+v)
 	}
-	return append(args, s.Image), nil
+	args = append(args, s.ExtraArgs...)
+	args = append(args, s.Image)
+	return append(args, s.Command...), nil
 }
 
 func validPort(p int) bool { return p >= 1 && p <= 65535 }

@@ -222,6 +222,12 @@ func (d *DB) ListDeployments(ctx context.Context, appID string, limit int) ([]De
 	return out, rows.Err()
 }
 
+// SetDeploymentBuild records what a Git deployment built.
+func (d *DB) SetDeploymentBuild(ctx context.Context, id, image, commit string) error {
+	_, err := d.ExecContext(ctx, `UPDATE deployments SET image = ?, commit_sha = ? WHERE id = ?`, image, commit, id)
+	return err
+}
+
 func (d *DB) StartDeployment(ctx context.Context, id string) error {
 	_, err := d.ExecContext(ctx, `UPDATE deployments SET status = ?, started_at = ? WHERE id = ?`, DeployRunning, now(), id)
 	return err
