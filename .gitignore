@@ -1,0 +1,12 @@
+# Build output and downloaded tools
+/bin/
+/dist/
+
+# Local data directory used in development
+/data/
+
+# OS and editor files
+.DS_Store
+*.swp
+.idea/
+.vscode/
