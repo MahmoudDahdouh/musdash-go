@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -69,6 +70,61 @@ func TestMigrateIsIdempotentAndOrdered(t *testing.T) {
 	}
 	if n != 2 {
 		t.Fatalf("rows = %d, want 2 (each migration exactly once)", n)
+	}
+}
+
+func TestMigrateRefusesDuplicateNumbers(t *testing.T) {
+	d, err := Open(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	files := fstest.MapFS{
+		"0001_a.sql": {Data: []byte(`CREATE TABLE a (v INTEGER);`)},
+		"0002_b.sql": {Data: []byte(`CREATE TABLE b (v INTEGER);`)},
+		"0002_c.sql": {Data: []byte(`CREATE TABLE c (v INTEGER);`)},
+	}
+	err = d.Migrate(context.Background(), files)
+	if err == nil || !strings.Contains(err.Error(), "share the number 2") {
+		t.Fatalf("want an error naming the duplicate, got %v", err)
+	}
+	var n int
+	d.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name IN ('a', 'b', 'c')`).Scan(&n)
+	if n != 0 {
+		t.Fatal("migrations ran although two share a number")
+	}
+}
+
+// The embedded migrations themselves must be numbered 1..n without gaps or
+// repeats, and the local-server index from the recovery migration must
+// really exist afterwards.
+func TestEmbeddedMigrations(t *testing.T) {
+	d := openTest(t)
+	rows, err := d.Query(`SELECT version FROM schema_migrations ORDER BY version`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	want := 1
+	for rows.Next() {
+		var v int
+		rows.Scan(&v)
+		if v != want {
+			t.Fatalf("migration numbers are not consecutive: got %d, want %d", v, want)
+		}
+		want++
+	}
+	var n int
+	d.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'servers_one_local'`).Scan(&n)
+	if n != 1 {
+		t.Fatal("the unique local-server index was not created")
+	}
+	if _, err := d.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('t', 'T', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	d.Exec(`INSERT INTO servers (id, team_id, name, kind, created_at) VALUES ('s1', 't', 'a', 'local', 1)`)
+	if _, err := d.Exec(`INSERT INTO servers (id, team_id, name, kind, created_at) VALUES ('s2', 't', 'b', 'local', 1)`); !IsUnique(err) {
+		t.Fatalf("a second local server was allowed: %v", err)
 	}
 }
 

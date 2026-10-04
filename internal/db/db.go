@@ -80,12 +80,24 @@ func (d *DB) Migrate(ctx context.Context, files fs.FS) error {
 	}
 	sort.Strings(names)
 
+	// Two files with one number would silently skip the second: the first
+	// marks the number as applied. Refuse to start instead.
+	seen := make(map[int]string, len(names))
 	for _, name := range names {
 		prefix, _, _ := strings.Cut(name, "_")
 		version, err := strconv.Atoi(prefix)
 		if err != nil {
 			return fmt.Errorf("migration %q: name must start with a number", name)
 		}
+		if other, dup := seen[version]; dup {
+			return fmt.Errorf("migrations %q and %q share the number %d", other, name, version)
+		}
+		seen[version] = name
+	}
+
+	for _, name := range names {
+		prefix, _, _ := strings.Cut(name, "_")
+		version, _ := strconv.Atoi(prefix)
 		var applied int
 		if err := d.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations WHERE version = ?`, version).Scan(&applied); err != nil {
 			return err
