@@ -213,3 +213,77 @@ func TestSessionLifecycle(t *testing.T) {
 		t.Fatal("the current session must survive a password change")
 	}
 }
+
+func TestAppsAreTeamScopedAndBlockDeletion(t *testing.T) {
+	ctx := context.Background()
+	d := openTest(t)
+	_, team, _ := d.CreateFirstUser(ctx, "a@example.com", "A", "hash")
+	d.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('teamb', 'B', 1)`)
+	server, err := d.EnsureLocalServer(ctx, team, "203.0.113.7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := d.EnsureLocalServer(ctx, team, "ignored"); again.ID != server.ID {
+		t.Fatal("a second local server was created")
+	}
+	p, _ := d.CreateProject(ctx, team, "Shop", "")
+	envs, _ := d.ListEnvironments(ctx, p.ID)
+	otherProject, _ := d.CreateProject(ctx, "teamb", "Other", "")
+	otherEnvs, _ := d.ListEnvironments(ctx, otherProject.ID)
+
+	app, err := d.CreateApp(ctx, team, App{EnvironmentID: envs[0].ID, ServerID: server.ID, Name: "web", Image: "nginx", Port: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CreateApp(ctx, team, App{EnvironmentID: envs[0].ID, ServerID: server.ID, Name: "web", Image: "nginx", Port: 80}); !IsUnique(err) {
+		t.Fatalf("duplicate name in one environment: want unique violation, got %v", err)
+	}
+	// Another team cannot place an app in this environment, on this server,
+	// or read or change the app.
+	if _, err := d.CreateApp(ctx, "teamb", App{EnvironmentID: envs[0].ID, ServerID: server.ID, Name: "x", Image: "nginx", Port: 80}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("other team create in our environment: %v", err)
+	}
+	if _, err := d.CreateApp(ctx, "teamb", App{EnvironmentID: otherEnvs[0].ID, ServerID: server.ID, Name: "x", Image: "nginx", Port: 80}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("other team create on our server: %v", err)
+	}
+	if _, err := d.App(ctx, "teamb", app.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("other team read: %v", err)
+	}
+	app.Name = "hijacked"
+	if err := d.UpdateAppSettings(ctx, "teamb", app); !errors.Is(err, ErrNotFound) {
+		t.Errorf("other team update: %v", err)
+	}
+
+	// A project or environment with something deployed in it cannot be deleted.
+	if err := d.DeleteProject(ctx, team, p.ID); !IsForeignKey(err) {
+		t.Fatalf("deleting a project with an app: want a foreign-key error, got %v", err)
+	}
+	if _, err := d.AddDomain(ctx, KindApp, app.ID, "shop.example.com", true, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.AddDomain(ctx, KindApp, "another-app", "shop.example.com", true, false); !IsUnique(err) {
+		t.Fatalf("a host used twice: want unique violation, got %v", err)
+	}
+	if err := d.DeleteApp(ctx, app.ID); err != nil {
+		t.Fatal(err)
+	}
+	if used, _ := d.HostInUse(ctx, "shop.example.com"); used {
+		t.Fatal("the domain outlived its app")
+	}
+	if err := d.DeleteProject(ctx, team, p.ID); err != nil {
+		t.Fatalf("deleting the emptied project: %v", err)
+	}
+}
+
+func TestSettings(t *testing.T) {
+	ctx := context.Background()
+	d := openTest(t)
+	if v, err := d.Setting(ctx, SettingInstanceDomain); err != nil || v != "" {
+		t.Fatalf("unset setting: %q %v", v, err)
+	}
+	d.SetSetting(ctx, SettingInstanceDomain, "a.example.com")
+	d.SetSetting(ctx, SettingInstanceDomain, "b.example.com")
+	if v, _ := d.Setting(ctx, SettingInstanceDomain); v != "b.example.com" {
+		t.Fatalf("got %q", v)
+	}
+}

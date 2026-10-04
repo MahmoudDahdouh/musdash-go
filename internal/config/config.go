@@ -39,11 +39,20 @@ func (c Config) ProxyPIDPath() string  { return filepath.Join(c.ProxyDir(), "pro
 func (c Config) CertDir() string       { return filepath.Join(c.ProxyDir(), "certs") }
 func (c Config) WorkDir() string       { return filepath.Join(c.DataDir, "work") }
 func (c Config) BackupDir() string     { return filepath.Join(c.DataDir, "backups") }
+func (c Config) AppsDir() string       { return filepath.Join(c.DataDir, "apps") }
+
+// AppDir holds one resource's env file and file mounts on its server.
+func (c Config) AppDir(id string) string { return filepath.Join(c.AppsDir(), id) }
+
+// DeployLogPath is where a deployment's build and deploy output is kept.
+func (c Config) DeployLogPath(id string) string {
+	return filepath.Join(c.LogDir(), "deployments", id+".log")
+}
 
 // EnsureDirs creates the data directory tree. Directories are private to the
 // musdash user because they hold the database, keys and env files.
 func (c Config) EnsureDirs() error {
-	for _, d := range []string{c.DataDir, c.LogDir(), c.ProxyDir(), c.CertDir(), c.WorkDir(), c.BackupDir()} {
+	for _, d := range []string{c.DataDir, c.LogDir(), filepath.Join(c.LogDir(), "deployments"), c.ProxyDir(), c.CertDir(), c.WorkDir(), c.BackupDir(), c.AppsDir()} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return fmt.Errorf("create %s: %w", d, err)
 		}
