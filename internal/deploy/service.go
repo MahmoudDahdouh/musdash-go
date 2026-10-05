@@ -501,15 +501,16 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 			if doc.Builds() {
 				log.Step("Building images")
 				build := d.composeCmd(r, s.ID, "build")
-				build.Stdout, build.Stderr = log, log
+				watch := &lookupWatch{w: log}
+				build.Stdout, build.Stderr = watch, watch
 				buildCtx, cancel := context.WithTimeout(ctx, d.buildTimeout)
 				err := r.Run(buildCtx, build)
 				cancel()
 				if err != nil {
 					if errors.Is(buildCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-						return fmt.Errorf("build: stopped after %s without finishing", d.buildTimeout)
+						return watch.explain("build", fmt.Errorf("stopped after %s without finishing", d.buildTimeout), server.Name)
 					}
-					return fmt.Errorf("build the images: %w", err)
+					return watch.explain("build the images", err, server.Name)
 				}
 			}
 		}

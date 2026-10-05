@@ -20,7 +20,7 @@ import (
 func (a *app) remoteServer(name string) (db.Server, *sshtest.Server) {
 	a.t.Helper()
 	ctx := context.Background()
-	res, body := a.post("/servers", "/servers", url.Values{"name": {name}, "host": {"198.51.100.20"}, "port": {"22"}, "ssh_user": {"deploy"}, "key": {"new"}, "data_dir": {a.t.TempDir() + "/remote"}})
+	res, body := a.post("/servers", "/servers", url.Values{"name": {name}, "host": {"198.51.100.20"}, "port": {"22"}, "ssh_user": {"deploy"}, "key": {"new"}, "data_dir": {"/srv/musdash"}})
 	if res.StatusCode != http.StatusSeeOther {
 		a.t.Fatalf("add server: %d\n%s", res.StatusCode, body)
 	}
@@ -44,7 +44,9 @@ func (a *app) remoteServer(name string) (db.Server, *sshtest.Server) {
 		a.t.Fatal(err)
 	}
 	srv := sshtest.StartWithKey(a.t, signer)
-	a.db.Exec(`UPDATE servers SET host = ?, port = ? WHERE id = ?`, srv.Host, srv.Port, server.ID)
+	// The "server" is this machine, so its data directory is put where a
+	// test may write: a place the form would refuse on a real server.
+	a.db.Exec(`UPDATE servers SET host = ?, port = ?, data_dir = ? WHERE id = ?`, srv.Host, srv.Port, a.t.TempDir()+"/remote", server.ID)
 	a.t.Cleanup(func() { a.server.Pool.Forget(server.ID) })
 	server, _ = a.db.ServerByID(ctx, server.ID)
 	return server, srv
@@ -75,6 +77,22 @@ func TestServersPage(t *testing.T) {
 		res, body := a.post("/servers", "/servers", form)
 		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, `id="`+key+`-error"`) {
 			t.Errorf("%s=%q: %d, error on the field: %v", key, bad, res.StatusCode, strings.Contains(body, `id="`+key+`-error"`))
+		}
+	}
+	// A data directory must be musdash's own: it makes directories there
+	// and empties one of them.
+	for dir, want := range map[string]string{
+		"/etc": "only for musdash", "/etc/musdash": "only for musdash", "/home/deploy": "only for musdash", "/var/lib/docker/musdash": "only for musdash",
+		"/root/.ssh": "only for musdash", "/tmp/musdash": "only for musdash", "/": "Enter a full path", "/srv/my dir": "Enter a full path", "/srv/../etc": "Enter a full path",
+	} {
+		form := url.Values{}
+		for k, v := range good {
+			form[k] = v
+		}
+		form.Set("data_dir", dir)
+		res, body := a.post("/servers", "/servers", form)
+		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, `id="data_dir-error"`) || !strings.Contains(body, want) {
+			t.Errorf("data_dir=%q: %d, says %q: %v", dir, res.StatusCode, want, strings.Contains(body, want))
 		}
 	}
 	for _, host := range []string{"-oProxyCommand=evil", "a b", "http://x", "x/y", ""} {
@@ -120,7 +138,10 @@ func TestServersPage(t *testing.T) {
 	if checked.HostKey != servers.HostKeyLine(srv.HostKey) || checked.CheckedAt == 0 {
 		t.Fatalf("after the check: %+v", checked)
 	}
-	for _, want := range []string{"What the check found", "signed in as deploy", "host key was recorded", servers.Fingerprint(checked.HostKey)} {
+	// The fingerprint comes with the kind of key and the file to compare it
+	// with: a server has three host keys.
+	for _, want := range []string{"What the check found", "signed in as deploy", "host key was recorded", "ED25519 " + servers.Fingerprint(checked.HostKey),
+		"ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub", "Forwarding"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the report is missing %q", want)
 		}

@@ -587,3 +587,103 @@ func TestSSHWriteFileNeverLeavesHalfAFileUnderItsName(t *testing.T) {
 		t.Fatalf("the file that was there is now %q", got)
 	}
 }
+
+// An sshd with AllowTcpForwarding no refuses what a health check of an app
+// needs. Callers must be able to tell that from a port nothing listens on.
+func TestSSHDialSaysWhenTheServerDoesNotForward(t *testing.T) {
+	srv := sshtest.Start(t)
+	r := mustDial(t, srv)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := ln.Addr().String()
+	ln.Close()
+
+	// A closed port on a server that forwards is not a refusal.
+	if _, err := r.Dial(ctx, "tcp", closed); err == nil || errors.Is(err, runner.ErrForwardRefused) {
+		t.Fatalf("a closed port: %v", err)
+	}
+	srv.Forward(sshtest.Refuse)
+	_, err = r.Dial(ctx, "tcp", net.JoinHostPort(srv.Host, strconv.Itoa(srv.Port)))
+	if !errors.Is(err, runner.ErrForwardRefused) {
+		t.Fatalf("a server that does not forward: %v", err)
+	}
+	// What the server said is still in it.
+	if !strings.Contains(err.Error(), "administratively prohibited") {
+		t.Fatalf("%v", err)
+	}
+}
+
+// The library asks for ECDSA host keys first, so a server with the usual
+// three presented its ECDSA key, while the person was told to compare the
+// fingerprint with the Ed25519 key's.
+func TestSSHFirstContactPrefersTheKeyPeopleAreToldToCompare(t *testing.T) {
+	keys := map[string]ssh.Signer{}
+	for _, kind := range []string{sshtest.ED25519, sshtest.ECDSA, sshtest.RSA} {
+		keys[kind] = sshtest.NewHostKey(t, kind)
+	}
+	// The order a server lists its keys in must not decide.
+	srv := sshtest.StartWithHostKeys(t, keys[sshtest.RSA], keys[sshtest.ECDSA], keys[sshtest.ED25519])
+	presented := func(recorded ssh.Signer) (ssh.PublicKey, error) {
+		var seen ssh.PublicKey
+		r, err := dial(t, srv, func(c *runner.SSHConfig) {
+			if recorded != nil {
+				c.HostKey = recorded.PublicKey().Marshal()
+				return
+			}
+			c.HostKey = nil
+			c.Seen = func(k ssh.PublicKey) error { seen = k; return nil }
+		})
+		if err != nil {
+			return nil, err
+		}
+		// Connected is not enough: a command has to run.
+		if out, err := r.Output(context.Background(), runner.Cmd{Name: "echo", Args: []string{"hello"}}); err != nil || string(out) != "hello\n" {
+			t.Fatalf("%q %v", out, err)
+		}
+		return seen, nil
+	}
+	seen, err := presented(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seen.Type() != ssh.KeyAlgoED25519 || !bytes.Equal(seen.Marshal(), keys[sshtest.ED25519].PublicKey().Marshal()) {
+		t.Fatalf("first contact was shown a %s key", seen.Type())
+	}
+	// A server recorded before, with whichever key it presented then,
+	// still connects: it is asked for that key's kind.
+	for kind, key := range keys {
+		if _, err := presented(key); err != nil {
+			t.Errorf("a server recorded with its %s key: %v", kind, err)
+		}
+	}
+
+	// With only two of the kinds, the next best is taken.
+	two := sshtest.StartWithHostKeys(t, keys[sshtest.RSA], keys[sshtest.ECDSA])
+	var got ssh.PublicKey
+	if _, err := dial(t, two, func(c *runner.SSHConfig) {
+		c.HostKey, c.Signer = nil, two.Signer
+		c.Seen = func(k ssh.PublicKey) error { got = k; return nil }
+	}); err != nil || got.Type() != ssh.KeyAlgoECDSA256 {
+		t.Fatalf("a server without an Ed25519 key: %v %v", got, err)
+	}
+	// A server that no longer has a key of the recorded kind has changed
+	// its keys: said as that, not as a failure to agree on an algorithm.
+	_, err = dial(t, two, func(c *runner.SSHConfig) {
+		c.HostKey, c.Signer = keys[sshtest.ED25519].PublicKey().Marshal(), two.Signer
+	})
+	if !errors.Is(err, runner.ErrHostKeyChanged) {
+		t.Fatalf("a server without the recorded kind of key: %v", err)
+	}
+	// And one that has a key of that kind, but another.
+	other := sshtest.StartWithHostKeys(t, sshtest.NewHostKey(t, sshtest.RSA))
+	_, err = dial(t, other, func(c *runner.SSHConfig) {
+		c.HostKey, c.Signer = keys[sshtest.RSA].PublicKey().Marshal(), other.Signer
+	})
+	if !errors.Is(err, runner.ErrHostKeyChanged) {
+		t.Fatalf("another RSA key than the recorded one: %v", err)
+	}
+}

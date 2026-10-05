@@ -590,3 +590,397 @@ func TestAHungServerHoldsNothingElse(t *testing.T) {
 		t.Fatal("a command on a hung server never ended")
 	}
 }
+
+func itemOf(rep Report, name string) Item {
+	for _, it := range rep.Items {
+		if it.Name == name {
+			return it
+		}
+	}
+	return Item{}
+}
+
+// An sshd with AllowTcpForwarding no signs the account in and runs every
+// command, so the check said the server was ready, and then every
+// deployment of an app failed after its whole health timeout.
+func TestCheckSaysWhenSSHDDoesNotForward(t *testing.T) {
+	ctx := context.Background()
+	for _, c := range []struct {
+		name, how string
+		ok        bool
+	}{
+		{"an sshd that forwards", "", true},
+		{"an sshd that does not", sshtest.Refuse, false},
+		// Up to 7.4 a port that nothing listens on is answered as if it
+		// were forbidden. Such a server forwards, and must not be told
+		// that it does not.
+		{"an old sshd that forwards", sshtest.LikeOldSSHD, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			e := newEnv(t)
+			e.srv.Forward(c.how)
+			rep, err := e.pool.Check(ctx, e.server)
+			if err != nil {
+				t.Fatal(err)
+			}
+			it := itemOf(rep, "Forwarding")
+			if it.OK != c.ok || !it.Needed || it.Detail == "" {
+				t.Fatalf("%+v", it)
+			}
+			got, _ := e.db.ServerByID(ctx, e.server.ID)
+			if c.ok {
+				if strings.Contains(got.StatusDetail, "Forwarding") {
+					t.Fatalf("stored: %q", got.StatusDetail)
+				}
+				return
+			}
+			for _, want := range []string{"AllowTcpForwarding", "authorized_keys", "restart sshd"} {
+				if !strings.Contains(it.Detail, want) {
+					t.Errorf("the advice does not mention %q: %s", want, it.Detail)
+				}
+			}
+			if rep.OK() || got.Status != db.ServerProblem {
+				t.Fatalf("a server that cannot be deployed to is %q, report ok=%v", got.Status, rep.OK())
+			}
+			// Everything else about the server was still looked at.
+			if !itemOf(rep, "Data directory").OK || itemOf(rep, "Proxy install").Name == "" {
+				t.Fatalf("%+v", rep.Items)
+			}
+		})
+	}
+}
+
+// A data directory that is somebody else's: musdash would make its
+// directories in it, and the first connection of a process empties the one
+// named work.
+func TestCheckLeavesSomebodyElsesDirectoryAlone(t *testing.T) {
+	ctx := context.Background()
+	theirs := func(dir string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(dir, "work"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"notes.txt", "work/thesis.tex"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("theirs"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	untouched := func(dir string) {
+		t.Helper()
+		entries, _ := os.ReadDir(dir)
+		var names []string
+		for _, entry := range entries {
+			names = append(names, entry.Name())
+		}
+		if strings.Join(names, " ") != "notes.txt work" {
+			t.Fatalf("the directory now holds: %v", names)
+		}
+		if raw, err := os.ReadFile(filepath.Join(dir, "work", "thesis.tex")); err != nil || string(raw) != "theirs" {
+			t.Fatalf("a file in their work directory: %q %v", raw, err)
+		}
+	}
+
+	t.Run("on a first check", func(t *testing.T) {
+		e := newEnv(t)
+		theirs(e.server.DataDir)
+		rep, err := e.pool.Check(ctx, e.server)
+		if err != nil {
+			t.Fatal(err)
+		}
+		it := itemOf(rep, "Data directory")
+		if it.OK || !it.Needed || !strings.Contains(it.Detail, "already has other things in it") || !strings.Contains(it.Detail, e.server.DataDir+"/musdash") {
+			t.Fatalf("%+v", it)
+		}
+		if rep.OK() || !itemOf(rep, "Connection").OK || rep.NewHostKey {
+			t.Fatalf("%+v", rep)
+		}
+		untouched(e.server.DataDir)
+		// The server stays one that nothing but a check talks to: its key
+		// was not recorded, so no deployment gets as far as sweeping it.
+		got, _ := e.db.ServerByID(ctx, e.server.ID)
+		if got.HostKey != "" || got.Status != db.ServerProblem || !strings.Contains(got.StatusDetail, "other things") {
+			t.Fatalf("stored: key %q, %s %q", got.HostKey, got.Status, got.StatusDetail)
+		}
+		if _, err := e.runner().Output(ctx, runner.Cmd{Name: "true"}); !errors.Is(err, ErrNotChecked) {
+			t.Fatalf("a command on the server: %v", err)
+		}
+		untouched(e.server.DataDir)
+
+		// Emptied by its owner, it is taken.
+		os.RemoveAll(e.server.DataDir)
+		os.MkdirAll(e.server.DataDir, 0o755)
+		if rep, _ = e.pool.Check(ctx, e.server); !itemOf(rep, "Data directory").OK || !rep.NewHostKey {
+			t.Fatalf("an empty directory: %+v", rep.Items)
+		}
+	})
+
+	t.Run("on a later check", func(t *testing.T) {
+		e := newEnv(t)
+		if rep, err := e.pool.Check(ctx, e.server); err != nil || !itemOf(rep, "Data directory").OK {
+			t.Fatalf("a directory that is not there yet: %+v %v", rep.Items, err)
+		}
+		// With what musdash made in it, and more: still its own.
+		os.WriteFile(filepath.Join(e.server.DataDir, "README"), []byte("x"), 0o644)
+		checked, _ := e.db.ServerByID(ctx, e.server.ID)
+		if rep, _ := e.pool.Check(ctx, checked); !itemOf(rep, "Data directory").OK {
+			t.Fatalf("a directory musdash uses: %+v", rep.Items)
+		}
+		// Replaced by something else since.
+		os.RemoveAll(e.server.DataDir)
+		theirs(e.server.DataDir)
+		rep, _ := e.pool.Check(ctx, checked)
+		if it := itemOf(rep, "Data directory"); it.OK || !strings.Contains(it.Detail, "other things") {
+			t.Fatalf("%+v", it)
+		}
+		untouched(e.server.DataDir)
+		// The rest of the check was still made.
+		if itemOf(rep, "Forwarding").Name == "" {
+			t.Fatalf("%+v", rep.Items)
+		}
+	})
+}
+
+// With three host keys on a server, the kind says which one a fingerprint
+// is to be compared with.
+func TestHostKeyKind(t *testing.T) {
+	for kind, want := range map[string][2]string{
+		sshtest.ED25519: {"ED25519", "/etc/ssh/ssh_host_ed25519_key.pub"},
+		sshtest.ECDSA:   {"ECDSA", "/etc/ssh/ssh_host_ecdsa_key.pub"},
+		sshtest.RSA:     {"RSA", "/etc/ssh/ssh_host_rsa_key.pub"},
+	} {
+		line := HostKeyLine(sshtest.NewHostKey(t, kind).PublicKey())
+		if got := [2]string{HostKeyKind(line), HostKeyFile(line)}; got != want {
+			t.Errorf("%s: %v", kind, got)
+		}
+	}
+	for _, line := range []string{"", "not a key", "ssh-ed25519 AAAA"} {
+		if HostKeyKind(line) != "" || HostKeyFile(line) != "" {
+			t.Errorf("%q has a kind", line)
+		}
+	}
+	// What a check reports for the server it reached.
+	e := newEnv(t)
+	rep, err := e.pool.Check(context.Background(), e.server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.HostKeyKind != "ED25519" || rep.HostKeyFile != "/etc/ssh/ssh_host_ed25519_key.pub" || rep.Fingerprint != ssh.FingerprintSHA256(e.srv.HostKey) {
+		t.Fatalf("%+v", rep)
+	}
+}
+
+func TestDataDirProblem(t *testing.T) {
+	for _, dir := range []string{
+		"/var/lib/musdash", "/home/deploy/.musdash", "/root/.musdash", "/srv/musdash", "/opt/musdash", "/data", "/data/musdash",
+		"/mnt/volume1/musdash", "/var/musdash", "/home/deploy/apps/musdash", "/etcetera", "/usrdata/musdash", "/var/lib/docker-data",
+		DefaultDataDir("root"), DefaultDataDir("deploy"),
+	} {
+		if p := DataDirProblem(dir); p != "" {
+			t.Errorf("%s: refused as %s", dir, p)
+		}
+	}
+	for dir, want := range map[string]string{
+		"":                          DataDirShape,
+		"/":                         DataDirShape,
+		"relative":                  DataDirShape,
+		"/srv/musdash/":             DataDirShape,
+		"/srv//musdash":             DataDirShape,
+		"/srv/../etc":               DataDirShape,
+		"/srv/./musdash":            DataDirShape,
+		"/srv/my dir":               DataDirShape,
+		"/srv/$(reboot)":            DataDirShape,
+		"/srv/a;b":                  DataDirShape,
+		"/srv/mus\ndash":            DataDirShape,
+		"/etc":                      DataDirShared,
+		"/etc/musdash":              DataDirShared,
+		"/usr/local/data":           DataDirShared,
+		"/proc/1":                   DataDirShared,
+		"/sys":                      DataDirShared,
+		"/dev/shm/x":                DataDirShared,
+		"/boot":                     DataDirShared,
+		"/bin":                      DataDirShared,
+		"/sbin/x":                   DataDirShared,
+		"/lib":                      DataDirShared,
+		"/lib64/x":                  DataDirShared,
+		"/run/musdash":              DataDirShared,
+		"/var/run/x":                DataDirShared,
+		"/tmp/musdash":              DataDirShared,
+		"/var/tmp/x":                DataDirShared,
+		"/var/lib/docker":           DataDirShared,
+		"/var/lib/docker/volumes/x": DataDirShared,
+		"/var/lib/containerd":       DataDirShared,
+		"/var":                      DataDirShared,
+		"/var/lib":                  DataDirShared,
+		"/var/log":                  DataDirShared,
+		"/home":                     DataDirShared,
+		"/home/deploy":              DataDirShared,
+		"/root":                     DataDirShared,
+		"/opt":                      DataDirShared,
+		"/srv":                      DataDirShared,
+		"/mnt":                      DataDirShared,
+		"/media":                    DataDirShared,
+		"/root/.ssh":                DataDirShared,
+		"/home/deploy/.ssh/musdash": DataDirShared,
+	} {
+		if got := DataDirProblem(dir); got != want {
+			t.Errorf("%q: %q, want %q", dir, got, want)
+		}
+	}
+	if DataDirProblem("/"+strings.Repeat("a", 200)) != "" || DataDirProblem("/"+strings.Repeat("a", 201)) != DataDirShape {
+		t.Error("the length limit moved")
+	}
+}
+
+// Whose a directory is cannot be told from names such as apps and work:
+// other people have directories called that. A check leaves a mark, and
+// both the look and the sweep go by it.
+func TestADataDirectoryIsKnownByItsMark(t *testing.T) {
+	ctx := context.Background()
+	put := func(dir string, names ...string) {
+		t.Helper()
+		for _, name := range names {
+			p := filepath.Join(dir, name)
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte("theirs"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	there := func(p string) bool {
+		_, err := os.Stat(p)
+		return err == nil
+	}
+
+	t.Run("a check leaves it", func(t *testing.T) {
+		e := newEnv(t)
+		if rep, err := e.pool.Check(ctx, e.server); err != nil || !itemOf(rep, "Data directory").OK {
+			t.Fatalf("%+v %v", rep.Items, err)
+		}
+		info, err := os.Stat(filepath.Join(e.server.DataDir, ownedMark))
+		if err != nil || info.Mode().Perm() != 0o600 {
+			t.Fatalf("the mark: %v %v", info, err)
+		}
+		// With the mark and nothing else of musdash's, the directory is
+		// still musdash's: a check that got no further than the mark.
+		for _, sub := range subDirs[1:] {
+			os.RemoveAll(filepath.Join(e.server.DataDir, sub))
+		}
+		checked, _ := e.db.ServerByID(ctx, e.server.ID)
+		if rep, _ := e.pool.Check(ctx, checked); !itemOf(rep, "Data directory").OK || !there(filepath.Join(e.server.DataDir, "apps")) {
+			t.Fatalf("a marked directory: %+v", rep.Items)
+		}
+	})
+
+	t.Run("somebody's own apps and work", func(t *testing.T) {
+		e := newEnv(t)
+		put(e.server.DataDir, "apps/shop/index.php", "work/thesis.tex", "notes.txt")
+		rep, err := e.pool.Check(ctx, e.server)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if it := itemOf(rep, "Data directory"); it.OK || !strings.Contains(it.Detail, "other things") {
+			t.Fatalf("%+v", it)
+		}
+		got, _ := e.db.ServerByID(ctx, e.server.ID)
+		if got.HostKey != "" || !there(filepath.Join(e.server.DataDir, "work/thesis.tex")) || there(filepath.Join(e.server.DataDir, "proxy")) || there(filepath.Join(e.server.DataDir, ownedMark)) {
+			t.Fatalf("key %q; the directory was changed", got.HostKey)
+		}
+	})
+
+	t.Run("a directory that cannot be looked into", func(t *testing.T) {
+		if os.Getuid() == 0 {
+			t.Skip("root can look into anything")
+		}
+		e := newEnv(t)
+		put(e.server.DataDir, "work/thesis.tex")
+		os.Chmod(e.server.DataDir, 0o300)
+		defer os.Chmod(e.server.DataDir, 0o700)
+		rep, err := e.pool.Check(ctx, e.server)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := e.db.ServerByID(ctx, e.server.ID)
+		if itemOf(rep, "Data directory").OK || got.HostKey != "" {
+			t.Fatalf("%+v, key %q", rep.Items, got.HostKey)
+		}
+		os.Chmod(e.server.DataDir, 0o700)
+		if !there(filepath.Join(e.server.DataDir, "work/thesis.tex")) || there(filepath.Join(e.server.DataDir, "apps")) {
+			t.Fatal("the directory was changed")
+		}
+	})
+
+	// A check is not the only way to a server: a row from before there
+	// was that look, or a directory replaced since, is swept by the first
+	// connection of the next process without anybody choosing Check.
+	t.Run("the sweep leaves an unmarked directory alone", func(t *testing.T) {
+		e := newEnv(t)
+		put(e.server.DataDir, "work/thesis.tex", "apps/shop/.musdash-0123456789abcdef", "proxy/.musdash-0123456789abcdef")
+		first, _, err := e.pool.FirstContact(ctx, e.server)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first.Close()
+		if _, err := e.runner().Output(ctx, runner.Cmd{Name: "true"}); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"work/thesis.tex", "apps/shop/.musdash-0123456789abcdef", "proxy/.musdash-0123456789abcdef"} {
+			if !there(filepath.Join(e.server.DataDir, name)) {
+				t.Errorf("%s was removed from a directory that is not musdash's", name)
+			}
+		}
+	})
+	t.Run("and sweeps a marked one", func(t *testing.T) {
+		e := newEnv(t)
+		put(e.server.DataDir, "work/dep123/checkout/deploy-key", ownedMark)
+		first, _, err := e.pool.FirstContact(ctx, e.server)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first.Close()
+		if _, err := e.runner().Output(ctx, runner.Cmd{Name: "true"}); err != nil {
+			t.Fatal(err)
+		}
+		if there(filepath.Join(e.server.DataDir, "work/dep123")) || !there(filepath.Join(e.server.DataDir, ownedMark)) {
+			t.Fatal("a build's leftovers are still there, or the mark is gone")
+		}
+	})
+}
+
+// A look that got no answer it understands is not a directory that may be
+// used.
+func TestALookThatFailsIsNotAnAnswer(t *testing.T) {
+	ctx := context.Background()
+	for answer, want := range map[string]struct {
+		taken bool
+		fails bool
+	}{
+		"new\n": {false, false}, "ours\n": {false, false}, "empty\n": {false, false}, "taken\n": {true, false},
+		"": {false, true}, "yes\n": {false, true}, "taken and more\n": {false, true},
+	} {
+		fake := &runnertest.Fake{Handle: func(string, runner.Cmd) (string, error) { return answer, nil }}
+		taken, err := dataDirTaken(ctx, fake, "/srv/musdash")
+		if taken != want.taken || (err != nil) != want.fails {
+			t.Errorf("answer %q: taken=%v err=%v", answer, taken, err)
+		}
+	}
+	fake := &runnertest.Fake{Handle: func(string, runner.Cmd) (string, error) { return "", runnertest.Exit("sh", 127, "sh: not found") }}
+	if _, err := dataDirTaken(ctx, fake, "/srv/musdash"); err == nil {
+		t.Error("a command that failed was taken for an answer")
+	}
+	// The directory is an argument of the script and never part of it.
+	var line string
+	fake = &runnertest.Fake{Handle: func(l string, c runner.Cmd) (string, error) {
+		line = c.Args[len(c.Args)-1]
+		if strings.Contains(c.Args[1], "/srv/it's; reboot") {
+			t.Error("the directory is in the script's text")
+		}
+		return "new\n", nil
+	}}
+	dataDirTaken(ctx, fake, "/srv/it's; reboot")
+	if line != "/srv/it's; reboot" {
+		t.Errorf("the directory arrived as %q", line)
+	}
+}

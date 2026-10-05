@@ -14,6 +14,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"golang.org/x/crypto/ssh"
+
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
 )
@@ -31,8 +33,11 @@ type Item struct {
 type Report struct {
 	Items []Item
 	// Fingerprint is the host key's, for the person to compare with what
-	// the server itself reports.
+	// the server itself reports. HostKeyKind and HostKeyFile say which of
+	// the server's keys it is; they are empty for a kind without a name.
 	Fingerprint string
+	HostKeyKind string
+	HostKeyFile string
 	// NewHostKey says this check was the first to see the key.
 	NewHostKey bool
 }
@@ -98,7 +103,24 @@ func (p *Pool) Check(ctx context.Context, s db.Server) (Report, error) {
 		return rep, nil
 	}
 	first := s.HostKey == ""
-	r, hostKey, err := p.FirstContact(ctx, s)
+	// Looked at before the key is recorded, and so before anything else can
+	// reach the server: the first connection of a process empties
+	// <data>/work, which in somebody else's directory is somebody else's.
+	taken := Item{Name: "Data directory", Needed: true, Detail: s.DataDir + " already has other things in it, or cannot be looked into, and musdash needs a directory of its own: it empties parts of it. Remove this server and add it again with a directory such as " + path.Join(s.DataDir, "musdash")}
+	r, hostKey, err := p.firstContact(ctx, s, func(r *runner.SSHRunner) error {
+		// A look that failed stops here as well: the key of a server whose
+		// directory nobody has seen is not recorded.
+		isTaken, err := dataDirTaken(ctx, r, s.DataDir)
+		if err == nil && isTaken {
+			err = errDataDirTaken
+		}
+		return err
+	})
+	if errors.Is(err, errDataDirTaken) {
+		rep.Items = append(rep.Items, Item{Name: "Connection", OK: true, Needed: true, Detail: "signed in as " + s.SSHUser}, taken)
+		s.Status, s.StatusDetail = db.ServerProblem, rep.Problem()
+		return rep, p.DB.SetServerChecked(ctx, s)
+	}
 	if errors.Is(err, runner.ErrHostKeyChanged) {
 		rep.Items = append(rep.Items, Item{Name: "Connection", Needed: true,
 			Detail: "the server's host key is not the one recorded for it. If the server was reinstalled, choose Forget host key and check again; otherwise something else is answering at this address"})
@@ -110,6 +132,7 @@ func (p *Pool) Check(ctx context.Context, s db.Server) (Report, error) {
 	}
 	defer r.Close()
 	rep.Fingerprint, rep.NewHostKey = Fingerprint(hostKey), first
+	rep.HostKeyKind, rep.HostKeyFile = HostKeyKind(hostKey), HostKeyFile(hostKey)
 	rep.Items = append(rep.Items, Item{Name: "Connection", OK: true, Needed: true, Detail: "signed in as " + s.SSHUser})
 
 	// What the server answers is shown and stored: kept short and to text.
@@ -149,13 +172,32 @@ func (p *Pool) Check(ctx context.Context, s db.Server) (Report, error) {
 		rep.Items = append(rep.Items, Item{Name: "git", Detail: "not installed; apps and services cannot be deployed from a repository here until it is"})
 	}
 
-	// The data directory, private to the account.
+	rep.Items = append(rep.Items, forwarding(ctx, r, s.Port))
+
+	// The data directory, private to the account. A server that was
+	// checked before is looked at as well: its directory may have been
+	// replaced since.
 	dirOK := true
-	for _, sub := range subDirs {
-		if err := r.MkdirAll(ctx, path.Join(s.DataDir, sub), 0o700); err != nil {
+	if !first {
+		if isTaken, err := dataDirTaken(ctx, r, s.DataDir); err != nil || isTaken {
 			dirOK = false
-			rep.Items = append(rep.Items, Item{Name: "Data directory", Needed: true, Detail: s.DataDir + " cannot be created by " + s.SSHUser + ". Create it on the server and give it to that account, or choose another directory"})
+			rep.Items = append(rep.Items, taken)
+		}
+	}
+	for i, sub := range subDirs {
+		if !dirOK {
 			break
+		}
+		err := r.MkdirAll(ctx, path.Join(s.DataDir, sub), 0o700)
+		if err == nil && i == 0 {
+			// The first thing in the directory says whose it is: that, and
+			// not the names of the directories below, is what the look and
+			// the sweep go by from now on.
+			err = r.WriteFile(ctx, path.Join(s.DataDir, ownedMark), 0o600, strings.NewReader(ownedMarkText))
+		}
+		if err != nil {
+			rep.Items = append(rep.Items, Item{Name: "Data directory", Needed: true, Detail: s.DataDir + " cannot be created by " + s.SSHUser + ". Create it on the server and give it to that account, or choose another directory"})
+			dirOK = false
 		}
 	}
 	if dirOK {
@@ -189,6 +231,52 @@ func (p *Pool) Check(ctx context.Context, s db.Server) (Report, error) {
 		s.Status, s.StatusDetail = db.ServerProblem, rep.Problem()
 	}
 	return rep, p.DB.SetServerChecked(ctx, s)
+}
+
+// errDataDirTaken stops a first contact before the server's key is
+// recorded.
+var errDataDirTaken = errors.New("the data directory holds other things")
+
+// forwarding reports whether the server's sshd opens connections for this
+// account: how the health check of an app reaches a new container's port.
+// An sshd with AllowTcpForwarding no (Alpine's default, and a common
+// hardening) signs the account in, runs every command, and then fails each
+// deployment of an app after its whole health timeout.
+func forwarding(ctx context.Context, r *runner.SSHRunner, sshPort int) Item {
+	item := Item{Name: "Forwarding", OK: true, Needed: true, Detail: "the server's sshd forwards connections to its own ports"}
+	// Port 1 first: nothing listens there, and a current sshd says so
+	// ("connect failed"), which shows it tried. An sshd up to 7.4 says
+	// "prohibited" for a port it could not connect to as well, so that
+	// answer alone decides nothing: the ports sshd itself may listen on
+	// are tried, and one that opens shows that it forwards. Only a server
+	// that refuses all of them is told so.
+	ports := []int{1, sshPort}
+	if sshPort != 22 {
+		ports = append(ports, 22)
+	}
+	for _, port := range ports {
+		dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		conn, err := r.Dial(dialCtx, "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		cancel()
+		var answer *ssh.OpenChannelError
+		switch {
+		case err == nil:
+			conn.Close()
+			return item
+		case errors.Is(err, runner.ErrForwardRefused):
+			// The next port.
+		case errors.As(err, &answer):
+			// It tried, and nothing was listening.
+			return item
+		default:
+			// No answer either way: not a reason to call the server
+			// unfit, and not one to say that it forwards.
+			return Item{Name: "Forwarding", Detail: "whether the server's sshd forwards connections could not be tried in time; check again"}
+		}
+	}
+	item.OK = false
+	item.Detail = "the server's sshd does not forward connections, which is how musdash checks that a new container of an app answers on its port. To change that, " + runner.ForwardAdvice
+	return item
 }
 
 func orUnknown(s string) string {

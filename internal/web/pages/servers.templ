@@ -188,8 +188,12 @@ templ remoteServerCard(s ui.Shell, info ServerInfo) {
 					if info.Report.NewHostKey {
 						@ui.Notice(ui.ToneBrand) {
 							<p class="font-semibold">This server's host key was recorded</p>
-							<p>Compare it with what the server itself prints for <span class="code">ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</span>. From now on musdash talks only to a server that presents this key.</p>
-							<p class="fact break-all">{ info.Report.Fingerprint }</p>
+							if info.Report.HostKeyFile != "" {
+								<p>Compare it with what the server itself prints for <span class="code">ssh-keygen -lf { info.Report.HostKeyFile }</span>. From now on musdash talks only to a server that presents this key.</p>
+							} else {
+								<p>Compare it with the fingerprint of the server's own host key. From now on musdash talks only to a server that presents this key.</p>
+							}
+							<p class="fact break-all">{ hostKeyShown(info.Report.HostKeyKind, info.Report.Fingerprint) }</p>
 						}
 					}
 				</div>
@@ -222,7 +226,7 @@ templ remoteServerCard(s ui.Shell, info ServerInfo) {
 				<dd class="fact break-all">{ info.Server.DataDir }</dd>
 				if info.Server.HostKey != "" {
 					<dt>Host key</dt>
-					<dd class="fact break-all">{ servers.Fingerprint(info.Server.HostKey) }</dd>
+					<dd class="fact break-all">{ hostKeyShown(servers.HostKeyKind(info.Server.HostKey), servers.Fingerprint(info.Server.HostKey)) }</dd>
 				}
 				<dt>Runs</dt>
 				<dd class="fact">{ strconv.Itoa(info.Apps) }</dd>
@@ -299,4 +303,14 @@ func serverOptions(list []db.Server) []ui.Option {
 		opts = append(opts, ui.Option{Value: s.ID, Label: label})
 	}
 	return opts
+}
+
+// hostKeyShown is a host key's fingerprint with the kind of key in front,
+// as ssh-keygen prints the two: with three keys on a server, the kind says
+// which one to compare.
+func hostKeyShown(kind, fingerprint string) string {
+	if kind == "" {
+		return fingerprint
+	}
+	return kind + " " + fingerprint
 }
