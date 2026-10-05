@@ -96,7 +96,7 @@ func parseGitForm(r *http.Request, f *ui.Form, c pages.GitChoices, app *db.App) 
 	}
 	parseRepoForm(r, f, c, app)
 	app.BuildPack = field("build_pack")
-	if app.BuildPack != deploy.PackDockerfile && app.BuildPack != deploy.PackStatic {
+	if !deploy.ValidPack(app.BuildPack) {
 		f.Fail("build_pack", "Choose how the app is built.")
 	}
 	if app.BaseDir = strings.Trim(field("base_dir"), "/"); !source.ValidRelPath(app.BaseDir) {

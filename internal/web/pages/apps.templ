@@ -57,6 +57,7 @@ func appTabs(v AppView) []ui.Tab {
 			{Key: "overview", Label: "Overview", Href: b},
 			{Key: "deployments", Label: "Deployments", Href: b + "/deployments"},
 			{Key: "logs", Label: "Logs", Href: b + "/logs"},
+			{Key: "metrics", Label: "Metrics", Href: b + "/metrics"},
 			{Key: "settings", Label: "Settings", Href: b + "/settings"},
 		}
 	}
@@ -64,6 +65,7 @@ func appTabs(v AppView) []ui.Tab {
 		{Key: "overview", Label: "Overview", Href: b},
 		{Key: "deployments", Label: "Deployments", Href: b + "/deployments"},
 		{Key: "logs", Label: "Logs", Href: b + "/logs"},
+		{Key: "metrics", Label: "Metrics", Href: b + "/metrics"},
 		{Key: "environment", Label: "Environment", Href: b + "/environment"},
 		{Key: "storage", Label: "Storage", Href: b + "/storage"},
 		{Key: "tasks", Label: "Tasks", Href: b + "/tasks"},
@@ -185,6 +187,8 @@ func accessOptions(c GitChoices) []ui.Option {
 var buildPackOptions = []ui.Option{
 	{Value: "dockerfile", Label: "Dockerfile"},
 	{Value: "static", Label: "Static site"},
+	{Value: "nixpacks", Label: "Nixpacks (no Dockerfile needed)"},
+	{Value: "railpack", Label: "Railpack (no Dockerfile needed)"},
 }
 
 func newAppTabs(p db.Project, env db.Environment) []ui.Tab {
@@ -199,7 +203,7 @@ func newAppTabs(p db.Project, env db.Environment) []ui.Tab {
 // it. The New app form and the app's Source settings share them.
 templ gitSourceFields(f ui.Form, c GitChoices, app db.App) {
 	@gitRepoFields(f, c, app)
-	@ui.Field(ui.FieldProps{Label: "Build with", For: "build_pack", Hint: "Dockerfile builds the repository's own Dockerfile. Static site serves a folder of ready-made files.", Error: f.E("build_pack")}) {
+	@ui.Field(ui.FieldProps{Label: "Build with", For: "build_pack", Hint: "Dockerfile builds the repository's own Dockerfile. Static site serves a folder of ready-made files. Nixpacks and Railpack work out how to build the code themselves; the app must listen on the port given below, which it is told as PORT.", Error: f.E("build_pack")}) {
 		@ui.Select("build_pack", buildPackOptions, orDefault(f.V("build_pack"), orDefault(app.BuildPack, "dockerfile")), templ.Attributes{"aria-describedby": "build_pack-hint"})
 	}
 	@gitBuildFields(f, c, app)
@@ -542,7 +546,7 @@ templ AppEnvironment(s ui.Shell, v AppView, f ui.Form) {
 					@ui.Textarea(ui.InputProps{ID: "vars", Mono: true, Rows: 12, Value: f.V("vars"), Invalid: f.E("vars") != "", Described: true, Placeholder: "DATABASE_URL=postgres://…\nNODE_ENV=production"})
 				}
 				if v.App.Source == db.SourceGit {
-					@ui.Field(ui.FieldProps{Label: "Build-time variables", For: "build_vars", Hint: "Given to the image build as build arguments, where the Dockerfile reads them with ARG. They are not given to the running app.", Error: f.E("build_vars")}) {
+					@ui.Field(ui.FieldProps{Label: "Build-time variables", For: "build_vars", Hint: "Given to the image build as build arguments, where the Dockerfile reads them with ARG. They are not given to the running app. Nixpacks and Railpack take their settings here: NIXPACKS_START_CMD, NIXPACKS_BUILD_CMD, RAILPACK_START_CMD, RAILPACK_BUILD_CMD and the like.", Error: f.E("build_vars")}) {
 						@ui.Textarea(ui.InputProps{ID: "build_vars", Mono: true, Rows: 5, Value: f.V("build_vars"), Invalid: f.E("build_vars") != "", Described: true, Placeholder: "NPM_TOKEN=…"})
 					}
 				}

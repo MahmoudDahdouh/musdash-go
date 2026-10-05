@@ -58,6 +58,8 @@ type Server struct {
 	hashing chan struct{}
 	// streams bounds the live log views open at once.
 	streams chan struct{}
+	// What phase 9 added: see extras.go.
+	extras
 }
 
 // Handler builds the route table.
@@ -207,6 +209,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /settings/notifications/{cid}", s.authed(s.notificationSave))
 	mux.Handle("POST /settings/notifications/{cid}/test", s.authed(s.notificationTest))
 	mux.Handle("POST /settings/notifications/{cid}/delete", s.authed(s.notificationDelete))
+
+	s.extraRoutes(mux)
 
 	if s.Cfg.Dev {
 		mux.Handle("GET /_ui", s.authed(s.gallery))

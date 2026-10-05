@@ -24,6 +24,7 @@ func serviceTabs(v ServiceView) []ui.Tab {
 	return []ui.Tab{
 		{Key: "overview", Label: "Overview", Href: b},
 		{Key: "logs", Label: "Logs", Href: b + "/logs"},
+		{Key: "metrics", Label: "Metrics", Href: b + "/metrics"},
 		{Key: "compose", Label: "Compose file", Href: b + "/compose"},
 		{Key: "settings", Label: "Settings", Href: b + "/settings"},
 	}

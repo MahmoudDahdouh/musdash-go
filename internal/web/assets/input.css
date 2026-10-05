@@ -683,6 +683,144 @@
     color: var(--color-log-dim);
   }
 
+  /* Charts and meters --------------------------------------------------
+   * Drawn by the server as SVG. One series a chart, in the brand colour;
+   * grid and scale stay quiet; every figure is also written as text.
+   */
+  .chart {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+  }
+  .chart-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .chart-title {
+    font-weight: 600;
+  }
+  .chart-now {
+    font-family: var(--font-mono);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .chart-plot {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 8px;
+  }
+  .chart-scale {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    line-height: 1;
+    color: var(--color-ink-mute);
+  }
+  .chart-svg {
+    display: block;
+    width: 100%;
+    height: 7.5rem;
+    overflow: visible;
+  }
+  .chart-grid,
+  .chart-base {
+    stroke: var(--color-line);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+  .chart-base {
+    stroke: var(--color-line-strong);
+  }
+  .chart-area {
+    fill: var(--color-brand-100);
+    stroke: none;
+  }
+  .chart-line {
+    fill: none;
+    stroke: var(--color-brand-600);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .chart-hit {
+    fill: var(--color-brand-600);
+    fill-opacity: 0;
+  }
+  .chart-hit:hover {
+    fill-opacity: 0.14;
+  }
+  .chart-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: var(--text-xs);
+    color: var(--color-ink-mute);
+  }
+  .chart-foot span:first-child,
+  .chart-foot span:last-child {
+    font-family: var(--font-mono);
+    white-space: nowrap;
+  }
+  .chart-empty {
+    padding: 28px 0;
+    text-align: center;
+    font-size: var(--text-sm);
+    color: var(--color-ink-mute);
+    border: 1px dashed var(--color-line-strong);
+    border-radius: var(--radius-md);
+  }
+
+  .meter {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+  .meter-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .meter-label {
+    font-size: var(--text-sm);
+    color: var(--color-ink-mute);
+  }
+  .meter-value {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .meter-bar {
+    display: block;
+    width: 100%;
+    height: 4px;
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+  .meter-track {
+    fill: var(--color-sunk);
+  }
+  .meter-fill {
+    fill: var(--color-brand-600);
+  }
+  .meter-warn {
+    fill: var(--color-warn);
+  }
+  .meter-danger {
+    fill: var(--color-danger);
+  }
+  .meter-detail {
+    font-size: var(--text-xs);
+    color: var(--color-ink-mute);
+  }
+
   /* Empty state -------------------------------------------------------- */
   .empty {
     display: grid;

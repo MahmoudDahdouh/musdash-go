@@ -124,6 +124,8 @@ templ localServerCard(s ui.Shell, info ServerInfo, f ui.Form) {
 				</dd>
 				<dt>Runs</dt>
 				<dd class="fact">{ strconv.Itoa(info.Apps) }</dd>
+				<dt>Usage</dt>
+				<dd><a class="link" href={ templ.SafeURL("/servers/" + info.Server.ID + "/metrics") }>Processor, memory and disk</a></dd>
 			</dl>
 			<form class="grid gap-3 border-t border-line pt-4" method="post" action={ templ.SafeURL("/servers/" + info.Server.ID) }>
 				@ui.CSRF(s.CSRF)
@@ -212,6 +214,8 @@ templ remoteServerCard(s ui.Shell, info ServerInfo) {
 				}
 				<dt>Runs</dt>
 				<dd class="fact">{ strconv.Itoa(info.Apps) }</dd>
+				<dt>Usage</dt>
+				<dd><a class="link" href={ templ.SafeURL("/servers/" + info.Server.ID + "/metrics") }>Processor, memory and disk</a></dd>
 			</dl>
 			if info.PublicKey != "" && info.Server.Status != db.ServerOK {
 				<div class="grid gap-2">

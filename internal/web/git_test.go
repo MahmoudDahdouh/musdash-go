@@ -126,7 +126,7 @@ func TestGitFormValidation(t *testing.T) {
 		{url.Values{"access": {"key:" + otherKey.ID}, "repo": {"git@github.com:acme/shop.git"}}, "Choose how the repository is read"},
 		{url.Values{"access": {"source:nope"}}, "Choose how the repository is read"},
 		{url.Values{"branch": {"--force"}}, "Enter a branch name"},
-		{url.Values{"build_pack": {"nixpacks"}}, "Choose how the app is built"},
+		{url.Values{"build_pack": {"buildpacks"}}, "Choose how the app is built"},
 		{url.Values{"base_dir": {"../../etc"}}, "Enter a path inside the repository"},
 		{url.Values{"dockerfile_path": {"/etc/passwd"}}, "Enter a path inside the repository"},
 		{url.Values{"publish_dir": {"a;b"}}, "Enter a path inside the repository"},

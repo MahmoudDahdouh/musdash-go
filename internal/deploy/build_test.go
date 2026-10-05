@@ -296,6 +296,10 @@ func TestFailedBuildKeepsOldContainerAndCleansUp(t *testing.T) {
 	if dep.Status != db.DeployFailed || !strings.HasPrefix(dep.Error, "build:") {
 		t.Fatalf("%s %q", dep.Status, dep.Error)
 	}
+	// A build that failed is not one that ran out of time.
+	if strings.Contains(dep.Error, "without finishing") {
+		t.Fatalf("a failed build was reported as stalled: %q", dep.Error)
+	}
 	after := e.reload()
 	if after.Container != before.Container || after.Status != db.AppRunning {
 		t.Fatalf("the previous container must keep serving: %+v", after)

@@ -1,0 +1,232 @@
+package pages
+
+import (
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// Usage is one live reading, as the page shows it. The page asks for it
+// when it is opened and again every few seconds while it stays open.
+type Usage struct {
+	Meters []ui.MeterProps
+	Rows   []UsageRow
+	// Problem says why there is no reading.
+	Problem string
+	// Next is where the next reading is asked for, and Every how often.
+	// Next is empty once a page has been open long enough that nobody is
+	// likely to be looking: the questions stop until it is asked to go on.
+	Next  string
+	Every string
+	// Resume is the page to reload to start again.
+	Resume string
+}
+
+// UsageRow is one container in a reading.
+type UsageRow struct {
+	Name string
+	Href string // the resource's page, or ""
+	CPU  string
+	Mem  string
+}
+
+// UsagePending stands where the first reading will be.
+templ UsagePending(url string) {
+	<div id="usage" class="card" hx-get={ url } hx-trigger="load" hx-swap="outerHTML">
+		<div class="card-body">
+			<p class="muted text-sm" role="status">Reading what is in use…</p>
+		</div>
+	</div>
+}
+
+templ UsageNow(u Usage) {
+	<div
+		id="usage"
+		class="card"
+		if u.Next != "" {
+			hx-get={ u.Next }
+			hx-trigger={ "every " + u.Every }
+			hx-swap="outerHTML"
+		}
+	>
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">In use now</h2>
+				if u.Next != "" {
+					<p class="muted text-sm">Read again every { u.Every } while this page is open.</p>
+				} else {
+					<p class="muted text-sm">Paused: this page has been open for a while.</p>
+				}
+			</div>
+			if u.Next == "" {
+				@ui.LinkButton(u.Resume, ui.ButtonProps{Icon: "refresh"}) {
+					Read again
+				}
+			}
+		</div>
+		<div class="card-body grid gap-5">
+			if u.Problem != "" {
+				@ui.Notice(ui.ToneWarn) {
+					<p class="break-words">{ u.Problem }</p>
+				}
+			}
+			if len(u.Meters) > 0 {
+				<div class="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+					for _, m := range u.Meters {
+						@ui.Meter(m)
+					}
+				</div>
+			}
+			if len(u.Rows) > 0 {
+				@ui.Table("Container", "Processor", "Memory") {
+					for _, row := range u.Rows {
+						<tr>
+							<td class="fact">
+								if row.Href != "" {
+									<a class="link" href={ templ.SafeURL(row.Href) }>{ row.Name }</a>
+								} else {
+									{ row.Name }
+								}
+							</td>
+							<td class="fact">{ row.CPU }</td>
+							<td class="fact">{ row.Mem }</td>
+						</tr>
+					}
+				}
+			}
+		</div>
+	</div>
+}
+
+// History is the charts of a server or a resource.
+type History struct {
+	// Sampled says whether the server keeps samples at all.
+	Sampled bool
+	Ranges  []ui.Tab
+	Range   string
+	Charts  []ui.ChartProps
+	// ServerHref is where sampling is switched on.
+	ServerHref string
+}
+
+templ historyCard(h History) {
+	<section class="card" id="history">
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">Over time</h2>
+				<p class="muted text-sm">One sample a minute, kept for a day.</p>
+			</div>
+			if h.Sampled {
+				<nav class="flex gap-1" aria-label="Stretch of time">
+					for _, t := range h.Ranges {
+						<a
+							class={ "btn btn-sm", templ.KV("btn-secondary", t.Key == h.Range), templ.KV("btn-ghost", t.Key != h.Range) }
+							href={ templ.SafeURL(t.Href) }
+							if t.Key == h.Range {
+								aria-current="true"
+							}
+						>{ t.Label }</a>
+					}
+				</nav>
+			}
+		</div>
+		<div class="card-body">
+			if !h.Sampled {
+				<p class="muted text-sm">
+					Nothing is kept for this server: sampling is switched off, which is how it starts.
+					if h.ServerHref != "" {
+						It is switched on under <a class="link" href={ templ.SafeURL(h.ServerHref) }>the server's usage</a>.
+					}
+				</p>
+			} else {
+				<div class="grid gap-x-8 gap-y-8 lg:grid-cols-2">
+					for _, c := range h.Charts {
+						@ui.Chart(c)
+					}
+				</div>
+			}
+		</div>
+	</section>
+}
+
+templ AppMetrics(s ui.Shell, v AppView, h History) {
+	@appFrame(s, v, "metrics") {
+		if v.App.Container == "" {
+			@ui.EmptyState("server", "Nothing is running", "What the app uses appears here once it is deployed.")
+		} else {
+			<div class="grid max-w-5xl gap-6">
+				@UsagePending(v.base() + "/metrics/now")
+				@historyCard(h)
+			</div>
+		}
+	}
+}
+
+templ DatabaseMetrics(s ui.Shell, v DatabaseView, h History) {
+	@databaseFrame(s, v, "metrics") {
+		if v.DB.Container == "" {
+			@ui.EmptyState("server", "Nothing is running", "What the database uses appears here once it is started.")
+		} else {
+			<div class="grid max-w-5xl gap-6">
+				@UsagePending(v.base() + "/metrics/now")
+				@historyCard(h)
+			</div>
+		}
+	}
+}
+
+templ ServiceMetrics(s ui.Shell, v ServiceView, h History) {
+	@serviceFrame(s, v, "metrics") {
+		if v.Service.Members == "" || v.Service.Status == db.AppStopped {
+			@ui.EmptyState("server", "Nothing is running", "What the service uses appears here once it is deployed.")
+		} else {
+			<div class="grid max-w-5xl gap-6">
+				@UsagePending(v.base() + "/metrics/now")
+				@historyCard(h)
+			</div>
+		}
+	}
+}
+
+// ServerMetrics is a server's usage page.
+templ ServerMetrics(s ui.Shell, server db.Server, h History) {
+	@ui.Layout(s) {
+		@ui.PageHeader(server.Name, "What this server and the containers on it are using.")
+		<div class="grid max-w-5xl gap-6">
+			@UsagePending("/servers/" + server.ID + "/metrics/now")
+			@historyCard(h)
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Sampling</h2>
+						<p class="muted text-sm">
+							if h.Sampled {
+								On: once a minute musdash asks this server what it and its containers use, and keeps the answers for a day.
+							} else {
+								Off: this server is asked only while a page like this one is open, and nothing is kept.
+							}
+						</p>
+					</div>
+					<form method="post" action={ templ.SafeURL("/servers/" + server.ID + "/metrics") }>
+						@ui.CSRF(s.CSRF)
+						if h.Sampled {
+							<input type="hidden" name="sample" value="0"/>
+							@ui.Button(ui.ButtonProps{Type: "submit"}) {
+								Switch sampling off
+							}
+						} else {
+							<input type="hidden" name="sample" value="1"/>
+							@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+								Switch sampling on
+							}
+						}
+					</form>
+				</div>
+				if h.Sampled {
+					<div class="card-body">
+						<p class="muted text-sm">Switching it off also removes the samples that were kept.</p>
+					</div>
+				}
+			</section>
+		</div>
+	}
+}

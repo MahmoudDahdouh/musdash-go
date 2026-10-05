@@ -482,7 +482,7 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 				err := r.Run(buildCtx, build)
 				cancel()
 				if err != nil {
-					if buildCtx.Err() != nil && ctx.Err() == nil {
+					if errors.Is(buildCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 						return fmt.Errorf("build: stopped after %s without finishing", d.buildTimeout)
 					}
 					return fmt.Errorf("build the images: %w", err)

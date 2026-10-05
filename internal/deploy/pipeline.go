@@ -627,6 +627,9 @@ func (d *Deployer) writeEnvFile(ctx context.Context, r runner.Runner, app db.App
 		vars = append(vars, db.EnvVar{Key: "MUSDASH_PREVIEW", Value: "1"},
 			db.EnvVar{Key: "MUSDASH_PULL_REQUEST", Value: strconv.Itoa(app.PRNumber)})
 	}
+	// An app built by Nixpacks or Railpack listens where PORT says. The
+	// app's own PORT, when it sets one, stands.
+	port := app.Source == db.SourceGit && ListensOnPORT(app.BuildPack) && app.Port > 0
 	for _, v := range sealed {
 		if v.BuildTime || (app.IsPreview() && (v.Key == "MUSDASH_PREVIEW" || v.Key == "MUSDASH_PULL_REQUEST")) {
 			continue
@@ -635,7 +638,13 @@ func (d *Deployer) writeEnvFile(ctx context.Context, r runner.Runner, app db.App
 		if err != nil {
 			return "", fmt.Errorf("environment variable %s cannot be decrypted: was the master key changed?", v.Key)
 		}
+		if v.Key == "PORT" {
+			port = false
+		}
 		vars = append(vars, db.EnvVar{Key: v.Key, Value: plain})
+	}
+	if port {
+		vars = append(vars, db.EnvVar{Key: "PORT", Value: strconv.Itoa(app.Port)})
 	}
 	body, err := EnvFile(vars)
 	if err != nil {

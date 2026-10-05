@@ -56,6 +56,11 @@ type Ops struct {
 	// touches it.
 	recent   map[string]time.Time
 	recentMu sync.Mutex
+	// sampling holds the servers a sample is being taken of; samples
+	// waits for those goroutines.
+	sampling   map[string]bool
+	samplingMu sync.Mutex
+	samples    sync.WaitGroup
 }
 
 // New returns an Ops with the usual limits.
@@ -195,4 +200,5 @@ func (o *Ops) Tick(ctx context.Context, now time.Time) {
 	}
 
 	o.cleanupIfDue(ctx, now)
+	o.sampleServers(ctx, now)
 }

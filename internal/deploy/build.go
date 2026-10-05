@@ -140,7 +140,9 @@ func (d *Deployer) clone(ctx context.Context, r runner.Runner, access db.App, re
 	err = r.Run(cloneCtx, clone)
 	cancelClone()
 	if err != nil {
-		if cloneCtx.Err() != nil && ctx.Err() == nil {
+		// The time limit, and not the cancel just above: after it every
+		// failed clone would look like one that ran out of time.
+		if errors.Is(cloneCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 			return "", fmt.Errorf("clone %s: stopped after %s without finishing", repo.FullName(), d.cloneTimeout)
 		}
 		return "", fmt.Errorf("clone %s: %w", repo.FullName(), err)
@@ -286,18 +288,36 @@ func (d *Deployer) build(ctx context.Context, r runner.Runner, app db.App, dep d
 		return "", "", err
 	}
 
-	contextDir := path.Join(checkout, app.BaseDir)
-	var dockerfile string
+	buildArgs, err := d.buildArgs(ctx, app)
+	if err != nil {
+		return "", "", err
+	}
+	image = ImageRepository(app.ID) + ":" + commit[:12]
+	spec := docker.BuildSpec{Tag: image, ContextDir: path.Join(checkout, app.BaseDir), BuildArgs: buildArgs}
 	switch app.BuildPack {
 	case PackStatic:
 		if err := d.refuseSymlinks(ctx, r, checkout, joinRel(app.BaseDir, app.PublishDir)); err != nil {
 			return "", "", err
 		}
-		dockerfile = path.Join(workDir, "Dockerfile.static")
-		if err := r.WriteFile(ctx, dockerfile, 0o600, strings.NewReader(StaticDockerfile(app.PublishDir, app.SPAFallback))); err != nil {
+		spec.Dockerfile = path.Join(workDir, "Dockerfile.static")
+		if err := r.WriteFile(ctx, spec.Dockerfile, 0o600, strings.NewReader(StaticDockerfile(app.PublishDir, app.SPAFallback))); err != nil {
 			return "", "", err
 		}
 		log.Step("Building a static site from %s", orRoot(joinRel(app.BaseDir, app.PublishDir)))
+	case PackNixpacks, PackRailpack:
+		// The directory the builder is shown must be the repository's own.
+		if err := d.refuseSymlinks(ctx, r, checkout, app.BaseDir); err != nil {
+			return "", "", err
+		}
+		if app.BuildPack == PackNixpacks {
+			err = d.planNixpacks(ctx, r, app, checkout, workDir, &spec, log)
+		} else {
+			err = d.planRailpack(ctx, r, app, workDir, &spec, log)
+		}
+		if err != nil {
+			return "", "", err
+		}
+		log.Step("Building %s", orRoot(app.BaseDir))
 	default:
 		rel := app.DockerfilePath
 		if rel == "" {
@@ -306,23 +326,18 @@ func (d *Deployer) build(ctx context.Context, r runner.Runner, app db.App, dep d
 		if err := d.refuseSymlinks(ctx, r, checkout, joinRel(app.BaseDir, rel)); err != nil {
 			return "", "", err
 		}
-		dockerfile = path.Join(contextDir, rel)
+		spec.Dockerfile = path.Join(spec.ContextDir, rel)
 		log.Step("Building with %s", joinRel(app.BaseDir, rel))
 	}
 
-	buildArgs, err := d.buildArgs(ctx, app)
-	if err != nil {
-		return "", "", err
-	}
-	image = ImageRepository(app.ID) + ":" + commit[:12]
 	dk := docker.Client{R: r}
 	// Bounded for the same reason as the clone: one build that never ends
 	// would keep every other build on the server waiting.
 	buildCtx, cancelBuild := context.WithTimeout(ctx, d.buildTimeout)
-	err = dk.Build(buildCtx, docker.BuildSpec{Tag: image, ContextDir: contextDir, Dockerfile: dockerfile, BuildArgs: buildArgs}, log)
+	err = dk.Build(buildCtx, spec, log)
 	cancelBuild()
 	if err != nil {
-		if buildCtx.Err() != nil && ctx.Err() == nil {
+		if errors.Is(buildCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 			return "", "", fmt.Errorf("build: stopped after %s without finishing", d.buildTimeout)
 		}
 		return "", "", fmt.Errorf("build: %w", err)

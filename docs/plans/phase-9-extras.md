@@ -37,7 +37,7 @@
 | What a server answers | Parsed into numbers by strict patterns, or dropped. Nothing of it is shown as text | It is data from a machine that is not trusted with the dashboard |
 | Nixpacks, Railpack: where the binary runs | In a container made from an image musdash builds on first use (`musdash/nixpacks:<version>`, `musdash/railpack:<version>`): the release file is fetched by Docker's `ADD --checksum`, so nothing is installed on the server and nothing needs `curl` | The spec's "installed on first use", without a binary on the host. The builder reads a repository; it does so where it can read nothing else |
 | The builder's sandbox | No Docker socket, no capabilities, a read-only root, the checkout mounted read-only. Nixpacks also has no network. Railpack has: it asks the network which versions of a language exist | The plan is made from files somebody else wrote |
-| Nixpacks: from plan to image | `nixpacks plan` gives the variables; `nixpacks build --out` writes the Dockerfile and a copy of the app, which leave the sandbox as a tar stream that is `docker build`'s context on standard input | Nothing is written to the server's disk by a container, so nothing is left there owned by another user |
+| Nixpacks: from plan to image | `nixpacks plan` gives the variables; `nixpacks build --out` writes `.nixpacks/Dockerfile` next to the app, into the checkout, which that one run may write to. The sandbox runs as the account that owns the checkout. Before the build, the server is asked that neither `.nixpacks` nor the Dockerfile in it is a link, in the repository and on disk | With `--out` Nixpacks writes only its own files and expects them inside the app's directory, which is the build context. The checkout is thrown away after the build |
 | Railpack: from plan to image | `railpack prepare` prints the plan, which is written next to the checkout; `docker build` with the Railpack frontend (`BUILDKIT_SYNTAX`, pinned to the same version) reads it. Build variables are passed as build secrets by name | Railpack's documented way of building without its own CLI doing the build |
 | Variables a plan names that the app does not have | Passed to `docker build` on the command line (`--build-arg NAME=value`): they come from the builder or the repository and are not secret. The app's own build variables keep travelling through Docker's environment by name | A repository must not be able to set an environment variable of the Docker command on the server (`nixpacks.toml` can name any variable) |
 | The port | For these two build packs the container gets `PORT=<the app's port>` unless the app sets `PORT` itself | Both builders start apps that listen on `$PORT` |
@@ -55,7 +55,7 @@
 
 ## Data model (migration `0014_extras.sql`)
 
-- `servers.metrics` (0/1): whether the server is sampled.
+- `servers.metrics` (0/1): whether the server is sampled. The file is `0013_extras.sql` on the branch, where migration numbers must be consecutive, and becomes `0014` when phase 8's `0013` is merged.
 - `metric_samples (server_id, resource_id, at, cpu, mem, mem_total, load, disk_used, disk_total)`, primary key `(server_id, resource_id, at)`, `WITHOUT ROWID`. `resource_id` is `''` for the server itself. `cpu` is in hundredths of a percent of one core for a resource and of the whole machine for a server; the rest are bytes, `load` hundredths.
 - No change to `apps`: `build_pack` takes two more values.
 
@@ -116,16 +116,16 @@ func acceptWS(w http.ResponseWriter, r *http.Request) (*wsConn, error)
 - [x] Tests: each host's documented payloads; a wrong token, a token for another app, a signature over another body; a GitLab fork; a Bitbucket push of two branches; indistinguishable answers kept.
 
 ### Task 2 — Nixpacks and Railpack
-- [ ] `docker.BuildSpec`: context from standard input, plain build arguments, secrets by name, a frontend.
-- [ ] `deploy/builders.go`: builder image on first use; the sandbox commands; Nixpacks plan → variables → tar → build; Railpack prepare → plan file → build.
-- [ ] `PORT` for these packs; the build-pack choice on the forms; hints.
-- [ ] Tests with the scripted runner: the commands, the sandbox flags, a plan that names `DOCKER_HOST`, a builder that fails, a plan that is not JSON. With real Docker (`MUSDASH_DOCKER_TEST=1`): a small app built and served with each.
+- [x] `docker.BuildSpec`: context from standard input, plain build arguments, secrets by name, a frontend.
+- [x] `deploy/builders.go`: builder image on first use; the sandbox commands; Nixpacks plan → variables → tar → build; Railpack prepare → plan file → build.
+- [x] `PORT` for these packs; the build-pack choice on the forms; hints.
+- [x] Tests with the scripted runner: the commands, the sandbox flags, a plan that names `DOCKER_HOST`, a builder that fails, a plan that is not JSON. With real Docker (`MUSDASH_DOCKER_TEST=1`): a small app built and served with each.
 
 ### Task 3 — Metrics
-- [ ] `internal/metrics`: the host script and `docker stats`, parsed strictly; tests with real output, garbage and hostile output.
-- [ ] Migration, queries, the sampler in `ops` with its per-server guard and the 24-hour ring.
-- [ ] `ui.Chart`; the Metrics tab of apps, databases and services; a server's usage page with the sampling switch.
-- [ ] Tests: sampling stores and prunes; a hanging server does not hold the tick; pages of another team's resources answer 404.
+- [x] `internal/metrics`: the host script and `docker stats`, parsed strictly; tests with real output, garbage and hostile output.
+- [x] Migration, queries, the sampler in `ops` with its per-server guard and the 24-hour ring.
+- [x] `ui.Chart`; the Metrics tab of apps, databases and services; a server's usage page with the sampling switch.
+- [x] Tests: sampling stores and prunes; a hanging server does not hold the tick; pages of another team's resources answer 404.
 
 ### Task 4 — Terminal
 - [ ] `runner`: `Terminal` for the local machine, SSH, the pool's remote runner and the test fakes; tests against a real shell locally and through `sshtest` (a resize is seen by `stty size`; closing ends the process).

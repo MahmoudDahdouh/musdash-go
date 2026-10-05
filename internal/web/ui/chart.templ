@@ -1,0 +1,100 @@
+package ui
+
+// Chart draws one series over time. See chart.go.
+templ Chart(p ChartProps) {
+	{{ l := p.layout() }}
+	<figure class="chart">
+		<figcaption class="chart-head">
+			<span class="chart-title">{ p.Title }</span>
+			if l.Latest != "" {
+				<span class="chart-now">{ l.Latest }</span>
+			}
+		</figcaption>
+		if len(l.Lines) == 0 {
+			<p class="chart-empty">No samples in this stretch of time.</p>
+		} else {
+			<div class="chart-plot">
+				<div class="chart-scale" aria-hidden="true">
+					<span>{ l.TopLabel }</span>
+					<span>{ l.MidLabel }</span>
+					<span>0</span>
+				</div>
+				<svg class="chart-svg" viewBox="0 0 600 120" preserveAspectRatio="none" role="img" aria-label={ l.Summary }>
+					<line class="chart-grid" x1="0" x2="600" y1="4" y2="4"></line>
+					<line class="chart-grid" x1="0" x2="600" y1="62" y2="62"></line>
+					<line class="chart-base" x1="0" x2="600" y1="120" y2="120"></line>
+					for _, d := range l.Areas {
+						<path class="chart-area" d={ d }></path>
+					}
+					for _, pts := range l.Lines {
+						<polyline class="chart-line" points={ pts }></polyline>
+					}
+					for _, h := range l.Hits {
+						<rect class="chart-hit" x={ h.X } y="0" width={ h.W } height="120">
+							<title>{ h.Label }</title>
+						</rect>
+					}
+				</svg>
+			</div>
+			<div class="chart-foot">
+				<span>{ l.FromLabel }</span>
+				<span>{ l.Figures }</span>
+				<span>{ l.ToLabel }</span>
+			</div>
+		}
+	</figure>
+}
+
+// Meter is one figure with a bar that shows how much of a whole it is.
+// The figure is written out; the bar only repeats it.
+type MeterProps struct {
+	Label  string
+	Value  string // "812 MiB of 1.9 GiB"
+	Share  float64 // 0 to 1, or below zero when there is no whole
+	Detail string
+}
+
+func meterTone(share float64) string {
+	switch {
+	case share >= 0.9:
+		return "meter-fill meter-danger"
+	case share >= 0.75:
+		return "meter-fill meter-warn"
+	}
+	return "meter-fill"
+}
+
+func meterWidth(share float64) string {
+	switch {
+	case share <= 0:
+		return "0"
+	case share >= 1:
+		return "100"
+	}
+	return coord(share * 100)
+}
+
+templ Meter(p MeterProps) {
+	<div class="meter">
+		<div class="meter-head">
+			<span class="meter-label">{ p.Label }</span>
+			<span class="flex items-baseline gap-2">
+				if p.Share >= 0.9 {
+					@Badge("Nearly full", ToneDanger)
+				} else if p.Share >= 0.75 {
+					@Badge("High", ToneWarn)
+				}
+				<span class="meter-value">{ p.Value }</span>
+			</span>
+		</div>
+		if p.Share >= 0 {
+			<svg class="meter-bar" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">
+				<rect class="meter-track" x="0" y="0" width="100" height="4"></rect>
+				<rect class={ meterTone(p.Share) } x="0" y="0" width={ meterWidth(p.Share) } height="4"></rect>
+			</svg>
+		}
+		if p.Detail != "" {
+			<p class="meter-detail">{ p.Detail }</p>
+		}
+	</div>
+}
