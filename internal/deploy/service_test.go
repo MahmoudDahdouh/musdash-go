@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -984,10 +985,12 @@ func lastLines(s string, n int) string {
 // repository: one service built from the checkout, with a file of the
 // checkout mounted.
 type gitStack struct {
-	project  string
-	checkout string
-	links    map[string]bool // repository paths that are symbolic links
-	compose  string
+	project   string
+	checkout  string          // the directory of the latest clone
+	checkouts []string        // every directory cloned into, by name
+	links     map[string]bool // repository paths that are symbolic links
+	compose   string
+	failUp    bool
 }
 
 const gitComposeFile = `services:
@@ -1007,10 +1010,15 @@ func (g *gitStack) handle(e *env) func(line string, c runner.Cmd) (string, error
 		case strings.HasPrefix(line, "id -"):
 			return "1000\n", nil
 		case strings.HasPrefix(line, "git clone"):
-			// Into whichever of the two directories this deployment uses.
+			// Into a directory of this deployment's own.
 			g.checkout = line[strings.LastIndex(line, " ")+1:]
+			g.checkouts = append(g.checkouts, g.checkout[strings.LastIndex(g.checkout, "/")+1:])
 			e.fake.PutFile(g.checkout+"/deploy/compose.yaml", g.compose)
 			return "", nil
+		case strings.HasPrefix(line, "ls -1 -- "):
+			return strings.Join(g.checkouts, "\n") + "\ncompose.resolved.json\nsandbox.env\n", nil
+		case strings.Contains(line, " up --detach") && g.failUp:
+			return "", runnertest.Exit("docker", 1, "container web is unhealthy")
 		case strings.Contains(line, "rev-parse HEAD"):
 			return "0123456789abcdef0123456789abcdef01234567\n", nil
 		case strings.Contains(line, "ls-tree HEAD -- "):
@@ -1044,7 +1052,7 @@ func TestDeployServiceFromGit(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := e.cfg.AppDir(s.ID)
-	g := &gitStack{project: ServiceProject(s.ID), checkout: dir + "/src-a", links: map[string]bool{}, compose: gitComposeFile}
+	g := &gitStack{project: ServiceProject(s.ID), links: map[string]bool{}, compose: gitComposeFile}
 	e.fake.Handle = g.handle(e)
 
 	got := e.deployService(s, 10*time.Second)
@@ -1052,12 +1060,14 @@ func TestDeployServiceFromGit(t *testing.T) {
 		t.Fatalf("%+v\n%s", got, e.serviceLog(s))
 	}
 	// What the repository held is what the service now shows.
-	if got.Compose != gitComposeFile || got.Commit != "0123456789abcdef0123456789abcdef01234567" || got.RepoName != "acme/stack" || got.Checkout != "a" {
-		t.Fatalf("compose %q, commit %q, repository %q, checkout %q", got.Compose, got.Commit, got.RepoName, got.Checkout)
+	first := g.checkout
+	if got.Compose != gitComposeFile || got.Commit != "0123456789abcdef0123456789abcdef01234567" || got.RepoName != "acme/stack" ||
+		!strings.HasPrefix(first, dir+"/src-") || got.Checkout != path.Base(first) {
+		t.Fatalf("compose %q, commit %q, repository %q, checkout %q (cloned into %s)", got.Compose, got.Commit, got.RepoName, got.Checkout, first)
 	}
 	all := "\n" + strings.Join(e.fake.Calls(), "\n") + "\n"
 	order := []string{
-		"rm-all " + dir + "/src-a", // a fresh checkout every time
+		"rm-all " + first, // nothing is there before the clone
 		"git clone --depth 1 --single-branch --no-tags --branch main -- https://github.com/acme/stack " + g.checkout,
 		"ls-tree HEAD -- deploy/compose.yaml",
 		"--mount type=bind,source=" + g.checkout + ",target=" + g.checkout + ",readonly",
@@ -1105,30 +1115,76 @@ func TestDeployServiceFromGit(t *testing.T) {
 	g.links["deploy/conf"] = true
 	before := len(e.fake.Calls())
 	got = e.deployService(got, 10*time.Second)
-	if !strings.Contains(got.LastError, "deploy/conf is a symbolic link") || got.Checkout != "a" {
+	if !strings.Contains(got.LastError, "deploy/conf is a symbolic link") || got.Checkout != path.Base(first) {
 		t.Fatalf("a linked mount source: %q (checkout %q)", got.LastError, got.Checkout)
 	}
 	for _, c := range e.fake.Calls()[before:] {
 		if strings.Contains(c, " build") || strings.Contains(c, " up --detach") {
 			t.Fatalf("something ran for a stack with a linked mount: %s", c)
 		}
-		if c == "rm-all "+dir+"/src-a" {
+		if c == "rm-all "+first {
 			t.Fatal("a failed redeployment removed the checkout the running stack has mounted")
 		}
 	}
-	if !strings.HasSuffix(g.checkout, "/src-b") {
-		t.Fatalf("the redeployment was cloned into %s", g.checkout)
+	second := g.checkout
+	if second == first {
+		t.Fatal("the redeployment was cloned over the checkout the running stack has mounted")
 	}
-	// A redeployment that works moves the stack to the other directory and
-	// removes the one it left.
+	// A redeployment whose stack does not come up may have replaced some
+	// containers and not others. Neither its checkout nor the ones before
+	// it are touched, by it or by the attempt after it.
 	g.links = map[string]bool{}
-	before = len(e.fake.Calls())
-	if got = e.deployService(got, 10*time.Second); got.Status != db.AppRunning || got.Checkout != "b" || got.LastError != "" {
+	g.failUp = true
+	if got = e.deployService(got, 10*time.Second); !strings.Contains(got.LastError, "did not come up") {
 		t.Fatalf("%+v", got)
 	}
-	if after := strings.Join(e.fake.Calls()[before:], "\n"); !strings.Contains(after, "rm-all "+dir+"/src-a") {
-		t.Fatal("the checkout the stack no longer uses was kept")
+	third := g.checkout
+	before = len(e.fake.Calls())
+	e.deployService(got, 10*time.Second)
+	for _, c := range e.fake.Calls()[before:] {
+		for _, old := range []string{first, second, third} {
+			if c == "rm-all "+old {
+				t.Fatalf("a checkout that containers may still have mounted was removed after a failed start: %s", c)
+			}
+		}
 	}
+	// A redeployment that works moves the stack to its own checkout and
+	// removes all the others.
+	g.failUp = false
+	before = len(e.fake.Calls())
+	if got = e.deployService(got, 10*time.Second); got.Status != db.AppRunning || got.Checkout != path.Base(g.checkout) || got.LastError != "" {
+		t.Fatalf("%+v", got)
+	}
+	after := strings.Join(e.fake.Calls()[before:], "\n")
+	for _, old := range []string{first, second, third} {
+		if !strings.Contains(after, "rm-all "+old) {
+			t.Fatalf("an old checkout was kept: %s", old)
+		}
+	}
+	if strings.Count(after, "rm-all "+g.checkout) != 1 || strings.Contains(after, "rm-all "+dir+"/compose.resolved.json") {
+		t.Fatal("the clean-up removed the checkout in use, or something that is not a checkout")
+	}
+	// A path with characters git reads as more than a name is refused
+	// before git is asked about it.
+	g.compose = strings.Replace(gitComposeFile, "./conf/site.conf", "./:(top)conf", 1)
+	odd := g.handle(e)
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		if strings.Contains(line, "config --format json") && !strings.Contains(line, "--no-interpolate") {
+			out, err := odd(line, c)
+			return strings.Replace(out, "/deploy/conf/site.conf", "/deploy/:(top)conf", 1), err
+		}
+		return odd(line, c)
+	}
+	if got = e.deployService(got, 10*time.Second); !strings.Contains(got.LastError, `names the path "deploy/:(top)conf"`) {
+		t.Fatalf("a path with pathspec magic: %q", got.LastError)
+	}
+	for _, c := range e.fake.Calls() {
+		if strings.Contains(c, "ls-tree") && strings.Contains(c, ":(top)") {
+			t.Fatalf("git was asked about a path it reads as magic: %s", c)
+		}
+	}
+	g.compose = gitComposeFile
+	e.fake.Handle = g.handle(e)
 	g.links = map[string]bool{"deploy/conf": true}
 	// So is a Compose file that is itself a link.
 	g.links = map[string]bool{"deploy/compose.yaml": true}
@@ -1243,10 +1299,13 @@ func TestGitServiceWithDocker(t *testing.T) {
 	os.WriteFile(filepath.Join(repo, "index.html"), []byte("built: two\n"), 0o644)
 	os.WriteFile(filepath.Join(repo, "extra.html"), []byte("mounted: two\n"), 0o644)
 	commit("second")
-	first := got.Commit
+	first, firstCheckout := got.Commit, got.Checkout
 	got = e.deployService(got, 10*time.Minute)
-	if got.Status != db.AppRunning || got.LastError != "" || got.Commit == first || got.Checkout != "b" {
+	if got.Status != db.AppRunning || got.LastError != "" || got.Commit == first || got.Checkout == firstCheckout || got.Checkout == "" {
 		t.Fatalf("%s %s (commit %s, checkout %s)\n%s", got.Status, got.LastError, got.Commit, got.Checkout, e.serviceLog(s))
+	}
+	if left, _ := filepath.Glob(filepath.Join(e.cfg.AppDir(s.ID), "src-*")); len(left) != 1 || filepath.Base(left[0]) != got.Checkout {
+		t.Fatalf("checkouts on disk after a redeployment: %v, want only %s", left, got.Checkout)
 	}
 	if body := fetch("/"); !strings.Contains(body, "built: two") {
 		t.Fatalf("after the second commit the image serves %q\n%s", body, e.serviceLog(s))

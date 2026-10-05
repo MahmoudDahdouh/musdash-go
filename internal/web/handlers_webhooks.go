@@ -42,8 +42,20 @@ func (s *Server) readSigned(w http.ResponseWriter, r *http.Request, secret []byt
 	case <-r.Context().Done():
 		return source.Push{}, false
 	}
-	return source.ReadPush(http.MaxBytesReader(w, r.Body, maxWebhookBytes), secret, r.Header.Get("X-Hub-Signature-256"))
+	body := http.MaxBytesReader(w, r.Body, maxWebhookBytes)
+	if len(secret) == 0 {
+		// Nothing can verify against a key nobody knows, but the body is
+		// read and hashed all the same: otherwise how long a large request
+		// takes would tell an id that has a secret from one that has none
+		// or does not exist.
+		source.ReadPush(body, hookDummyKey, r.Header.Get("X-Hub-Signature-256"))
+		return source.Push{}, false
+	}
+	return source.ReadPush(body, secret, r.Header.Get("X-Hub-Signature-256"))
 }
+
+// hookDummyKey stands in for the secret of a resource that has none.
+var hookDummyKey = secret.RandomBytes(32)
 
 // deliveryID returns the delivery id of a webhook request, or "" when it
 // carries none that can be recorded.

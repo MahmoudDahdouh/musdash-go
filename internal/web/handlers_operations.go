@@ -14,6 +14,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/backup"
 	"github.com/MahmoudDahdouh/musdash-go/internal/cron"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
 	"github.com/MahmoudDahdouh/musdash-go/internal/ops"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
@@ -572,7 +573,7 @@ func (s *Server) checkStorage(ctx context.Context, teamID string, m db.S3Storage
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	// A directory of its own for the keys file, gone afterwards.
-	dir := path.Join(s.Cfg.WorkDir(), "storage-"+secret.RandomID())
+	dir := path.Join(deploy.PathsOn(s.Cfg, rn).WorkDir(), "storage-"+secret.RandomID())
 	if err := rn.MkdirAll(ctx, dir, 0o700); err != nil {
 		return err
 	}

@@ -53,7 +53,7 @@ type Service struct {
 	WebhookSecret   string // sealed
 	DeployTokenHash string
 	Commit          string // what the running stack was deployed from
-	Checkout        string // which checkout directory it uses: "a", "b" or ""
+	Checkout        string // the checkout directory the running stack uses; "" before the first deployment
 }
 
 // FromGit reports whether the service's Compose file comes from a
@@ -242,6 +242,15 @@ func (d *DB) ServiceDeployWaiting(ctx context.Context, id string) (bool, error) 
 	var n int
 	err := d.QueryRowContext(ctx, `SELECT count(*) FROM jobs WHERE kind = 'service' AND status = 'queued' AND json_extract(payload, '$.id') = ?`, id).Scan(&n)
 	return n > 0, err
+}
+
+// UpdateServiceSettings stores what a person may change about a Git
+// service on its Compose tab: its variables and whether it joins the
+// environment's network. The file's text is the repository's and is left
+// alone.
+func (d *DB) UpdateServiceSettings(ctx context.Context, teamID string, m Service) error {
+	return affected(d.ExecContext(ctx, `UPDATE services SET variables = ?, connect_env = ?, updated_at = ? WHERE id = ?`+teamServices,
+		m.Variables, m.ConnectEnv, now(), m.ID, teamID))
 }
 
 // SetServiceVariables stores the sealed variables, for a deployment that

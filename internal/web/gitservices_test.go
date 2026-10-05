@@ -86,6 +86,26 @@ func TestServiceFromGitPages(t *testing.T) {
 		t.Error("the file of a stack from a repository can be edited on the page")
 	}
 
+	// A GitHub App or deploy key of another team cannot be borrowed, on
+	// creation or afterwards.
+	a.db.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('otherteam', 'Other', 1)`)
+	theirKey, err := a.db.CreateSSHKey(ctx, "otherteam", "theirs", "ssh-ed25519 AAAA", a.seal("private"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	borrowed := svc
+	borrowed.SSHKeyID, borrowed.RepoURL = theirKey.ID, "git@github.com:acme/stack.git"
+	if err := a.db.UpdateServiceSource(ctx, firstTeam(t, a), borrowed); err != db.ErrNotFound {
+		t.Fatalf("saving a source with another team's key: %v", err)
+	}
+	borrowed.Name = "borrowed"
+	if _, err := a.db.CreateService(ctx, firstTeam(t, a), borrowed); err != db.ErrNotFound {
+		t.Fatalf("creating a service with another team's key: %v", err)
+	}
+	if got, _ := a.db.ServiceByID(ctx, id); got.SSHKeyID != "" {
+		t.Fatal("another team's key was attached to the service")
+	}
+
 	// The file's text cannot be put in from the page; variables can.
 	res, _ = a.post(base+"/compose", base+"/compose", url.Values{"compose": {"services: {evil: {image: x, privileged: true}}"}, "variables": {"TOKEN=abc"}, "connect_env": {"1"}})
 	wantRedirect(t, res, base+"/compose")

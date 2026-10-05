@@ -263,8 +263,8 @@ func sandboxUser(ctx context.Context, r runner.Runner) string {
 
 // composeCmd is a `docker compose` command for a service's project, run on
 // the server against the resolved file.
-func (d *Deployer) composeCmd(id string, args ...string) runner.Cmd {
-	dir := d.Cfg.AppDir(id)
+func (d *Deployer) composeCmd(r runner.Runner, id string, args ...string) runner.Cmd {
+	dir := d.at(r).AppDir(id)
 	full := append([]string{"compose", "--project-name", ServiceProject(id), "--project-directory", dir,
 		"--file", filepath.Join(dir, compose.ResolvedFile), "--ansi", "never"}, args...)
 	return runner.Cmd{Name: "docker", Args: full, Dir: dir}
@@ -289,7 +289,7 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		return err
 	}
 	dk := docker.Client{R: r}
-	dir := d.Cfg.AppDir(s.ID)
+	dir := d.at(r).AppDir(s.ID)
 	project := ServiceProject(s.ID)
 
 	if err := r.MkdirAll(ctx, dir, 0o700); err != nil {
@@ -370,14 +370,18 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 	if err != nil {
 		return fmt.Errorf("the Compose file could not be read: %w", err)
 	}
-	if err := resolved.Validate(compose.ValidateOptions{Dir: dir, BuildDir: checkout, Protected: []string{d.Cfg.DataDir}, ValidPort: ValidPublicPort}); err != nil {
+	if err := resolved.Validate(compose.ValidateOptions{Dir: dir, BuildDir: checkout, Protected: []string{d.at(r).DataDir}, ValidPort: ValidPublicPort}); err != nil {
 		return fmt.Errorf("the Compose file asks for things a service may not do:\n%w", err)
 	}
 	if checkout != "" {
 		// What the stack mounts or builds from the checkout must be the
 		// repository's own files, not links out of it.
 		for _, p := range resolved.CheckoutPaths(checkout) {
-			if err := d.refuseSymlinks(ctx, r, checkout, strings.TrimPrefix(strings.TrimPrefix(p, checkout), "/")); err != nil {
+			rel := strings.TrimPrefix(strings.TrimPrefix(p, checkout), "/")
+			if !source.ValidRelPath(rel) {
+				return fmt.Errorf("the Compose file names the path %q in the repository; use only letters, numbers, dots, hyphens, underscores and slashes in paths it mounts or builds from", rel)
+			}
+			if err := d.refuseSymlinks(ctx, r, checkout, rel); err != nil {
 				return err
 			}
 		}
@@ -465,14 +469,14 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 
 		if attempt == 1 {
 			log.Step("Pulling images")
-			pull := d.composeCmd(s.ID, "pull", "--ignore-buildable")
+			pull := d.composeCmd(r, s.ID, "pull", "--ignore-buildable")
 			pull.Stdout, pull.Stderr = log, log
 			if err := r.Run(ctx, pull); err != nil {
 				return fmt.Errorf("pull the images: %w", err)
 			}
 			if doc.Builds() {
 				log.Step("Building images")
-				build := d.composeCmd(s.ID, "build")
+				build := d.composeCmd(r, s.ID, "build")
 				build.Stdout, build.Stderr = log, log
 				buildCtx, cancel := context.WithTimeout(ctx, d.buildTimeout)
 				err := r.Run(buildCtx, build)
@@ -488,7 +492,7 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 
 		log.Step("Starting %s", strings.Join(members, ", "))
 		upOut := &tail{limit: 4096}
-		up := d.composeCmd(s.ID, "up", "--detach", "--remove-orphans", "--wait", "--wait-timeout", strconv.Itoa(int(d.serviceStartTimeout.Seconds())))
+		up := d.composeCmd(r, s.ID, "up", "--detach", "--remove-orphans", "--wait", "--wait-timeout", strconv.Itoa(int(d.serviceStartTimeout.Seconds())))
 		up.Stdout, up.Stderr = teeWriter{log, upOut}, teeWriter{log, upOut}
 		err = r.Run(ctx, up)
 		if err == nil {
@@ -504,7 +508,7 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		// What the containers said is what explains a stack that did not
 		// come up.
 		logs := &tail{limit: 2000}
-		show := d.composeCmd(s.ID, "logs", "--tail", "25", "--no-color")
+		show := d.composeCmd(r, s.ID, "logs", "--tail", "25", "--no-color")
 		show.Stdout, show.Stderr = logs, logs
 		logCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
 		r.Run(logCtx, show)
@@ -513,17 +517,13 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 	}
 
 	if checkout != "" {
-		// The new stack runs from the new checkout; the one before it is
-		// no longer mounted anywhere.
-		previous := s.Checkout
-		if err := d.DB.SetServiceDeployed(ctx, s.ID, commit, checkoutSlot(checkout)); err != nil {
+		// The new stack runs from the new checkout. The ones before it,
+		// also those of attempts that failed, are no longer mounted by
+		// anything.
+		if err := d.DB.SetServiceDeployed(ctx, s.ID, commit, path.Base(checkout)); err != nil {
 			return err
 		}
-		if previous != "" {
-			if err := r.RemoveAll(ctx, checkoutDir(dir, previous)); err != nil {
-				d.Log.Warn("remove a service's previous checkout", "service", s.ID, "err", err)
-			}
-		}
+		d.pruneCheckouts(ctx, r, dir, path.Base(checkout))
 	}
 	if err := d.DB.SetServiceState(ctx, s.ID, db.AppRunning, ""); err != nil {
 		return err
@@ -539,20 +539,37 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 // maxComposeFile bounds a Compose file read from a repository.
 const maxComposeFile = 512 << 10
 
-// checkoutDir is one of a Git service's two checkout directories.
-func checkoutDir(serviceDir, slot string) string { return path.Join(serviceDir, "src-"+slot) }
+// checkoutPrefix starts the name of a Git service's checkout directories.
+const checkoutPrefix = "src-"
 
-// checkoutSlot is the slot of a checkout directory.
-func checkoutSlot(checkout string) string { return checkout[len(checkout)-1:] }
+// pruneCheckouts removes every checkout of a service except the one named.
+// It is called once a stack is up from that one, when no container can
+// still have a file of another mounted.
+func (d *Deployer) pruneCheckouts(ctx context.Context, r runner.Runner, serviceDir, keep string) {
+	out, err := r.Output(ctx, runner.Cmd{Name: "ls", Args: []string{"-1", "--", serviceDir}})
+	if err != nil {
+		d.Log.Warn("list a service's checkouts", "dir", serviceDir, "err", err)
+		return
+	}
+	for _, name := range strings.Fields(string(out)) {
+		if !strings.HasPrefix(name, checkoutPrefix) || name == keep || !docker.ValidName(name) {
+			continue
+		}
+		if err := r.RemoveAll(ctx, path.Join(serviceDir, name)); err != nil {
+			d.Log.Warn("remove an old checkout", "dir", path.Join(serviceDir, name), "err", err)
+		}
+	}
+}
 
 // checkoutService fetches a Git service's repository and returns the
 // checkout, its commit, and the service with the repository's Compose text.
 //
-// A stack may mount files of its checkout, so the checkout has to stay for
-// as long as the stack runs from it. A service therefore has two
-// directories and each deployment clones into the one the running stack
-// does not use: the running containers keep their files until they are
-// replaced, and after a deployment that failed they still have them.
+// A stack may mount files of its checkout, so a checkout has to stay for as
+// long as anything runs from it. Every deployment therefore clones into a
+// directory of its own: the running containers keep their files until they
+// are replaced, and after a deployment that failed, whichever containers
+// it did or did not replace still have theirs. Old checkouts go once a
+// stack is up from a newer one.
 func (d *Deployer) checkoutService(ctx context.Context, r runner.Runner, s db.Service, log *Log) (string, string, db.Service, error) {
 	fail := func(err error) (string, string, db.Service, error) { return "", "", s, err }
 	repo, err := source.ParseRepo(s.RepoURL)
@@ -565,13 +582,9 @@ func (d *Deployer) checkoutService(ctx context.Context, r runner.Runner, s db.Se
 	if s.ComposePath == "" || !source.ValidRelPath(s.ComposePath) {
 		return fail(fmt.Errorf("the Compose file path %q must be a path inside the repository", s.ComposePath))
 	}
-	slot := "a"
-	if s.Checkout == "a" {
-		slot = "b"
-	}
-	checkout := checkoutDir(d.Cfg.AppDir(s.ID), slot)
+	checkout := path.Join(d.at(r).AppDir(s.ID), checkoutPrefix+secret.RandomID())
 	// For the deploy key, away from anything a container can be given.
-	keyDir := path.Join(d.Cfg.WorkDir(), "service-"+s.ID)
+	keyDir := path.Join(d.at(r).WorkDir(), "service-"+s.ID)
 	for _, p := range []string{checkout, keyDir} {
 		if err := r.RemoveAll(ctx, p); err != nil {
 			return fail(err)
@@ -665,13 +678,13 @@ func (d *Deployer) StopService(ctx context.Context, id string) error {
 // composeDown runs a Compose command that winds a project down. A project
 // that was never started has no resolved file; then there is nothing to do.
 func (d *Deployer) composeDown(ctx context.Context, r runner.Runner, s db.Service, args ...string) error {
-	file, err := r.ReadFile(ctx, filepath.Join(d.Cfg.AppDir(s.ID), compose.ResolvedFile))
+	file, err := r.ReadFile(ctx, filepath.Join(d.at(r).AppDir(s.ID), compose.ResolvedFile))
 	if err != nil {
 		return nil
 	}
 	file.Close()
 	out := &tail{limit: 1500}
-	cmd := d.composeCmd(s.ID, args...)
+	cmd := d.composeCmd(r, s.ID, args...)
 	cmd.Stdout, cmd.Stderr = out, out
 	if err := r.Run(ctx, cmd); err != nil {
 		return fmt.Errorf("docker compose %s: %w %s", args[0], err, out.String())
@@ -723,7 +736,7 @@ func (d *Deployer) DestroyService(ctx context.Context, id string, deleteData boo
 	}
 	// Directories a container created inside the stack's directory belong
 	// to root and may not be removable; what is left is only files.
-	if err := r.RemoveAll(ctx, d.Cfg.AppDir(s.ID)); err != nil {
+	if err := r.RemoveAll(ctx, d.at(r).AppDir(s.ID)); err != nil {
 		d.Log.Warn("remove a deleted service's directory", "service", s.ID, "err", err)
 	}
 	if err := d.DB.DeleteService(ctx, s.ID); err != nil {
@@ -738,7 +751,7 @@ func (d *Deployer) DestroyService(ctx context.Context, id string, deleteData boo
 // ServiceLogs writes the output of a stack's containers to w: the last
 // tail lines of each, then what follows, until ctx ends or they all stop.
 func (d *Deployer) ServiceLogs(ctx context.Context, r runner.Runner, id string, tail int, w io.Writer) error {
-	cmd := d.composeCmd(id, "logs", "--follow", "--no-color", "--tail", strconv.Itoa(tail))
+	cmd := d.composeCmd(r, id, "logs", "--follow", "--no-color", "--tail", strconv.Itoa(tail))
 	cmd.Stdout, cmd.Stderr = w, w
 	return r.Run(ctx, cmd)
 }

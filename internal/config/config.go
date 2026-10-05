@@ -22,6 +22,16 @@ type Config struct {
 // DefaultDataDir is used when neither --data nor MUSDASH_DATA is set.
 const DefaultDataDir = "/var/lib/musdash"
 
+// On returns the same layout under another data directory: that of a
+// remote server, where the files a deployment writes through its Runner
+// live. An empty directory means the server is this machine.
+func (c Config) On(dataDir string) Config {
+	if dataDir != "" {
+		c.DataDir = dataDir
+	}
+	return c
+}
+
 // EnvOr returns the environment variable's value, or def when it is unset.
 func EnvOr(name, def string) string {
 	if v, ok := os.LookupEnv(name); ok && v != "" {

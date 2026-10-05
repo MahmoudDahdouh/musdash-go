@@ -13,9 +13,9 @@ ALTER TABLE services ADD COLUMN webhook_secret TEXT NOT NULL DEFAULT ''; -- seal
 ALTER TABLE services ADD COLUMN deploy_token_hash TEXT NOT NULL DEFAULT '';
 -- The commit the running stack was deployed from.
 ALTER TABLE services ADD COLUMN commit_sha TEXT NOT NULL DEFAULT '';
--- Which of the service's two checkout directories the running stack uses:
--- 'a', 'b', or '' before the first deployment. A deployment clones into the
--- other one, so the files the running containers have mounted stay where
--- they are until the new stack is up.
+-- The checkout directory the running stack uses, '' before the first
+-- deployment. Every deployment clones into a directory of its own, so the
+-- files the running containers have mounted stay where they are until the
+-- new stack is up.
 ALTER TABLE services ADD COLUMN checkout TEXT NOT NULL DEFAULT '';
 CREATE INDEX services_push ON services(repo_name, branch) WHERE repo_name <> '';

@@ -613,6 +613,24 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if svc.FromGit() {
+		// The file and what follows from it, the endpoints and generated
+		// values, are a deployment's business: it reads the repository.
+		// Writing back the text this page was loaded with could undo what
+		// a deployment running right now has just recorded.
+		if err := s.DB.UpdateServiceSettings(ctx, sessionFrom(r).TeamID, svc); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if r.PostFormValue("deploy") == "1" {
+			s.queueServiceDeploy(w, r, svc, true)
+			redirect(w, r, "/services/"+svc.ID)
+			return
+		}
+		setFlash(w, r, ui.ToneOK, "Saved. Deploy to apply it.")
+		redirect(w, r, "/services/"+svc.ID+"/compose")
+		return
+	}
 	if err := s.DB.UpdateServiceCompose(ctx, sessionFrom(r).TeamID, svc); err != nil {
 		s.fail(w, r, err)
 		return

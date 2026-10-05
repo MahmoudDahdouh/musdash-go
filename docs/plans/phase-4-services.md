@@ -125,12 +125,23 @@ func (d *Deployer) DestroyService(ctx, id string, deleteData bool) error
 - MinIO stopped publishing its own image; the template uses Chainguard's build of MinIO's source (`cgr.dev/chainguard/minio`), which takes the same command and variables.
 - Idle memory on Linux after this phase: server 23.6 MB, proxy 17.6 MB (phase 3: 23.5 and 17.2).
 - Task 5, stacks from a Git repository (migration `0010_service_git.sql`): `TestGitServiceWithDocker` clones a real repository, builds its Dockerfile with `docker compose build`, serves the built page and a file mounted from the checkout, shows that the container cannot write to that file, redeploys from a second commit, refuses a mounted path that is a symlink out of the repository while the stack from before keeps serving, and deletes the stack with its image.
-  - A service has two checkout directories and alternates between them. The first version cloned into one directory every time; on a redeployment that pulled the mounted files out from under the running containers, and a failed redeployment would have left them without. Found by the real-Docker test.
+  - Every deployment clones into a directory of its own, and the others are removed once a stack is up from the new one. The first version cloned into one directory every time; on a redeployment that pulled the mounted files out from under the running containers. Found by the real-Docker test.
   - Files of the checkout are mounted read-only, and every checkout path the stack reads (mounts, build contexts, Dockerfiles, secret and config files) is checked for symlinks in the repository. A container that could write to the checkout could otherwise leave a link for another mount to follow out of it.
   - The commit and checkout are recorded when the stack is running, not when it was cloned; the Compose text is recorded as read, so a deployment that fails can still be explained.
   - Only the Compose file itself is scanned for `SERVICE_…` variables.
 
-### Found by the independent review, and fixed
+### Found by the independent review of task 5, and fixed
+
+1. **The symlink check could be made to look at another file.** git reads a path that starts with `:` as pathspec "magic", so for a link named `:(top)plain.txt` it answered about `plain.txt`. git is now told to take paths literally (`GIT_LITERAL_PATHSPECS`), and a path of the checkout that the Compose file mounts or builds from must pass the same validation as the Compose file's own path. `TestRefuseSymlinksAsksAboutTheExactPath` runs real git against such names.
+2. **A checkout could be removed under running containers** when a stack failed to come up after some containers had been replaced: the next attempt reused the directory. Every deployment now has its own, and old ones are removed only after a successful start.
+3. **A path the repository does not have was created by Docker, as root, inside the checkout.** It is an error now.
+4. **A build argument without a value was read from musdash's environment.** Dropped like such environment variables.
+5. **Saving the Compose tab of a Git service wrote back the file's text the page was loaded with**, which could undo what a running deployment had just recorded. The tab saves variables and the network switch only.
+6. **How long a large webhook request took told an id with a secret from one without.** The body is hashed either way.
+
+Left as it is: a stack from Git holds its server's build lock until it is up, at most the ten minutes a stack gets to start. Releasing it after the build would need a second kind of lock for one job.
+
+### Found by the independent review of tasks 1 to 4, and fixed
 
 1. **The stack's own directory could be mounted.** A container given `.:/s` could overwrite `compose.resolved.json` between the check and `docker compose up`, or leave a symlink that a later bind mount followed to anywhere on the server. Bind mounts, secrets and configs inside that directory are now refused.
 2. **Bind mounts reached directories the server acts on as root** (`/var/spool/cron`, `/var/lib/cloud`, `/var/backups`, `/var/log`). The deny-list now covers `/var/lib`, `/var/spool`, `/var/backups` and `/var/log`. It remains a deny-list, as decided in phase 1: mounting a directory of the server is for people trusted with the server. `/home` and `/opt` are still allowed. Phase 8 (roles) should reserve bind mounts for administrators.

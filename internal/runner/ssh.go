@@ -39,6 +39,8 @@ type SSHConfig struct {
 	// WorkDir is a private directory on the server for the short-lived
 	// files that carry a command's environment.
 	WorkDir string
+	// DataDir is where musdash keeps its files on this server.
+	DataDir string
 	// Timeout bounds connecting and signing in. Zero means 15 seconds.
 	Timeout time.Duration
 }
@@ -100,6 +102,9 @@ func DialSSH(ctx context.Context, cfg SSHConfig) (*SSHRunner, error) {
 	conn.SetDeadline(time.Time{})
 	return &SSHRunner{cfg: cfg, client: ssh.NewClient(sc, chans, reqs)}, nil
 }
+
+// DataDir is where musdash keeps its files on this server.
+func (r *SSHRunner) DataDir() string { return r.cfg.DataDir }
 
 // Alive reports whether the connection still answers.
 func (r *SSHRunner) Alive() bool {

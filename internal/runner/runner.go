@@ -48,6 +48,22 @@ type Runner interface {
 	Close() error
 }
 
+// Located is implemented by a Runner whose server keeps musdash's files
+// somewhere other than the control plane's own data directory: a remote
+// server. Paths handed to such a Runner are built under DataDir.
+type Located interface {
+	DataDir() string
+}
+
+// DataDirOf returns the data directory of r's server, or "" when it is the
+// control plane's own.
+func DataDirOf(r Runner) string {
+	if l, ok := r.(Located); ok {
+		return l.DataDir()
+	}
+	return ""
+}
+
 // OutputLimit caps what Output will hold in memory.
 const OutputLimit = 1 << 20
 

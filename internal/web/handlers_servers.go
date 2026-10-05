@@ -42,7 +42,7 @@ func (s *Server) serverInfo(ctx context.Context, server db.Server) pages.ServerI
 
 // proxyRunning reports whether the proxy's pid file names a live process.
 func (s *Server) proxyRunning(ctx context.Context, r runner.Runner) bool {
-	f, err := r.ReadFile(ctx, s.Cfg.ProxyPIDPath())
+	f, err := r.ReadFile(ctx, deploy.PathsOn(s.Cfg, r).ProxyPIDPath())
 	if err != nil {
 		return false
 	}

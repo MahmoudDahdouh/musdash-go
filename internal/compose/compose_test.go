@@ -333,6 +333,48 @@ func TestApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Files of a stack's checkout are mounted read-only, every one of them
+	// and in whatever form it was written; what lies elsewhere is not
+	// touched. A path that is not there is not created.
+	ro := parse(t, `{"name":"p","services":{"a":{"image":"x","build":{"context":"/data/apps/s/src-1","args":{"KEPT":"1","FROM_SERVER":null}},"volumes":[
+		{"type":"bind","source":"/data/apps/s/src-1","target":"/all","bind":{"create_host_path":true}},
+		{"type":"bind","source":"/data/apps/s/src-1/conf/site.conf","target":"/c"},
+		{"type":"bind","source":"/data/apps/s/src-1/.git","target":"/g","read_only":false},
+		{"type":"bind","source":"/srv/shared","target":"/s","bind":{"create_host_path":true}},
+		{"type":"volume","source":"data","target":"/d"}]}}}`)
+	ro.Apply(Override{ServiceID: "s", ReadOnlyUnder: "/data/apps/s/src-1"})
+	roRaw, _ := ro.Marshal()
+	var roDoc struct {
+		Services map[string]struct {
+			Build   struct{ Args map[string]any }
+			Volumes []struct {
+				Source   string
+				ReadOnly bool `json:"read_only"`
+				Bind     struct {
+					Create *bool `json:"create_host_path"`
+				}
+			}
+		}
+	}
+	json.Unmarshal(roRaw, &roDoc)
+	for _, v := range roDoc.Services["a"].Volumes {
+		inCheckout := strings.HasPrefix(v.Source, "/data/apps/s/src-1")
+		if v.ReadOnly != inCheckout {
+			t.Errorf("%s: read_only=%v", v.Source, v.ReadOnly)
+		}
+		if inCheckout && (v.Bind.Create == nil || *v.Bind.Create) {
+			t.Errorf("%s: Docker may still create the path", v.Source)
+		}
+		if v.Source == "/srv/shared" && (v.Bind.Create == nil || !*v.Bind.Create) {
+			t.Errorf("a mount outside the checkout was changed")
+		}
+	}
+	// A build argument without a value would be read from musdash's own
+	// environment by the build.
+	if args := roDoc.Services["a"].Build.Args; len(args) != 1 || args["KEPT"] != "1" {
+		t.Errorf("build arguments after Apply: %v", args)
+	}
+
 	// A variable left without a value would be filled in from musdash's own
 	// environment when Compose starts the stack. An empty one is a value.
 	if s := string(raw); strings.Contains(s, "AWS_SECRET_ACCESS_KEY") || !strings.Contains(s, `"POSTGRES_DB"`) || !strings.Contains(s, `"EMPTY"`) {

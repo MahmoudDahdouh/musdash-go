@@ -693,3 +693,46 @@ func TestGitDeployWithDocker(t *testing.T) {
 	}
 	t.Logf("built and served two commits: %s then %s", first.CommitSHA[:12], second.CommitSHA[:12])
 }
+
+// git reads a path that starts with ":" as pathspec "magic" unless told
+// otherwise, and then answers about a different entry than the one asked
+// for. The symlink check must be asking about exactly the path it names.
+func TestRefuseSymlinksAsksAboutTheExactPath(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	e := newEnv(t)
+	repo := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init", "--quiet", "--initial-branch", "main")
+	os.WriteFile(filepath.Join(repo, "plain.txt"), []byte("a file\n"), 0o644)
+	os.MkdirAll(filepath.Join(repo, "dir"), 0o755)
+	os.WriteFile(filepath.Join(repo, "dir", "inner.txt"), []byte("a file\n"), 0o644)
+	for _, link := range []string{"link", ":link", ":(top)plain.txt", ":!plain.txt", "dir/:(glob)inner.txt"} {
+		if err := os.Symlink("/etc/hostname", filepath.Join(repo, link)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("add", "--all")
+	run("commit", "--quiet", "--message", "links")
+
+	ctx := context.Background()
+	local := runner.NewLocal()
+	for _, link := range []string{"link", ":link", ":(top)plain.txt", ":!plain.txt", "dir/:(glob)inner.txt"} {
+		if err := e.d.refuseSymlinks(ctx, local, repo, link); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+			t.Errorf("%q is a symbolic link in the repository and was let through: %v", link, err)
+		}
+	}
+	for _, file := range []string{"plain.txt", "dir/inner.txt", "dir", "not-there"} {
+		if err := e.d.refuseSymlinks(ctx, local, repo, file); err != nil {
+			t.Errorf("%q: %v", file, err)
+		}
+	}
+}

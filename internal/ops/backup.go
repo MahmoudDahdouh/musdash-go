@@ -10,6 +10,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/backup"
 	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
 	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
@@ -80,7 +81,7 @@ func (o *Ops) target(ctx context.Context, databaseID string) (target, error) {
 	if t.r, err = o.Runners.Runner(ctx, server); err != nil {
 		return t, err
 	}
-	t.dir = o.Cfg.DatabaseBackupDir(m.ID)
+	t.dir = deploy.PathsOn(o.Cfg, t.r).DatabaseBackupDir(m.ID)
 	return t, nil
 }
 
@@ -232,7 +233,7 @@ func (o *Ops) retain(ctx context.Context, t target) {
 // reached must not be what fills the server's disk. The record goes last
 // and stays while the copy could not be removed, so that it is tried again.
 func (o *Ops) remove(ctx context.Context, r runner.Runner, b db.Backup) error {
-	dir := o.Cfg.DatabaseBackupDir(b.DatabaseID)
+	dir := deploy.PathsOn(o.Cfg, r).DatabaseBackupDir(b.DatabaseID)
 	if b.File != "" {
 		if err := r.RemoveAll(ctx, path.Join(dir, b.File)); err != nil {
 			return err

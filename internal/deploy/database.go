@@ -157,7 +157,7 @@ func (d *Deployer) startDatabase(ctx context.Context, m db.Database) error {
 	if err != nil {
 		return err
 	}
-	dir := d.Cfg.AppDir(m.ID)
+	dir := d.at(r).AppDir(m.ID)
 	if err := r.MkdirAll(ctx, dir, 0o700); err != nil {
 		return err
 	}
@@ -347,7 +347,7 @@ func (d *Deployer) DestroyDatabase(ctx context.Context, id string, deleteData bo
 	if err != nil {
 		return err
 	}
-	if err := r.RemoveAll(ctx, d.Cfg.AppDir(m.ID)); err != nil {
+	if err := r.RemoveAll(ctx, d.at(r).AppDir(m.ID)); err != nil {
 		return err
 	}
 	if deleteData {
@@ -356,7 +356,7 @@ func (d *Deployer) DestroyDatabase(ctx context.Context, id string, deleteData bo
 		}
 		// Its backups on the server are its data too. Copies in a storage
 		// bucket are not touched: they are there to outlive the server.
-		if err := r.RemoveAll(ctx, d.Cfg.DatabaseBackupDir(m.ID)); err != nil {
+		if err := r.RemoveAll(ctx, d.at(r).DatabaseBackupDir(m.ID)); err != nil {
 			return fmt.Errorf("delete the backups: %w", err)
 		}
 	}

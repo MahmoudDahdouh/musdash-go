@@ -104,11 +104,11 @@ func (d *Deployer) SyncRoutes(ctx context.Context, server db.Server) error {
 	if err != nil {
 		return err
 	}
-	if err := r.MkdirAll(ctx, d.Cfg.ProxyDir(), 0o700); err != nil {
+	if err := r.MkdirAll(ctx, d.at(r).ProxyDir(), 0o700); err != nil {
 		return err
 	}
 	// 0644: the proxy may run as a different user than the control plane.
-	if err := r.WriteFile(ctx, d.Cfg.RoutesPath(), 0o644, bytes.NewReader(raw)); err != nil {
+	if err := r.WriteFile(ctx, d.at(r).RoutesPath(), 0o644, bytes.NewReader(raw)); err != nil {
 		return err
 	}
 	return d.signalProxy(ctx, r)
@@ -119,7 +119,7 @@ func (d *Deployer) SyncRoutes(ctx context.Context, server db.Server) error {
 // change immediate; when it cannot be delivered this waits out one poll
 // instead of failing.
 func (d *Deployer) signalProxy(ctx context.Context, r runner.Runner) error {
-	pidFile, err := r.ReadFile(ctx, d.Cfg.ProxyPIDPath())
+	pidFile, err := r.ReadFile(ctx, d.at(r).ProxyPIDPath())
 	if errors.Is(err, fs.ErrNotExist) {
 		return ErrProxyDown
 	}

@@ -35,7 +35,11 @@ func ImageRepository(appID string) string { return "musdash/" + appID }
 // gitEnv is the environment every git command runs with: never prompt, and
 // ignore whatever git configuration exists on the server.
 func gitEnv() []string {
-	return []string{"GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"}
+	return []string{"GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
+		// A path given to git is that path and nothing else. Without this
+		// a name starting with ":" is read as pathspec "magic", and a
+		// question about one file is answered for another.
+		"GIT_LITERAL_PATHSPECS=1"}
 }
 
 // cloneAccess works out the address to clone and how git authenticates.
@@ -99,7 +103,7 @@ func (d *Deployer) cloneAccess(ctx context.Context, r runner.Runner, app db.App,
 			"-o", "IdentitiesOnly=yes",
 			"-o", "BatchMode=yes",
 			"-o", "StrictHostKeyChecking=accept-new",
-			"-o", "UserKnownHostsFile="+path.Join(d.Cfg.DataDir, "known_hosts"),
+			"-o", "UserKnownHostsFile="+path.Join(d.at(r).DataDir, "known_hosts"),
 		))
 		return repo.URL, env, nil
 	}
@@ -166,7 +170,7 @@ func (d *Deployer) build(ctx context.Context, r runner.Runner, app db.App, dep d
 		}
 	}
 
-	workDir := path.Join(d.Cfg.WorkDir(), dep.ID)
+	workDir := path.Join(d.at(r).WorkDir(), dep.ID)
 	checkout := path.Join(workDir, "src")
 	if err := r.RemoveAll(ctx, workDir); err != nil {
 		return "", "", err

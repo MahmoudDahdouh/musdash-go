@@ -158,14 +158,14 @@ func (p Project) Apply(o Override) {
 		labels[docker.LabelKind] = "service"
 		labels[docker.LabelResource] = o.ServiceID
 
-		// A variable named without a value means "take it from where
-		// Compose runs". The sandbox has already filled in the ones the
-		// stack defines; any still empty would be read from musdash's own
-		// environment when the stack is started.
-		if env := asMap(svc["environment"]); env != nil {
-			for key, value := range env {
+		// A variable or build argument named without a value means "take
+		// it from where Compose runs". The sandbox has already filled in
+		// the ones the stack defines; any still empty would be read from
+		// musdash's own environment when the stack is built or started.
+		for _, vars := range []map[string]any{asMap(svc["environment"]), asMap(asMap(svc["build"])["args"])} {
+			for key, value := range vars {
 				if value == nil {
-					delete(env, key)
+					delete(vars, key)
 				}
 			}
 		}
@@ -177,6 +177,15 @@ func (p Project) Apply(o Override) {
 				mount := asMap(m)
 				if source, _ := mount["source"].(string); mount["type"] == "bind" && inside(source, o.ReadOnlyUnder) {
 					mount["read_only"] = true
+					// A path the repository does not have is an error, not
+					// a directory for Docker to create, as root, inside the
+					// checkout.
+					bind := asMap(mount["bind"])
+					if bind == nil {
+						bind = map[string]any{}
+						mount["bind"] = bind
+					}
+					bind["create_host_path"] = false
 				}
 			}
 		}

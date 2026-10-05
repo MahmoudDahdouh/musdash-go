@@ -122,6 +122,17 @@ func New(d *db.DB, box *secret.Box, q *jobs.Queue, r Runners, cfg *config.Config
 	}
 }
 
+// PathsOn is the data-directory layout on the server a Runner reaches. For
+// this machine it is cfg itself; a remote server has its own directory.
+// Every path given to a Runner comes from here. Files the control plane
+// writes for itself, such as deployment logs, come from cfg directly.
+func PathsOn(cfg *config.Config, r runner.Runner) config.Config {
+	return cfg.On(runner.DataDirOf(r))
+}
+
+// at is PathsOn for the deployer's own configuration.
+func (d *Deployer) at(r runner.Runner) config.Config { return PathsOn(d.Cfg, r) }
+
 // tell reports an event to whoever listens.
 func (d *Deployer) tell(environmentID string, e notify.Event) {
 	if d.Notify != nil {
@@ -500,7 +511,7 @@ func (d *Deployer) writeEnvFile(ctx context.Context, r runner.Runner, app db.App
 	if err != nil {
 		return "", err
 	}
-	dir := d.Cfg.AppDir(app.ID)
+	dir := d.at(r).AppDir(app.ID)
 	if err := r.MkdirAll(ctx, dir, 0o700); err != nil {
 		return "", err
 	}
@@ -526,7 +537,7 @@ func (d *Deployer) prepareMounts(ctx context.Context, r runner.Runner, app db.Ap
 		case db.StorageBind:
 			// Checked again at deploy time, with the data directory this
 			// install actually uses.
-			if err := docker.CheckBindSource(s.Source, d.Cfg.DataDir); err != nil {
+			if err := docker.CheckBindSource(s.Source, d.at(r).DataDir); err != nil {
 				return nil, err
 			}
 			mounts = append(mounts, docker.Mount{Kind: docker.MountBind, Source: s.Source, Target: s.Target})
@@ -535,7 +546,7 @@ func (d *Deployer) prepareMounts(ctx context.Context, r runner.Runner, app db.Ap
 			if err != nil {
 				return nil, fmt.Errorf("file mount %s cannot be decrypted: was the master key changed?", s.Target)
 			}
-			dir := filepath.Join(d.Cfg.AppDir(app.ID), "files")
+			dir := filepath.Join(d.at(r).AppDir(app.ID), "files")
 			if err := r.MkdirAll(ctx, dir, 0o700); err != nil {
 				return nil, err
 			}
@@ -631,7 +642,7 @@ func (d *Deployer) Destroy(ctx context.Context, appID string) error {
 	if err != nil {
 		return err
 	}
-	if err := r.RemoveAll(ctx, d.Cfg.AppDir(app.ID)); err != nil {
+	if err := r.RemoveAll(ctx, d.at(r).AppDir(app.ID)); err != nil {
 		return err
 	}
 	if app.Source == db.SourceGit {
