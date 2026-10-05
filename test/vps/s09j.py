@@ -1,0 +1,20 @@
+from lib_b import *
+c = owner_client(); D = "qfoenpmqqgvg"
+sq = lambda s: shout(f"python3 -c \"import sqlite3,sys;d=sqlite3.connect('file:/var/lib/musdash/musdash.db?mode=ro',uri=True);print(d.execute(sys.argv[1]).fetchall())\" \"{s}\" 2>&1")
+f = [x for x in parse_forms(c.get(f"/databases/{D}/backups", follow=True).text) if x["action"] == f"/databases/{D}/backups"][0]
+c.post_form(f, follow=False)
+wait_for(lambda: "running" in sq(f"select status from backups where database_id='{D}' order by rowid desc limit 1"), 15, 0.5)
+time.sleep(2)
+print("before kill:", sq(f"select status, file from backups where database_id='{D}' order by rowid desc limit 2"), shout(f"ls -la /var/lib/musdash/backups/{D}/ | tail -3"))
+pid = shout("systemctl show -p MainPID --value musdash-server"); shout(f"kill -9 {pid}")
+time.sleep(6)
+print("healthz", Client().get("/healthz").status)
+r = sq(f"select status, substr(error,1,90) from backups where database_id='{D}' order by rowid desc limit 1") if "error" in sq("select sql from sqlite_master where name='backups'") else sq(f"select status from backups where database_id='{D}' order by rowid desc limit 1")
+print("after restart:", r)
+print(shout(f"ls -la /var/lib/musdash/backups/{D}/; docker ps --format '{{{{.Names}}}}' | grep -c pg_dump; ps aux | grep -c '[p]g_dump'"))
+time.sleep(10)
+st = sq(f"select status from backups where database_id='{D}' order by rowid desc limit 1")
+stuck = sq("select count(*) from backups where status='running'")
+check("S9.9", "failed" in st and stuck == "[(0,)]", f"kill -9 during a backup: row becomes {st}, rows still 'running': {stuck}")
+page = flash(c.get(f"/databases/{D}/backups", follow=True)); i = page.find("Backups Made"); print(page[i:i+260])
+print(shout(f"ls -la /var/lib/musdash/backups/{D}/; docker ps -a --format '{{{{.Names}}}} {{{{.Status}}}}' | grep -v -E 'musdash-(db|vnk|cma|ucd|tq2|szh|kkb|qz3|gcw|s2k|lew|mxl|krf|vs6)'"))
