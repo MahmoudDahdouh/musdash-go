@@ -238,13 +238,13 @@ make test
 MUSDASH_DOCKER_TEST=1 go test ./test -run TestDeployWithDocker -v
 ```
 
-The second command runs the end-to-end test against your local Docker: it deploys `nginx:alpine`, fetches it through the proxy, redeploys while sending requests continuously and fails if any request is dropped.
+The second command runs the end-to-end test against your local Docker: it deploys `nginx:alpine`, fetches it through the proxy, redeploys while sending requests continuously and fails if any request is dropped. It then rolls back to the first deployment's kept image, and asks the proxy for a path of a second domain with its prefix removed and a password in front.
 
 ```bash
 MUSDASH_DOCKER_TEST=1 go test ./internal/deploy -run TestGitDeployWithDocker -v
 ```
 
-This one clones a local repository with the real `git`, builds it with Docker and serves two commits in turn.
+This one clones a local repository with the real `git`, builds it with Docker and serves two commits in turn. It then previews a branch as a pull request would: built and served next to the app, with its own variables, and removed again.
 
 ```bash
 MUSDASH_DOCKER_TEST=1 go test ./internal/deploy -run TestDatabasesWithDocker -v
@@ -272,7 +272,7 @@ Installs the catalogue's templates for real, fetches each web address, redeploys
 
 ## Memory
 
-Targets when idle: under 30 MB for `server` and under 20 MB for `proxy`. A test builds the release binary, starts both processes, uses them briefly and fails if either is above its target.
+Targets when idle: under 30 MB for `server` and under 20 MB for `proxy`. A test builds the release binary, starts both processes, uses them briefly and fails if either is above its target. The proxy is given fifty hosts, some routed by path and some behind a password, and is asked for each, with right and wrong passwords.
 
 ```bash
 make rss

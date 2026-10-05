@@ -2,11 +2,13 @@
 package test
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
@@ -17,6 +19,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Idle memory targets from the spec, in megabytes.
@@ -72,12 +76,92 @@ func TestIdleRSS(t *testing.T) {
 	})
 
 	t.Run("proxy", func(t *testing.T) {
+		// A table of the size a busy small server has: fifty hosts, some
+		// routed by path, some behind a password.
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			io.WriteString(w, "upstream "+r.URL.Path)
+		}))
+		defer upstream.Close()
+		target := strings.TrimPrefix(upstream.URL, "http://")
+		hash, err := bcrypt.GenerateFromPassword([]byte("the right password"), 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		type route struct {
+			Host        string `json:"host"`
+			Path        string `json:"path,omitempty"`
+			StripPrefix bool   `json:"strip_prefix,omitempty"`
+			Target      string `json:"target"`
+			AuthUser    string `json:"auth_user,omitempty"`
+			AuthHash    string `json:"auth_hash,omitempty"`
+		}
+		var routes []route
+		for i := range 50 {
+			host := "app" + strconv.Itoa(i) + ".example.com"
+			routes = append(routes, route{Host: host, Target: target})
+			if i%5 == 0 {
+				routes = append(routes, route{Host: host, Path: "/api", StripPrefix: true, Target: target})
+			}
+			if i%10 == 0 {
+				routes = append(routes, route{Host: host, Path: "/admin", Target: target, AuthUser: "ada", AuthHash: string(hash)})
+			}
+		}
+		raw, _ := json.Marshal(map[string]any{"routes": routes})
+		proxyDir := filepath.Join(dir, "data", "proxy")
+		if err := os.MkdirAll(proxyDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(proxyDir, "routes.json"), raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
 		addr := freeAddr(t)
 		pid := start(t, bin, "proxy", "-data", filepath.Join(dir, "data"), "-http", addr, "-https=")
 		waitReady(t, "http://"+addr+"/")
-		client := &http.Client{Timeout: 10 * time.Second}
+		client := &http.Client{Timeout: 30 * time.Second}
+		ask := func(host, path, password string) int {
+			req, _ := http.NewRequest(http.MethodGet, "http://"+addr+path, nil)
+			req.Host = host
+			if password != "" {
+				req.SetBasicAuth("ada", password)
+			}
+			res, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			io.Copy(io.Discard, res.Body)
+			res.Body.Close()
+			return res.StatusCode
+		}
 		for range 5 {
 			fetch(t, client, "http://"+addr+"/")
+		}
+		// Used as it would be: plain routes, routes by path, a password
+		// that is right many times over and wrong a few times.
+		for i := range 50 {
+			host := "app" + strconv.Itoa(i) + ".example.com"
+			if code := ask(host, "/", ""); code != http.StatusOK {
+				t.Fatalf("%s: %d", host, code)
+			}
+		}
+		for i := 0; i < 50; i += 10 {
+			host := "app" + strconv.Itoa(i) + ".example.com"
+			if code := ask(host, "/api/users", ""); code != http.StatusOK {
+				t.Fatalf("%s/api: %d", host, code)
+			}
+			if code := ask(host, "/admin", ""); code != http.StatusUnauthorized {
+				t.Fatalf("%s/admin without a password: %d", host, code)
+			}
+			for n := range 3 {
+				if code := ask(host, "/admin", "a wrong guess "+strconv.Itoa(n)); code != http.StatusUnauthorized {
+					t.Fatalf("%s/admin with a wrong password: %d", host, code)
+				}
+			}
+			for range 20 {
+				if code := ask(host, "/admin/page", "the right password"); code != http.StatusOK {
+					t.Fatalf("%s/admin with the password: %d", host, code)
+				}
+			}
 		}
 		client.CloseIdleConnections()
 		assertRSS(t, pid, proxyLimitMB)

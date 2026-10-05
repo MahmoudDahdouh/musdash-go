@@ -712,6 +712,86 @@ func TestGitDeployWithDocker(t *testing.T) {
 		t.Fatalf("after the second deploy, served %q", got)
 	}
 	t.Logf("built and served two commits: %s then %s", first.CommitSHA[:12], second.CommitSHA[:12])
+
+	// A pull request: a branch of the same repository gets a deployment of
+	// its own next to the app, and goes when the pull request is closed.
+	ctx := context.Background()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("checkout", "--quiet", "-b", "feature/three")
+	os.WriteFile(filepath.Join(repo, "public/index.html"), []byte("<h1>version three, not merged</h1>\n"), 0o644)
+	git("add", "--all")
+	git("commit", "--quiet", "--message", "third")
+	git("checkout", "--quiet", "main")
+	if err := e.db.SetAppPreviews(ctx, e.team, e.app.ID, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	parent := e.reload()
+	child, err := e.d.SyncPreview(ctx, parent, source.PullRequest{Repo: parent.RepoName, HeadRepo: parent.RepoName, Number: 12,
+		Action: "opened", Branch: "feature/three", BaseBranch: parent.Branch})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		out, _ := local.Output(ctx, runner.Cmd{Name: "docker", Args: []string{"ps", "--all", "--quiet", "--filter", "label=" + docker.LabelResource + "=" + child.ID}})
+		for _, id := range strings.Fields(string(out)) {
+			dk.Remove(ctx, id)
+		}
+		tags, _ := dk.ImageTags(ctx, ImageRepository(child.ID))
+		for _, tag := range tags {
+			dk.RemoveImage(ctx, ImageRepository(child.ID)+":"+tag)
+		}
+	})
+	var built db.Deployment
+	for deadline := time.Now().Add(5 * time.Minute); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+		if list, _ := e.db.ListDeployments(ctx, child.ID, 1); len(list) == 1 && (list[0].Status == db.DeploySuccess || list[0].Status == db.DeployFailed) {
+			built = list[0]
+			break
+		}
+	}
+	if built.Status != db.DeploySuccess {
+		t.Fatalf("the preview: %s %q\n%s", built.Status, built.Error, e.log(built))
+	}
+	child, _ = e.db.AppByID(ctx, child.ID)
+	get := func(port int) string {
+		t.Helper()
+		res, err := http.Get("http://127.0.0.1:" + strconv.Itoa(port) + "/")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		body, _ := io.ReadAll(res.Body)
+		return string(body)
+	}
+	if got := get(child.HostPort); !strings.Contains(got, "version three") {
+		t.Fatalf("the preview serves %q", got)
+	}
+	if got := get(e.reload().HostPort); !strings.Contains(got, "version two") {
+		t.Fatalf("the app itself now serves %q", got)
+	}
+	out, err := local.Output(ctx, runner.Cmd{Name: "docker", Args: []string{"exec", child.Container, "printenv", "MUSDASH_PREVIEW", "MUSDASH_PULL_REQUEST"}})
+	if err != nil || strings.Join(strings.Fields(string(out)), ",") != "1,12" {
+		t.Fatalf("the preview's own variables: %q %v", out, err)
+	}
+	if err := e.d.ClosePreview(ctx, child); err != nil {
+		t.Fatal(err)
+	}
+	e.gone(child.ID)
+	out, _ = local.Output(ctx, runner.Cmd{Name: "docker", Args: []string{"ps", "--all", "--quiet", "--filter", "label=" + docker.LabelResource + "=" + child.ID}})
+	left, _ := dk.ImageTags(ctx, ImageRepository(child.ID))
+	if strings.TrimSpace(string(out)) != "" || len(left) != 0 {
+		t.Fatalf("closing left a container (%q) or images (%v)", strings.TrimSpace(string(out)), left)
+	}
+	if got := get(e.reload().HostPort); !strings.Contains(got, "version two") {
+		t.Fatalf("after its preview was closed the app serves %q", got)
+	}
+	t.Log("a branch was previewed next to the app and removed again")
 }
 
 // git reads a path that starts with ":" as pathspec "magic" unless told
