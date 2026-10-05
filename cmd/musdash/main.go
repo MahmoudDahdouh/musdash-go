@@ -23,6 +23,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
+	"github.com/MahmoudDahdouh/musdash-go/internal/ops"
 	"github.com/MahmoudDahdouh/musdash-go/internal/proxy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
@@ -210,6 +211,14 @@ func runServer(args []string) error {
 	queue := jobs.New(d.DB, log, *workers)
 	deployer := deploy.New(d, box, queue, pool, cfg, log, net.JoinHostPort("127.0.0.1", port))
 	deployer.Register()
+	operations := ops.New(d, box, queue, pool, cfg, log)
+	operations.Register()
+	deployer.Notify = operations.NotifyEnvironment
+	// Before the queue starts: a requeued backup or task looks at its
+	// record to see whether it still has something to do.
+	if err := operations.Recover(ctx); err != nil {
+		return err
+	}
 	if err := queue.Start(ctx); err != nil {
 		return err
 	}
@@ -230,8 +239,9 @@ func runServer(args []string) error {
 	go settle(ctx)
 	go republishRoutes(ctx, d, deployer, log)
 	go monitorServers(ctx, d, deployer, log)
+	go operations.Run(ctx)
 
-	app := &web.Server{Cfg: cfg, DB: d, Box: box, Queue: queue, Deploy: deployer, Pool: pool, Log: log, Pprof: *pprof, Closing: ctx}
+	app := &web.Server{Cfg: cfg, DB: d, Box: box, Queue: queue, Deploy: deployer, Ops: operations, Pool: pool, Log: log, Pprof: *pprof, Closing: ctx}
 	srv := &http.Server{
 		Handler:           app.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,

@@ -327,3 +327,50 @@ func TestDefaultBackoff(t *testing.T) {
 		}
 	}
 }
+
+// Kinds marked as background leave one worker free, so a deployment does
+// not queue behind a full set of long-running backups and tasks.
+func TestBackgroundKindsLeaveAWorkerFree(t *testing.T) {
+	q, d := newQueue(t, 3)
+	release := make(chan struct{})
+	var slow, peak atomic.Int32
+	q.Register("task", func(ctx context.Context, _ []byte) error {
+		n := slow.Add(1)
+		for {
+			old := peak.Load()
+			if n <= old || peak.CompareAndSwap(old, n) {
+				break
+			}
+		}
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		slow.Add(-1)
+		return nil
+	})
+	q.Register("deploy", func(context.Context, []byte) error { return nil })
+	q.Background("task", "backup")
+	start(t, q)
+
+	ctx := context.Background()
+	var tasks []string
+	for range 5 {
+		id, _ := q.Enqueue(ctx, "task", nil)
+		tasks = append(tasks, id)
+	}
+	waitFor(t, "two tasks running", func() bool { return slow.Load() == 2 })
+	// Queued after five tasks, and still it runs at once.
+	deploy, _ := q.Enqueue(ctx, "deploy", nil)
+	waitFor(t, "the deployment", func() bool { st, _, _ := status(t, d, deploy); return st == StatusDone })
+	if slow.Load() != 2 || peak.Load() != 2 {
+		t.Fatalf("%d background jobs running (peak %d), want 2 of 3 workers", slow.Load(), peak.Load())
+	}
+	close(release)
+	for _, id := range tasks {
+		waitFor(t, "the tasks", func() bool { st, _, _ := status(t, d, id); return st == StatusDone })
+	}
+	if peak.Load() != 2 {
+		t.Fatalf("peak of background jobs: %d", peak.Load())
+	}
+}

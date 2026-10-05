@@ -158,6 +158,14 @@ templ ServiceCatalogue(s ui.Shell, p db.Project, env db.Environment, templates [
 					</div>
 					@ui.Icon("chevron-right", "text-ink-mute")
 				</a>
+				<a class="card row" href={ templ.SafeURL(newServiceURL(p, env, db.TemplateGit)) }>
+					@ui.Icon("git-branch", "text-ink-mute")
+					<div class="min-w-0 flex-1">
+						<p class="font-semibold">A Compose file in a Git repository</p>
+						<p class="muted text-sm">The file is read from the repository at every deployment, and may build images from the repository's own Dockerfiles.</p>
+					</div>
+					@ui.Icon("chevron-right", "text-ink-mute")
+				</a>
 			</section>
 		</div>
 	}
@@ -176,10 +184,37 @@ const composeHint = "Give a service a web address by adding SERVICE_FQDN_<NAME>_
 func varFieldID(name string) string { return "var_" + name }
 
 // ServiceNew is the second step: a name, and what the file needs to know.
-templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, t catalog.ServiceTemplate, required []catalog.VarRef, f ui.Form) {
+// ServiceGit is what the forms of a service from a Git repository need.
+type ServiceGit struct {
+	Choices GitChoices
+	Source  ui.Form  // the Source form's state
+	Tr      Triggers // webhook and deploy token
+}
+
+// serviceRepo is a service's repository settings in the shape the shared
+// repository fields take.
+func serviceRepo(m db.Service) db.App {
+	return db.App{RepoURL: m.RepoURL, Branch: m.Branch, GitSourceID: m.GitSourceID, SSHKeyID: m.SSHKeyID, AutoDeploy: m.AutoDeploy}
+}
+
+const composePathHint = "Where the Compose file is in the repository, such as docker-compose.yml or deploy/compose.yaml. Paths in the file are relative to it."
+
+// serviceGitFields are the repository fields of a service from Git: the
+// New service form and the service's Source settings share them.
+templ serviceGitFields(f ui.Form, c GitChoices, m db.Service, autoDeployDefault bool) {
+	@gitRepoFields(f, c, serviceRepo(m))
+	@ui.TextField(f, "Compose file", composePathHint, ui.InputProps{ID: "compose_path", Mono: true, Required: true, Value: orDefault(m.ComposePath, "docker-compose.yml")})
+	@ui.Checkbox("auto_deploy", checked(f, "auto_deploy", m.AutoDeploy || autoDeployDefault), nil) {
+		Deploy automatically when the branch is pushed
+	}
+}
+
+templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, t catalog.ServiceTemplate, required []catalog.VarRef, f ui.Form, git GitChoices) {
 	@ui.Layout(s) {
 		if template == db.TemplateCustom {
 			@ui.PageHeader("New service from your own Compose file", "Runs in "+env.Name+".")
+		} else if template == db.TemplateGit {
+			@ui.PageHeader("New service from a Git repository", "Runs in "+env.Name+".")
 		} else {
 			@ui.PageHeader("New "+t.Name+" service", t.About)
 		}
@@ -195,6 +230,11 @@ templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, 
 							@ui.Textarea(ui.InputProps{ID: "compose", Mono: true, Rows: 16, Required: true, Value: f.V("compose"), Invalid: f.E("compose") != "", Described: true, Placeholder: composePlaceholder, Attrs: templ.Attributes{"wrap": "off"}})
 						}
 						@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the other ${NAME} references in the file. One NAME=value per line. Stored encrypted.", Error: f.E("variables")}) {
+							@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 4, Value: f.V("variables"), Invalid: f.E("variables") != "", Described: true})
+						}
+					} else if template == db.TemplateGit {
+						@serviceGitFields(f, git, db.Service{}, true)
+						@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the ${NAME} references in the file. One NAME=value per line. Stored encrypted. Passwords the file asks for with SERVICE_PASSWORD_… are generated.", Error: f.E("variables")}) {
 							@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 4, Value: f.V("variables"), Invalid: f.E("variables") != "", Described: true})
 						}
 					} else {
@@ -399,20 +439,53 @@ templ ServiceLogs(s ui.Shell, v ServiceView) {
 	}
 }
 
-templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables string) {
+func shortCommit(c string) string {
+	if len(c) > 12 {
+		return c[:12]
+	}
+	return c
+}
+
+templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables string, git *ServiceGit) {
 	@serviceFrame(s, v, "compose") {
-		<div class="max-w-3xl">
+		<div class="grid max-w-3xl gap-6">
+			if git != nil && git.Tr.NewToken != "" {
+				@ui.Notice(ui.ToneOK) {
+					<p class="font-semibold">Deploy token created. Copy it now: it is not shown again.</p>
+					@ui.Copyable(git.Tr.NewToken)
+				}
+			}
 			<form class="card" method="post" action={ templ.SafeURL(v.base() + "/compose") }>
 				@ui.CSRF(s.CSRF)
 				<div class="card-head">
 					<div>
 						<h2 class="card-title">Compose file</h2>
-						<p class="muted text-sm">Changes apply on the next deployment. Files it names (env_file, include, extends) are not read: everything a stack needs is in this file and its variables.</p>
+						if git != nil {
+							<p class="muted text-sm">Read from the repository at every deployment. To change it, change it there. A file of the repository that it mounts into a container is mounted read-only.</p>
+						} else {
+							<p class="muted text-sm">Changes apply on the next deployment. Files it names (env_file, include, extends) are not read: everything a stack needs is in this file and its variables.</p>
+						}
 					</div>
 				</div>
 				<div class="card-body grid gap-4">
-					@ui.Field(ui.FieldProps{Label: "docker-compose.yml", For: "compose", Hint: composeHint, Error: f.E("compose")}) {
-						@ui.Textarea(ui.InputProps{ID: "compose", Mono: true, Rows: 22, Required: true, Value: composeText, Invalid: f.E("compose") != "", Described: true, Attrs: templ.Attributes{"wrap": "off"}})
+					if git != nil {
+						if v.Service.Compose == "" {
+							<p class="muted">The file has not been fetched yet. It is shown here after the first deployment.</p>
+						} else {
+							<div class="grid gap-2">
+								<p class="field-label">
+									<span class="fact">{ v.Service.ComposePath }</span> as the last deployment read it.
+									if v.Service.Commit != "" {
+										The running stack is from commit <span class="fact">{ shortCommit(v.Service.Commit) }</span>.
+									}
+								</p>
+								<pre class="logview" tabindex="0" aria-label="The Compose file as last deployed">{ v.Service.Compose }</pre>
+							</div>
+						}
+					} else {
+						@ui.Field(ui.FieldProps{Label: "docker-compose.yml", For: "compose", Hint: composeHint, Error: f.E("compose")}) {
+							@ui.Textarea(ui.InputProps{ID: "compose", Mono: true, Rows: 22, Required: true, Value: composeText, Invalid: f.E("compose") != "", Described: true, Attrs: templ.Attributes{"wrap": "off"}})
+						}
 					}
 					@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the ${NAME} references in the file, other than the generated ones. One NAME=value per line. Stored encrypted.", Error: f.E("variables")}) {
 						@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 5, Value: variables, Invalid: f.E("variables") != "", Described: true})
@@ -432,6 +505,12 @@ templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variable
 					}
 				</div>
 			</form>
+			if git != nil {
+				@ui.FormCard("Source", "The repository the Compose file is read from.", v.base()+"/source", s.CSRF, "Save source") {
+					@serviceGitFields(git.Source, git.Choices, v.Service, false)
+				}
+				@triggersCard(s.CSRF, v.base(), "service", true, git.Tr)
+			}
 		</div>
 	}
 }

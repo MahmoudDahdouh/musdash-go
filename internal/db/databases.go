@@ -264,10 +264,14 @@ func (d *DB) SetDatabaseState(ctx context.Context, id, status, container, lastEr
 }
 
 // SetDatabaseStatusIf is the database counterpart of SetAppStatusIf.
-func (d *DB) SetDatabaseStatusIf(ctx context.Context, id, container, status string) error {
-	_, err := d.ExecContext(ctx, `UPDATE databases SET status = ?, updated_at = ? WHERE id = ? AND container = ? AND status NOT IN (?, ?)`,
-		status, now(), id, container, AppDeploying, AppStopped)
-	return err
+func (d *DB) SetDatabaseStatusIf(ctx context.Context, id, container, status string) (bool, error) {
+	res, err := d.ExecContext(ctx, `UPDATE databases SET status = ?, updated_at = ? WHERE id = ? AND container = ? AND status NOT IN (?, ?, ?)`,
+		status, now(), id, container, AppDeploying, AppStopped, status)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }
 
 // ResetStuckDatabases repairs databases left "deploying" by a process that

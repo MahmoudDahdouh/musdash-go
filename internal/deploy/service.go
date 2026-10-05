@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -19,6 +21,8 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
+	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
+	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 )
 
 // A service is a Compose stack. Its file is never loaded on the server as
@@ -43,6 +47,12 @@ type servicePayload struct {
 // already deploying answers ErrBusy; again queues another deployment
 // regardless, for a change the one in progress may not have seen.
 func (d *Deployer) EnqueueService(ctx context.Context, s db.Service, again bool) error {
+	// A stack from a repository may build images: it waits its turn with
+	// the server's other builds.
+	lock := "service:" + s.ID
+	if s.FromGit() {
+		lock = "build:" + s.ServerID
+	}
 	began, err := d.DB.BeginServiceDeploy(ctx, s.ID)
 	if err != nil {
 		return err
@@ -55,7 +65,7 @@ func (d *Deployer) EnqueueService(ctx context.Context, s db.Service, again bool)
 		// log waits for the new one instead of showing the old.
 		os.Remove(d.Cfg.ServiceLogPath(s.ID))
 	}
-	_, err = d.Queue.Enqueue(ctx, JobService, servicePayload{ID: s.ID}, jobs.WithLockKey("service:"+s.ID), jobs.WithMaxAttempts(1))
+	_, err = d.Queue.Enqueue(ctx, JobService, servicePayload{ID: s.ID}, jobs.WithLockKey(lock), jobs.WithMaxAttempts(1))
 	if err != nil && began {
 		rec, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 		defer cancel()
@@ -282,11 +292,26 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 	dir := d.Cfg.AppDir(s.ID)
 	project := ServiceProject(s.ID)
 
+	if err := r.MkdirAll(ctx, dir, 0o700); err != nil {
+		return err
+	}
+	// A stack from a repository: fetch it, and take the Compose file from
+	// there. Its endpoints are only known now, so they get their generated
+	// domains now.
+	checkout, commit := "", ""
+	var newHost func(string) (string, bool)
+	if s.FromGit() {
+		if checkout, commit, s, err = d.checkoutService(ctx, r, s, log); err != nil {
+			return err
+		}
+		newHost = func(string) (string, bool) { return GeneratedDomain(server), false }
+	}
+
 	vars, err := d.ServiceVariables(s)
 	if err != nil {
 		return err
 	}
-	if err := d.PrepareService(ctx, s, vars, nil); err != nil {
+	if err := d.PrepareService(ctx, s, vars, newHost); err != nil {
 		return err
 	}
 	endpoints, err := d.DB.ListEndpoints(ctx, s.ID)
@@ -314,6 +339,13 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		Image: compose.SandboxImage(version), Project: project, Dir: dir,
 		Source: []byte(s.Compose), EnvFile: envPath, User: sandboxUser(ctx, r),
 	}
+	if checkout != "" {
+		// The sandbox sees the checkout, read-only, and nothing else of
+		// the server. Paths in the file are relative to where it lies.
+		opt.Source, opt.Mount = nil, checkout
+		opt.Dir = path.Join(checkout, path.Dir(s.ComposePath))
+		opt.File = path.Base(s.ComposePath)
+	}
 	if have, err := dk.HasImage(ctx, opt.Image); err != nil {
 		return err
 	} else if !have {
@@ -338,12 +370,21 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 	if err != nil {
 		return fmt.Errorf("the Compose file could not be read: %w", err)
 	}
-	if err := resolved.Validate(compose.ValidateOptions{Dir: dir, Protected: []string{d.Cfg.DataDir}, ValidPort: ValidPublicPort}); err != nil {
+	if err := resolved.Validate(compose.ValidateOptions{Dir: dir, BuildDir: checkout, Protected: []string{d.Cfg.DataDir}, ValidPort: ValidPublicPort}); err != nil {
 		return fmt.Errorf("the Compose file asks for things a service may not do:\n%w", err)
+	}
+	if checkout != "" {
+		// What the stack mounts or builds from the checkout must be the
+		// repository's own files, not links out of it.
+		for _, p := range resolved.CheckoutPaths(checkout) {
+			if err := d.refuseSymlinks(ctx, r, checkout, strings.TrimPrefix(strings.TrimPrefix(p, checkout), "/")); err != nil {
+				return err
+			}
+		}
 	}
 
 	members := resolved.Services()
-	override := compose.Override{ServiceID: s.ID}
+	override := compose.Override{ServiceID: s.ID, ReadOnlyUnder: checkout}
 	if s.ConnectEnv {
 		// On the environment's network every container answers to its
 		// Compose service name. A name something else there already
@@ -429,6 +470,20 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 			if err := r.Run(ctx, pull); err != nil {
 				return fmt.Errorf("pull the images: %w", err)
 			}
+			if doc.Builds() {
+				log.Step("Building images")
+				build := d.composeCmd(s.ID, "build")
+				build.Stdout, build.Stderr = log, log
+				buildCtx, cancel := context.WithTimeout(ctx, d.buildTimeout)
+				err := r.Run(buildCtx, build)
+				cancel()
+				if err != nil {
+					if buildCtx.Err() != nil && ctx.Err() == nil {
+						return fmt.Errorf("build: stopped after %s without finishing", d.buildTimeout)
+					}
+					return fmt.Errorf("build the images: %w", err)
+				}
+			}
 		}
 
 		log.Step("Starting %s", strings.Join(members, ", "))
@@ -457,6 +512,19 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		return fmt.Errorf("the stack did not come up: %w. Its last output:\n%s", err, logs.String())
 	}
 
+	if checkout != "" {
+		// The new stack runs from the new checkout; the one before it is
+		// no longer mounted anywhere.
+		previous := s.Checkout
+		if err := d.DB.SetServiceDeployed(ctx, s.ID, commit, checkoutSlot(checkout)); err != nil {
+			return err
+		}
+		if previous != "" {
+			if err := r.RemoveAll(ctx, checkoutDir(dir, previous)); err != nil {
+				d.Log.Warn("remove a service's previous checkout", "service", s.ID, "err", err)
+			}
+		}
+	}
 	if err := d.DB.SetServiceState(ctx, s.ID, db.AppRunning, ""); err != nil {
 		return err
 	}
@@ -466,6 +534,90 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		return fmt.Errorf("the stack is running, but its routes could not be published: %w", err)
 	}
 	return nil
+}
+
+// maxComposeFile bounds a Compose file read from a repository.
+const maxComposeFile = 512 << 10
+
+// checkoutDir is one of a Git service's two checkout directories.
+func checkoutDir(serviceDir, slot string) string { return path.Join(serviceDir, "src-"+slot) }
+
+// checkoutSlot is the slot of a checkout directory.
+func checkoutSlot(checkout string) string { return checkout[len(checkout)-1:] }
+
+// checkoutService fetches a Git service's repository and returns the
+// checkout, its commit, and the service with the repository's Compose text.
+//
+// A stack may mount files of its checkout, so the checkout has to stay for
+// as long as the stack runs from it. A service therefore has two
+// directories and each deployment clones into the one the running stack
+// does not use: the running containers keep their files until they are
+// replaced, and after a deployment that failed they still have them.
+func (d *Deployer) checkoutService(ctx context.Context, r runner.Runner, s db.Service, log *Log) (string, string, db.Service, error) {
+	fail := func(err error) (string, string, db.Service, error) { return "", "", s, err }
+	repo, err := source.ParseRepo(s.RepoURL)
+	if err != nil {
+		return fail(err)
+	}
+	if !source.ValidBranch(s.Branch) {
+		return fail(fmt.Errorf("%q is not a valid branch name", s.Branch))
+	}
+	if s.ComposePath == "" || !source.ValidRelPath(s.ComposePath) {
+		return fail(fmt.Errorf("the Compose file path %q must be a path inside the repository", s.ComposePath))
+	}
+	slot := "a"
+	if s.Checkout == "a" {
+		slot = "b"
+	}
+	checkout := checkoutDir(d.Cfg.AppDir(s.ID), slot)
+	// For the deploy key, away from anything a container can be given.
+	keyDir := path.Join(d.Cfg.WorkDir(), "service-"+s.ID)
+	for _, p := range []string{checkout, keyDir} {
+		if err := r.RemoveAll(ctx, p); err != nil {
+			return fail(err)
+		}
+	}
+	if err := r.MkdirAll(ctx, keyDir, 0o700); err != nil {
+		return fail(err)
+	}
+	defer r.RemoveAll(context.WithoutCancel(ctx), keyDir)
+
+	commit, err := d.clone(ctx, r, db.App{GitSourceID: s.GitSourceID, SSHKeyID: s.SSHKeyID}, repo, s.Branch, keyDir, checkout, log)
+	if err != nil {
+		return fail(err)
+	}
+	if err := d.refuseSymlinks(ctx, r, checkout, s.ComposePath); err != nil {
+		return fail(err)
+	}
+	f, err := r.ReadFile(ctx, path.Join(checkout, s.ComposePath))
+	if err != nil {
+		return fail(fmt.Errorf("the repository has no file %s on the branch %s", s.ComposePath, s.Branch))
+	}
+	text, err := io.ReadAll(io.LimitReader(f, maxComposeFile+1))
+	f.Close()
+	if err != nil {
+		return fail(err)
+	}
+	if len(text) > maxComposeFile {
+		return fail(fmt.Errorf("%s is larger than 512 KB", s.ComposePath))
+	}
+	if err := d.DB.SetServiceComposeRead(ctx, s.ID, string(text)); err != nil {
+		return fail(err)
+	}
+	s.Compose = string(text)
+	return checkout, commit, s, nil
+}
+
+// GeneratedDomain builds an address that resolves to the server without any
+// DNS setup: sslip.io answers <anything>.<ip>.sslip.io with <ip>.
+func GeneratedDomain(server db.Server) string {
+	ip := server.IP
+	if net.ParseIP(ip) == nil {
+		ip = "127.0.0.1"
+	}
+	// IPv6 addresses use dashes in sslip.io names.
+	ip = strings.ReplaceAll(ip, ":", "-")
+	return strings.ToLower(secret.RandomID()[:8]) + "." + ip + ".sslip.io"
 }
 
 // teeWriter writes to each of its writers.
@@ -558,6 +710,16 @@ func (d *Deployer) DestroyService(ctx context.Context, id string, deleteData boo
 	}
 	if err := d.composeDown(ctx, r, s, args...); err != nil {
 		return err
+	}
+	if s.FromGit() {
+		// The images built for it are of no use to anything else.
+		dk := docker.Client{R: r}
+		for _, member := range s.MemberNames() {
+			image := ServiceProject(s.ID) + "-" + member
+			if err := dk.RemoveImage(ctx, image); err != nil {
+				d.Log.Warn("remove a deleted service's image", "image", image, "err", err)
+			}
+		}
 	}
 	// Directories a container created inside the stack's directory belong
 	// to root and may not be removable; what is left is only files.

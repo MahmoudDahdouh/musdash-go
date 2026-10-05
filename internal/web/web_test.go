@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -24,6 +25,8 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
+	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
+	"github.com/MahmoudDahdouh/musdash-go/internal/ops"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner/runnertest"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
@@ -99,7 +102,13 @@ func newAppWithLog(t *testing.T, dev bool, logTo io.Writer) *app {
 		defer cancel()
 		queue.Stop(ctx)
 	})
-	s := &Server{Cfg: cfg, DB: d, Box: box, Queue: queue, Deploy: deployer, Pool: pool, Log: log}
+	operations := ops.New(d, box, queue, pool, cfg, log)
+	operations.Sender = notify.Sender{Dialer: notify.Dialer{AllowLoopback: true}}
+	operations.S3Lookup = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("198.51.100.7")}, nil
+	}
+	operations.Register()
+	s := &Server{Cfg: cfg, DB: d, Box: box, Queue: queue, Deploy: deployer, Ops: operations, Pool: pool, Log: log}
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
 	a := &app{t: t, server: s, db: d, cfg: cfg, fake: fake, url: srv.URL}

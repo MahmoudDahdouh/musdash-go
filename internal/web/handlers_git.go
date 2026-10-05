@@ -35,8 +35,10 @@ func (s *Server) gitChoices(r *http.Request) (pages.GitChoices, error) {
 	return c, nil
 }
 
-// parseGitForm reads and validates the repository and build fields into app.
-func parseGitForm(r *http.Request, f *ui.Form, c pages.GitChoices, app *db.App) {
+// parseRepoForm reads and validates the fields that say which repository
+// and branch to read, and how: the part of the Git forms that apps and
+// services share.
+func parseRepoForm(r *http.Request, f *ui.Form, c pages.GitChoices, app *db.App) {
 	field := func(key string) string {
 		v := strings.TrimSpace(r.PostFormValue(key))
 		f.Set(key, v)
@@ -78,11 +80,25 @@ func parseGitForm(r *http.Request, f *ui.Form, c pages.GitChoices, app *db.App) 
 	if !source.ValidBranch(app.Branch) {
 		f.Fail("branch", "Enter a branch name such as main.")
 	}
+	app.AutoDeploy = r.PostFormValue("auto_deploy") == "1"
+	f.Set("auto_deploy", map[bool]string{true: "1", false: "0"}[app.AutoDeploy])
+}
+
+// insideRepo is the message for a path that must lie in the repository.
+const insideRepo = "Enter a path inside the repository, such as apps/web, without a leading slash."
+
+// parseGitForm reads and validates the repository and build fields into app.
+func parseGitForm(r *http.Request, f *ui.Form, c pages.GitChoices, app *db.App) {
+	field := func(key string) string {
+		v := strings.TrimSpace(r.PostFormValue(key))
+		f.Set(key, v)
+		return v
+	}
+	parseRepoForm(r, f, c, app)
 	app.BuildPack = field("build_pack")
 	if app.BuildPack != deploy.PackDockerfile && app.BuildPack != deploy.PackStatic {
 		f.Fail("build_pack", "Choose how the app is built.")
 	}
-	const insideRepo = "Enter a path inside the repository, such as apps/web, without a leading slash."
 	if app.BaseDir = strings.Trim(field("base_dir"), "/"); !source.ValidRelPath(app.BaseDir) {
 		f.Fail("base_dir", insideRepo)
 	}
@@ -93,9 +109,7 @@ func parseGitForm(r *http.Request, f *ui.Form, c pages.GitChoices, app *db.App) 
 		f.Fail("publish_dir", insideRepo)
 	}
 	app.SPAFallback = r.PostFormValue("spa_fallback") == "1"
-	app.AutoDeploy = r.PostFormValue("auto_deploy") == "1"
 	f.Set("spa_fallback", map[bool]string{true: "1", false: "0"}[app.SPAFallback])
-	f.Set("auto_deploy", map[bool]string{true: "1", false: "0"}[app.AutoDeploy])
 }
 
 // triggers gathers what the Settings page shows about starting deployments

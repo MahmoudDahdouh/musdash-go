@@ -354,6 +354,11 @@ func (d *Deployer) DestroyDatabase(ctx context.Context, id string, deleteData bo
 		if err := (docker.Client{R: r}).RemoveVolume(ctx, DatabaseVolume(m.ID)); err != nil {
 			return fmt.Errorf("delete the data volume: %w", err)
 		}
+		// Its backups on the server are its data too. Copies in a storage
+		// bucket are not touched: they are there to outlive the server.
+		if err := r.RemoveAll(ctx, d.Cfg.DatabaseBackupDir(m.ID)); err != nil {
+			return fmt.Errorf("delete the backups: %w", err)
+		}
 	}
 	return d.DB.DeleteDatabase(ctx, m.ID)
 }

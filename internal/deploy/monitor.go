@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
@@ -21,6 +23,16 @@ type event struct {
 
 // statusFor maps a Docker event to an app status, or "" for events that do
 // not change it.
+// stoppedEvent is what people are told when a container ends on its own.
+func stoppedEvent(what, link, exitCode string) notify.Event {
+	e := notify.Event{Kind: notify.EventContainer, Title: what + " stopped unexpectedly", URL: link, At: time.Now()}
+	if exitCode != "" {
+		e.Body = "Its container ended with status " + exitCode + "."
+	}
+	e.Body = strings.TrimSpace(e.Body + " Docker starts it again by itself unless it keeps failing; its logs say why it stopped.")
+	return e
+}
+
 func statusFor(action string) string {
 	switch action {
 	case "start":
@@ -45,11 +57,24 @@ func (d *Deployer) applyEvent(ctx context.Context, dk docker.Client, line []byte
 		return
 	}
 	var err error
+	var changed bool
 	switch attrs[docker.LabelKind] {
 	case db.KindApp:
-		err = d.DB.SetAppStatusIf(ctx, attrs[docker.LabelResource], attrs["name"], status)
+		changed, err = d.DB.SetAppStatusIf(ctx, attrs[docker.LabelResource], attrs["name"], status)
+		if changed && status == db.AppExited {
+			// Not a stop or a deployment: those set a status this event
+			// does not replace.
+			if app, aerr := d.DB.AppByID(ctx, attrs[docker.LabelResource]); aerr == nil {
+				d.tell(app.EnvironmentID, stoppedEvent("The app "+app.Name, "/apps/"+app.ID, attrs["exitCode"]))
+			}
+		}
 	case db.KindDatabase:
-		err = d.DB.SetDatabaseStatusIf(ctx, attrs[docker.LabelResource], attrs["name"], status)
+		changed, err = d.DB.SetDatabaseStatusIf(ctx, attrs[docker.LabelResource], attrs["name"], status)
+		if changed && status == db.AppExited {
+			if m, merr := d.DB.DatabaseByID(ctx, attrs[docker.LabelResource]); merr == nil {
+				d.tell(m.EnvironmentID, stoppedEvent("The database "+m.Name, "/databases/"+m.ID, attrs["exitCode"]))
+			}
+		}
 	case db.KindService:
 		// A stack's status depends on all of its containers, so they are
 		// looked at together rather than taken from this one event.
@@ -141,7 +166,7 @@ func (d *Deployer) Reconcile(ctx context.Context, server db.Server, dk docker.Cl
 		if state[app.Container] == "running" {
 			status = db.AppRunning
 		}
-		if err := d.DB.SetAppStatusIf(ctx, app.ID, app.Container, status); err != nil {
+		if _, err := d.DB.SetAppStatusIf(ctx, app.ID, app.Container, status); err != nil {
 			return err
 		}
 	}
@@ -157,7 +182,7 @@ func (d *Deployer) Reconcile(ctx context.Context, server db.Server, dk docker.Cl
 		if state[m.Container] == "running" {
 			status = db.AppRunning
 		}
-		if err := d.DB.SetDatabaseStatusIf(ctx, m.ID, m.Container, status); err != nil {
+		if _, err := d.DB.SetDatabaseStatusIf(ctx, m.ID, m.Container, status); err != nil {
 			return err
 		}
 	}

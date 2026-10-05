@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,6 +60,9 @@ type Queue struct {
 
 	mu       sync.Mutex
 	handlers map[string]Handler
+	// background are the kinds that may not fill every worker; see
+	// Background.
+	background []string
 
 	started bool
 	wake    chan struct{}
@@ -94,6 +98,16 @@ func defaultBackoff(attempt int) time.Duration {
 		d *= 4
 	}
 	return min(d, 10*time.Minute)
+}
+
+// Background marks job kinds as work that can wait: together they never
+// occupy the last worker. Scheduled commands and backups may run for hours,
+// and a deployment must not queue behind a full set of them. Call it before
+// Start.
+func (q *Queue) Background(kinds ...string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.background = append(q.background, kinds...)
 }
 
 // Register sets the handler for a job kind. Call it before Start.
@@ -264,6 +278,23 @@ func (q *Queue) dispatch(ctx context.Context) {
 // claim atomically takes the oldest ready job whose lock key is free.
 func (q *Queue) claim(ctx context.Context) (job, bool, error) {
 	nowUnix := time.Now().Unix()
+	args := []any{nowUnix, nowUnix}
+	// Background kinds are passed over while they hold all the workers
+	// they may have.
+	reserve := ""
+	q.mu.Lock()
+	background := q.background
+	q.mu.Unlock()
+	if len(background) > 0 && q.workers > 1 {
+		marks := strings.TrimSuffix(strings.Repeat("?,", len(background)), ",")
+		reserve = ` AND (j.kind NOT IN (` + marks + `) OR (SELECT count(*) FROM jobs b WHERE b.status = 'running' AND b.kind IN (` + marks + `)) < ?)`
+		for range 2 {
+			for _, k := range background {
+				args = append(args, k)
+			}
+		}
+		args = append(args, q.workers-1)
+	}
 	var j job
 	err := q.db.QueryRowContext(ctx, `
 		UPDATE jobs SET status = 'running', started_at = ?, attempts = attempts + 1
@@ -271,10 +302,10 @@ func (q *Queue) claim(ctx context.Context) (job, bool, error) {
 			SELECT j.id FROM jobs j
 			WHERE j.status = 'queued' AND j.run_after <= ?
 			  AND (j.lock_key = '' OR NOT EXISTS (
-			        SELECT 1 FROM jobs r WHERE r.status = 'running' AND r.lock_key = j.lock_key))
+			        SELECT 1 FROM jobs r WHERE r.status = 'running' AND r.lock_key = j.lock_key))`+reserve+`
 			ORDER BY j.run_after, j.created_at, j.id
 			LIMIT 1)
-		RETURNING id, kind, payload, attempts, max_attempts`, nowUnix, nowUnix).
+		RETURNING id, kind, payload, attempts, max_attempts`, args...).
 		Scan(&j.id, &j.kind, &j.payload, &j.attempts, &j.maxAttempts)
 	if errors.Is(err, sql.ErrNoRows) {
 		return job{}, false, nil

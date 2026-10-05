@@ -109,6 +109,46 @@ func (d *Deployer) cloneAccess(ctx context.Context, r runner.Runner, app db.App,
 	return repo.URL, append(env, d.extraGitEnv...), nil
 }
 
+// clone fetches one branch of a repository into checkout and returns the
+// commit it got. access says how to authenticate: only its GitHub App and
+// deploy key are looked at. workDir is a private directory for a deploy
+// key, which the caller removes.
+func (d *Deployer) clone(ctx context.Context, r runner.Runner, access db.App, repo source.Repo, branch, workDir, checkout string, log *Log) (string, error) {
+	url, env, err := d.cloneAccess(ctx, r, access, repo, workDir)
+	if err != nil {
+		return "", err
+	}
+	log.Step("Cloning %s (branch %s)", repo.FullName(), branch)
+	clone := runner.Cmd{
+		Name: "git",
+		// "--" ends the options: the address and the directory are operands.
+		Args:   []string{"clone", "--depth", "1", "--single-branch", "--no-tags", "--branch", branch, "--", url, checkout},
+		Env:    env,
+		Stdout: log, Stderr: log,
+	}
+	// Bounded: a host that accepts the connection and then stalls would
+	// otherwise hold the server's build lock for good.
+	cloneCtx, cancelClone := context.WithTimeout(ctx, d.cloneTimeout)
+	err = r.Run(cloneCtx, clone)
+	cancelClone()
+	if err != nil {
+		if cloneCtx.Err() != nil && ctx.Err() == nil {
+			return "", fmt.Errorf("clone %s: stopped after %s without finishing", repo.FullName(), d.cloneTimeout)
+		}
+		return "", fmt.Errorf("clone %s: %w", repo.FullName(), err)
+	}
+	head, err := r.Output(ctx, runner.Cmd{Name: "git", Args: []string{"-C", checkout, "rev-parse", "HEAD"}, Env: gitEnv()})
+	if err != nil {
+		return "", fmt.Errorf("read the checked-out commit: %w", err)
+	}
+	commit := strings.TrimSpace(string(head))
+	if len(commit) < 12 || strings.Trim(commit, "0123456789abcdef") != "" {
+		return "", fmt.Errorf("git reported an unexpected commit id %q", commit)
+	}
+	log.Step("Checked out %s", commit[:12])
+	return commit, nil
+}
+
 // build clones the app's repository on its server and builds an image from
 // it. It returns the image tag and the commit that was built. The checkout
 // is removed afterwards whether the build worked or not.
@@ -142,40 +182,9 @@ func (d *Deployer) build(ctx context.Context, r runner.Runner, app db.App, dep d
 		}
 	}()
 
-	url, env, err := d.cloneAccess(ctx, r, app, repo, workDir)
-	if err != nil {
+	if commit, err = d.clone(ctx, r, app, repo, app.Branch, workDir, checkout, log); err != nil {
 		return "", "", err
 	}
-
-	log.Step("Cloning %s (branch %s)", repo.FullName(), app.Branch)
-	clone := runner.Cmd{
-		Name: "git",
-		// "--" ends the options: the address and the directory are operands.
-		Args:   []string{"clone", "--depth", "1", "--single-branch", "--no-tags", "--branch", app.Branch, "--", url, checkout},
-		Env:    env,
-		Stdout: log, Stderr: log,
-	}
-	// Bounded: a host that accepts the connection and then stalls would
-	// otherwise hold the server's build lock for good.
-	cloneCtx, cancelClone := context.WithTimeout(ctx, d.cloneTimeout)
-	err = r.Run(cloneCtx, clone)
-	cancelClone()
-	if err != nil {
-		if cloneCtx.Err() != nil && ctx.Err() == nil {
-			return "", "", fmt.Errorf("clone %s: stopped after %s without finishing", repo.FullName(), d.cloneTimeout)
-		}
-		return "", "", fmt.Errorf("clone %s: %w", repo.FullName(), err)
-	}
-
-	head, err := r.Output(ctx, runner.Cmd{Name: "git", Args: []string{"-C", checkout, "rev-parse", "HEAD"}, Env: gitEnv()})
-	if err != nil {
-		return "", "", fmt.Errorf("read the checked-out commit: %w", err)
-	}
-	commit = strings.TrimSpace(string(head))
-	if len(commit) < 12 || strings.Trim(commit, "0123456789abcdef") != "" {
-		return "", "", fmt.Errorf("git reported an unexpected commit id %q", commit)
-	}
-	log.Step("Checked out %s", commit[:12])
 
 	contextDir := path.Join(checkout, app.BaseDir)
 	var dockerfile string

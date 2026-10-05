@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
 	"hash/fnv"
 	"log/slog"
 	"math/rand/v2"
@@ -54,6 +55,10 @@ type Deployer struct {
 	// InstanceTarget is the control plane's own loopback address, routed
 	// when a dashboard domain is set.
 	InstanceTarget string
+	// Notify, when set, is told about things worth telling the people of
+	// an environment's team: a deployment's end, a container that stopped.
+	// It must not block.
+	Notify func(environmentID string, e notify.Event)
 
 	healthEvery time.Duration // how often a starting container is checked
 	drain       time.Duration // pause between switching traffic and stopping the old container
@@ -114,6 +119,13 @@ func New(d *db.DB, box *secret.Box, q *jobs.Queue, r Runners, cfg *config.Config
 		serviceStartTimeout: 10 * time.Minute,
 		cloneTimeout:        10 * time.Minute,
 		buildTimeout:        30 * time.Minute,
+	}
+}
+
+// tell reports an event to whoever listens.
+func (d *Deployer) tell(environmentID string, e notify.Event) {
+	if d.Notify != nil {
+		d.Notify(environmentID, e)
 	}
 }
 
@@ -223,6 +235,8 @@ func (d *Deployer) runJob(ctx context.Context, raw []byte) error {
 			return ferr
 		}
 		d.pruneDeployments(rec, app.ID)
+		d.tell(app.EnvironmentID, notify.Event{Kind: notify.EventDeploy, OK: true, At: time.Now(),
+			Title: app.Name + " was deployed", URL: "/apps/" + app.ID + "/deployments/" + dep.ID})
 		return nil
 	}
 
@@ -240,6 +254,12 @@ func (d *Deployer) runJob(ctx context.Context, raw []byte) error {
 	if ferr := d.DB.FinishDeployment(rec, dep.ID, db.DeployFailed, err.Error()); ferr != nil {
 		d.Log.Error("record deployment", "deployment", dep.ID, "err", ferr)
 	}
+	body := err.Error()
+	if status == db.AppRunning {
+		body += "\n\nThe version from before is still running."
+	}
+	d.tell(app.EnvironmentID, notify.Event{Kind: notify.EventDeploy, At: time.Now(),
+		Title: "The deployment of " + app.Name + " failed", Body: body, URL: "/apps/" + app.ID + "/deployments/" + dep.ID})
 	return jobs.Permanent(err)
 }
 
@@ -632,11 +652,18 @@ func (d *Deployer) Destroy(ctx context.Context, appID string) error {
 	if err != nil {
 		return err
 	}
+	runs, err := d.DB.TaskRunIDs(ctx, app.ID)
+	if err != nil {
+		return err
+	}
 	if err := d.DB.DeleteApp(ctx, app.ID); err != nil {
 		return err
 	}
 	for _, id := range logs {
 		os.Remove(d.Cfg.DeployLogPath(id))
+	}
+	for _, id := range runs {
+		os.Remove(d.Cfg.TaskLogPath(id))
 	}
 	return nil
 }

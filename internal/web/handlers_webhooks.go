@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -81,9 +82,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // have one waiting. A delivery is acted on once: GitHub redelivers on
 // timeouts and on request. A delivery that failed is forgotten again, so
 // its redelivery is not mistaken for a repeat.
-func (s *Server) enqueuePush(w http.ResponseWriter, r *http.Request, apps []db.App) {
+func (s *Server) enqueuePush(w http.ResponseWriter, r *http.Request, apps []db.App, services []db.Service) {
 	ctx := r.Context()
-	if len(apps) == 0 {
+	if len(apps) == 0 && len(services) == 0 {
 		writeJSON(w, http.StatusOK, map[string]any{"deployments": 0})
 		return
 	}
@@ -113,7 +114,35 @@ func (s *Server) enqueuePush(w http.ResponseWriter, r *http.Request, apps []db.A
 			return
 		}
 	}
+	for _, svc := range services {
+		started, err := s.deployServiceFromOutside(ctx, svc)
+		if err != nil {
+			forget, cancel := detached(r, 10*time.Second)
+			if ferr := s.DB.ForgetDelivery(forget, delivery); ferr != nil {
+				s.Log.Error("forget webhook delivery", "err", ferr)
+			}
+			cancel()
+			s.hookFail(w, r, err)
+			return
+		}
+		if started {
+			queued++
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"deployments": queued})
+}
+
+// deployServiceFromOutside queues a deployment of a service for a push or
+// an API call. One that is already waiting will read the repository when
+// it starts, so nothing more is queued behind it.
+func (s *Server) deployServiceFromOutside(ctx context.Context, svc db.Service) (bool, error) {
+	waiting, err := s.DB.ServiceDeployWaiting(ctx, svc.ID)
+	if err != nil || waiting {
+		return false, err
+	}
+	// "again": a deployment that is running has already read the
+	// repository as it was.
+	return true, s.Deploy.EnqueueService(ctx, svc, true)
 }
 
 // githubWebhook receives events from a GitHub App created by musdash.
@@ -144,19 +173,39 @@ func (s *Server) githubWebhook(w http.ResponseWriter, r *http.Request) {
 		s.hookFail(w, r, err)
 		return
 	}
-	s.enqueuePush(w, r, apps)
+	services, err := s.DB.ServicesForPush(r.Context(), src.ID, push.Repo, push.Branch)
+	if err != nil {
+		s.hookFail(w, r, err)
+		return
+	}
+	s.enqueuePush(w, r, apps, services)
 }
 
 // gitWebhook receives a push webhook that a person added to a repository by
-// hand, for apps that clone with a deploy key or from a public repository.
+// hand, for apps and services that clone with a deploy key or from a public
+// repository. The id in the address is the app's or the service's.
 func (s *Server) gitWebhook(w http.ResponseWriter, r *http.Request) {
 	if !s.hookAllowed(w, r) {
 		return
 	}
+	// What a push is compared with, whichever kind of resource it is for.
+	var (
+		git, auto    bool
+		branch, repo string
+		sealed       string
+		svc          db.Service
+	)
 	app, err := s.DB.AppByID(r.Context(), r.PathValue("id"))
+	if err == nil {
+		git, auto, branch, repo, sealed = app.Source == db.SourceGit, app.AutoDeploy, app.Branch, app.RepoName, app.WebhookSecret
+	} else if errors.Is(err, db.ErrNotFound) {
+		if svc, err = s.DB.ServiceByID(r.Context(), r.PathValue("id")); err == nil {
+			git, auto, branch, repo, sealed = svc.FromGit(), svc.AutoDeploy, svc.Branch, svc.RepoName, svc.WebhookSecret
+		}
+	}
 	var key []byte
-	if err == nil && app.WebhookSecret != "" {
-		key, err = s.Box.Open(app.WebhookSecret)
+	if err == nil && sealed != "" {
+		key, err = s.Box.Open(sealed)
 	}
 	push, ok := s.readSigned(w, r, key)
 	if err != nil || !ok {
@@ -169,14 +218,18 @@ func (s *Server) gitWebhook(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"deployments": 0, "note": notJSONNote})
 		return
 	}
-	// Only a push to the app's own branch deploys. The repository name is
-	// compared when the event carries one.
-	if app.Source != db.SourceGit || !app.AutoDeploy || push.Branch == "" || push.Branch != app.Branch ||
-		(push.Repo != "" && !strings.EqualFold(push.Repo, app.RepoName)) {
+	// Only a push to the resource's own branch deploys. The repository
+	// name is compared when the event carries one.
+	if !git || !auto || push.Branch == "" || push.Branch != branch ||
+		(push.Repo != "" && !strings.EqualFold(push.Repo, repo)) {
 		writeJSON(w, http.StatusOK, map[string]any{"deployments": 0})
 		return
 	}
-	s.enqueuePush(w, r, []db.App{app})
+	if svc.ID != "" {
+		s.enqueuePush(w, r, nil, []db.Service{svc})
+		return
+	}
+	s.enqueuePush(w, r, []db.App{app}, nil)
 }
 
 // apiDeploy lets an external system, such as a CI pipeline that has just
@@ -197,7 +250,20 @@ func (s *Server) apiDeploy(w http.ResponseWriter, r *http.Request) {
 	// wrong token and an unknown app are indistinguishable.
 	app, err := s.DB.AppByDeployToken(r.Context(), r.URL.Query().Get("uuid"), secret.HashToken(token))
 	if errors.Is(err, db.ErrNotFound) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "The token does not match this app."})
+		// Not an app's token: a service's, or nobody's.
+		svc, serr := s.DB.ServiceByDeployToken(r.Context(), r.URL.Query().Get("uuid"), secret.HashToken(token))
+		if errors.Is(serr, db.ErrNotFound) {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "The token does not match this app."})
+			return
+		}
+		if serr == nil {
+			_, serr = s.deployServiceFromOutside(r.Context(), svc)
+		}
+		if serr != nil {
+			s.hookFail(w, r, serr)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]string{"service_id": svc.ID, "status": "queued"})
 		return
 	}
 	if err != nil {

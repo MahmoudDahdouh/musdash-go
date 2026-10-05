@@ -17,6 +17,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
+	"github.com/MahmoudDahdouh/musdash-go/internal/ops"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
 	"github.com/MahmoudDahdouh/musdash-go/internal/source"
@@ -33,6 +34,7 @@ type Server struct {
 	Box   *secret.Box
 	Queue *jobs.Queue
 	// Deploy runs deployments and publishes routes; Pool reaches servers.
+	Ops    *ops.Ops
 	Deploy *deploy.Deployer
 	Pool   *servers.Pool
 	Log    *slog.Logger
@@ -126,6 +128,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /apps/{id}/domains", s.authed(s.appDomainAdd))
 	mux.Handle("POST /apps/{id}/domains/{did}/delete", s.authed(s.appDomainDelete))
 	mux.Handle("POST /apps/{id}/delete", s.authed(s.appDelete))
+	mux.Handle("GET /apps/{id}/tasks", s.authed(s.appTasks))
+	mux.Handle("POST /apps/{id}/tasks", s.authed(s.appTaskCreate))
+	mux.Handle("GET /apps/{id}/tasks/{tid}", s.authed(s.appTask))
+	mux.Handle("POST /apps/{id}/tasks/{tid}", s.authed(s.appTaskSave))
+	mux.Handle("GET /apps/{id}/tasks/{tid}/runs", s.authed(s.appTaskRuns))
+	mux.Handle("POST /apps/{id}/tasks/{tid}/run", s.authed(s.appTaskRun))
+	mux.Handle("POST /apps/{id}/tasks/{tid}/delete", s.authed(s.appTaskDelete))
 	mux.Handle("POST /apps/{id}/source", s.authed(s.appSourceSave))
 	mux.Handle("POST /apps/{id}/webhook-secret", s.authed(s.appWebhookSecret))
 	mux.Handle("POST /apps/{id}/deploy-token", s.authed(s.appDeployToken))
@@ -141,6 +150,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /databases/{id}/settings", s.authed(s.databaseSettings))
 	mux.Handle("POST /databases/{id}/settings", s.authed(s.databaseSettingsSave))
 	mux.Handle("POST /databases/{id}/delete", s.authed(s.databaseDelete))
+	mux.Handle("GET /databases/{id}/backups", s.authed(s.databaseBackups))
+	mux.Handle("POST /databases/{id}/backups", s.authed(s.databaseBackupNow))
+	mux.Handle("GET /databases/{id}/backups/list", s.authed(s.databaseBackupList))
+	mux.Handle("POST /databases/{id}/backups/schedule", s.authed(s.databaseBackupSchedule))
+	mux.Handle("GET /databases/{id}/backups/{bid}/download", s.authed(s.databaseBackupDownload))
+	mux.Handle("POST /databases/{id}/backups/{bid}/restore", s.authed(s.databaseBackupRestore))
+	mux.Handle("POST /databases/{id}/backups/{bid}/delete", s.authed(s.databaseBackupDelete))
 
 	mux.Handle("GET /projects/{id}/services/new", s.authed(s.serviceNew))
 	mux.Handle("POST /projects/{id}/services", s.authed(s.serviceCreate))
@@ -154,6 +170,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /services/{id}/compose", s.authed(s.serviceCompose))
 	mux.Handle("POST /services/{id}/compose", s.authed(s.serviceComposeSave))
 	mux.Handle("GET /services/{id}/settings", s.authed(s.serviceSettings))
+	mux.Handle("POST /services/{id}/source", s.authed(s.serviceSourceSave))
+	mux.Handle("POST /services/{id}/webhook-secret", s.authed(s.serviceWebhookSecret))
+	mux.Handle("POST /services/{id}/deploy-token", s.authed(s.serviceDeployToken))
 	mux.Handle("POST /services/{id}/endpoints/{eid}", s.authed(s.serviceEndpointSave))
 	mux.Handle("POST /services/{id}/delete", s.authed(s.serviceDelete))
 
@@ -170,6 +189,15 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /servers/{id}", s.authed(s.serverUpdate))
 	mux.Handle("GET /settings", s.authed(s.settingsPage))
 	mux.Handle("POST /settings", s.authed(s.settingsSave))
+	mux.Handle("GET /settings/storages", s.authed(s.storagesPage))
+	mux.Handle("POST /settings/storages", s.authed(s.storageCreate))
+	mux.Handle("POST /settings/storages/{sid}/test", s.authed(s.storageTest))
+	mux.Handle("POST /settings/storages/{sid}/delete", s.authed(s.storageDelete))
+	mux.Handle("GET /settings/notifications", s.authed(s.notificationsPage))
+	mux.Handle("POST /settings/notifications", s.authed(s.notificationCreate))
+	mux.Handle("POST /settings/notifications/{cid}", s.authed(s.notificationSave))
+	mux.Handle("POST /settings/notifications/{cid}/test", s.authed(s.notificationTest))
+	mux.Handle("POST /settings/notifications/{cid}/delete", s.authed(s.notificationDelete))
 
 	if s.Cfg.Dev {
 		mux.Handle("GET /_ui", s.authed(s.gallery))

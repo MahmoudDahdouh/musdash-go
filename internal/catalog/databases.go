@@ -104,6 +104,10 @@ const (
 	redisCommand = `umask 077 && printf 'requirepass %s\nappendonly yes\n' "$REDIS_PASSWORD" > /tmp/musdash.conf && chown redis /tmp/musdash.conf && exec docker-entrypoint.sh redis-server /tmp/musdash.conf`
 	keydbCommand = `umask 077 && printf 'requirepass %s\nappendonly yes\n' "$REDIS_PASSWORD" > /tmp/musdash.conf && chown keydb /tmp/musdash.conf && exec docker-entrypoint.sh keydb-server /tmp/musdash.conf`
 	redisURL     = "redis://default:{{.Pass}}@{{.Host}}:{{.Port}}/0"
+	// mongoWithPassword writes the root password to a file only the
+	// container's user can read and leaves its path in $f. printf is the
+	// shell's own, so the password is in no process's arguments.
+	mongoWithPassword = `umask 077; f=$(mktemp) || exit 1; printf 'password: "%s"\n' "$MONGO_INITDB_ROOT_PASSWORD" > "$f"; `
 )
 
 var databases = []DBTemplate{
@@ -157,12 +161,14 @@ var databases = []DBTemplate{
 	{
 		Engine: "mongodb", Label: "MongoDB", About: "A document database.",
 		Image: "mongo:8", Port: 27017,
-		Env:         map[string]string{"MONGO_INITDB_ROOT_USERNAME": "{{.User}}", "MONGO_INITDB_ROOT_PASSWORD": "{{.Pass}}"},
-		VolumePath:  "/data/db",
-		HealthCmd:   []string{"sh", "-c", `mongosh --quiet --host "$(hostname)" --eval 'db.adminCommand({ping:1}).ok' | grep -q 1`},
-		URLFormat:   "mongodb://{{.User}}:{{.Pass}}@{{.Host}}:{{.Port}}/?authSource=admin",
-		DumpCmd:     `mongodump --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --archive`,
-		RestoreCmd:  `mongorestore --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --archive --drop`,
+		Env:        map[string]string{"MONGO_INITDB_ROOT_USERNAME": "{{.User}}", "MONGO_INITDB_ROOT_PASSWORD": "{{.Pass}}"},
+		VolumePath: "/data/db",
+		HealthCmd:  []string{"sh", "-c", `mongosh --quiet --host "$(hostname)" --eval 'db.adminCommand({ping:1}).ok' | grep -q 1`},
+		URLFormat:  "mongodb://{{.User}}:{{.Pass}}@{{.Host}}:{{.Port}}/?authSource=admin",
+		// The password goes through a private file: an argument would be
+		// readable in the container's process list.
+		DumpCmd:     mongoWithPassword + `mongodump --config "$f" --username "$MONGO_INITDB_ROOT_USERNAME" --authenticationDatabase admin --archive; s=$?; rm -f "$f"; exit $s`,
+		RestoreCmd:  mongoWithPassword + `mongorestore --config "$f" --username "$MONGO_INITDB_ROOT_USERNAME" --authenticationDatabase admin --archive --drop; s=$?; rm -f "$f"; exit $s`,
 		DefaultUser: "root",
 	},
 	{

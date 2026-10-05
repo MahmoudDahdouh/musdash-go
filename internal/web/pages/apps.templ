@@ -33,6 +33,7 @@ func appTabs(v AppView) []ui.Tab {
 		{Key: "logs", Label: "Logs", Href: b + "/logs"},
 		{Key: "environment", Label: "Environment", Href: b + "/environment"},
 		{Key: "storage", Label: "Storage", Href: b + "/storage"},
+		{Key: "tasks", Label: "Tasks", Href: b + "/tasks"},
 		{Key: "settings", Label: "Settings", Href: b + "/settings"},
 	}
 }
@@ -157,6 +158,16 @@ func newAppTabs(p db.Project, env db.Environment) []ui.Tab {
 // gitSourceFields are the fields describing a repository and how to build
 // it. The New app form and the app's Source settings share them.
 templ gitSourceFields(f ui.Form, c GitChoices, app db.App) {
+	@gitRepoFields(f, c, app)
+	@ui.Field(ui.FieldProps{Label: "Build with", For: "build_pack", Hint: "Dockerfile builds the repository's own Dockerfile. Static site serves a folder of ready-made files.", Error: f.E("build_pack")}) {
+		@ui.Select("build_pack", buildPackOptions, orDefault(f.V("build_pack"), orDefault(app.BuildPack, "dockerfile")), templ.Attributes{"aria-describedby": "build_pack-hint"})
+	}
+	@gitBuildFields(f, c, app)
+}
+
+// gitRepoFields say which repository and branch to read, and how. Apps
+// and services deployed from Git share them; app carries the stored values.
+templ gitRepoFields(f ui.Form, c GitChoices, app db.App) {
 	@ui.Field(ui.FieldProps{Label: "Read the repository through", For: "access", Hint: "Private repositories need a GitHub App or a deploy key. Add them under Sources.", Error: f.E("access")}) {
 		@ui.Select("access", accessOptions(c), orDefault(f.V("access"), appAccess(app)), templ.Attributes{"aria-describedby": "access-hint"})
 	}
@@ -175,9 +186,9 @@ templ gitSourceFields(f ui.Form, c GitChoices, app db.App) {
 		</div>
 	}
 	@ui.TextField(f, "Branch", "", ui.InputProps{ID: "branch", Mono: true, Required: true, Value: orDefault(app.Branch, "main")})
-	@ui.Field(ui.FieldProps{Label: "Build with", For: "build_pack", Hint: "Dockerfile builds the repository's own Dockerfile. Static site serves a folder of ready-made files.", Error: f.E("build_pack")}) {
-		@ui.Select("build_pack", buildPackOptions, orDefault(f.V("build_pack"), orDefault(app.BuildPack, "dockerfile")), templ.Attributes{"aria-describedby": "build_pack-hint"})
-	}
+}
+
+templ gitBuildFields(f ui.Form, c GitChoices, app db.App) {
 	@ui.TextField(f, "Base directory", "The folder inside the repository to build from. Empty for the repository root.", ui.InputProps{ID: "base_dir", Mono: true, Value: app.BaseDir, Placeholder: "apps/web"})
 	<div class="grid gap-4 sm:grid-cols-2">
 		@ui.TextField(f, "Dockerfile", "For the Dockerfile build. Relative to the base directory.", ui.InputProps{ID: "dockerfile_path", Mono: true, Value: app.DockerfilePath, Placeholder: "Dockerfile"})
@@ -553,6 +564,64 @@ type Triggers struct {
 	ViaGitHubApp  bool
 }
 
+// triggersCard is the "Deploy from outside" card: the push webhook of a
+// resource deployed from Git, and its deploy token. An app's settings and a
+// Git service's share it; base is the resource's own address.
+templ triggersCard(csrf, base, what string, git bool, tr Triggers) {
+	<section class="card" id="triggers">
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">Deploy from outside</h2>
+				<p class="muted text-sm">Ways for other systems to start a deployment of this { what }.</p>
+			</div>
+		</div>
+		if git {
+			<div class="card-body grid gap-3 border-b border-line">
+				<h3 class="font-semibold">Push webhook</h3>
+				if tr.ViaGitHubApp {
+					<p class="muted text-sm">This { what } deploys through a GitHub App, which already tells musdash about pushes. Nothing to set up.</p>
+				} else {
+					<p class="muted text-sm">Add a webhook to the repository with this address, content type <span class="code">application/json</span>, the secret below, and the push event.</p>
+					@ui.Copyable(tr.WebhookURL)
+					if tr.WebhookSecret != "" {
+						@ui.Copyable(tr.WebhookSecret)
+					}
+					<form method="post" action={ templ.SafeURL(base + "/webhook-secret") }>
+						@ui.CSRF(csrf)
+						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh"}) {
+							if tr.WebhookSecret == "" {
+								Create webhook secret
+							} else {
+								Replace webhook secret
+							}
+						}
+					</form>
+				}
+			</div>
+		}
+		<div class="card-body grid gap-3">
+			<h3 class="font-semibold">Deploy token</h3>
+			<p class="muted text-sm">For a CI pipeline: send a POST request with the token to start a deployment.</p>
+			<p class="code block break-all">curl -X POST -H "Authorization: Bearer TOKEN" "{ tr.DeployURL }"</p>
+			<form class="flex flex-wrap items-center gap-2" method="post" action={ templ.SafeURL(base + "/deploy-token") }>
+				@ui.CSRF(csrf)
+				@ui.Button(ui.ButtonProps{Type: "submit", Icon: "key"}) {
+					if tr.HasToken {
+						Replace deploy token
+					} else {
+						Create deploy token
+					}
+				}
+				if tr.HasToken {
+					@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Type: "submit", Attrs: templ.Attributes{"name": "revoke", "value": "1"}}) {
+						Revoke
+					}
+				}
+			</form>
+		</div>
+	</section>
+}
+
 templ AppSettings(s ui.Shell, v AppView, general, domain, src ui.Form, choices GitChoices, tr Triggers) {
 	@appFrame(s, v, "settings") {
 		<div class="grid max-w-3xl gap-6">
@@ -586,58 +655,7 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src ui.Form, choices G
 					@gitSourceFields(src, choices, v.App)
 				}
 			}
-			<section class="card" id="triggers">
-				<div class="card-head">
-					<div>
-						<h2 class="card-title">Deploy from outside</h2>
-						<p class="muted text-sm">Ways for other systems to start a deployment of this app.</p>
-					</div>
-				</div>
-				if v.App.Source == db.SourceGit {
-					<div class="card-body grid gap-3 border-b border-line">
-						<h3 class="font-semibold">Push webhook</h3>
-						if tr.ViaGitHubApp {
-							<p class="muted text-sm">This app deploys through a GitHub App, which already tells musdash about pushes. Nothing to set up.</p>
-						} else {
-							<p class="muted text-sm">Add a webhook to the repository with this address, content type <span class="code">application/json</span>, the secret below, and the push event.</p>
-							@ui.Copyable(tr.WebhookURL)
-							if tr.WebhookSecret != "" {
-								@ui.Copyable(tr.WebhookSecret)
-							}
-							<form method="post" action={ templ.SafeURL(v.base() + "/webhook-secret") }>
-								@ui.CSRF(s.CSRF)
-								@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh"}) {
-									if tr.WebhookSecret == "" {
-										Create webhook secret
-									} else {
-										Replace webhook secret
-									}
-								}
-							</form>
-						}
-					</div>
-				}
-				<div class="card-body grid gap-3">
-					<h3 class="font-semibold">Deploy token</h3>
-					<p class="muted text-sm">For a CI pipeline: send a POST request with the token to start a deployment.</p>
-					<p class="code block break-all">curl -X POST -H "Authorization: Bearer TOKEN" "{ tr.DeployURL }"</p>
-					<form class="flex flex-wrap items-center gap-2" method="post" action={ templ.SafeURL(v.base() + "/deploy-token") }>
-						@ui.CSRF(s.CSRF)
-						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "key"}) {
-							if tr.HasToken {
-								Replace deploy token
-							} else {
-								Create deploy token
-							}
-						}
-						if tr.HasToken {
-							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Type: "submit", Attrs: templ.Attributes{"name": "revoke", "value": "1"}}) {
-								Revoke
-							}
-						}
-					</form>
-				</div>
-			</section>
+			@triggersCard(s.CSRF, v.base(), "app", v.App.Source == db.SourceGit, tr)
 			<section class="card" id="domains">
 				<div class="card-head">
 					<div>
@@ -772,8 +790,7 @@ templ Servers(s ui.Shell, list []ServerInfo, f ui.Form) {
 }
 
 templ InstanceSettings(s ui.Shell, f ui.Form, domain, email string) {
-	@ui.Layout(s) {
-		@ui.PageHeader("Settings", "Settings for this musdash install.")
+	@settingsFrame(s, "dashboard") {
 		<div class="max-w-2xl">
 			@ui.FormCard("Dashboard address", "Reach this dashboard on its own domain, over HTTPS, through the musdash proxy.", "/settings", s.CSRF, "Save settings") {
 				@ui.TextField(f, "Dashboard domain", "Point the domain's DNS at this server first. Leave empty to keep using the server's address and port.", ui.InputProps{ID: "instance_domain", Mono: true, Value: domain, Placeholder: "musdash.example.com"})

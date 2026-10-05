@@ -10,6 +10,8 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
+	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
+	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
@@ -60,8 +62,11 @@ func newServiceCrumbs(p db.Project, env db.Environment) []ui.Crumb {
 // serviceTemplate resolves the template of a new service: a catalogue entry
 // or the empty one for a person's own file.
 func serviceTemplate(key string) (catalog.ServiceTemplate, bool) {
-	if key == db.TemplateCustom {
+	switch key {
+	case db.TemplateCustom:
 		return catalog.ServiceTemplate{Key: "", Name: "Your own Compose file"}, true
+	case db.TemplateGit:
+		return catalog.ServiceTemplate{Key: "", Name: "A Compose file in a Git repository"}, true
 	}
 	return catalog.Service(key)
 }
@@ -94,7 +99,25 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), ui.Form{}))
+	choices, err := s.gitChoices(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), ui.Form{}, choices))
+}
+
+// parseServiceSource reads the repository fields of a service from Git.
+func parseServiceSource(r *http.Request, f *ui.Form, c pages.GitChoices, svc *db.Service) {
+	var repo db.App
+	parseRepoForm(r, f, c, &repo)
+	svc.RepoURL, svc.RepoName, svc.Branch = repo.RepoURL, repo.RepoName, repo.Branch
+	svc.GitSourceID, svc.SSHKeyID, svc.AutoDeploy = repo.GitSourceID, repo.SSHKeyID, repo.AutoDeploy
+	svc.ComposePath = strings.Trim(strings.TrimSpace(r.PostFormValue("compose_path")), "/")
+	f.Set("compose_path", svc.ComposePath)
+	if svc.ComposePath == "" || !source.ValidRelPath(svc.ComposePath) {
+		f.Fail("compose_path", "Enter the file's path inside the repository, such as docker-compose.yml.")
+	}
 }
 
 // parseServiceVariables reads the Variables box: the values a person
@@ -168,7 +191,19 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 		f.Fail("name", appNameRule)
 	}
 	vars := map[string]string{}
-	if key == db.TemplateCustom {
+	choices, err := s.gitChoices(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if key == db.TemplateGit {
+		// The file is read when the service is deployed; until then
+		// there is nothing to show or check.
+		svc.Compose = ""
+		parseServiceSource(r, &f, choices, &svc)
+		f.Set("variables", r.PostFormValue("variables"))
+		vars = parseServiceVariables(&f, r.PostFormValue("variables"))
+	} else if key == db.TemplateCustom {
 		// Line ends as a browser sends them, made the file's own.
 		svc.Compose = strings.ReplaceAll(r.PostFormValue("compose"), "\r\n", "\n")
 		f.Set("compose", svc.Compose)
@@ -187,7 +222,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	rerender := func() {
 		shell := s.shell(w, r, "New service", "projects", newServiceCrumbs(p, env)...)
-		s.render(w, r, http.StatusUnprocessableEntity, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), f))
+		s.render(w, r, http.StatusUnprocessableEntity, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), f, choices))
 	}
 	if !f.OK() {
 		rerender()
@@ -199,6 +234,12 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	name := svc.Name
 	svc, err = s.DB.CreateService(ctx, teamID, svc)
+	if errors.Is(err, db.ErrNotFound) {
+		// A GitHub App or key that is not the team's.
+		f.Fail("access", "Choose how the repository is read.")
+		rerender()
+		return
+	}
 	if errors.Is(err, db.ErrNameTaken) || db.IsUnique(err) {
 		f.Fail("name", "This environment already has an app, database or service called "+name+".")
 		rerender()
@@ -400,7 +441,129 @@ func (s *Server) renderServiceCompose(w http.ResponseWriter, r *http.Request, st
 	} else if _, entered, _, err := s.serviceValues(v.Service); err == nil {
 		variables = deploy.FormatEnv(entered)
 	}
-	s.render(w, r, status, pages.ServiceCompose(s.serviceShell(w, r, v), v, f, composeText, variables))
+	s.renderServiceComposeGit(w, r, status, v, f, composeText, variables, ui.Form{}, "")
+}
+
+// renderServiceComposeGit is renderServiceCompose with the state of the
+// forms only a service from Git has.
+func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, f ui.Form, composeText, variables string, src ui.Form, newToken string) {
+	var git *pages.ServiceGit
+	if v.Service.FromGit() {
+		choices, err := s.gitChoices(r)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		base := s.publicBase(r)
+		git = &pages.ServiceGit{Choices: choices, Source: src, Tr: pages.Triggers{
+			WebhookURL:   base + "/webhooks/git/" + v.Service.ID,
+			DeployURL:    base + "/api/v1/deploy?uuid=" + v.Service.ID,
+			HasToken:     v.Service.DeployTokenHash != "",
+			NewToken:     newToken,
+			ViaGitHubApp: v.Service.GitSourceID != "",
+		}}
+		if v.Service.WebhookSecret != "" {
+			plain, err := s.Box.OpenString(v.Service.WebhookSecret)
+			if err != nil {
+				s.fail(w, r, errors.New("the webhook secret cannot be decrypted"))
+				return
+			}
+			git.Tr.WebhookSecret = plain
+		}
+	}
+	s.render(w, r, status, pages.ServiceCompose(s.serviceShell(w, r, v), v, f, composeText, variables, git))
+}
+
+// serviceSourceSave stores where a Git service's Compose file comes from.
+func (s *Server) serviceSourceSave(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
+	if !v.Service.FromGit() {
+		s.notFound(w, r)
+		return
+	}
+	choices, err := s.gitChoices(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var f ui.Form
+	svc := v.Service
+	parseServiceSource(r, &f, choices, &svc)
+	if f.OK() {
+		err := s.DB.UpdateServiceSource(r.Context(), sessionFrom(r).TeamID, svc)
+		switch {
+		case errors.Is(err, db.ErrNotFound):
+			f.Fail("access", "Choose how the repository is read.")
+		case err != nil:
+			s.fail(w, r, err)
+			return
+		}
+	}
+	if !f.OK() {
+		_, entered, _, _ := s.serviceValues(v.Service)
+		s.renderServiceComposeGit(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, v.Service.Compose, deploy.FormatEnv(entered), f, "")
+		return
+	}
+	setFlash(w, r, ui.ToneOK, "Source saved. Deploy to read the file from there.")
+	redirect(w, r, "/services/"+svc.ID+"/compose")
+}
+
+func (s *Server) serviceWebhookSecret(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
+	if !v.Service.FromGit() {
+		s.notFound(w, r)
+		return
+	}
+	sealed, err := s.Box.SealString(secret.RandomHex(24))
+	if err == nil {
+		err = s.DB.SetServiceWebhookSecret(r.Context(), sessionFrom(r).TeamID, v.Service.ID, sealed)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	setFlash(w, r, ui.ToneOK, "Webhook secret saved. Enter it in the repository's webhook settings.")
+	redirect(w, r, "/services/"+v.Service.ID+"/compose#triggers")
+}
+
+// serviceDeployToken creates, replaces or revokes the service's deploy
+// token. A new token is shown once: only its hash is kept.
+func (s *Server) serviceDeployToken(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
+	if !v.Service.FromGit() {
+		s.notFound(w, r)
+		return
+	}
+	teamID := sessionFrom(r).TeamID
+	if r.PostFormValue("revoke") == "1" {
+		if err := s.DB.SetServiceDeployToken(r.Context(), teamID, v.Service.ID, ""); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		setFlash(w, r, ui.ToneOK, "Deploy token revoked.")
+		redirect(w, r, "/services/"+v.Service.ID+"/compose#triggers")
+		return
+	}
+	token := "mdt_" + secret.RandomToken(32)
+	hash := secret.HashToken(token)
+	if err := s.DB.SetServiceDeployToken(r.Context(), teamID, v.Service.ID, hash); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	v.Service.DeployTokenHash = hash
+	_, entered, _, _ := s.serviceValues(v.Service)
+	// Rendered directly rather than after a redirect, so the token is never
+	// placed in a cookie or a URL.
+	s.renderServiceComposeGit(w, r, http.StatusOK, v, ui.Form{}, v.Service.Compose, deploy.FormatEnv(entered), ui.Form{}, token)
 }
 
 func (s *Server) serviceCompose(w http.ResponseWriter, r *http.Request) {
@@ -418,12 +581,15 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 	var f ui.Form
 	f.Set("_submitted", "1")
 	svc := v.Service
-	svc.Compose = strings.ReplaceAll(r.PostFormValue("compose"), "\r\n", "\n")
 	svc.ConnectEnv = r.PostFormValue("connect_env") == "1"
+	if !svc.FromGit() {
+		// A service from Git keeps the file its last deployment read.
+		svc.Compose = strings.ReplaceAll(r.PostFormValue("compose"), "\r\n", "\n")
+		checkCompose(&f, svc.Compose)
+	}
 	f.Set("compose", svc.Compose)
 	f.Set("variables", r.PostFormValue("variables"))
 	f.Set("connect_env", r.PostFormValue("connect_env"))
-	checkCompose(&f, svc.Compose)
 	entered := parseServiceVariables(&f, r.PostFormValue("variables"))
 	if !f.OK() {
 		s.renderServiceCompose(w, r, http.StatusUnprocessableEntity, v, f)

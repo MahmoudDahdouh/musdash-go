@@ -17,8 +17,9 @@ The full design is in [docs/spec.md](docs/spec.md). Each phase has an implementa
 | 1 | Deploy Docker images with domains, HTTPS, storage, live logs and rolling updates | Done |
 | 2 | Deploy from Git: Dockerfile and static builds, GitHub App, deploy keys, push webhooks, deploy token | Done |
 | 3 | Databases: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, KeyDB, Dragonfly, ClickHouse | Done |
-| 4 | Services: Docker Compose stacks from a catalogue (n8n, WordPress, Ghost, Uptime Kuma, MinIO, Cloudflare Tunnel) or your own file | Done, except stacks built from a Git repository |
-| 5–9 | Backups, multi-server, previews, teams, extras | Planned |
+| 4 | Services: Docker Compose stacks from a catalogue (n8n, WordPress, Ghost, Uptime Kuma, MinIO, Cloudflare Tunnel), your own file, or a Git repository | Done |
+| 5 | Operations: scheduled database backups with S3 copies, retention and restore; scheduled commands; notifications; Docker clean-up | Done |
+| 6–9 | Multi-server, previews, teams, extras | Planned |
 
 ## Build
 
@@ -160,6 +161,32 @@ A stack is held to the same limits as an app. Its file is read inside a containe
 A stack runs on its own network. Tick "Connect to the environment's network" if its containers and the apps and databases of the environment need to reach each other by name; names must then be unique across them.
 
 To publish a port that is not HTTP (a mail server, a game server), use an ordinary `ports:` entry with a host port from 1024 to 65535, outside 20000 to 29999.
+
+### Stacks from a Git repository
+
+"New service" also takes a Compose file that lives in a repository, read through the same GitHub Apps and deploy keys as apps. At every deployment musdash clones the branch, reads the file in the sandbox with only the checkout in view, and applies the same checks as to a pasted file. Differences from a pasted stack:
+
+- `build:` is allowed for contexts inside the repository. Images are built with `docker compose build`, one build at a time per server, and named by musdash.
+- Files of the repository can be mounted into containers (`./nginx.conf:/etc/nginx/nginx.conf`). They are mounted read-only, and a path that is a symbolic link in the repository is refused. Data that a container writes belongs in a named volume.
+- `include`, `extends` and `env_file` may name files of the repository.
+- A push to the branch redeploys it, through the GitHub App or through a webhook you add to the repository; a deploy token does the same for a CI pipeline. Both are on the service's Compose tab.
+- Only the Compose file itself is scanned for `SERVICE_…` variables, not files it includes.
+
+## Backups, scheduled tasks and notifications
+
+**Backups.** A database's Backups tab sets a schedule, how many backups to keep, and optionally a bucket to copy each one to. A backup is a dump made by the engine's own tool inside the database's container (`pg_dump`, `mysqldump`, `mariadb-dump`, `mongodump`, `redis-cli --rdb`), compressed and written to `<data>/backups/<database id>/`. It is streamed, so its memory use does not depend on the size of the database. Older backups beyond the number to keep are removed from the server and from the bucket.
+
+- Restore puts a backup back into the same database after you type its name; the database keeps running. Redis backups can be downloaded but not restored from the page: an RDB file is loaded by replacing the file and restarting.
+- KeyDB, Dragonfly and ClickHouse are not backed up yet. Their pages say so.
+- Buckets are added under Settings, Backup storage: any S3-compatible service. Copies are made with `rclone` in a container that runs only for the upload; the keys reach it through a file that is removed afterwards. A bucket hosted on the same server is reached through its public domain. Deleting a database with its data removes its backups on the server and leaves the copies in the bucket.
+
+**Scheduled tasks.** An app's Tasks tab runs a command in the app's running container on a schedule, with `sh -c`. Each run is listed with its exit status and output; the last 50 are kept. A run that is still going when its next time comes is not started a second time.
+
+**Schedules** are five cron fields (`0 3 * * *`), or `@hourly`, `@daily`, `@weekly`, `@monthly`, always in UTC. A schedule whose time passed while musdash was not running fires once when it is back, however many of its times were missed.
+
+**Notifications.** Settings, Notifications adds channels (Discord, Slack, Mattermost, Telegram, Pushover, a generic webhook, or email over SMTP) and chooses which events each one hears: a deployment finished or failed, a backup finished or failed, a scheduled task failed, a container stopped unexpectedly, the disk is nearly full. A container that keeps crashing is reported once every 15 minutes, not on every restart. A channel's address, and a bucket's endpoint, may not lead to the server's own services, to the private addresses of containers on it, or to a cloud metadata service; what such an address answers is never shown. Other machines on a private network are allowed: a self-hosted chat server or object store usually lives on one.
+
+**Clean-up.** Once a day after 03:00 UTC, musdash removes dangling images, build cache older than a week and stopped containers whose app, database or service no longer exists. It never removes volumes, and never images that a stopped app or database still needs.
 
 ## Tests
 

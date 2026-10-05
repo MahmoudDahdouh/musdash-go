@@ -3,7 +3,6 @@ package web
 import (
 	"context"
 	"errors"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,7 +12,6 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
 	"github.com/MahmoudDahdouh/musdash-go/internal/proxy"
-	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
@@ -120,15 +118,7 @@ func parseLimits(f *ui.Form, memory, cpus string) (memoryMB int, cores float64) 
 
 // generatedDomain builds an address that resolves to the server without any
 // DNS setup: sslip.io answers <anything>.<ip>.sslip.io with <ip>.
-func generatedDomain(server db.Server) string {
-	ip := server.IP
-	if net.ParseIP(ip) == nil {
-		ip = "127.0.0.1"
-	}
-	// IPv6 addresses use dashes in sslip.io names.
-	ip = strings.ReplaceAll(ip, ":", "-")
-	return strings.ToLower(secret.RandomID()[:8]) + "." + ip + ".sslip.io"
-}
+func generatedDomain(server db.Server) string { return deploy.GeneratedDomain(server) }
 
 // isGeneratedDomain reports whether a host is one of the shared wildcard
 // DNS names. They are served over plain HTTP: the certificate authority

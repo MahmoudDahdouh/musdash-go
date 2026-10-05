@@ -16,6 +16,10 @@ const KindService = "service"
 // supplied.
 const TemplateCustom = "custom"
 
+// TemplateGit is the template of a service whose Compose file is read from
+// a Git repository at every deployment.
+const TemplateGit = "git"
+
 // AppDegraded is the status of a service some of whose containers are not
 // running.
 const AppDegraded = "degraded"
@@ -36,7 +40,25 @@ type Service struct {
 	LastError     string
 	CreatedAt     int64
 	UpdatedAt     int64
+
+	// Git source, for a service of the template TemplateGit. Compose then
+	// holds the file as it was at the last deployment.
+	RepoURL         string
+	RepoName        string // "owner/name", lower case
+	Branch          string
+	ComposePath     string // the Compose file inside the repository
+	GitSourceID     string
+	SSHKeyID        string
+	AutoDeploy      bool
+	WebhookSecret   string // sealed
+	DeployTokenHash string
+	Commit          string // what the running stack was deployed from
+	Checkout        string // which checkout directory it uses: "a", "b" or ""
 }
+
+// FromGit reports whether the service's Compose file comes from a
+// repository.
+func (s Service) FromGit() bool { return s.Template == TemplateGit }
 
 // MemberNames returns the Compose service names of the last deployment.
 func (s Service) MemberNames() []string {
@@ -47,12 +69,16 @@ func (s Service) MemberNames() []string {
 }
 
 const serviceColumns = `s.id, s.environment_id, s.server_id, s.name, s.template, s.compose, s.variables, s.connect_env,
-	s.members, s.status, s.last_error, s.created_at, s.updated_at`
+	s.members, s.status, s.last_error, s.created_at, s.updated_at,
+	s.repo_url, s.repo_name, s.branch, s.compose_path, s.git_source_id, s.ssh_key_id, s.auto_deploy, s.webhook_secret,
+	s.deploy_token_hash, s.commit_sha, s.checkout`
 
 func scanService(row interface{ Scan(...any) error }) (Service, error) {
 	var m Service
 	err := row.Scan(&m.ID, &m.EnvironmentID, &m.ServerID, &m.Name, &m.Template, &m.Compose, &m.Variables, &m.ConnectEnv,
-		&m.Members, &m.Status, &m.LastError, &m.CreatedAt, &m.UpdatedAt)
+		&m.Members, &m.Status, &m.LastError, &m.CreatedAt, &m.UpdatedAt,
+		&m.RepoURL, &m.RepoName, &m.Branch, &m.ComposePath, &m.GitSourceID, &m.SSHKeyID, &m.AutoDeploy, &m.WebhookSecret,
+		&m.DeployTokenHash, &m.Commit, &m.Checkout)
 	return m, notFound(err)
 }
 
@@ -64,6 +90,10 @@ func (d *DB) CreateService(ctx context.Context, teamID string, m Service) (Servi
 	if _, err := d.Server(ctx, teamID, m.ServerID); err != nil {
 		return Service{}, err
 	}
+	if err := d.checkSourceOwnership(ctx, teamID, App{GitSourceID: m.GitSourceID, SSHKeyID: m.SSHKeyID}); err != nil {
+		return Service{}, err
+	}
+	m.RepoName = strings.ToLower(m.RepoName)
 	m.ID = secret.RandomID()
 	m.Status = AppCreated
 	m.CreatedAt = now()
@@ -77,9 +107,10 @@ func (d *DB) CreateService(ctx context.Context, teamID string, m Service) (Servi
 			return ErrNameTaken
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO services (id, environment_id, server_id, name, template, compose, variables, connect_env,
-				status, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			m.ID, m.EnvironmentID, m.ServerID, m.Name, m.Template, m.Compose, m.Variables, m.ConnectEnv, m.Status, m.CreatedAt, m.UpdatedAt)
+				status, created_at, updated_at, repo_url, repo_name, branch, compose_path, git_source_id, ssh_key_id, auto_deploy)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			m.ID, m.EnvironmentID, m.ServerID, m.Name, m.Template, m.Compose, m.Variables, m.ConnectEnv, m.Status, m.CreatedAt, m.UpdatedAt,
+			m.RepoURL, m.RepoName, m.Branch, m.ComposePath, m.GitSourceID, m.SSHKeyID, m.AutoDeploy)
 		return err
 	})
 	return m, err
@@ -132,6 +163,85 @@ func (d *DB) ServicesOnServer(ctx context.Context, serverID string) ([]Service, 
 func (d *DB) UpdateServiceCompose(ctx context.Context, teamID string, m Service) error {
 	return affected(d.ExecContext(ctx, `UPDATE services SET compose = ?, variables = ?, connect_env = ?, updated_at = ? WHERE id = ?`+teamServices,
 		m.Compose, m.Variables, m.ConnectEnv, now(), m.ID, teamID))
+}
+
+// UpdateServiceSource stores where a Git service's Compose file comes
+// from. A GitHub App or deploy key must be the team's own.
+func (d *DB) UpdateServiceSource(ctx context.Context, teamID string, m Service) error {
+	if err := d.checkSourceOwnership(ctx, teamID, App{GitSourceID: m.GitSourceID, SSHKeyID: m.SSHKeyID}); err != nil {
+		return err
+	}
+	return affected(d.ExecContext(ctx, `UPDATE services SET repo_url = ?, repo_name = ?, branch = ?, compose_path = ?, git_source_id = ?,
+			ssh_key_id = ?, auto_deploy = ?, updated_at = ? WHERE id = ? AND template = ?`+teamServices,
+		m.RepoURL, strings.ToLower(m.RepoName), m.Branch, m.ComposePath, m.GitSourceID, m.SSHKeyID, m.AutoDeploy, now(), m.ID, TemplateGit, teamID))
+}
+
+// SetServiceComposeRead records the Compose file a deployment read from the
+// repository, whether or not that deployment then succeeds: it is what the
+// service's pages explain themselves with.
+func (d *DB) SetServiceComposeRead(ctx context.Context, id, composeText string) error {
+	return affected(d.ExecContext(ctx, `UPDATE services SET compose = ?, updated_at = ? WHERE id = ?`, composeText, now(), id))
+}
+
+// SetServiceDeployed records what the stack that is now running came from:
+// the commit, and which checkout directory holds its files.
+func (d *DB) SetServiceDeployed(ctx context.Context, id, commit, checkout string) error {
+	return affected(d.ExecContext(ctx, `UPDATE services SET commit_sha = ?, checkout = ?, updated_at = ? WHERE id = ?`, commit, checkout, now(), id))
+}
+
+// SetServiceWebhookSecret stores the (sealed) secret of the service's own
+// push webhook.
+func (d *DB) SetServiceWebhookSecret(ctx context.Context, teamID, id, sealed string) error {
+	return affected(d.ExecContext(ctx, `UPDATE services SET webhook_secret = ?, updated_at = ? WHERE id = ?`+teamServices, sealed, now(), id, teamID))
+}
+
+// SetServiceDeployToken stores the hash of the service's deploy token; ""
+// revokes it.
+func (d *DB) SetServiceDeployToken(ctx context.Context, teamID, id, hash string) error {
+	return affected(d.ExecContext(ctx, `UPDATE services SET deploy_token_hash = ?, updated_at = ? WHERE id = ?`+teamServices, hash, now(), id, teamID))
+}
+
+// ServiceByDeployToken finds the service whose deploy token has this hash.
+func (d *DB) ServiceByDeployToken(ctx context.Context, id, hash string) (Service, error) {
+	if hash == "" {
+		return Service{}, ErrNotFound
+	}
+	return scanService(d.QueryRowContext(ctx, `SELECT `+serviceColumns+` FROM services s WHERE s.id = ? AND s.deploy_token_hash = ?`, id, hash))
+}
+
+// ServicesForPush returns the services that a push to the given repository
+// and branch should redeploy. With sourceID set, only services connected
+// through that GitHub App are returned.
+func (d *DB) ServicesForPush(ctx context.Context, sourceID, repoName, branch string) ([]Service, error) {
+	query := `SELECT ` + serviceColumns + ` FROM services s WHERE s.template = ? AND s.auto_deploy = 1 AND s.repo_name = ? AND s.branch = ?`
+	args := []any{TemplateGit, strings.ToLower(repoName), branch}
+	if sourceID != "" {
+		query += ` AND s.git_source_id = ?`
+		args = append(args, sourceID)
+	}
+	rows, err := d.QueryContext(ctx, query+` ORDER BY s.created_at, s.rowid`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Service
+	for rows.Next() {
+		m, err := scanService(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// ServiceDeployWaiting reports whether a deployment of the service is
+// queued and has not started: it will deploy whatever a new request wants
+// deployed.
+func (d *DB) ServiceDeployWaiting(ctx context.Context, id string) (bool, error) {
+	var n int
+	err := d.QueryRowContext(ctx, `SELECT count(*) FROM jobs WHERE kind = 'service' AND status = 'queued' AND json_extract(payload, '$.id') = ?`, id).Scan(&n)
+	return n > 0, err
 }
 
 // SetServiceVariables stores the sealed variables, for a deployment that

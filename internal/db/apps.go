@@ -383,10 +383,15 @@ func (d *DB) SetAppStatus(ctx context.Context, id, status string) error {
 // has since been replaced cannot overwrite the new container's status. It
 // also leaves alone an app that is being deployed or was stopped on purpose:
 // those statuses are set by the code doing the work, not by Docker events.
-func (d *DB) SetAppStatusIf(ctx context.Context, id, container, status string) error {
-	_, err := d.ExecContext(ctx, `UPDATE apps SET status = ?, updated_at = ? WHERE id = ? AND container = ? AND status NOT IN (?, ?)`,
-		status, now(), id, container, AppDeploying, AppStopped)
-	return err
+// It reports whether the status changed.
+func (d *DB) SetAppStatusIf(ctx context.Context, id, container, status string) (bool, error) {
+	res, err := d.ExecContext(ctx, `UPDATE apps SET status = ?, updated_at = ? WHERE id = ? AND container = ? AND status NOT IN (?, ?, ?)`,
+		status, now(), id, container, AppDeploying, AppStopped, status)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }
 
 // SetAppRuntime records the container now serving the app. It returns

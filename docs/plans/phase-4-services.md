@@ -111,8 +111,8 @@ func (d *Deployer) DestroyService(ctx, id string, deleteData bool) error
 - [x] Tests: validation messages reach the form, team scoping, generated secrets are shown only on the service's own page.
 
 ### Task 5 — Compose from Git
-- [ ] A service of kind `git`: repository, branch, Compose file path, access as for Git apps; clone → config in the sandbox with the checkout mounted → `docker compose build` → up.
-- [ ] Push webhooks and the deploy token work for it as for a Git app.
+- [x] A service of kind `git`: repository, branch, Compose file path, access as for Git apps; clone → config in the sandbox with the checkout mounted → `docker compose build` → up.
+- [x] Push webhooks and the deploy token work for it as for a Git app.
 
 ### Task 6 — End to end
 - [x] With `MUSDASH_DOCKER_TEST=1`: Uptime Kuma (one container) and WordPress (two containers, generated database password) are installed from the catalogue, answer on their loopback ports, survive a redeploy with their data, and are deleted with their volumes.
@@ -124,7 +124,11 @@ func (d *Deployer) DestroyService(ctx, id string, deleteData bool) error
 - `TestSandboxCannotReadTheServer`: `include`, `env_file` and `extends` naming files of the server fail without their content appearing anywhere.
 - MinIO stopped publishing its own image; the template uses Chainguard's build of MinIO's source (`cgr.dev/chainguard/minio`), which takes the same command and variables.
 - Idle memory on Linux after this phase: server 23.6 MB, proxy 17.6 MB (phase 3: 23.5 and 17.2).
-- Task 5 (stacks built from a Git repository) is not done. When it is: the checkout must not be the stack's directory, and a file of the checkout that a container can write to must not be trusted on the next deployment (clone afresh, check for symlinks as the app build does).
+- Task 5, stacks from a Git repository (migration `0010_service_git.sql`): `TestGitServiceWithDocker` clones a real repository, builds its Dockerfile with `docker compose build`, serves the built page and a file mounted from the checkout, shows that the container cannot write to that file, redeploys from a second commit, refuses a mounted path that is a symlink out of the repository while the stack from before keeps serving, and deletes the stack with its image.
+  - A service has two checkout directories and alternates between them. The first version cloned into one directory every time; on a redeployment that pulled the mounted files out from under the running containers, and a failed redeployment would have left them without. Found by the real-Docker test.
+  - Files of the checkout are mounted read-only, and every checkout path the stack reads (mounts, build contexts, Dockerfiles, secret and config files) is checked for symlinks in the repository. A container that could write to the checkout could otherwise leave a link for another mount to follow out of it.
+  - The commit and checkout are recorded when the stack is running, not when it was cloned; the Compose text is recorded as read, so a deployment that fails can still be explained.
+  - Only the Compose file itself is scanned for `SERVICE_…` variables.
 
 ### Found by the independent review, and fixed
 

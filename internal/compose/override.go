@@ -2,6 +2,7 @@ package compose
 
 import (
 	"fmt"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -130,6 +131,9 @@ type Override struct {
 	// EnvNetwork, when set, is the environment's Docker network, which
 	// every service of the stack joins.
 	EnvNetwork string
+	// ReadOnlyUnder, when set, is the checkout of a stack from a Git
+	// repository: bind mounts from inside it are made read-only.
+	ReadOnlyUnder string
 }
 
 // envNetworkKey is the name the environment's network has inside the stack.
@@ -162,6 +166,17 @@ func (p Project) Apply(o Override) {
 			for key, value := range env {
 				if value == nil {
 					delete(env, key)
+				}
+			}
+		}
+		// Files of the repository are mounted read-only. A container that
+		// could write to the checkout could leave a link there for another
+		// mount, of this deployment or the next, to follow out of it.
+		if o.ReadOnlyUnder != "" {
+			for _, m := range asList(svc["volumes"]) {
+				mount := asMap(m)
+				if source, _ := mount["source"].(string); mount["type"] == "bind" && inside(source, o.ReadOnlyUnder) {
+					mount["read_only"] = true
 				}
 			}
 		}
@@ -202,6 +217,59 @@ func (p Project) Apply(o Override) {
 		}
 		networks[envNetworkKey] = map[string]any{"name": o.EnvNetwork, "external": true}
 	}
+}
+
+// CheckoutPaths returns every path inside the checkout that the stack reads
+// from the server: bind-mount sources, build contexts and Dockerfiles, and
+// the files of secrets and configs. The caller makes sure none of them is,
+// or passes through, a symbolic link of the repository.
+func (p Project) CheckoutPaths(checkout string) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(v any) {
+		s, _ := v.(string)
+		if s = path.Clean(s); inside(s, checkout) && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	for _, raw := range asMap(p.doc["services"]) {
+		svc := asMap(raw)
+		for _, m := range asList(svc["volumes"]) {
+			if mount := asMap(m); mount["type"] == "bind" {
+				add(mount["source"])
+			}
+		}
+		if b := asMap(svc["build"]); b != nil {
+			context, _ := b["context"].(string)
+			add(context)
+			if dockerfile, _ := b["dockerfile"].(string); dockerfile != "" {
+				if !path.IsAbs(dockerfile) {
+					dockerfile = path.Join(context, dockerfile)
+				}
+				add(dockerfile)
+			} else if b["dockerfile_inline"] == nil {
+				add(path.Join(context, "Dockerfile"))
+			}
+		}
+	}
+	for _, kind := range []string{"secrets", "configs"} {
+		for _, raw := range asMap(p.doc[kind]) {
+			add(asMap(raw)["file"])
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Builds reports whether any service of the stack is built from source.
+func (p Project) Builds() bool {
+	for _, raw := range asMap(p.doc["services"]) {
+		if asMap(raw)["build"] != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // Volumes returns the Docker names of the stack's named volumes.

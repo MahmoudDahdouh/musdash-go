@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -976,4 +978,315 @@ func lastLines(s string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// gitStack answers the commands of a deployment of a stack that lives in a
+// repository: one service built from the checkout, with a file of the
+// checkout mounted.
+type gitStack struct {
+	project  string
+	checkout string
+	links    map[string]bool // repository paths that are symbolic links
+	compose  string
+}
+
+const gitComposeFile = `services:
+  web:
+    build: .
+    environment:
+      - SERVICE_FQDN_WEB_8080
+    volumes:
+      - ./conf/site.conf:/etc/site.conf
+`
+
+func (g *gitStack) handle(e *env) func(line string, c runner.Cmd) (string, error) {
+	return func(line string, c runner.Cmd) (string, error) {
+		switch {
+		case strings.HasPrefix(line, "docker version"):
+			return "29.8.0\n", nil
+		case strings.HasPrefix(line, "id -"):
+			return "1000\n", nil
+		case strings.HasPrefix(line, "git clone"):
+			// Into whichever of the two directories this deployment uses.
+			g.checkout = line[strings.LastIndex(line, " ")+1:]
+			e.fake.PutFile(g.checkout+"/deploy/compose.yaml", g.compose)
+			return "", nil
+		case strings.Contains(line, "rev-parse HEAD"):
+			return "0123456789abcdef0123456789abcdef01234567\n", nil
+		case strings.Contains(line, "ls-tree HEAD -- "):
+			p := line[strings.Index(line, "-- ")+3:]
+			if g.links[p] {
+				return "120000 blob abc\t" + p + "\n", nil
+			}
+			return "100644 blob abc\t" + p + "\n", nil
+		case strings.Contains(line, "config --format json --no-interpolate"):
+			return `{"name":"` + g.project + `","services":{"web":{"build":{"context":"` + g.checkout + `/deploy"},"environment":["SERVICE_FQDN_WEB_8080"]}}}`, nil
+		case strings.Contains(line, "config --format json"):
+			return `{"name":"` + g.project + `","networks":{"default":{"name":"` + g.project + `_default"}},"services":{"web":{
+				"build":{"context":"` + g.checkout + `/deploy","dockerfile":"Dockerfile"},
+				"environment":{"SERVICE_FQDN_WEB_8080":"x.example.test"},"networks":{"default":null},
+				"volumes":[{"type":"bind","source":"` + g.checkout + `/deploy/conf/site.conf","target":"/etc/site.conf","bind":{"create_host_path":true}}]}}}`, nil
+		case strings.HasPrefix(line, "docker inspect"):
+			return running, nil
+		}
+		return "", nil
+	}
+}
+
+func TestDeployServiceFromGit(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, err := e.db.CreateService(ctx, e.team, db.Service{
+		EnvironmentID: e.app.EnvironmentID, ServerID: e.server.ID, Name: "stack", Template: db.TemplateGit,
+		RepoURL: "https://github.com/acme/stack", RepoName: "Acme/Stack", Branch: "main", ComposePath: "deploy/compose.yaml", AutoDeploy: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := e.cfg.AppDir(s.ID)
+	g := &gitStack{project: ServiceProject(s.ID), checkout: dir + "/src-a", links: map[string]bool{}, compose: gitComposeFile}
+	e.fake.Handle = g.handle(e)
+
+	got := e.deployService(s, 10*time.Second)
+	if got.Status != db.AppRunning {
+		t.Fatalf("%+v\n%s", got, e.serviceLog(s))
+	}
+	// What the repository held is what the service now shows.
+	if got.Compose != gitComposeFile || got.Commit != "0123456789abcdef0123456789abcdef01234567" || got.RepoName != "acme/stack" || got.Checkout != "a" {
+		t.Fatalf("compose %q, commit %q, repository %q, checkout %q", got.Compose, got.Commit, got.RepoName, got.Checkout)
+	}
+	all := "\n" + strings.Join(e.fake.Calls(), "\n") + "\n"
+	order := []string{
+		"rm-all " + dir + "/src-a", // a fresh checkout every time
+		"git clone --depth 1 --single-branch --no-tags --branch main -- https://github.com/acme/stack " + g.checkout,
+		"ls-tree HEAD -- deploy/compose.yaml",
+		"--mount type=bind,source=" + g.checkout + ",target=" + g.checkout + ",readonly",
+		"--project-directory " + g.checkout + "/deploy --file " + g.checkout + "/deploy/compose.yaml config --format json --no-interpolate",
+		"ls-tree HEAD -- deploy/conf/site.conf",
+		" pull --ignore-buildable",
+		" --ansi never build\n",
+		" up --detach",
+	}
+	at := 0
+	for _, want := range order {
+		i := strings.Index(all[at:], want)
+		if i < 0 {
+			t.Fatalf("%q is missing or out of order in:%s", want, all)
+		}
+		at += i
+	}
+	// The Dockerfile and the build context were checked for links too.
+	for _, want := range []string{"ls-tree HEAD -- deploy/Dockerfile", "ls-tree HEAD -- deploy\n"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("missing %q", strings.TrimSpace(want))
+		}
+	}
+	// A file of the repository is mounted read-only, and the built image
+	// has a name of musdash's choosing.
+	resolved, mode, _ := e.fake.File(dir + "/compose.resolved.json")
+	if mode != 0o600 || !strings.Contains(resolved, `"read_only": true`) || !strings.Contains(resolved, `"image": "`+g.project+`-web"`) {
+		t.Fatalf("resolved file (mode %o): %s", mode, resolved)
+	}
+	// The endpoint the file names got a generated domain at deployment.
+	endpoints, _ := e.db.ListEndpoints(ctx, s.ID)
+	if len(endpoints) != 1 || !strings.HasSuffix(endpoints[0].Host, ".sslip.io") || endpoints[0].Port != 8080 {
+		t.Fatalf("endpoints: %+v", endpoints)
+	}
+	// It waited its turn with the server's other builds.
+	var lock string
+	e.db.QueryRowContext(ctx, `SELECT lock_key FROM jobs WHERE kind = ? ORDER BY rowid DESC LIMIT 1`, JobService).Scan(&lock)
+	if lock != "build:"+e.server.ID {
+		t.Fatalf("lock key %q", lock)
+	}
+
+	// A mounted path that is a link in the repository is refused before
+	// anything is built or started. The attempt was cloned next to the
+	// checkout the running stack uses, which is left alone.
+	g.links["deploy/conf"] = true
+	before := len(e.fake.Calls())
+	got = e.deployService(got, 10*time.Second)
+	if !strings.Contains(got.LastError, "deploy/conf is a symbolic link") || got.Checkout != "a" {
+		t.Fatalf("a linked mount source: %q (checkout %q)", got.LastError, got.Checkout)
+	}
+	for _, c := range e.fake.Calls()[before:] {
+		if strings.Contains(c, " build") || strings.Contains(c, " up --detach") {
+			t.Fatalf("something ran for a stack with a linked mount: %s", c)
+		}
+		if c == "rm-all "+dir+"/src-a" {
+			t.Fatal("a failed redeployment removed the checkout the running stack has mounted")
+		}
+	}
+	if !strings.HasSuffix(g.checkout, "/src-b") {
+		t.Fatalf("the redeployment was cloned into %s", g.checkout)
+	}
+	// A redeployment that works moves the stack to the other directory and
+	// removes the one it left.
+	g.links = map[string]bool{}
+	before = len(e.fake.Calls())
+	if got = e.deployService(got, 10*time.Second); got.Status != db.AppRunning || got.Checkout != "b" || got.LastError != "" {
+		t.Fatalf("%+v", got)
+	}
+	if after := strings.Join(e.fake.Calls()[before:], "\n"); !strings.Contains(after, "rm-all "+dir+"/src-a") {
+		t.Fatal("the checkout the stack no longer uses was kept")
+	}
+	g.links = map[string]bool{"deploy/conf": true}
+	// So is a Compose file that is itself a link.
+	g.links = map[string]bool{"deploy/compose.yaml": true}
+	if got = e.deployService(got, 10*time.Second); !strings.Contains(got.LastError, "deploy/compose.yaml is a symbolic link") {
+		t.Fatalf("a linked Compose file: %q", got.LastError)
+	}
+	// And a repository without the file says so.
+	g.links = map[string]bool{}
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		if strings.HasPrefix(line, "git clone") {
+			return "", nil // nothing written
+		}
+		return g.handle(e)(line, c)
+	}
+	if got = e.deployService(got, 10*time.Second); !strings.Contains(got.LastError, "no file deploy/compose.yaml on the branch main") {
+		t.Fatalf("a missing Compose file: %q", got.LastError)
+	}
+
+	// Deleting it removes the image built for it.
+	e.fake.Handle = g.handle(e)
+	if err := e.d.DestroyService(ctx, s.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if all := strings.Join(e.fake.Calls(), "\n"); !strings.Contains(all, "docker rmi "+g.project+"-web") {
+		t.Fatal("the built image was not removed")
+	}
+}
+
+// A stack that lives in a repository, against the real Docker and git: the
+// file is read in the sandbox from the checkout, an image is built from the
+// repository's Dockerfile, and a file of the repository is mounted
+// read-only.
+func TestGitServiceWithDocker(t *testing.T) {
+	if os.Getenv("MUSDASH_DOCKER_TEST") != "1" {
+		t.Skip("set MUSDASH_DOCKER_TEST=1 to run against the local Docker daemon")
+	}
+	e := newEnv(t)
+	ctx := context.Background()
+	repo, gitEnv := makeRepo(t, "stack", map[string]string{
+		"deploy/compose.yaml": "services:\n  web:\n    build: ..\n    environment:\n      - SERVICE_FQDN_WEB_80\n    volumes:\n      - ../extra.html:/usr/share/nginx/html/extra.html\n",
+		"Dockerfile":          "FROM nginx:alpine\nCOPY index.html /usr/share/nginx/html/index.html\n",
+		"index.html":          "built: one\n",
+		"extra.html":          "mounted: one\n",
+	})
+	local := runner.NewLocal()
+	dk := docker.Client{R: local}
+	e.d.Runners = fixedRunners{local}
+	e.d.extraGitEnv = gitEnv
+	s, err := e.db.CreateService(ctx, e.team, db.Service{
+		EnvironmentID: e.app.EnvironmentID, ServerID: e.server.ID, Name: "stack", Template: db.TemplateGit,
+		RepoURL: "https://git.test/acme/stack.git", RepoName: "acme/stack", Branch: "main", ComposePath: "deploy/compose.yaml",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := ServiceProject(s.ID)
+	t.Cleanup(func() {
+		local.Run(ctx, runner.Cmd{Name: "docker", Args: []string{"compose", "--project-name", project, "down", "--volumes", "--remove-orphans", "--timeout", "2"}})
+		dk.RemoveImage(ctx, project+"-web")
+	})
+	commit := func(message string) {
+		t.Helper()
+		for _, args := range [][]string{{"add", "--all"}, {"commit", "--quiet", "--message", message}} {
+			cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+			cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+	}
+
+	got := e.deployService(s, 10*time.Minute)
+	if got.Status != db.AppRunning {
+		t.Fatalf("%s %s\n%s", got.Status, got.LastError, e.serviceLog(s))
+	}
+	endpoints, _ := e.db.ListEndpoints(ctx, s.ID)
+	if len(endpoints) != 1 || endpoints[0].HostPort < portMin || !strings.HasSuffix(endpoints[0].Host, ".sslip.io") {
+		t.Fatalf("endpoints: %+v", endpoints)
+	}
+	fetch := func(path string) string {
+		t.Helper()
+		var last error
+		for range 20 {
+			res, err := http.Get("http://127.0.0.1:" + strconv.Itoa(endpoints[0].HostPort) + path)
+			if err == nil {
+				body, _ := io.ReadAll(res.Body)
+				res.Body.Close()
+				return string(body)
+			}
+			last = err
+			time.Sleep(250 * time.Millisecond)
+		}
+		t.Fatalf("GET %s: %v", path, last)
+		return ""
+	}
+	if body := fetch("/"); !strings.Contains(body, "built: one") {
+		t.Fatalf("the built image serves %q", body)
+	}
+	if body := fetch("/extra.html"); !strings.Contains(body, "mounted: one") {
+		t.Fatalf("the mounted file serves %q", body)
+	}
+	if got.Commit == "" || !strings.Contains(got.Compose, "SERVICE_FQDN_WEB_80") {
+		t.Fatalf("commit %q, compose %q", got.Commit, got.Compose)
+	}
+	// The container cannot write to the repository's file.
+	container := project + "-web-1"
+	if err := local.Run(ctx, runner.Cmd{Name: "docker", Args: []string{"exec", container, "sh", "-c", "echo changed > /usr/share/nginx/html/extra.html"}}); err == nil {
+		t.Fatal("a container wrote to a file of the checkout")
+	}
+
+	// A new commit and a redeployment: both the image and the file follow.
+	os.WriteFile(filepath.Join(repo, "index.html"), []byte("built: two\n"), 0o644)
+	os.WriteFile(filepath.Join(repo, "extra.html"), []byte("mounted: two\n"), 0o644)
+	commit("second")
+	first := got.Commit
+	got = e.deployService(got, 10*time.Minute)
+	if got.Status != db.AppRunning || got.LastError != "" || got.Commit == first || got.Checkout != "b" {
+		t.Fatalf("%s %s (commit %s, checkout %s)\n%s", got.Status, got.LastError, got.Commit, got.Checkout, e.serviceLog(s))
+	}
+	if body := fetch("/"); !strings.Contains(body, "built: two") {
+		t.Fatalf("after the second commit the image serves %q\n%s", body, e.serviceLog(s))
+	}
+	if body := fetch("/extra.html"); !strings.Contains(body, "mounted: two") {
+		t.Fatalf("after the second commit the mounted file serves %q", body)
+	}
+
+	// A mounted path that is a link out of the repository is refused, and
+	// what was running keeps running.
+	os.Remove(filepath.Join(repo, "extra.html"))
+	if err := os.Symlink("/etc/hostname", filepath.Join(repo, "extra.html")); err != nil {
+		t.Fatal(err)
+	}
+	commit("a link")
+	got = e.deployService(got, 10*time.Minute)
+	if !strings.Contains(got.LastError, "extra.html is a symbolic link") || got.Status != db.AppRunning {
+		t.Fatalf("a linked mount: status %s, error %q", got.Status, got.LastError)
+	}
+	if body := fetch("/"); !strings.Contains(body, "built: two") {
+		t.Fatalf("the running stack was disturbed: %q", body)
+	}
+
+	// A file that reads the server through the sandbox's only window, the
+	// checkout, finds nothing of the server there.
+	os.Remove(filepath.Join(repo, "extra.html"))
+	os.WriteFile(filepath.Join(repo, "extra.html"), []byte("mounted: three\n"), 0o644)
+	os.WriteFile(filepath.Join(repo, "deploy/compose.yaml"), []byte("include:\n  - /etc/hostname\nservices:\n  web:\n    build: ..\n"), 0o644)
+	commit("an include")
+	got = e.deployService(got, 10*time.Minute)
+	host, _ := os.Hostname()
+	if got.LastError == "" || (host != "" && strings.Contains(got.LastError, host)) {
+		t.Fatalf("an include of a server file: %q", got.LastError)
+	}
+
+	if err := e.d.DestroyService(ctx, s.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if have, _ := dk.HasImage(ctx, project+"-web"); have {
+		t.Fatal("the image built for the deleted service is still there")
+	}
+	t.Log("a stack from a repository: built, served, redeployed from a new commit, a linked mount refused, deleted with its image")
 }
