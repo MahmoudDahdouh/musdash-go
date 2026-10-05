@@ -72,7 +72,18 @@ var codeAttrs = templ.Attributes{"inputmode": "numeric", "maxlength": "7", "auto
 
 var anyCodeAttrs = templ.Attributes{"maxlength": "20", "autocapitalize": "off", "spellcheck": "false"}
 
-// twoStepCard is the Account page's part about the second step.
+// twoStepForm gives a dialog of the second step's card the form that came
+// back, when it is the one that was sent, and an empty one otherwise: two
+// of them ask for a code, and an error belongs to one.
+func twoStepForm(f ui.Form, which string) ui.Form {
+	if f.V("_form") == which {
+		return f
+	}
+	return ui.Form{}
+}
+
+// twoStepCard is the Account page's part about the second step, and the
+// dialogs its buttons open.
 templ twoStepCard(s ui.Shell, v AccountView, f ui.Form) {
 	<section class="card" id="two-step">
 		<div class="card-head">
@@ -89,51 +100,47 @@ templ twoStepCard(s ui.Shell, v AccountView, f ui.Form) {
 			</div>
 		</div>
 		if v.TwoStep {
-			<div class="card-body grid gap-6">
-				<form class="grid gap-4" method="post" action="/account/two-step/codes">
-					@ui.CSRF(s.CSRF)
-					<div>
-						<h3 class="font-semibold">Recovery codes</h3>
-						<p class="muted text-sm">
-							{ codesLeft(v.RecoveryCodes) }. Each signs you in once when you do not have your phone. Making new ones ends the old ones.
-						</p>
+			<div class="rows">
+				<div class="row">
+					<div class="min-w-0 flex-1">
+						<p class="font-semibold">Recovery codes</p>
+						<p class="muted text-sm">{ codesLeft(v.RecoveryCodes) }. Each signs you in once when you do not have your phone.</p>
 					</div>
-					@ui.TextField(f, "Code from your app", "", ui.InputProps{ID: "codes_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: codeAttrs})
-					<div>
-						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh"}) {
-							Make new recovery codes
-						}
-					</div>
-				</form>
-				<form class="grid gap-4 border-t border-line pt-6" method="post" action="/account/two-step/off">
-					@ui.CSRF(s.CSRF)
-					<div>
-						<h3 class="font-semibold">Turn off</h3>
-						<p class="muted text-sm">Signing in then needs your password only.</p>
-					</div>
-					@ui.TextField(f, "Current password", "", ui.InputProps{ID: "off_password", Type: "password", Autocomplete: "current-password", Required: true})
-					@ui.TextField(f, "Code from your app, or a recovery code", "", ui.InputProps{ID: "off_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: anyCodeAttrs})
-					<div>
-						@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Type: "submit"}) {
-							Turn off two-step sign-in
-						}
-					</div>
-				</form>
-			</div>
-		} else {
-			<form method="post" action="/account/two-step/start">
-				@ui.CSRF(s.CSRF)
-				<div class="card-body grid gap-4">
-					@ui.TextField(f, "Current password", "So that a session left open is not enough to set this up.", ui.InputProps{ID: "start_password", Type: "password", Autocomplete: "current-password", Required: true})
-				</div>
-				<div class="card-foot">
-					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
-						Set up two-step sign-in
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "refresh", Opens: "new-codes"}) {
+						Make new codes
 					}
 				</div>
-			</form>
+				<div class="row">
+					<div class="min-w-0 flex-1">
+						<p class="font-semibold">Turn off</p>
+						<p class="muted text-sm">Signing in then needs your password only.</p>
+					</div>
+					@ui.Button(ui.ButtonProps{Small: true, Variant: ui.DangerQuiet, Opens: "two-step-off"}) {
+						Turn off
+					}
+				</div>
+			</div>
+		} else {
+			<div class="card-body">
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "lock", Opens: "two-step-start"}) {
+					Set up two-step sign-in
+				}
+			</div>
 		}
 	</section>
+	if v.TwoStep {
+		@ui.FormDialog(ui.DialogProps{ID: "new-codes", Title: "Make new recovery codes", Description: "The codes you have now stop working. The new ones are shown once, right after they are made.", Action: "/account/two-step/codes", CSRF: s.CSRF, Submit: "Make new codes", Open: !twoStepForm(f, "codes").OK()}) {
+			@ui.TextField(twoStepForm(f, "codes"), "Code from your app", "", ui.InputProps{ID: "codes_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: codeAttrs})
+		}
+		@ui.FormDialog(ui.DialogProps{ID: "two-step-off", Title: "Turn off two-step sign-in", Description: "Your password alone signs you in from then on, and your recovery codes are deleted.", Action: "/account/two-step/off", CSRF: s.CSRF, Submit: "Turn off two-step sign-in", Danger: true, Open: !twoStepForm(f, "off").OK()}) {
+			@ui.TextField(twoStepForm(f, "off"), "Current password", "", ui.InputProps{ID: "off_password", Type: "password", Autocomplete: "current-password", Required: true})
+			@ui.TextField(twoStepForm(f, "off"), "Code from your app, or a recovery code", "", ui.InputProps{ID: "off_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: anyCodeAttrs})
+		}
+	} else {
+		@ui.FormDialog(ui.DialogProps{ID: "two-step-start", Title: "Set up two-step sign-in", Description: "Nothing changes yet: the next page shows a key for your authenticator app and asks for a code from it.", Action: "/account/two-step/start", CSRF: s.CSRF, Submit: "Continue", Open: !f.OK()}) {
+			@ui.TextField(f, "Current password", "So that a session left open is not enough to set this up.", ui.InputProps{ID: "start_password", Type: "password", Autocomplete: "current-password", Required: true})
+		}
+	}
 }
 
 // TwoStepSetup shows a new key once, and asks for a code to prove the app

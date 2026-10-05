@@ -325,8 +325,13 @@ func TestTurningTwoStepOff(t *testing.T) {
 	}
 
 	// New recovery codes need a code from the app, not a recovery code.
-	res, _ := a.post("/account", "/account/two-step/codes", url.Values{"code": {codes[1]}})
+	res, refusal := a.post("/account", "/account/two-step/codes", url.Values{"code": {codes[1]}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
+	// The refusal is said in the dialog that was sent, which is the one
+	// that is open: two dialogs of the page ask for a code.
+	if strings.Count(refusal, wrongCode) != 1 || strings.Count(refusal, "data-autoopen") != 1 || !strings.Contains(refusal, `id="new-codes" aria-labelledby="new-codes-title" data-autoopen`) {
+		t.Fatal("a wrong code is not explained in the dialog it was typed into")
+	}
 	res, page := a.post("/account", "/account/two-step/codes", url.Values{"code": {codeIn(key, 1)}})
 	wantStatus(t, res, http.StatusOK)
 	fresh := recoveryRE.FindAllStringSubmatch(page, -1)
@@ -340,8 +345,11 @@ func TestTurningTwoStepOff(t *testing.T) {
 	// Turning off needs the password and a code.
 	res, _ = a.post("/account", "/account/two-step/off", url.Values{"off_password": {"wrong password"}, "code": {fresh[0][1]}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
-	res, _ = a.post("/account", "/account/two-step/off", url.Values{"off_password": {testPassword}, "code": {"000000"}})
+	res, refusal = a.post("/account", "/account/two-step/off", url.Values{"off_password": {testPassword}, "code": {"000000"}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
+	if strings.Count(refusal, wrongCode) != 1 || !strings.Contains(refusal, `id="two-step-off" aria-labelledby="two-step-off-title" data-autoopen`) {
+		t.Fatal("a wrong code is not explained in the Turn off dialog")
+	}
 	if !on() {
 		t.Fatal("turned off without both")
 	}

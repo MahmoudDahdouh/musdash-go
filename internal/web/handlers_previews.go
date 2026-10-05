@@ -69,6 +69,8 @@ func (s *Server) appPreviewsSave(w http.ResponseWriter, r *http.Request) {
 	var f ui.Form
 	on := r.PostFormValue("previews") == "1"
 	raw := strings.TrimSpace(r.PostFormValue("preview_domain"))
+	f.Set("_submitted", "1")
+	f.Set("previews", r.PostFormValue("previews"))
 	f.Set("preview_domain", raw)
 	domain := ""
 	if raw != "" {

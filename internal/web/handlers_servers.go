@@ -332,6 +332,12 @@ func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
+	s.renderInstanceSettings(w, r, http.StatusOK, ui.Form{})
+}
+
+// renderInstanceSettings draws the dashboard's settings as they are stored; what
+// was typed into a refused form is in f.
+func (s *Server) renderInstanceSettings(w http.ResponseWriter, r *http.Request, status int, f ui.Form) {
 	domain, err := s.DB.Setting(r.Context(), db.SettingInstanceDomain)
 	if err != nil {
 		s.fail(w, r, err)
@@ -342,7 +348,7 @@ func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.InstanceSettings(s.shell(w, r, "Settings", "settings"), ui.Form{}, domain, email))
+	s.render(w, r, status, pages.InstanceSettings(s.shell(w, r, "Settings", "settings"), f, domain, email))
 }
 
 func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
@@ -370,7 +376,7 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.render(w, r, http.StatusUnprocessableEntity, pages.InstanceSettings(s.shell(w, r, "Settings", "settings"), f, rawDomain, rawEmail))
+		s.renderInstanceSettings(w, r, http.StatusUnprocessableEntity, f)
 		return
 	}
 	if err := s.DB.SetSetting(ctx, db.SettingInstanceDomain, domain); err != nil {

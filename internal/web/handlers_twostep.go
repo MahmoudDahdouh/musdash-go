@@ -204,8 +204,9 @@ func (s *Server) twoStepCodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var f ui.Form
+	f.Set("_form", "codes")
 	if ok, wait := s.codeAllowed(sess.UserID); !ok {
-		f.Fail("codes_code", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
+		f.Fail("code", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		s.renderAccount(w, r, http.StatusTooManyRequests, ui.Form{}, ui.Form{}, f)
 		return
 	}
@@ -219,7 +220,7 @@ func (s *Server) twoStepCodes(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !ok {
-		f.Fail("codes_code", wrongCode)
+		f.Fail("code", wrongCode)
 		s.renderAccount(w, r, http.StatusUnprocessableEntity, ui.Form{}, ui.Form{}, f)
 		return
 	}
@@ -240,8 +241,9 @@ func (s *Server) twoStepOff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var f ui.Form
+	f.Set("_form", "off")
 	if ok, wait := s.codeAllowed(sess.UserID); !ok {
-		f.Fail("off_code", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
+		f.Fail("code", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		s.renderAccount(w, r, http.StatusTooManyRequests, ui.Form{}, ui.Form{}, f)
 		return
 	}
@@ -252,7 +254,7 @@ func (s *Server) twoStepOff(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !ok {
-			f.Fail("off_code", wrongCode)
+			f.Fail("code", wrongCode)
 		}
 	}
 	if !f.OK() {

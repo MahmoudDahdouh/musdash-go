@@ -67,7 +67,13 @@ func keyOptions(keys []db.SSHKey) []ui.Option {
 
 templ Servers(s ui.Shell, list []ServerInfo, keys []db.SSHKey, f ui.Form) {
 	@ui.Layout(s) {
-		@ui.PageHeader("Servers", "The machines your apps run on.")
+		@ui.PageHeader("Servers", "The machines your apps run on.") {
+			if s.Admin {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "add-server"}) {
+					Add server
+				}
+			}
+		}
 		<div class="grid max-w-3xl gap-6">
 			for _, info := range list {
 				if info.Server.Kind == db.ServerLocal {
@@ -76,8 +82,9 @@ templ Servers(s ui.Shell, list []ServerInfo, keys []db.SSHKey, f ui.Form) {
 					@remoteServerCard(s, info)
 				}
 			}
-			if s.Admin {
-				@ui.FormCard("Add a server", "Another machine with Docker, reached over SSH. Nothing of musdash is installed on it except, if you choose so, the proxy that serves its domains.", "/servers", s.CSRF, "Add server") {
+		</div>
+		if s.Admin {
+			@ui.FormDialog(ui.DialogProps{ID: "add-server", Title: "Add a server", Description: "Another machine with Docker, reached over SSH. Nothing of musdash is installed on it except, if you choose so, the proxy that serves its domains.", Action: "/servers", CSRF: s.CSRF, Submit: "Add server", Wide: true, Open: addServerOpen(f)}) {
 					@ui.TextField(f, "Name", "What you call it here, such as Frankfurt.", ui.InputProps{ID: "name", Required: true})
 					<div class="grid gap-4 sm:grid-cols-[1fr_8rem]">
 						@ui.TextField(f, "Address", "An IP address or a host name.", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "203.0.113.20"})
@@ -88,9 +95,8 @@ templ Servers(s ui.Shell, list []ServerInfo, keys []db.SSHKey, f ui.Form) {
 						@ui.Select("key", keyOptions(keys), orDefault(f.V("key"), "new"), templ.Attributes{"aria-describedby": "key-hint"})
 					}
 					@ui.TextField(f, "Data directory", "Where musdash keeps its files on the server. Empty uses /var/lib/musdash for root and ~/.musdash otherwise.", ui.InputProps{ID: "data_dir", Mono: true})
-				}
 			}
-		</div>
+		}
 	}
 }
 
@@ -130,24 +136,43 @@ templ localServerCard(s ui.Shell, info ServerInfo, f ui.Form) {
 				<dd><a class="link" href={ templ.SafeURL("/servers/" + info.Server.ID + "/metrics") }>Processor, memory and disk</a></dd>
 				<dt>Shared variables</dt>
 				<dd><a href={ templ.SafeURL("/servers/" + info.Server.ID + "/variables") }>Values for what runs here</a></dd>
-				if !s.Admin && info.Server.IP != "" {
+				if s.Admin || info.Server.IP != "" {
 					<dt>Public IP address</dt>
-					<dd class="fact">{ info.Server.IP }</dd>
+					<dd class="flex flex-wrap items-center gap-2">
+						if info.Server.IP != "" {
+							<span class="fact">{ info.Server.IP }</span>
+						} else {
+							<span class="muted">Not set</span>
+						}
+						if s.Admin {
+							@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "server-ip"}) {
+								Change
+							}
+						}
+					</dd>
 				}
 			</dl>
-			if s.Admin {
-				<form class="grid gap-3 border-t border-line pt-4" method="post" action={ templ.SafeURL("/servers/" + info.Server.ID) }>
-					@ui.CSRF(s.CSRF)
-					@ui.TextField(f, "Public IP address", "Used to build the generated address of new apps, such as abc123.203.0.113.7.sslip.io.", ui.InputProps{ID: "ip", Mono: true, Value: info.Server.IP, Placeholder: "203.0.113.7"})
-					<div>
-						@ui.Button(ui.ButtonProps{Type: "submit"}) {
-							Save address
-						}
-					</div>
-				</form>
-			}
 		</div>
 	</section>
+	if s.Admin {
+		@ui.FormDialog(ui.DialogProps{ID: "server-ip", Title: "Public IP address", Description: "Used to build the generated address of new apps, such as abc123.203.0.113.7.sslip.io. Apps that have an address keep it.", Action: "/servers/" + info.Server.ID, CSRF: s.CSRF, Submit: "Save address", Open: f.E("ip") != ""}) {
+			@ui.TextField(f, "Public IP address", "", ui.InputProps{ID: "ip", Mono: true, Value: info.Server.IP, Placeholder: "203.0.113.7"})
+		}
+	}
+}
+
+// addServerOpen says whether the Add server form came back refused. The
+// page's one form state is shared with the address of this machine, whose
+// error is its own.
+func addServerOpen(f ui.Form) bool { return !f.OK() && f.E("ip") == "" }
+
+// proxyAsk is the question before the proxy is put on a server: installing
+// again restarts the one that is serving.
+func proxyAsk(s db.Server) templ.Attributes {
+	if s.Proxy == db.ProxyInstalled {
+		return ui.Ask("Reinstall the proxy on "+s.Name+"?", "The proxy's binary and service are written again and the proxy is restarted. Sites served from this server may not answer for a moment.", "Reinstall proxy", false)
+	}
+	return ui.Ask("Install the proxy on "+s.Name+"?", "musdash copies its binary to the server and starts it as a service on ports 80 and 443. Domains pointed at this server are served from then on.", "Install proxy", false)
 }
 
 templ remoteServerCard(s ui.Shell, info ServerInfo) {
@@ -242,7 +267,7 @@ templ remoteServerCard(s ui.Shell, info ServerInfo) {
 					if info.Server.Status == db.ServerOK {
 						<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/proxy") }>
 							@ui.CSRF(s.CSRF)
-							@ui.Button(ui.ButtonProps{Type: "submit"}) {
+							@ui.Button(ui.ButtonProps{Type: "submit", Attrs: proxyAsk(info.Server)}) {
 								if info.Server.Proxy == db.ProxyInstalled {
 									Reinstall proxy
 								} else {
@@ -254,7 +279,7 @@ templ remoteServerCard(s ui.Shell, info ServerInfo) {
 					if info.Server.HostKey != "" {
 						<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/forget-host-key") }>
 							@ui.CSRF(s.CSRF)
-							@ui.Button(ui.ButtonProps{Type: "submit"}) {
+							@ui.Button(ui.ButtonProps{Type: "submit", Attrs: ui.Ask("Forget the host key of "+info.Server.Name+"?", "Nothing can be done on the server until Check has met it again, and Check then trusts whatever machine answers at its address. Do this only after you replaced or reinstalled the server yourself.", "Forget host key", true)}) {
 								Forget host key
 							}
 						</form>
@@ -262,7 +287,7 @@ templ remoteServerCard(s ui.Shell, info ServerInfo) {
 					if info.Apps == 0 {
 						<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/delete") }>
 							@ui.CSRF(s.CSRF)
-							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Icon: "trash", Type: "submit"}) {
+							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Icon: "trash", Type: "submit", Attrs: ui.Ask("Remove the server "+info.Server.Name+"?", "musdash forgets the server and its settings. Nothing on the machine itself is touched.", "Remove server", true)}) {
 								Remove server
 							}
 						</form>

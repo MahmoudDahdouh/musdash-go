@@ -371,6 +371,8 @@ type DialogProps struct {
 	// back from the server with errors.
 	Open bool
 	Wide bool
+	// Danger draws the submit button red: the form takes something away.
+	Danger bool
 }
 
 // FormDialog is a short form in a dialog: what creating or changing
@@ -395,12 +397,19 @@ templ FormDialog(p DialogProps) {
 				@Button(ButtonProps{Attrs: templ.Attributes{"data-close": true}}) {
 					Cancel
 				}
-				@Button(ButtonProps{Variant: Primary, Type: "submit"}) {
+				@Button(ButtonProps{Variant: dialogSubmit(p), Type: "submit"}) {
 					{ p.Submit }
 				}
 			</div>
 		</form>
 	</dialog>
+}
+
+func dialogSubmit(p DialogProps) string {
+	if p.Danger {
+		return Danger
+	}
+	return Primary
 }
 
 // Ask marks a submit button as critical: pressing it opens the page's

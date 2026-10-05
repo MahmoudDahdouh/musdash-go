@@ -346,15 +346,12 @@ func TestNotificationsPage(t *testing.T) {
 
 	res, body := a.get(page)
 	wantStatus(t, res, http.StatusOK)
-	if !strings.Contains(body, "No channel yet") || !strings.Contains(body, "Add Discord channel") {
+	// Each kind has a dialog with its own fields, and none is open.
+	if !strings.Contains(body, "No channel yet") || !strings.Contains(body, "Add a Discord channel") || !strings.Contains(body, "SMTP server") {
 		t.Fatal("the empty page")
 	}
-	// Each kind has its own fields.
-	if _, body = a.get(page + "?kind=email"); !strings.Contains(body, "SMTP server") || !strings.Contains(body, "Add Email channel") {
-		t.Fatal("the email form")
-	}
-	if _, body = a.get(page + "?kind=nonsense"); !strings.Contains(body, "Add Discord channel") {
-		t.Fatal("an unknown kind did not fall back to the first")
+	if strings.Contains(body, "data-autoopen") {
+		t.Fatal("a dialog is open on a page nobody sent a form from")
 	}
 
 	secretURL := hook.URL + "/hooks/T0PSECRET"
@@ -362,6 +359,10 @@ func TestNotificationsPage(t *testing.T) {
 	wantStatus(t, res, http.StatusUnprocessableEntity)
 	if !strings.Contains(body, "must be an http:// or https:// address") {
 		t.Fatal("a bad address was not explained")
+	}
+	// The refused form comes back in its own dialog, open, and no other.
+	if strings.Count(body, "data-autoopen") != 1 || !strings.Contains(body, `id="add-channel-webhook" aria-labelledby="add-channel-webhook-title" data-autoopen`) {
+		t.Fatal("the refused form is not the one dialog that is open")
 	}
 	res, _ = a.post(page+"?kind=webhook", page, url.Values{"kind": {"carrier-pigeon"}, "name": {"Ops"}})
 	wantStatus(t, res, http.StatusNotFound)

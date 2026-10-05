@@ -329,11 +329,33 @@ templ Account(s ui.Shell, profile, password, twoStep ui.Form, v AccountView) {
 	@ui.Layout(s) {
 		@ui.PageHeader("Account", "")
 		<div class="grid max-w-2xl gap-6">
-			@ui.FormCard("Profile", "", "/account/profile", s.CSRF, "Save changes") {
+			<section class="card">
+				<div class="card-head">
+					<h2 class="card-title">Profile</h2>
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-profile"}) {
+						Edit
+					}
+				</div>
+				<div class="card-body">
+					@ui.KeyValue([]ui.KVItem{{Key: "Name", Value: s.Name}, {Key: "Email", Value: s.Email}})
+				</div>
+			</section>
+			@ui.FormDialog(ui.DialogProps{ID: "edit-profile", Title: "Profile", Action: "/account/profile", CSRF: s.CSRF, Submit: "Save changes", Open: !profile.OK()}) {
 				@ui.TextField(profile, "Name", "", ui.InputProps{ID: "name", Value: s.Name, Autocomplete: "name", Required: true})
 				@ui.TextField(profile, "Email", "You sign in with this address.", ui.InputProps{ID: "email", Type: "email", Value: s.Email, Autocomplete: "email", Required: true})
 			}
-			@ui.FormCard("Password", "Changing it signs you out everywhere else and revokes your API tokens.", "/account/password", s.CSRF, "Change password") {
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Password</h2>
+						<p class="muted text-sm">Changing it signs you out everywhere else and revokes your API tokens.</p>
+					</div>
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "key", Opens: "change-password"}) {
+						Change password
+					}
+				</div>
+			</section>
+			@ui.FormDialog(ui.DialogProps{ID: "change-password", Title: "Change password", Description: "You are signed out everywhere else, and your API tokens are revoked.", Action: "/account/password", CSRF: s.CSRF, Submit: "Change password", Open: !password.OK()}) {
 				@ui.TextField(password, "Current password", "", ui.InputProps{ID: "current", Type: "password", Autocomplete: "current-password", Required: true})
 				@ui.TextField(password, "New password", "10 to 72 characters.", ui.InputProps{ID: "password", Type: "password", Autocomplete: "new-password", Required: true})
 			}

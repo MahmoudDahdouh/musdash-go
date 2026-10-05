@@ -85,7 +85,7 @@ templ ServiceHeader(csrf string, s db.Service) {
 				if serviceDeployed(s) {
 					<form method="post" action={ templ.SafeURL("/services/" + s.ID + "/stop") }>
 						@ui.CSRF(csrf)
-						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop"}) {
+						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+s.Name+"?", "Every container of the service is stopped and its endpoints stop answering. Its volumes and settings are kept.", "Stop service", false)}) {
 							Stop
 						}
 					</form>
@@ -466,23 +466,39 @@ templ ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) {
 				if len(v.Endpoints) == 0 {
 					<p class="card-body muted">This stack has no web address. To give a service one, add <span class="code">SERVICE_FQDN_NAME_PORT</span> to its environment in the Compose file.</p>
 				}
-				for _, e := range v.Endpoints {
-					<form class="card-body grid gap-3 border-t border-line" method="post" action={ templ.SafeURL(v.base() + "/endpoints/" + e.ID) }>
-						@ui.CSRF(s.CSRF)
-						@ui.Field(ui.FieldProps{Label: "Domain for " + endpointTarget(e), For: endpointFormID(e), Error: endpointError(e, failed, f)}) {
-							@ui.Input(ui.InputProps{ID: endpointFormID(e), Name: "host", Mono: true, Required: true, Value: endpointValue(e, failed, f), Invalid: endpointError(e, failed, f) != "", Placeholder: "app.example.com"})
+				if len(v.Endpoints) > 0 {
+					<div class="rows">
+						for _, e := range v.Endpoints {
+							<div class="row">
+								<div class="min-w-0 flex-1">
+									<p class="fact truncate">{ orDefault(e.Host, "No domain") }</p>
+									<p class="muted text-sm">{ endpointTarget(e) }</p>
+								</div>
+								if e.Host != "" {
+									if e.TLS {
+										@ui.Badge("HTTPS", ui.ToneOK)
+									} else {
+										@ui.Badge("HTTP", ui.ToneNeutral)
+									}
+								}
+								@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "endpoint-" + e.ID}) {
+									Change
+								}
+							</div>
 						}
-						@ui.Checkbox("tls-"+e.ID, e.TLS, templ.Attributes{"name": "tls"}) {
-							Serve over HTTPS with an automatic certificate
-						}
-						<div>
-							@ui.Button(ui.ButtonProps{Type: "submit"}) {
-								Save domain
-							}
-						</div>
-					</form>
+					</div>
 				}
 			</section>
+			for _, e := range v.Endpoints {
+				@ui.FormDialog(ui.DialogProps{ID: "endpoint-" + e.ID, Title: "Domain for " + endpointTarget(e), Description: "Point the domain's DNS at this server first. The change takes effect on the next deployment.", Action: v.base() + "/endpoints/" + e.ID, CSRF: s.CSRF, Submit: "Save domain", Open: endpointError(e, failed, f) != ""}) {
+					@ui.Field(ui.FieldProps{Label: "Domain", For: endpointFormID(e), Error: endpointError(e, failed, f)}) {
+						@ui.Input(ui.InputProps{ID: endpointFormID(e), Name: "host", Mono: true, Required: true, Value: endpointValue(e, failed, f), Invalid: endpointError(e, failed, f) != "", Placeholder: "app.example.com"})
+					}
+					@ui.Checkbox("tls-"+e.ID, e.TLS, templ.Attributes{"name": "tls"}) {
+						Serve over HTTPS with an automatic certificate
+					}
+				}
+			}
 			@tagsCard(s.CSRF, v.base()+"/tags", v.Tags, v.TeamTags)
 			<section class="card card-danger">
 				<div class="card-head">
