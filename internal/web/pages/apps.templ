@@ -20,6 +20,8 @@ type AppView struct {
 	Parent *db.App
 	// Previews are the app's previews, filled in for the Settings page.
 	Previews []PreviewRow
+	// Tags are the app's tags, filled in for the Settings page.
+	Tags []string
 }
 
 // PreviewRow is one preview in its parent's list.
@@ -843,6 +845,7 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form,
 			if v.App.Source == db.SourceGit {
 				@previewsCard(s.CSRF, v, previews)
 			}
+			@tagsCard(s.CSRF, v.base()+"/tags", v.Tags)
 			<section class="card" id="domains">
 				<div class="card-head">
 					<div>

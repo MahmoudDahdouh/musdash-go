@@ -729,7 +729,7 @@ func (d *DB) DeleteApp(ctx context.Context, id string) error {
 		if previews > 0 {
 			return ErrHasPreviews
 		}
-		for _, table := range []string{"domains", "env_vars", "storages"} {
+		for _, table := range []string{"domains", "env_vars", "storages", "resource_tags"} {
 			if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE resource_kind = ? AND resource_id = ?`, KindApp, id); err != nil {
 				return err
 			}

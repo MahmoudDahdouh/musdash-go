@@ -340,6 +340,9 @@ func (d *DB) DeleteService(ctx context.Context, id string) error {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM domains WHERE resource_kind = ? AND resource_id IN (SELECT id FROM service_endpoints WHERE service_id = ?)`, KindService, id); err != nil {
 			return err
 		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM resource_tags WHERE resource_kind = ? AND resource_id = ?`, KindService, id); err != nil {
+			return err
+		}
 		return affected(tx.ExecContext(ctx, `DELETE FROM services WHERE id = ?`, id))
 	})
 }

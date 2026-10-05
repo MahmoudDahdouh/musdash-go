@@ -150,9 +150,9 @@ func (s *Server) handle(mux *http.ServeMux, pattern string, who access, h http.H
 - [x] Tests: each scope resolves for an app and for a service; a preview resolves as its parent; another team's variable cannot be named; rows go with their project, environment and server.
 
 ### Task 4 — Tags
-- [ ] Tags on an app's and a service's settings page; the Tags page; a tag's page with "Deploy all".
-- [ ] `DeployTag`.
-- [ ] Tests: the name rule; a tag's page lists only the team's; deploy all queues one deployment each and none behind a waiting one; tags go with the resource; a preview cannot be tagged.
+- [x] Tags on an app's and a service's settings page; the Tags page; a tag's page with "Deploy all".
+- [x] `DeployTag`.
+- [x] Tests: the name rule; a tag's page lists only the team's; deploy all queues one deployment each and none behind a waiting one; tags go with the resource; a preview cannot be tagged.
 
 ### Task 5 — API tokens and the API
 - [ ] Account page: tokens (make, shown once, revoke).

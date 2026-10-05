@@ -1,0 +1,110 @@
+package pages
+
+import (
+	"strings"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+func tagCountLine(t db.TagCount) string {
+	var parts []string
+	if t.Apps > 0 {
+		parts = append(parts, plural(t.Apps, "app", "apps"))
+	}
+	if t.Services > 0 {
+		parts = append(parts, plural(t.Services, "service", "services"))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// tagsCard is the part of an app's or a service's settings that holds
+// its tags.
+templ tagsCard(csrf, action string, tags []string) {
+	<form class="card" id="tags" method="post" action={ templ.SafeURL(action) }>
+		@ui.CSRF(csrf)
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">Tags</h2>
+				<p class="muted text-sm">Everything with the same tag can be deployed together, from the Tags page or with one API call.</p>
+			</div>
+		</div>
+		<div class="card-body grid gap-4">
+			@ui.Field(ui.FieldProps{Label: "Tags", For: "tags", Hint: "Separated by commas or spaces. Lowercase letters, numbers, dots and hyphens."}) {
+				@ui.Input(ui.InputProps{ID: "tags", Mono: true, Value: strings.Join(tags, ", "), Described: true, Placeholder: "nightly, frontend", Autocomplete: "off"})
+			}
+			if len(tags) > 0 {
+				<p class="flex flex-wrap gap-2">
+					for _, t := range tags {
+						<a class="badge" href={ templ.SafeURL("/tags/" + t) }>{ t }</a>
+					}
+				</p>
+			}
+		</div>
+		<div class="card-foot">
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+				Save tags
+			}
+		</div>
+	</form>
+}
+
+templ Tags(s ui.Shell, list []db.TagCount) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Tags", "Groups of apps and services that are deployed together.")
+		if len(list) == 0 {
+			@ui.EmptyState("tag", "No tags yet", "Give an app or a service a tag on its Settings page. Everything with that tag can then be deployed in one go.")
+		} else {
+			<div class="card rows max-w-3xl">
+				for _, t := range list {
+					<a class="row" href={ templ.SafeURL("/tags/" + t.Tag) }>
+						@ui.Icon("tag", "text-ink-mute")
+						<div class="min-w-0 flex-1">
+							<p class="fact truncate font-semibold">{ t.Tag }</p>
+							<p class="muted text-sm">{ tagCountLine(t) }</p>
+						</div>
+						@ui.Icon("chevron-right", "text-ink-mute")
+					</a>
+				}
+			</div>
+		}
+	}
+}
+
+templ Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, base string) {
+	@ui.Layout(s) {
+		@ui.PageHeader(tag, plural(len(apps)+len(services), "resource has", "resources have")+" this tag.") {
+			<form method="post" action={ templ.SafeURL("/tags/" + tag + "/deploy") }>
+				@ui.CSRF(s.CSRF)
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy"}) {
+					Deploy all
+				}
+			</form>
+		}
+		<div class="grid max-w-3xl gap-6">
+			if len(apps) > 0 {
+				<section class="grid gap-2">
+					<h2 class="font-semibold">Apps</h2>
+					@AppRows(apps)
+				</section>
+			}
+			if len(services) > 0 {
+				<section class="grid gap-2">
+					<h2 class="font-semibold">Services</h2>
+					@ServiceRows(services)
+				</section>
+			}
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">From a pipeline</h2>
+						<p class="muted text-sm">The same as the button, with an API token that may deploy. Tokens are made under Account.</p>
+					</div>
+				</div>
+				<div class="card-body">
+					@ui.Copyable("curl -X POST -H \"Authorization: Bearer $MUSDASH_TOKEN\" \"" + base + "/api/v1/deploy?tag=" + tag + "\"")
+				</div>
+			</section>
+		</div>
+	}
+}

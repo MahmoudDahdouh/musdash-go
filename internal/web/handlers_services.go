@@ -663,9 +663,20 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, "/services/"+svc.ID+"/compose")
 }
 
+// renderServiceSettings draws a service's Settings page. failed is the
+// endpoint whose form was refused.
+func (s *Server) renderServiceSettings(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, failed string, f ui.Form) {
+	var err error
+	if v.Tags, err = s.DB.TagsOf(r.Context(), sessionFrom(r).TeamID, db.KindService, v.Service.ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, status, pages.ServiceSettings(s.serviceShell(w, r, v), v, failed, f))
+}
+
 func (s *Server) serviceSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadService(w, r); ok {
-		s.render(w, r, http.StatusOK, pages.ServiceSettings(s.serviceShell(w, r, v), v, "", ui.Form{}))
+		s.renderServiceSettings(w, r, http.StatusOK, v, "", ui.Form{})
 	}
 }
 
@@ -714,7 +725,7 @@ func (s *Server) serviceEndpointSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.render(w, r, http.StatusUnprocessableEntity, pages.ServiceSettings(s.serviceShell(w, r, v), v, current.ID, f))
+		s.renderServiceSettings(w, r, http.StatusUnprocessableEntity, v, current.ID, f)
 		return
 	}
 	// The new name is routed at once; the service itself learns its address

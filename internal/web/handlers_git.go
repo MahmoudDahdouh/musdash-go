@@ -169,6 +169,10 @@ func (s *Server) renderAppSettingsForms(w http.ResponseWriter, r *http.Request, 
 		s.fail(w, r, err)
 		return
 	}
+	if v.Tags, err = s.DB.TagsOf(r.Context(), sessionFrom(r).TeamID, db.KindApp, v.App.ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	s.render(w, r, status, pages.AppSettings(s.appShell(w, r, v), v, general, domain, src, previews, choices, tr))
 }
 
