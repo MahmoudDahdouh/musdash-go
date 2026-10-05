@@ -8,6 +8,7 @@ import (
 	"context"
 	"io"
 	"io/fs"
+	"net"
 	"strings"
 	"sync"
 
@@ -113,6 +114,12 @@ func (f *Fake) RemoveAll(_ context.Context, path string) error {
 		}
 	}
 	return nil
+}
+
+// Dial connects from this machine: a scripted server is nowhere else.
+func (f *Fake) Dial(ctx context.Context, network, address string) (net.Conn, error) {
+	var d net.Dialer
+	return d.DialContext(ctx, network, address)
 }
 
 func (f *Fake) Close() error { return nil }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -137,6 +138,11 @@ func (LocalRunner) MkdirAll(_ context.Context, path string, mode fs.FileMode) er
 
 func (LocalRunner) RemoveAll(_ context.Context, path string) error {
 	return os.RemoveAll(path)
+}
+
+func (LocalRunner) Dial(ctx context.Context, network, address string) (net.Conn, error) {
+	var d net.Dialer
+	return d.DialContext(ctx, network, address)
 }
 
 func (LocalRunner) Close() error { return nil }

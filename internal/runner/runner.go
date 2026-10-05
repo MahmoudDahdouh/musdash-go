@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 )
 
 // Cmd describes one command. Name and Args are passed as an argument vector,
@@ -39,6 +40,10 @@ type Runner interface {
 	ReadFile(ctx context.Context, path string) (io.ReadCloser, error)
 	MkdirAll(ctx context.Context, path string, mode fs.FileMode) error
 	RemoveAll(ctx context.Context, path string) error
+	// Dial opens a network connection as the server sees it: "127.0.0.1"
+	// is the server's own loopback interface, wherever musdash runs. A
+	// health check of a container's port goes through it.
+	Dial(ctx context.Context, network, address string) (net.Conn, error)
 	// Close releases any connection the runner holds.
 	Close() error
 }
