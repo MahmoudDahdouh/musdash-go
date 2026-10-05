@@ -227,3 +227,33 @@ func TestCatalogueLoadsInTheSandbox(t *testing.T) {
 		})
 	}
 }
+
+// A volume with a one-letter name, mounted in short syntax: Compose takes
+// the letter and the colon for a Windows drive, so the mount it hands on has
+// no volume and a target that is not a path, and the volume's own entry
+// (with its "external") is gone because nothing uses it. That must be
+// refused here, in words about the file, not later by Docker.
+func TestSandboxOneLetterVolume(t *testing.T) {
+	dir, opt, r := sandbox(t)
+	rules := ValidateOptions{Dir: dir, ValidPort: func(int) bool { return false }}
+	stack := func(volume string) string {
+		return "services:\n  a:\n    image: alpine\n    volumes:\n      - " + volume + ":/x\nvolumes:\n  " + volume + ":\n    external: true\n"
+	}
+	p, err := load(t, r, opt, stack("v"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Validate(rules); err == nil || !strings.Contains(err.Error(), "one-letter name") {
+		raw, _ := p.Marshal()
+		t.Errorf("a one-letter volume: %v\n%s", err, raw)
+	}
+	// With a name Compose reads as a name, the volume is there and what is
+	// wrong with it is said.
+	p, err = load(t, r, opt, stack("vol"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Validate(rules); err == nil || !strings.Contains(err.Error(), `"name" and "external" are not allowed`) {
+		t.Errorf("an external volume: %v", err)
+	}
+}

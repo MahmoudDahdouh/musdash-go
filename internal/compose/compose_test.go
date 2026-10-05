@@ -200,6 +200,13 @@ func TestValidateRefuses(t *testing.T) {
 		// Directories whose content the server acts on as root.
 		{"volumes", `[{"type":"bind","source":"/var/spool/cron","target":"/c","bind":{}}]`, `/var/spool`},
 		{"volumes", `[{"type":"bind","source":"/var/lib/cloud","target":"/c","bind":{}}]`, `/var/lib`},
+		// A mount goes to a full path. The first is what Compose makes of
+		// "v:/x" with a volume called v: the name is taken for a drive.
+		{"volumes", `[{"type":"volume","target":"v:/x","volume":{}}]`, `the mount at "v:/x" must be a full path in the container, such as /data. A volume with a one-letter name`},
+		{"volumes", `[{"type":"volume","source":"data","target":"relative/path","volume":{}}]`, `the mount at "relative/path" must be a full path`},
+		{"volumes", `[{"type":"tmpfs","target":"cache"}]`, `the mount at "cache" must be a full path`},
+		{"volumes", `[{"type":"bind","source":"/srv/site/conf","target":"conf","bind":{}}]`, `the mount at "conf" must be a full path`},
+		{"volumes", `[{"type":"volume","source":"data","volume":{}}]`, `the mount at "" must be a full path`},
 		// A subnet of the stack's choosing becomes a route of the server.
 		{"/networks", `{"default":{"name":"musdash-svc1_default","ipam":{"config":[{"subnet":"8.8.8.0/24"}]}}}`, `"ipam" is not allowed`},
 		{"networks", `{"default":{"ipv4_address":"8.8.8.8"}}`, `the option "ipv4_address" is not supported`},

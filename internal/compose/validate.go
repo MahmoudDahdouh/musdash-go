@@ -3,6 +3,7 @@ package compose
 import (
 	"fmt"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -297,12 +298,29 @@ func (c *checker) labels(v any) {
 	}
 }
 
+// driveRE is how a mount's target looks when Compose took a one-letter
+// volume name for a Windows drive.
+var driveRE = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
+
 func (c *checker) mounts(v any) {
 	for _, entry := range asList(v) {
 		m := asMap(entry)
 		kind, _ := m["type"].(string)
 		source, _ := m["source"].(string)
 		target, _ := m["target"].(string)
+		// Compose passes on whatever it took for the target, and Docker
+		// then refuses the mount in its own words. The usual way to get
+		// there: a volume with a one-letter name, as in "v:/data", which
+		// Compose reads as a Windows drive, so that the whole text is the
+		// target of a volume without a name.
+		if !path.IsAbs(target) {
+			hint := ""
+			if driveRE.MatchString(target) {
+				hint = ". A volume with a one-letter name is read as a Windows drive: give the volume a longer name"
+			}
+			c.fail("the mount at %q must be a full path in the container, such as /data%s", target, hint)
+			continue
+		}
 		switch kind {
 		case "volume":
 			if source != "" && !c.volumes[source] {
