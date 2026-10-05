@@ -303,8 +303,13 @@ func (s *Server) projectDomainAdd(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, db.ErrNotFound):
 		f.Fail("app", "Choose an app of this project.")
-		f.Set("host", strings.TrimSpace(r.PostFormValue("host")))
-		f.Set("path", strings.TrimSpace(r.PostFormValue("path")))
+		// What was typed and ticked comes back as it was.
+		for _, field := range []string{"host", "path", "auth_user"} {
+			f.Set(field, strings.TrimSpace(r.PostFormValue(field)))
+		}
+		for _, box := range []string{"tls", "redirect_www", "strip_prefix"} {
+			f.Set(box, map[bool]string{true: "1", false: "0"}[r.PostFormValue(box) == "1"])
+		}
 	case err != nil:
 		s.fail(w, r, err)
 		return

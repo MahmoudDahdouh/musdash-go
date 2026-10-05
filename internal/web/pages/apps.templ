@@ -571,8 +571,8 @@ templ AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) {
 				}
 				@ui.TextField(f, "Volume name or server folder", "A name such as data for a volume, or a path such as /srv/uploads for a server folder. Leave empty for a file.", ui.InputProps{ID: "source", Mono: true})
 				@ui.TextField(f, "Path in the container", "Where the app sees it, for example /var/lib/app/data.", ui.InputProps{ID: "target", Mono: true, Required: true})
-				@ui.Field(ui.FieldProps{Label: "File content", For: "content", Hint: "Only for the File type. Stored encrypted.", Error: f.E("content")}) {
-					@ui.Textarea(ui.InputProps{ID: "content", Mono: true, Rows: 6, Value: f.V("content"), Invalid: f.E("content") != "", Described: true})
+				@ui.Field(ui.FieldProps{Label: "File content", For: "file-content", Hint: "Only for the File type. Stored encrypted.", Error: f.E("content")}) {
+					@ui.Textarea(ui.InputProps{ID: "file-content", Name: "content", Mono: true, Rows: 6, Value: f.V("content"), Invalid: f.E("content") != "", Described: true})
 				}
 			}
 		</div>
@@ -685,7 +685,7 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 		}
 	</section>
 	@ui.FormDialog(ui.DialogProps{ID: "edit-previews", Title: "Pull request previews", Description: "A preview runs the pull request's code with this app's variables, so anyone who can push a branch to the repository can read them. Pull requests from forks get no preview. Up to ten previews exist at once. A webhook added by hand must also send pull request events.", Action: v.base() + "/previews", CSRF: csrf, Submit: "Save", Open: !f.OK()}) {
-		@ui.Checkbox("previews", checked(f, "previews", v.App.Previews), nil) {
+		@ui.CheckboxNamed("previews-on", "previews", checked(f, "previews", v.App.Previews), nil) {
 			Give every pull request a preview
 		}
 		@ui.TextField(f, "Domain for previews", "Optional. With preview.example.com, pull request 12 is served at pr-12-" + v.App.Name + ".preview.example.com: point *.preview.example.com at this server. Empty uses generated addresses over plain HTTP.", ui.InputProps{ID: "preview_domain", Mono: true, Value: v.App.PreviewDomain, Placeholder: "preview.example.com"})

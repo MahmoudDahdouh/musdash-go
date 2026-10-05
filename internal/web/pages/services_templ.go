@@ -1789,7 +1789,7 @@ func ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) templ.
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = ui.Checkbox("tls-"+e.ID, e.TLS, templ.Attributes{"name": "tls"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var64), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.CheckboxNamed("tls-"+e.ID, "tls", e.TLS, nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var64), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

@@ -15,7 +15,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 )
 
-var newTokenRE = regexp.MustCompile(`id="new-token">(msd_[A-Za-z0-9_-]+)<`)
+var newTokenRE = regexp.MustCompile(`id="new-token-value">(msd_[A-Za-z0-9_-]+)<`)
 
 // newToken makes an API token for the owner through the Account page.
 func (a *app) newToken(ability string) string {
@@ -25,6 +25,11 @@ func (a *app) newToken(ability string) string {
 	m := newTokenRE.FindStringSubmatch(body)
 	if m == nil {
 		a.t.Fatalf("no token on the page:\n%s", body)
+	}
+	// The page that shows the token still has one New token dialog, and
+	// nothing else of its id: the button would open that instead.
+	if strings.Count(body, `id="new-token"`) != 1 {
+		a.t.Fatalf("%d elements with the id of the New token dialog", strings.Count(body, `id="new-token"`))
 	}
 	return m[1]
 }

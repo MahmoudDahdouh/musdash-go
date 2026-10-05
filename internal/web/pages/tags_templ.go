@@ -228,13 +228,13 @@ func tagsCard(csrf, action string, tags, teamTags []string) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = ui.Input(ui.InputProps{ID: "tags", Mono: true, Described: true, Placeholder: "nightly, frontend", Autocomplete: "off"}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Input(ui.InputProps{ID: "new-tags", Name: "tags", Mono: true, Described: true, Placeholder: "nightly, frontend", Autocomplete: "off"}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Field(ui.FieldProps{Label: "New tags", For: "tags", Hint: "Separated by commas or spaces. Lowercase letters, numbers, dots and hyphens."}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Field(ui.FieldProps{Label: "New tags", For: "new-tags", Hint: "Separated by commas or spaces. Lowercase letters, numbers, dots and hyphens."}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

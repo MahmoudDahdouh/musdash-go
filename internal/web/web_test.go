@@ -753,13 +753,22 @@ func TestAccount(t *testing.T) {
 // The policy forbids inline script and style on every page, not only the
 // first one: the pages a signed-in person works in, with their dialogs,
 // switchers and tiles, and the component gallery, must have none either.
+var elementID = regexp.MustCompile(`\sid="([^"]*)"`)
+
 func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
 	a := newApp(t, true)
 	a.setup()
 	projectID, env := a.project("Shop")
 	appID := a.newApp(projectID, env, "web", false, nil)
+	git := a.newGitApp(projectID, env, "api", nil)
+	a.stackServer("front", "3000", nil)
+	svc := a.newService(projectID, env, "site", nil)
+	mdb := a.newDatabase(projectID, env, "postgres", "maindb", nil)
 	base := "/projects/" + projectID
 	for _, page := range []string{
+		"/databases/" + mdb.ID, "/databases/" + mdb.ID + "/backups", "/databases/" + mdb.ID + "/settings",
+		"/apps/" + git.ID + "/settings", "/apps/" + git.ID + "/tasks", "/apps/" + git.ID + "/environment",
+		"/services/" + svc.ID, "/services/" + svc.ID + "/compose", "/services/" + svc.ID + "/settings",
 		"/", "/projects", base, base + "/e/" + env.ID, base + "/e/" + env.ID + "/new", base + "/domains", base + "/settings",
 		"/apps/" + appID, "/apps/" + appID + "/environment", "/apps/" + appID + "/environment/edit", "/apps/" + appID + "/storage", "/apps/" + appID + "/settings",
 		"/tags", "/keys", "/servers", "/sources", "/team", "/team/variables", "/account",
@@ -776,6 +785,18 @@ func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
 		for _, inline := range []string{"<script>", " style=", "onclick=", "javascript:"} {
 			if strings.Contains(body, inline) {
 				t.Errorf("%s contains %q, which the CSP blocks", page, inline)
+			}
+		}
+		// An id that two elements have breaks whatever names it: a label's
+		// for, a button's data-open, a link's #fragment. Pages with several
+		// dialogs are where that happens.
+		ids := map[string]int{}
+		for _, m := range elementID.FindAllStringSubmatch(body, -1) {
+			ids[m[1]]++
+		}
+		for id, n := range ids {
+			if n > 1 {
+				t.Errorf("%s has %d elements with id %q", page, n, id)
 			}
 		}
 	}

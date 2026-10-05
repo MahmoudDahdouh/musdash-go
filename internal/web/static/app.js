@@ -12,7 +12,7 @@
   // Dialogs: data-open="<dialog id>" opens, data-close closes the nearest one.
   on("click", "[data-open]", (el) => {
     const dialog = document.getElementById(el.dataset.open);
-    if (dialog && !dialog.open) dialog.showModal();
+    if (dialog instanceof HTMLDialogElement && !dialog.open) dialog.showModal();
   });
   on("click", "[data-close]", (el) => el.closest("dialog")?.close());
   // A click on the backdrop lands on the <dialog> element itself.

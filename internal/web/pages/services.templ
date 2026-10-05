@@ -494,7 +494,7 @@ templ ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) {
 					@ui.Field(ui.FieldProps{Label: "Domain", For: endpointFormID(e), Error: endpointError(e, failed, f)}) {
 						@ui.Input(ui.InputProps{ID: endpointFormID(e), Name: "host", Mono: true, Required: true, Value: endpointValue(e, failed, f), Invalid: endpointError(e, failed, f) != "", Placeholder: "app.example.com"})
 					}
-					@ui.Checkbox("tls-"+e.ID, e.TLS, templ.Attributes{"name": "tls"}) {
+					@ui.CheckboxNamed("tls-"+e.ID, "tls", e.TLS, nil) {
 						Serve over HTTPS with an automatic certificate
 					}
 				}

@@ -362,8 +362,18 @@ templ MenuNote(text string, problem bool) {
 
 // Checkbox renders a labelled checkbox. Its children are the label.
 templ Checkbox(id string, checked bool, attrs templ.Attributes) {
+	@CheckboxNamed(id, id, checked, attrs) {
+		{ children... }
+	}
+}
+
+// CheckboxNamed is a Checkbox whose form field is not its id: for a page
+// that has the same field in several forms, or an element of that id
+// already. The name cannot be given in attrs: an element with two name
+// attributes keeps the first.
+templ CheckboxNamed(id, name string, checked bool, attrs templ.Attributes) {
 	<label class="check" for={ id }>
-		<input type="checkbox" id={ id } name={ id } value="1" checked?={ checked } { attrs... }/>
+		<input type="checkbox" id={ id } name={ name } value="1" checked?={ checked } { attrs... }/>
 		<span>
 			{ children... }
 		</span>

@@ -117,7 +117,7 @@ templ apiTokensCard(s ui.Shell, v KeysView) {
 			<div class="card-body border-b border-line">
 				@ui.Notice(ui.ToneOK) {
 					<p class="font-semibold">Token created. Copy it now: it is not shown again.</p>
-					<p class="code mt-2 block break-all" id="new-token">{ v.NewToken }</p>
+					<p class="code mt-2 block break-all" id="new-token-value">{ v.NewToken }</p>
 					<p class="mt-2">
 						<button type="button" class="btn btn-secondary btn-sm" data-copy={ v.NewToken }>
 							@ui.Icon("copy")

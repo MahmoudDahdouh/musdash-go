@@ -49,8 +49,8 @@ templ tagsCard(csrf, action string, tags, teamTags []string) {
 				</div>
 			</fieldset>
 		}
-		@ui.Field(ui.FieldProps{Label: "New tags", For: "tags", Hint: "Separated by commas or spaces. Lowercase letters, numbers, dots and hyphens."}) {
-			@ui.Input(ui.InputProps{ID: "tags", Mono: true, Described: true, Placeholder: "nightly, frontend", Autocomplete: "off"})
+		@ui.Field(ui.FieldProps{Label: "New tags", For: "new-tags", Hint: "Separated by commas or spaces. Lowercase letters, numbers, dots and hyphens."}) {
+			@ui.Input(ui.InputProps{ID: "new-tags", Name: "tags", Mono: true, Described: true, Placeholder: "nightly, frontend", Autocomplete: "off"})
 		}
 	}
 }

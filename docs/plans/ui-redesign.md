@@ -113,6 +113,12 @@ An independent read of the plan against the code found these; each replaces what
 | Tests outside `-short` | `test/deploy_test.go` and `test/rss_test.go` are moved to the new addresses with the rest. The Docker test is compiled and not run here: a second musdash on this machine's Docker would remove the containers of the instance already running |
 | The security-header test reads only `/setup` | It also reads the gallery and a signed-in page |
 
+## As built
+
+- Task 4's test (`TestCriticalFormsAsk`) reads the templates instead of walking rendered pages: a branch that no test renders (a server with a proxy, a database that is running) is checked too.
+- "Up to five fields" was taken as the least a dialog is used for, not the most: Add server, Add bucket, Add domain and Add storage have more and are dialogs as well, so that every list is added to the same way. An app's General and Source settings and a service's Compose form stay on the page.
+- The independent review of tasks 5 to 9 found a checkbox that sent the wrong field name (a service address's HTTPS box, older than this work), ids that two elements shared (`previews`, `tags`, `new-token`, `content`), and a form that lost a tick when it was refused. All are fixed, and the page walk now fails for a duplicate id.
+
 ## What is deliberately not done
 
 - No change to the JSON API's shape or to webhook addresses.

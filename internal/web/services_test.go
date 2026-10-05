@@ -415,6 +415,11 @@ func TestServiceEndpointDomain(t *testing.T) {
 	endpoints, _ := a.db.ListEndpoints(ctx, s.ID)
 	otherEndpoints, _ := a.db.ListEndpoints(ctx, other.ID)
 	settings := "/services/" + s.ID + "/settings"
+	// The form sends what the handler reads: the HTTPS box is "tls", and
+	// the box's own id is not a second name for it.
+	if _, page := a.get(settings); !strings.Contains(page, `id="tls-`+endpoints[0].ID+`" name="tls"`) || strings.Contains(page, `name="tls-`) {
+		t.Fatal("the HTTPS box of an endpoint is not sent as tls")
+	}
 	save := func(endpointID string, form url.Values) (*http.Response, string) {
 		res, body := a.post(settings, "/services/"+s.ID+"/endpoints/"+endpointID, form)
 		return res, html.UnescapeString(body)
