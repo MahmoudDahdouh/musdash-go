@@ -179,6 +179,48 @@ func (c Client) EnsureNetwork(ctx context.Context, name string) error {
 	return err
 }
 
+// RemoveNetwork deletes a network. One that does not exist is not an error.
+//
+// Docker removes a network that only stopped containers are attached to,
+// and those containers can then never be started again: ask NetworkInUse
+// first when anything might be attached.
+func (c Client) RemoveNetwork(ctx context.Context, name string) error {
+	if !ValidName(name) {
+		return fmt.Errorf("bad network name %q", name)
+	}
+	_, err := c.R.Output(ctx, cmd("network", "rm", name))
+	// For a network Docker says "not found", where for a container or a
+	// volume it says "no such".
+	var ee *runner.ExitError
+	if errors.As(err, &ee) && strings.Contains(strings.ToLower(ee.Stderr), "not found") {
+		return nil
+	}
+	return ignoreMissing(err)
+}
+
+// Networks lists the networks that carry musdash's label: those of
+// environments. A stack's own networks are made by Compose and do not.
+func (c Client) Networks(ctx context.Context) ([]string, error) {
+	out, err := c.R.Output(ctx, cmd("network", "ls", "--filter", "label="+ManagedLabel+"=true", "--format", "{{.Name}}"))
+	if err != nil {
+		return nil, err
+	}
+	return strings.Fields(string(out)), nil
+}
+
+// NetworkInUse reports whether any container is attached to a network,
+// running or not.
+func (c Client) NetworkInUse(ctx context.Context, name string) (bool, error) {
+	if !ValidName(name) {
+		return false, fmt.Errorf("bad network name %q", name)
+	}
+	out, err := c.R.Output(ctx, cmd("ps", "--all", "--quiet", "--filter", "network="+name))
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(out)) != "", nil
+}
+
 // RemoveVolume deletes a volume and the data in it. A volume that does not
 // exist is not an error.
 func (c Client) RemoveVolume(ctx context.Context, name string) error {

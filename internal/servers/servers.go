@@ -267,9 +267,12 @@ func (p *Pool) acquire(ctx context.Context, id string) (*conn, *runner.SSHRunner
 
 // sweep removes what a process that died, or a connection that dropped,
 // left on a server: build directories (a checkout may hold a deploy key),
-// files with a command's environment, files with a storage's keys. It runs
-// before this process has put anything there, so everything it finds is
-// left over. Best effort: a server where it fails is no worse off.
+// files with a command's environment, files with a storage's keys, and
+// files that were being written and never got their name: a backup as
+// large as the dump had got, an app's variables, the routes, a copy of the
+// binary. It runs before this process has put anything there, so
+// everything it finds is left over. Best effort: a server where it fails
+// is no worse off.
 func sweep(ctx context.Context, r *runner.SSHRunner, dataDir string) {
 	if dataDir == "" {
 		return
@@ -277,9 +280,12 @@ func sweep(ctx context.Context, r *runner.SSHRunner, dataDir string) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	const clear = `if [ -d "$1" ]; then find "$1" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; fi
-if [ -d "$2" ]; then find "$2" -mindepth 2 -maxdepth 2 -type f -name "$3" -exec rm -f -- {} +; fi`
+if [ -d "$2" ]; then find "$2" -mindepth 2 -maxdepth 2 -type f \( -name "$3" -o -name "$4" \) -exec rm -f -- {} +; fi
+if [ -d "$5" ]; then find "$5" -mindepth 2 -maxdepth 2 -type f -name "$4" -exec rm -f -- {} +; fi
+for d in "$6" "$7"; do if [ -d "$d" ]; then find "$d" -mindepth 1 -maxdepth 1 -type f -name "$4" -exec rm -f -- {} +; fi; done`
 	r.Output(ctx, runner.Cmd{Name: "sh", Args: []string{"-c", clear, "sh",
-		path.Join(dataDir, "work"), path.Join(dataDir, "backups"), backup.EnvFilePrefix + "*"}})
+		path.Join(dataDir, "work"), path.Join(dataDir, "backups"), backup.EnvFilePrefix + "*", runner.TempPrefix + "*",
+		path.Join(dataDir, "apps"), path.Join(dataDir, "proxy"), path.Join(dataDir, "bin")}})
 }
 
 // release ends one use. A connection that turned out dead is dropped, so

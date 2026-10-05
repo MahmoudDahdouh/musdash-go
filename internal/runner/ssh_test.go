@@ -495,3 +495,95 @@ func TestSSHMoreCommandsThanOneConnectionCarries(t *testing.T) {
 		t.Fatalf("after the commands ended: %v", err)
 	}
 }
+
+// halfThenWait gives a reader's first part and then waits, as a dump does
+// that is still running.
+type halfThenWait struct {
+	first   io.Reader
+	sent    chan struct{} // closed when the first part has been read
+	release chan struct{} // the reader ends, with err, when this is closed
+	err     error
+	once    sync.Once
+}
+
+func (h *halfThenWait) Read(p []byte) (int, error) {
+	if n, err := h.first.Read(p); n > 0 || err == nil {
+		return n, nil
+	}
+	h.once.Do(func() { close(h.sent) })
+	<-h.release
+	if h.err != nil {
+		return 0, h.err
+	}
+	return 0, io.EOF
+}
+
+// A file appears under its name only when all of it was written. The
+// connection that goes away in the middle is the case that matters: sshd
+// then closes the remote command's input, which to that command is the
+// end of the file, arrived in good order. A backup was left truncated under
+// its name that way, and so could a routes file be.
+func TestSSHWriteFileNeverLeavesHalfAFileUnderItsName(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	settled := func(name string) (dest bool, temps []string) {
+		// The remote command needs a moment to see its input end, and
+		// then, were it the one to rename, to rename. A destination that
+		// appears within this time is the failure; none is the rule.
+		for deadline := time.Now().Add(time.Second); time.Now().Before(deadline) && !dest; time.Sleep(20 * time.Millisecond) {
+			_, err := os.Stat(name)
+			dest = err == nil
+		}
+		temps, _ = filepath.Glob(filepath.Join(filepath.Dir(name), ".musdash-*"))
+		return dest, temps
+	}
+
+	// The connection drops while the file is being written.
+	srv := sshtest.Start(t)
+	r := mustDial(t, srv)
+	dropped := filepath.Join(dir, "dropped.dump.gz")
+	src := &halfThenWait{first: strings.NewReader(strings.Repeat("half of a dump\n", 4096)), sent: make(chan struct{}), release: make(chan struct{})}
+	done := make(chan error, 1)
+	go func() { done <- r.WriteFile(ctx, dropped, 0o600, src) }()
+	<-src.sent
+	time.Sleep(100 * time.Millisecond)
+	srv.DropConnections()
+	close(src.release)
+	if err := <-done; err == nil {
+		t.Fatal("a write whose connection dropped reported success")
+	}
+	if dest, _ := settled(dropped); dest {
+		t.Fatal("half a file was left under the destination's name after the connection dropped")
+	}
+
+	// The reader fails: no destination, and no temporary file either.
+	r = mustDial(t, sshtest.Start(t))
+	failed := filepath.Join(dir, "failed.dump.gz")
+	src = &halfThenWait{first: strings.NewReader("some of it"), sent: make(chan struct{}), release: make(chan struct{}), err: errors.New("the dump failed")}
+	close(src.release)
+	if err := r.WriteFile(ctx, failed, 0o600, src); err == nil || !strings.Contains(err.Error(), "the dump failed") {
+		t.Fatalf("a write whose reader failed: %v", err)
+	}
+	if dest, temps := settled(failed); dest || len(temps) != 1 {
+		// One temporary file is the dropped write's, which nobody could
+		// remove; the failed write's own must be gone.
+		t.Fatalf("after a reader that failed: destination there %v, temporary files %v", dest, temps)
+	}
+
+	// A file that already exists is left as it was by both.
+	kept := filepath.Join(dir, "kept.env")
+	if err := r.WriteFile(ctx, kept, 0o600, strings.NewReader("the old content")); err != nil {
+		t.Fatal(err)
+	}
+	src = &halfThenWait{first: strings.NewReader("new"), sent: make(chan struct{}), release: make(chan struct{}), err: errors.New("stopped")}
+	close(src.release)
+	if err := r.WriteFile(ctx, kept, 0o600, src); err == nil {
+		t.Fatal("a write whose reader failed reported success")
+	}
+	if got, _ := os.ReadFile(kept); string(got) != "the old content" {
+		t.Fatalf("the file that was there is now %q", got)
+	}
+}

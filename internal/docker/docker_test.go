@@ -254,6 +254,55 @@ func TestEnsureNetwork(t *testing.T) {
 	}
 }
 
+func TestNetworks(t *testing.T) {
+	ctx := context.Background()
+	// A network that is not there is not an error, in Docker's words for
+	// networks, which are not its words for containers.
+	gone := &scripted{answers: map[string]answer{"docker network rm": {code: 1, stderr: "Error response from daemon: network musdash-env1 not found"}}}
+	if err := (Client{R: gone}).RemoveNetwork(ctx, "musdash-env1"); err != nil {
+		t.Fatalf("removing a network that is not there: %v", err)
+	}
+	if want := "docker network rm musdash-env1"; gone.calls[0] != want {
+		t.Fatalf("got %q", gone.calls[0])
+	}
+	// One that something is attached to is.
+	busy := &scripted{answers: map[string]answer{"docker network rm": {code: 1, stderr: `Error response from daemon: error while removing network: network musdash-env1 has active endpoints (name:"web" id:"abc")`}}}
+	if err := (Client{R: busy}).RemoveNetwork(ctx, "musdash-env1"); err == nil {
+		t.Fatal("a network in use was reported as removed")
+	}
+	for _, bad := range []string{"", "--force", "a b", "-x"} {
+		r := &scripted{}
+		if err := (Client{R: r}).RemoveNetwork(ctx, bad); err == nil || len(r.calls) != 0 {
+			t.Errorf("RemoveNetwork(%q): %v, calls %q", bad, err, r.calls)
+		}
+		if _, err := (Client{R: r}).NetworkInUse(ctx, bad); err == nil || len(r.calls) != 0 {
+			t.Errorf("NetworkInUse(%q): %v, calls %q", bad, err, r.calls)
+		}
+	}
+
+	listed := &scripted{answers: map[string]answer{"docker network ls": {out: "musdash-env1\nmusdash-env2\n"}}}
+	names, err := (Client{R: listed}).Networks(ctx)
+	if err != nil || len(names) != 2 || names[1] != "musdash-env2" {
+		t.Fatalf("%v %v", names, err)
+	}
+	if want := "docker network ls --filter label=musdash.managed=true --format {{.Name}}"; listed.calls[0] != want {
+		t.Fatalf("got %q", listed.calls[0])
+	}
+
+	// Attached means any container, also one that is not running: Docker
+	// would remove the network from under it, and it could not start again.
+	attached := &scripted{answers: map[string]answer{"docker ps": {out: "3f2a9c\n"}}}
+	if used, err := (Client{R: attached}).NetworkInUse(ctx, "musdash-env1"); err != nil || !used {
+		t.Fatalf("%v %v", used, err)
+	}
+	if want := "docker ps --all --quiet --filter network=musdash-env1"; attached.calls[0] != want {
+		t.Fatalf("got %q", attached.calls[0])
+	}
+	if used, err := (Client{R: &scripted{}}).NetworkInUse(ctx, "musdash-env1"); err != nil || used {
+		t.Fatalf("%v %v", used, err)
+	}
+}
+
 func TestList(t *testing.T) {
 	r := &scripted{answers: map[string]answer{
 		"docker ps": {out: "musdash-a-1\trunning\tapp\ta\td1\nmusdash-b-2\texited\tapp\tb\td2\n"},

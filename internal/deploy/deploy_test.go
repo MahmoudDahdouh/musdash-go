@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -935,11 +936,20 @@ func TestReconcileRemovesOrphans(t *testing.T) {
 	// One that finished long ago, and one for an app that no longer exists.
 	old, _ := e.db.CreateDeployment(ctx, db.Deployment{AppID: e.app.ID, Image: "nginx"})
 	e.db.Exec(`UPDATE deployments SET status = 'success', finished_at = 100 WHERE id = ?`, old.ID)
+	// One that succeeded a moment ago and has been replaced since: its
+	// container may still be draining. And one that failed a moment ago:
+	// nothing of it is wanted, however lately it failed.
+	draining, _ := e.db.CreateDeployment(ctx, db.Deployment{AppID: e.app.ID, Image: "nginx"})
+	e.db.Exec(`UPDATE deployments SET status = 'success', finished_at = ? WHERE id = ?`, time.Now().Unix()-1, draining.ID)
+	failed, _ := e.db.CreateDeployment(ctx, db.Deployment{AppID: e.app.ID, Image: "nginx"})
+	e.db.Exec(`UPDATE deployments SET status = 'failed', finished_at = ? WHERE id = ?`, time.Now().Unix()-1, failed.ID)
 
 	rows := []string{
 		current + "\trunning\tapp\t" + e.app.ID + "\t" + dep.ID,
 		"musdash-" + e.app.ID + "-" + active.ID + "\trunning\tapp\t" + e.app.ID + "\t" + active.ID,
 		"musdash-" + e.app.ID + "-" + old.ID + "\trunning\tapp\t" + e.app.ID + "\t" + old.ID,
+		"musdash-" + e.app.ID + "-" + draining.ID + "\trunning\tapp\t" + e.app.ID + "\t" + draining.ID,
+		"musdash-" + e.app.ID + "-" + failed.ID + "\trunning\tapp\t" + e.app.ID + "\t" + failed.ID,
 		"musdash-gone-xyz\texited\tapp\tgone\txyz",
 		"musdash-db1-abc\trunning\tdatabase\tdb1\tabc",
 	}
@@ -960,9 +970,78 @@ func TestReconcileRemovesOrphans(t *testing.T) {
 			removed = append(removed, name)
 		}
 	}
-	want := []string{"musdash-" + e.app.ID + "-" + old.ID, "musdash-gone-xyz"}
-	if len(removed) != 2 || removed[0] != want[0] || removed[1] != want[1] {
-		t.Fatalf("removed %v, want %v (the serving container, an active deployment's container and other kinds must stay)", removed, want)
+	want := []string{"musdash-" + e.app.ID + "-" + old.ID, "musdash-" + e.app.ID + "-" + failed.ID, "musdash-gone-xyz"}
+	if !slices.Equal(removed, want) {
+		t.Fatalf("removed %v, want %v (the serving container, the containers of an active deployment and of one that just succeeded, and other kinds must stay)", removed, want)
+	}
+}
+
+// The dashboard is killed while a deployment waits for its new container's
+// health check. A deploy job runs once, so at the next start the job is
+// failed, then its deployment, and then the container it had started must
+// go: nothing else would ever remove it, and the app would have two.
+func TestContainerOfADeploymentTheProcessDiedInIsRemoved(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	serving := ContainerName(e.app.ID, e.deploy().ID)
+
+	// What the dead process left: its job and its deployment still marked
+	// as running, and the container it had started.
+	dead, _ := e.db.CreateDeployment(ctx, db.Deployment{AppID: e.app.ID, Image: "nginx"})
+	e.db.StartDeployment(ctx, dead.ID)
+	e.db.SetAppStatus(ctx, e.app.ID, db.AppDeploying)
+	e.db.Exec(`INSERT INTO jobs (id, kind, payload, status, attempts, max_attempts, lock_key, run_after, created_at, started_at)
+		VALUES ('deadjob', ?, ?, 'running', 1, 1, ?, 0, 1, 1)`, JobDeploy, `{"deployment_id":"`+dead.ID+`"}`, "app:"+e.app.ID)
+	left := ContainerName(e.app.ID, dead.ID)
+	e.fake.Handle = func(line string, _ runner.Cmd) (string, error) {
+		if strings.HasPrefix(line, "docker ps") {
+			return serving + "\trunning\tapp\t" + e.app.ID + "\t" + strings.TrimPrefix(serving, "musdash-"+e.app.ID+"-") + "\n" +
+				left + "\trunning\tapp\t" + e.app.ID + "\t" + dead.ID + "\n", nil
+		}
+		return running, nil
+	}
+
+	// What start-up does, in its order (cmd/musdash): the queue fails the
+	// job that has used its one attempt, the deployments without a job are
+	// failed, the app is no longer "deploying", and the monitor's first act
+	// is to reconcile.
+	q := jobs.New(e.db.DB, slog.New(slog.NewTextHandler(io.Discard, nil)), 1)
+	if err := q.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	stop, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	q.Stop(stop)
+	var jobStatus string
+	e.db.QueryRow(`SELECT status FROM jobs WHERE id = 'deadjob'`).Scan(&jobStatus)
+	if jobStatus != jobs.StatusFailed {
+		t.Fatalf("the dead process's job is %q, want it failed and not run again", jobStatus)
+	}
+	if err := e.db.FailStaleDeployments(ctx, "musdash stopped before this deployment ran"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.db.DeploymentByID(ctx, dead.ID); got.Status != db.DeployFailed {
+		t.Fatalf("the deployment is %q", got.Status)
+	}
+	if err := e.db.ResetStuckDeploying(ctx); err != nil {
+		t.Fatal(err)
+	}
+	r, _ := e.d.Runners.Runner(ctx, e.server)
+	before := len(e.fake.Calls())
+	if err := e.d.Reconcile(ctx, e.server, dockerClient(r)); err != nil {
+		t.Fatal(err)
+	}
+	var removed []string
+	for _, c := range e.fake.Calls()[before:] {
+		if name, ok := strings.CutPrefix(c, "docker rm --force "); ok {
+			removed = append(removed, name)
+		}
+	}
+	if !slices.Equal(removed, []string{left}) {
+		t.Fatalf("removed %v, want only %s: the container the dead process had started", removed, left)
+	}
+	if app := e.reload(); app.Container != serving || app.Status != db.AppRunning {
+		t.Fatalf("the app: %s %s", app.Status, app.Container)
 	}
 }
 

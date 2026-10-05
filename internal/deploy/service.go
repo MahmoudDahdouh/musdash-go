@@ -769,6 +769,7 @@ func (d *Deployer) DestroyService(ctx context.Context, id string, deleteData boo
 	if err := d.SyncRoutes(ctx, server); err != nil && !errors.Is(err, ErrProxyDown) {
 		d.Log.Warn("withdraw a deleted service's routes", "service", s.ID, "err", err)
 	}
+	d.dropNetwork(ctx, r, s.EnvironmentID, s.ServerID)
 	return nil
 }
 

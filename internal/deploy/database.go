@@ -360,7 +360,11 @@ func (d *Deployer) DestroyDatabase(ctx context.Context, id string, deleteData bo
 			return fmt.Errorf("delete the backups: %w", err)
 		}
 	}
-	return d.DB.DeleteDatabase(ctx, m.ID)
+	if err := d.DB.DeleteDatabase(ctx, m.ID); err != nil {
+		return err
+	}
+	d.dropNetwork(ctx, r, m.EnvironmentID, m.ServerID)
+	return nil
 }
 
 // ValidPublicPort reports whether a person may choose this public port for

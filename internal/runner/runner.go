@@ -67,6 +67,11 @@ func DataDirOf(r Runner) string {
 	return ""
 }
 
+// TempPrefix starts the name of the file WriteFile writes to before it
+// gives the file its name. One left behind by a process that died, or by a
+// connection that dropped, is found and removed by this prefix.
+const TempPrefix = ".musdash-"
+
 // OutputLimit caps what Output will hold in memory.
 const OutputLimit = 1 << 20
 

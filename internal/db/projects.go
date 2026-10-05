@@ -125,6 +125,28 @@ func (d *DB) CreateEnvironment(ctx context.Context, teamID, projectID, name stri
 	return e, err
 }
 
+// EnvironmentUsesServer reports whether an app, a database or a service of
+// the environment is on the server: whether the environment's network is
+// still wanted there. Rows are asked, not containers: something that is
+// stopped, or is being deployed for the first time, counts. So do previews,
+// which are apps.
+func (d *DB) EnvironmentUsesServer(ctx context.Context, environmentID, serverID string) (bool, error) {
+	var used bool
+	err := d.QueryRowContext(ctx, `SELECT
+		EXISTS (SELECT 1 FROM apps WHERE environment_id = ?1 AND server_id = ?2)
+		OR EXISTS (SELECT 1 FROM databases WHERE environment_id = ?1 AND server_id = ?2)
+		OR EXISTS (SELECT 1 FROM services WHERE environment_id = ?1 AND server_id = ?2)`, environmentID, serverID).Scan(&used)
+	return used, err
+}
+
+// EnvironmentExists reports whether there is an environment with this id,
+// in any team.
+func (d *DB) EnvironmentExists(ctx context.Context, id string) (bool, error) {
+	var exists bool
+	err := d.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM environments WHERE id = ?)`, id).Scan(&exists)
+	return exists, err
+}
+
 // DeleteEnvironment removes an environment unless it is the project's last.
 func (d *DB) DeleteEnvironment(ctx context.Context, teamID, id string) error {
 	return d.Tx(ctx, func(tx *sql.Tx) error {

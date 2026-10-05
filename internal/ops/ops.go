@@ -18,6 +18,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
 	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
+	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 )
 
@@ -106,8 +107,15 @@ func (o *Ops) Recover(ctx context.Context) error {
 	if err := o.DB.FailRunningBackups(ctx, "musdash was restarted while this was running"); err != nil {
 		return err
 	}
-	// Storage keys of an upload that was cut short.
-	if left, err := filepath.Glob(filepath.Join(o.Cfg.BackupDir(), "*", backup.EnvFilePrefix+"*")); err == nil {
+	// Storage keys of an upload that was cut short, and the file a dump was
+	// being written to when the process died: it has no name yet, so no
+	// page lists it and nothing would ever count or remove it. Nothing is
+	// being written at this point; the queue has not started.
+	for _, pattern := range []string{backup.EnvFilePrefix + "*", runner.TempPrefix + "*"} {
+		left, err := filepath.Glob(filepath.Join(o.Cfg.BackupDir(), "*", pattern))
+		if err != nil {
+			continue
+		}
 		for _, p := range left {
 			os.Remove(p)
 		}

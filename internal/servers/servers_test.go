@@ -510,8 +510,15 @@ func TestFirstConnectionClearsLeftovers(t *testing.T) {
 		}
 		return p
 	}
-	gone := []string{write("work/dep123/checkout/deploy-key"), write("work/.env-abcdef"), write("backups/db1/.rclone-123.env")}
-	kept := []string{write("backups/db1/2026-01-01.sql.gz"), write("apps/app1/.env"), write("proxy/routes.json")}
+	gone := []string{write("work/dep123/checkout/deploy-key"), write("work/.env-abcdef"), write("backups/db1/.rclone-123.env"),
+		// What was being written when the last process died, or its
+		// connection dropped: a backup, an app's variables, the routes, the
+		// proxy's binary.
+		write("backups/db1/.musdash-0123456789abcdef"), write("apps/app1/.musdash-0123456789abcdef"),
+		write("proxy/.musdash-0123456789abcdef"), write("bin/.musdash-0123456789abcdef")}
+	kept := []string{write("backups/db1/2026-01-01.sql.gz"), write("apps/app1/.env"), write("apps/app1/env"), write("proxy/routes.json"), write("bin/musdash"),
+		// Deeper than musdash writes: a file an app's own mount holds.
+		write("apps/app1/files/conf/.musdash-notours")}
 
 	if _, err := e.pool.Check(ctx, e.server); err != nil {
 		t.Fatal(err)
