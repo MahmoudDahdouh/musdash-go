@@ -87,7 +87,11 @@ func (d *Deployer) SyncPreview(ctx context.Context, parent db.App, pr source.Pul
 	if errors.Is(err, db.ErrNotFound) {
 		if child, err = d.createPreview(ctx, parent, pr); errors.Is(err, db.ErrNameTaken) {
 			// Created by another delivery of the same event in the meantime.
-			child, err = d.DB.Preview(ctx, parent.ID, pr.Number)
+			if child, err = d.DB.Preview(ctx, parent.ID, pr.Number); errors.Is(err, db.ErrNotFound) {
+				// Or not: something else in the environment has the name.
+				d.Log.Warn("no preview: its name is taken in the environment", "app", parent.Name, "name", PreviewName(parent.Name, pr.Number))
+				return db.App{}, ErrNoPreview
+			}
 		}
 	}
 	if err != nil {
@@ -128,8 +132,8 @@ func (d *Deployer) createPreview(ctx context.Context, parent db.App, pr source.P
 	host := PreviewHost(parent, server, pr.Number)
 	// Never the dashboard's own address, whatever the app's preview domain
 	// and name add up to.
-	if instance, _ := d.DB.Setting(ctx, db.SettingInstanceDomain); instance != "" && instance == host {
-		d.Log.Warn("a preview has no address: it would be the dashboard's own", "app", parent.Name, "host", host)
+	if instance, err := d.DB.Setting(ctx, db.SettingInstanceDomain); err != nil || instance == host {
+		d.Log.Warn("a preview has no address: it would be the dashboard's own, or that could not be checked", "app", parent.Name, "host", host, "err", err)
 		return child, nil
 	}
 	_, err = d.DB.AddDomain(ctx, teamID, parent.ServerID, db.Domain{ResourceKind: db.KindApp, ResourceID: child.ID,
@@ -142,7 +146,16 @@ func (d *Deployer) createPreview(ctx context.Context, parent db.App, pr source.P
 
 type closePayload struct {
 	AppID string `json:"app_id"`
+	// After is the preview's newest deployment when the removal was asked
+	// for. One that is newer by the time the removal runs means the pull
+	// request was opened again or pushed to in between.
+	After string `json:"after,omitempty"`
 }
+
+// closeAttempts is how often a removal is tried. With the queue's back-off
+// that is most of a day: a server that is down for an hour does not leave
+// a preview behind.
+const closeAttempts = 12
 
 // ClosePreview removes a preview. The removal is queued behind whatever
 // deployment of the preview is running, under the same lock.
@@ -150,8 +163,21 @@ func (d *Deployer) ClosePreview(ctx context.Context, preview db.App) error {
 	if !preview.IsPreview() {
 		return ErrNoPreview
 	}
-	_, err := d.Queue.Enqueue(ctx, JobClosePreview, closePayload{AppID: preview.ID}, jobs.WithLockKey(deployLock(preview)), jobs.WithMaxAttempts(5))
+	after, err := d.newestDeployment(ctx, preview.ID)
+	if err != nil {
+		return err
+	}
+	_, err = d.Queue.Enqueue(ctx, JobClosePreview, closePayload{AppID: preview.ID, After: after}, jobs.WithLockKey(deployLock(preview)), jobs.WithMaxAttempts(closeAttempts))
 	return err
+}
+
+// newestDeployment is the id of an app's newest deployment, or "".
+func (d *Deployer) newestDeployment(ctx context.Context, appID string) (string, error) {
+	list, err := d.DB.ListDeployments(ctx, appID, 1)
+	if err != nil || len(list) == 0 {
+		return "", err
+	}
+	return list[0].ID, nil
 }
 
 func (d *Deployer) runClosePreview(ctx context.Context, raw []byte) error {
@@ -170,6 +196,13 @@ func (d *Deployer) runClosePreview(ctx context.Context, raw []byte) error {
 	// id in it must not be a way to delete the app.
 	if !app.IsPreview() {
 		return jobs.Permanent(fmt.Errorf("app %s is not a preview", app.ID))
+	}
+	// Opened again, or pushed to, since this was asked for: the preview
+	// that is there now is wanted.
+	if newest, err := d.newestDeployment(ctx, app.ID); err != nil {
+		return err
+	} else if newest != p.After {
+		return nil
 	}
 	err = d.Destroy(ctx, app.ID)
 	if errors.Is(err, db.ErrNotFound) {

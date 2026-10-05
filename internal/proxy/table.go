@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"sort"
@@ -39,6 +40,10 @@ type Route struct {
 	// RedirectTo sends every request to the same path on another host. It is
 	// how "www.example.com" forwards to "example.com" or the reverse.
 	RedirectTo string `json:"redirect_to,omitempty"`
+
+	// guard is the path of the route whose password this one asks for,
+	// when that is not its own (see Table.Guard).
+	guard string
 }
 
 // File is the content of routes.json, written by the control plane.
@@ -46,7 +51,17 @@ type File struct {
 	// Email is given to the certificate authority for expiry notices.
 	Email  string  `json:"email,omitempty"`
 	Routes []Route `json:"routes"`
+	// Guarded holds every route of the hosts that have a path or a
+	// password on any of them. The key is one a proxy from before those
+	// existed does not read, and that is the point: such a proxy would
+	// ignore the path and the password and serve the host open. Not
+	// knowing the host at all, it answers that nothing is deployed there
+	// until it is replaced.
+	Guarded []Route `json:"routes_v2,omitempty"`
 }
+
+// NeedsV2 reports whether a route uses what an earlier proxy does not know.
+func (rt Route) NeedsV2() bool { return rt.Path != "" || rt.AuthUser != "" || rt.AuthHash != "" }
 
 // Table is an immutable, validated route set. The proxy swaps whole tables
 // atomically, so a request never sees a half-updated one.
@@ -89,8 +104,9 @@ func Parse(r io.Reader) (*Table, error) {
 	if err := json.Unmarshal(raw, &file); err != nil {
 		return nil, fmt.Errorf("routes file: %w", err)
 	}
-	t := &Table{Email: file.Email, hosts: make(map[string][]Route, len(file.Routes))}
-	for i, rt := range file.Routes {
+	all := append(append(make([]Route, 0, len(file.Routes)+len(file.Guarded)), file.Routes...), file.Guarded...)
+	t := &Table{Email: file.Email, hosts: make(map[string][]Route, len(all))}
+	for i, rt := range all {
 		host := NormalizeHost(rt.Host)
 		if !ValidHost(host) {
 			return nil, fmt.Errorf("route %d: %q is not a valid host name", i, rt.Host)
@@ -176,6 +192,59 @@ func under(requestPath, prefix string) bool {
 func (t *Table) Lookup(hostport, requestPath string) (Route, bool) {
 	for _, rt := range t.hosts[NormalizeHost(hostport)] {
 		if under(requestPath, rt.Path) {
+			return rt, true
+		}
+	}
+	return Route{}, false
+}
+
+// loose is a request path as an app might read it when it is more
+// forgiving than the proxy: decoded once or twice more, without regard to
+// case, with a backslash for a slash and without what follows a semicolon
+// in a segment. "/Admin", "/admin;x", "/x/..;/admin", "/\\admin" and
+// "/%2e%2e/admin" all come out as "/admin".
+func loose(p string) string {
+	for range 2 {
+		decoded, err := url.PathUnescape(p)
+		if err != nil || decoded == p {
+			break
+		}
+		p = decoded
+	}
+	p = strings.ToLower(strings.ReplaceAll(p, "\\", "/"))
+	if strings.Contains(p, ";") {
+		segments := strings.Split(p, "/")
+		for i, s := range segments {
+			segments[i], _, _ = strings.Cut(s, ";")
+		}
+		p = strings.Join(segments, "/")
+	}
+	return Plain(p)
+}
+
+// Guard returns the password route that also covers a request served by
+// chosen, if there is one: a route of the same host, with a password and a
+// longer path than chosen's, that the request's path is under when it is
+// read loosely.
+//
+// It is for one app routed twice on a host, open at "/" and behind a
+// password at "/admin". The proxy reads "/Admin" as not under "/admin" and
+// picks the open route; an app that ignores case then serves its admin
+// page. With this, anything an app could take for the guarded path asks
+// for the password.
+func (t *Table) Guard(hostport, requestPath string, chosen Route) (Route, bool) {
+	if chosen.AuthUser != "" {
+		return Route{}, false
+	}
+	var read string
+	for _, rt := range t.hosts[NormalizeHost(hostport)] {
+		if rt.AuthUser == "" || len(rt.Path) <= len(chosen.Path) {
+			continue
+		}
+		if read == "" {
+			read = loose(requestPath)
+		}
+		if under(read, strings.ToLower(rt.Path)) {
 			return rt, true
 		}
 	}

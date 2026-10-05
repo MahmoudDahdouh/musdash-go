@@ -699,7 +699,7 @@ func (s *Server) serviceEndpointSave(w http.ResponseWriter, r *http.Request) {
 	if f.OK() {
 		err := s.DB.SetEndpointDomain(ctx, v.Service.ID, current.ID, host, tls)
 		switch {
-		case db.IsUnique(err):
+		case db.IsUnique(err), errors.Is(err, db.ErrHostTaken):
 			f.Fail("host", domainTaken)
 		case errors.Is(err, db.ErrNotFound):
 			s.notFound(w, r)

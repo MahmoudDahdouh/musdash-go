@@ -513,3 +513,136 @@ func TestPreviewNames(t *testing.T) {
 		t.Fatal("generated preview addresses repeat")
 	}
 }
+
+// What a preview is built and run with is its parent's, at every
+// deployment: a setting changed on the parent while a pull request is open
+// applies to the preview's next deployment.
+func TestAPreviewFollowsItsParentsSettings(t *testing.T) {
+	e, _ := previewEnv(t)
+	ctx := context.Background()
+	parent := e.reload()
+	child, err := e.d.SyncPreview(ctx, parent, pull(12, "feature/login"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := e.last(child.ID)
+	if first.Status != db.DeploySuccess {
+		t.Fatalf("%s %q", first.Status, first.Error)
+	}
+	e.db.Exec(`UPDATE apps SET port = 8080, dockerfile_path = 'docker/Dockerfile.prod', memory_mb = 256, start_command = 'node server.js',
+		repo_url = 'https://github.com/acme/moved', repo_name = 'acme/moved' WHERE id = ?`, parent.ID)
+	moved := pull(12, "feature/login")
+	moved.Repo, moved.HeadRepo = "acme/moved", "acme/moved"
+	before := len(e.fake.Calls())
+	if _, err := e.d.SyncPreview(ctx, e.reload(), moved); err != nil {
+		t.Fatal(err)
+	}
+	second := e.last(child.ID)
+	for second.ID == first.ID {
+		time.Sleep(5 * time.Millisecond)
+		second = e.last(child.ID)
+	}
+	if second.Status != db.DeploySuccess {
+		t.Fatalf("%s %q", second.Status, second.Error)
+	}
+	got, _ := e.db.AppByID(ctx, child.ID)
+	if got.Port != 8080 || got.DockerfilePath != "docker/Dockerfile.prod" || got.MemoryMB != 256 || got.StartCommand != "node server.js" || got.RepoName != "acme/moved" {
+		t.Fatalf("the preview kept its old settings: %+v", got)
+	}
+	// And stayed itself.
+	if got.Name != "web-pr-12" || got.Branch != "feature/login" || got.PreviewOf != parent.ID || got.AutoDeploy || got.Previews {
+		t.Fatalf("the preview lost what makes it one: %+v", got)
+	}
+	calls := strings.Join(e.since(before), "\n")
+	for _, want := range []string{"acme/moved", "docker/Dockerfile.prod", ":8080"} {
+		if !strings.Contains(calls, want) {
+			t.Errorf("the redeployment did not use %q:\n%s", want, calls)
+		}
+	}
+	// The parent's own row is never written by this.
+	if p := e.reload(); p.Branch != "main" || p.Name != "web" || p.PreviewOf != "" {
+		t.Fatalf("the parent was changed: %+v", p)
+	}
+}
+
+func TestAPreviewWhoseNameIsTakenIsNotMade(t *testing.T) {
+	e, _ := previewEnv(t)
+	ctx := context.Background()
+	parent := e.reload()
+	if _, err := e.db.CreateApp(ctx, e.team, db.App{EnvironmentID: parent.EnvironmentID, ServerID: e.server.ID, Name: "web-pr-12", Image: "nginx", Port: 80}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.d.SyncPreview(ctx, parent, pull(12, "feature/login")); !errors.Is(err, ErrNoPreview) {
+		t.Fatalf("a preview whose name something else has: %v", err)
+	}
+	if list, _ := e.db.Previews(ctx, parent.ID); len(list) != 0 {
+		t.Fatal("a preview was made")
+	}
+}
+
+// Closed and opened again before the removal ran: the preview that is
+// there now is wanted, and its deployment must not find the app gone.
+func TestAReopenedPullRequestKeepsItsPreview(t *testing.T) {
+	e, _ := previewEnv(t)
+	ctx := context.Background()
+	parent := e.reload()
+	child, err := e.d.SyncPreview(ctx, parent, pull(12, "feature/login"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := e.last(child.ID)
+
+	// The removal as it was asked for after the first deployment, run only
+	// after the pull request was opened again.
+	asked, _ := json.Marshal(closePayload{AppID: child.ID, After: first.ID})
+	if _, err := e.d.SyncPreview(ctx, parent, pull(12, "feature/login")); err != nil {
+		t.Fatal(err)
+	}
+	second := e.last(child.ID)
+	for second.ID == first.ID {
+		time.Sleep(5 * time.Millisecond)
+		second = e.last(child.ID)
+	}
+	if err := e.d.runClosePreview(ctx, asked); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.db.AppByID(ctx, child.ID); err != nil {
+		t.Fatalf("a preview that was opened again was removed: %v", err)
+	}
+	if second.Status != db.DeploySuccess {
+		t.Fatalf("its deployment: %s %q", second.Status, second.Error)
+	}
+	// Asked for now, it goes.
+	child, _ = e.db.AppByID(ctx, child.ID)
+	if err := e.d.ClosePreview(ctx, child); err != nil {
+		t.Fatal(err)
+	}
+	e.gone(child.ID)
+}
+
+// An app that got a preview in the moment it was being deleted is not
+// torn down halfway: the row could not go, so nothing else does.
+func TestAnAppWithAPreviewIsNotHalfDeleted(t *testing.T) {
+	e, _ := previewEnv(t)
+	ctx := context.Background()
+	e.deploy()
+	parent := e.reload()
+	if _, err := e.db.CreatePreview(ctx, parent, 12, PreviewName(parent.Name, 12), "late"); err != nil {
+		t.Fatal(err)
+	}
+	before := len(e.fake.Calls())
+	// The step Destroy takes after it has dealt with the previews it saw.
+	if err := e.d.destroy(ctx, parent.ID); !errors.Is(err, db.ErrHasPreviews) {
+		t.Fatalf("deleting an app that has a preview: %v", err)
+	}
+	if n := len(e.since(before)); n != 0 {
+		t.Fatalf("%d commands were run for an app that was not deleted", n)
+	}
+	if app := e.reload(); app.Container != parent.Container || app.Status != db.AppRunning {
+		t.Fatalf("the app was disturbed: %+v", app)
+	}
+	// Asked again, as a person would, it takes the preview with it.
+	if err := e.d.Destroy(ctx, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+}

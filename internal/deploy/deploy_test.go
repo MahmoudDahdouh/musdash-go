@@ -387,7 +387,7 @@ func TestFailedHealthCheckKeepsOldContainer(t *testing.T) {
 	}
 	calls := e.fake.Calls()
 	newC := ContainerName(e.app.ID, second.ID)
-	runAt := indexOf(calls, "docker run --detach --name "+newC)
+	runAt := indexOf(calls, "docker run --detach --pull never --name "+newC)
 	removed := false
 	for _, c := range calls[runAt+1:] {
 		if c == "docker rm --force "+newC {
@@ -660,11 +660,39 @@ func TestBuildRoutesByPath(t *testing.T) {
 		t.Fatalf("skipped %v", skipped)
 	}
 	got := map[string]proxy.Route{}
-	for _, r := range file.Routes {
+	for _, r := range append(append([]proxy.Route{}, file.Routes...), file.Guarded...) {
 		if _, dup := got[r.Host+r.Path]; dup {
 			t.Fatalf("%s%s routed twice", r.Host, r.Path)
 		}
 		got[r.Host+r.Path] = r
+	}
+	// A proxy from before paths and passwords reads "routes" and nothing
+	// else. It must not learn of a host that has either, not even of that
+	// host's open route: it would serve the whole host through it.
+	for _, r := range file.Routes {
+		if r.Host == "example.com" {
+			t.Fatalf("an older proxy would serve %s%s, without the path or the password", r.Host, r.Path)
+		}
+	}
+	if len(file.Guarded) != 2 || len(file.Routes) != 2 {
+		t.Fatalf("%d routes for every proxy, %d for ones that know paths and passwords", len(file.Routes), len(file.Guarded))
+	}
+	raw, _ := json.Marshal(file)
+	var old struct {
+		Routes []struct {
+			Host, Target string
+		} `json:"routes"`
+	}
+	json.Unmarshal(raw, &old)
+	for _, r := range old.Routes {
+		if r.Host == "example.com" && r.Target != "" {
+			t.Fatal("the file as an older proxy reads it routes the guarded host")
+		}
+	}
+	if tab, err := proxy.Parse(bytes.NewReader(raw)); err != nil {
+		t.Fatal(err)
+	} else if rt, ok := tab.Lookup("example.com", "/api/x"); !ok || rt.AuthUser != "ada" {
+		t.Fatalf("this proxy does not read the guarded host: %+v", rt)
 	}
 	want := map[string]proxy.Route{
 		"example.com":       {Host: "example.com", Target: "127.0.0.1:20001", TLS: true},
@@ -1317,5 +1345,30 @@ func TestMonitorEndsWhenItsServerIsGone(t *testing.T) {
 	}
 	if ctx.Err() != nil {
 		t.Fatal("it ended only with its context")
+	}
+}
+
+// The dashboard's own address stays the dashboard's whatever the domains
+// table holds: an app served from it would have its origin in a browser.
+func TestBuildRoutesKeepsTheDashboardsAddress(t *testing.T) {
+	rows := []db.RouteRow{
+		{Host: "dash.example.com", HostPort: 20001},
+		{Host: "dash.example.com", Path: "/app", HostPort: 20002},
+		{Host: "www.dash.example.com", RedirectWWW: true, HostPort: 20003},
+		{Host: "other.example.com", HostPort: 20004},
+	}
+	file, skipped := BuildRoutes(rows, "", "dash.example.com", "127.0.0.1:8000")
+	if len(skipped) != 2 {
+		t.Fatalf("skipped %v", skipped)
+	}
+	raw, _ := json.Marshal(file)
+	tab, err := proxy.Parse(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/", "/app", "/app/x"} {
+		if rt, _ := tab.Lookup("dash.example.com", path); rt.Target != "127.0.0.1:8000" {
+			t.Errorf("dash.example.com%s goes to %q", path, rt.Target)
+		}
 	}
 }

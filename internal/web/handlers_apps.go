@@ -151,7 +151,12 @@ func (s *Server) checkHost(ctx context.Context, f *ui.Form, key, value string) s
 		return ""
 	}
 	instance, err := s.DB.Setting(ctx, db.SettingInstanceDomain)
-	if err == nil && instance == host {
+	if err != nil {
+		s.Log.Error("read the dashboard's domain", "err", err)
+		f.Fail(key, "The domain could not be checked just now. Try again.")
+		return ""
+	}
+	if instance == host {
 		f.Fail(key, "This domain is the dashboard's own address.")
 		return ""
 	}

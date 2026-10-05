@@ -1028,6 +1028,14 @@ func TestPreviewSettingsAndManualWebhook(t *testing.T) {
 	if len(doms) != 1 || doms[0].Host != "pr-32-web.preview.example.com" || !doms[0].TLS {
 		t.Fatalf("the preview's address: %+v", doms)
 	}
+	// New commits, as Gitea and Forgejo spell them.
+	a.db.Exec(`UPDATE deployments SET status = 'failed' WHERE app_id = ?`, previews[0].ID)
+	if _, answer = a.hook(hookPath, key, "", "m-1b", prBody("synchronized", "acme/shop", "acme/shop", "feature", 32)); !strings.Contains(answer, `"previews":1`) {
+		t.Fatalf("synchronized: %s", answer)
+	}
+	if list, _ := a.db.ListDeployments(ctx, previews[0].ID, 5); len(list) != 2 {
+		t.Fatalf("%d deployments of the preview after new commits", len(list))
+	}
 	// The preview has no webhook of its own: its id is not an address.
 	if res, _ := a.hook("/webhooks/git/"+previews[0].ID, key, "push", "m-child", pushBody("acme/shop", "refs/heads/feature")); res.StatusCode != http.StatusUnauthorized {
 		t.Errorf("a webhook to the preview's id: %d", res.StatusCode)

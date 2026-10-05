@@ -208,8 +208,16 @@ func (p *Proxy) route(w http.ResponseWriter, r *http.Request) (Route, bool) {
 	rt, ok := t.Lookup(r.Host, r.URL.Path)
 	if !ok {
 		noRoute(w)
+		return rt, false
 	}
-	return rt, ok
+	// A path that an app might take for a guarded one asks for that
+	// route's password, whichever route serves it.
+	if strict {
+		if guard, found := t.Guard(r.Host, r.URL.Path, rt); found {
+			rt.AuthUser, rt.AuthHash, rt.guard = guard.AuthUser, guard.AuthHash, guard.Path
+		}
+	}
+	return rt, true
 }
 
 func (p *Proxy) serve(w http.ResponseWriter, r *http.Request, rt Route, scheme string) {

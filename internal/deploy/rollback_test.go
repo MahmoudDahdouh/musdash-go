@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
@@ -203,9 +204,27 @@ func TestRollbackOfAGitApp(t *testing.T) {
 	e.fake.Handle = (&gitEnvRecorder{}).handle
 	e.gitApp(nil)
 	built := e.deploy()
-	if built.Status != db.DeploySuccess || built.KeptImage != ImageRepository(e.app.ID)+":"+testCommit[:12] {
-		t.Fatalf("%s %q kept %q", built.Status, built.Error, built.KeptImage)
+	// Kept under the deployment's own name, not the commit's: the commit's
+	// tag moves when the commit is built again.
+	commitTag := ImageRepository(e.app.ID) + ":" + testCommit[:12]
+	if built.Status != db.DeploySuccess || built.Image != commitTag || built.KeptImage != keptName(e.app.ID, built.ID) {
+		t.Fatalf("%s %q image %q kept %q", built.Status, built.Error, built.Image, built.KeptImage)
 	}
+	if !hasPrefix(e.fake.Calls(), "docker tag "+commitTag+" "+built.KeptImage) {
+		t.Fatal("the built image was not given the deployment's own name")
+	}
+	// The same commit built again, and failing its health check: the first
+	// deployment's image is still what a rollback to it runs.
+	e.probe.mu.Lock()
+	e.probe.fn = func() error { return errors.New("connection refused") }
+	e.probe.mu.Unlock()
+	e.db.Exec(`UPDATE apps SET health_timeout = 1 WHERE id = ?`, e.app.ID)
+	if rebuilt := e.deploy(); rebuilt.Status != db.DeployFailed || rebuilt.KeptImage == built.KeptImage {
+		t.Fatalf("the rebuild: %s, kept %q", rebuilt.Status, rebuilt.KeptImage)
+	}
+	e.probe.mu.Lock()
+	e.probe.fn = nil
+	e.probe.mu.Unlock()
 	before := len(e.fake.Calls())
 	back := e.rollback(built)
 	if back.Status != db.DeploySuccess || back.CommitSHA != testCommit {
@@ -220,5 +239,70 @@ func TestRollbackOfAGitApp(t *testing.T) {
 	e.db.QueryRowContext(ctx, `SELECT lock_key FROM jobs WHERE kind = ? ORDER BY rowid DESC LIMIT 1`, JobDeploy).Scan(&lock)
 	if lock != "build:"+e.server.ID {
 		t.Fatalf("lock key %q: a rollback could overlap the app's builds", lock)
+	}
+}
+
+// A rollback that is waiting to run is not "a deployment of the newest code
+// is waiting". A push that took it for one would queue nothing, and the
+// new commit would never be deployed.
+func TestAWaitingRollbackDoesNotStandInForADeployment(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	good := e.deploy()
+	e.deploy()
+	inner := e.fake.Handle
+	hold := make(chan struct{})
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) { <-hold; return inner(line, c) }
+	blocker, err := e.d.Enqueue(ctx, e.reload(), "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Wait until the blocker is the one running, then queue the rollback
+	// behind it.
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		if got, _ := e.db.DeploymentByID(ctx, blocker.ID); got.Status == db.DeployRunning {
+			break
+		}
+	}
+	queued, err := e.d.Rollback(ctx, e.reload(), good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waiting, err := e.db.QueuedDeployment(ctx, e.app.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("a waiting rollback is taken for a waiting deployment: %+v %v", waiting, err)
+	}
+	// A real one behind it is found.
+	next, err := e.d.Enqueue(ctx, e.reload(), "push")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waiting, err := e.db.QueuedDeployment(ctx, e.app.ID); err != nil || waiting.ID != next.ID {
+		t.Fatalf("the waiting deployment: %+v %v", waiting, err)
+	}
+	close(hold)
+	for _, dep := range []db.Deployment{blocker, queued, next} {
+		if done := e.wait(dep, 15*time.Second); done.Status != db.DeploySuccess {
+			t.Fatalf("%s: %s %q", dep.Trigger, done.Status, done.Error)
+		}
+	}
+}
+
+// An image that is meant to be on the server is never looked for under
+// the same name in a registry.
+func TestAppContainersNeverPullAtRun(t *testing.T) {
+	e := newEnv(t)
+	first := e.deploy()
+	e.rollback(first)
+	runs := 0
+	for _, c := range e.fake.Calls() {
+		if strings.HasPrefix(c, "docker run") {
+			runs++
+			if !strings.HasPrefix(c, "docker run --detach --pull never ") {
+				t.Errorf("a container could be started from a registry's image: %s", c)
+			}
+		}
+	}
+	if runs != 2 {
+		t.Fatalf("%d containers were started", runs)
 	}
 }

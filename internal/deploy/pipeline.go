@@ -288,6 +288,14 @@ func (d *Deployer) runJob(ctx context.Context, raw []byte) error {
 	mu.Lock()
 	defer mu.Unlock()
 	app, err := d.DB.AppByID(ctx, dep.AppID)
+	if err == nil && app.IsPreview() {
+		// What a preview is built and run with is its parent's, as it is
+		// now: a port or a Dockerfile path changed there since the pull
+		// request was opened applies here too.
+		if err = d.DB.RefreshPreview(ctx, app.ID); err == nil {
+			app, err = d.DB.AppByID(ctx, dep.AppID)
+		}
+	}
 	if err != nil {
 		// The app was deleted while this deployment waited in the queue.
 		d.DB.FinishDeployment(ctx, dep.ID, db.DeployFailed, "the app no longer exists")
@@ -418,14 +426,16 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 		if err := d.DB.SetDeploymentBuild(ctx, dep.ID, image, commit); err != nil {
 			return err
 		}
-		kept = image
 	default:
 		log.Step("Pulling %s", image)
 		if err := dk.Pull(ctx, image, log); err != nil {
 			return fmt.Errorf("pull %s: %w", image, err)
 		}
-		// A tag such as nginx:latest moves. Under a name of the app's own
-		// the image that is deployed now stays what it is.
+	}
+	if dep.RollbackOf == "" {
+		// A tag such as nginx:latest moves, and so does the tag of a
+		// commit that is built a second time. Under a name of this
+		// deployment's own the image that is deployed now stays what it is.
 		kept = keptName(app.ID, dep.ID)
 		if err := dk.Tag(ctx, image, kept); err != nil {
 			return fmt.Errorf("keep the image for a rollback: %w", err)
@@ -437,7 +447,7 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 	// Old images go only once this one is serving.
 	defer func() {
 		if err == nil {
-			d.pruneImages(context.WithoutCancel(ctx), dk, app.ID, kept)
+			d.pruneImages(context.WithoutCancel(ctx), dk, app.ID, kept, image)
 		}
 	}()
 
@@ -447,7 +457,10 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 	}
 
 	spec := docker.RunSpec{
-		Name: container, Image: image, Network: network, Alias: app.Name,
+		// Pulled, built or kept a moment ago: it is here, or the
+		// deployment fails. Never fetched under this name from outside.
+		Local: true,
+		Name:  container, Image: image, Network: network, Alias: app.Name,
 		ContainerPort: app.Port, MemoryMB: app.MemoryMB, CPUs: app.CPUs,
 		ExtraArgs: extraArgs,
 		Labels: map[string]string{
@@ -773,6 +786,14 @@ func (d *Deployer) destroy(ctx context.Context, appID string) error {
 	app, err := d.DB.AppByID(ctx, appID)
 	if err != nil {
 		return err
+	}
+	// A pull request opened in this very moment: the row could not be
+	// deleted, so nothing is torn down either. Asked again, the delete
+	// takes the new preview first.
+	if late, err := d.DB.Previews(ctx, appID); err != nil {
+		return err
+	} else if len(late) > 0 {
+		return db.ErrHasPreviews
 	}
 	server, err := d.stopLocked(ctx, app)
 	if err != nil {

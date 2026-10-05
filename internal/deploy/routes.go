@@ -29,23 +29,36 @@ var ErrProxyDown = errors.New("the proxy is not running")
 func BuildRoutes(rows []db.RouteRow, email, instanceDomain, instanceTarget string) (file proxy.File, skipped []string) {
 	file = proxy.File{Email: email, Routes: []proxy.Route{}}
 	taken := make(map[string]bool, len(rows)+1)
+	// Hosts with a path or a password on any of their routes: all of their
+	// routes go where only a proxy that knows about both reads them.
+	guarded := make(map[string]bool)
 	for _, r := range rows {
 		taken[r.Host] = true
+		if r.Path != "" || r.AuthUser != "" || r.AuthHash != "" {
+			guarded[r.Host] = true
+		}
 	}
-	if instanceDomain != "" && !taken[instanceDomain] && proxy.ValidHost(instanceDomain) {
+	// The dashboard's own address is the dashboard's, whatever a row says:
+	// an app served from it would have the dashboard's origin in a browser.
+	if instanceDomain != "" && proxy.ValidHost(instanceDomain) {
 		taken[instanceDomain] = true
 		file.Routes = append(file.Routes, proxy.Route{Host: instanceDomain, Target: instanceTarget, TLS: true})
 	}
 	for _, r := range rows {
-		if !proxy.ValidHost(r.Host) || !proxy.ValidPath(r.Path) {
+		if !proxy.ValidHost(r.Host) || !proxy.ValidPath(r.Path) || (instanceDomain != "" && r.Host == instanceDomain) {
 			skipped = append(skipped, r.Host+r.Path)
 			continue
 		}
-		file.Routes = append(file.Routes, proxy.Route{
+		rt := proxy.Route{
 			Host: r.Host, Path: r.Path, StripPrefix: r.StripPrefix && r.Path != "",
 			Target: "127.0.0.1:" + strconv.Itoa(r.HostPort), TLS: r.TLS,
 			AuthUser: r.AuthUser, AuthHash: r.AuthHash,
-		})
+		}
+		if guarded[r.Host] {
+			file.Guarded = append(file.Guarded, rt)
+		} else {
+			file.Routes = append(file.Routes, rt)
+		}
 		if !r.RedirectWWW {
 			continue
 		}
@@ -96,7 +109,7 @@ func (d *Deployer) SyncRoutes(ctx context.Context, server db.Server) error {
 	}
 	file, skipped := BuildRoutes(rows, email, instanceDomain, d.InstanceTarget)
 	if len(skipped) > 0 {
-		d.Log.Warn("domains left out of the routes: not valid host names", "hosts", skipped)
+		d.Log.Warn("domains left out of the routes: not valid, or the dashboard's own", "hosts", skipped)
 	}
 	raw, err := json.MarshalIndent(file, "", "  ")
 	if err != nil {

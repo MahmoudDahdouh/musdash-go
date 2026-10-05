@@ -21,6 +21,10 @@ const (
 	authRemembered = 256
 	// authWait is how long a request waits for its turn to be compared.
 	authWait = 5 * time.Second
+	// authWaiting is how many requests for one route may wait for a turn.
+	// More are refused at once: a flood of guesses at one site then holds
+	// a few places in the line, not all of it.
+	authWaiting = 4
 	// maxPassword is bcrypt's limit; a longer password would be compared
 	// by its first 72 bytes only.
 	maxPassword = 72
@@ -44,6 +48,7 @@ type gate struct {
 
 	mu       sync.Mutex
 	verified map[[sha256.Size]byte]time.Time // credentials → until when
+	waiting  map[string]int                  // route → requests waiting for a turn
 	now      func() time.Time
 }
 
@@ -52,6 +57,7 @@ func newGate() *gate {
 		key:      make([]byte, 32),
 		turn:     make(chan struct{}, 1),
 		verified: make(map[[sha256.Size]byte]time.Time),
+		waiting:  make(map[string]int),
 		now:      time.Now,
 	}
 	rand.Read(g.key)
@@ -69,11 +75,20 @@ func (g *gate) check(r *http.Request, rt Route) authResult {
 	if g.remembered(id) {
 		return authOK
 	}
+	route := rt.Host + rt.Path + "\x00" + rt.guard
+	if !g.wait(route) {
+		return authBusy
+	}
+	wait := time.NewTimer(authWait)
+	defer wait.Stop()
 	select {
 	case g.turn <- struct{}{}:
+		g.waited(route)
 	case <-r.Context().Done():
+		g.waited(route)
 		return authDenied
-	case <-time.After(authWait):
+	case <-wait.C:
+		g.waited(route)
 		return authBusy
 	}
 	// Compared whatever the user name is, so that a wrong name and a wrong
@@ -92,7 +107,13 @@ func (g *gate) check(r *http.Request, rt Route) authResult {
 // remembered for this one.
 func (g *gate) id(rt Route, user, password string) (id [sha256.Size]byte) {
 	h := hmac.New(sha256.New, g.key)
-	for _, part := range []string{rt.Host, rt.Path, rt.AuthUser, rt.AuthHash, user, password} {
+	// The path is the one the password belongs to, which a route asking on
+	// another's behalf (Table.Guard) carries apart from its own.
+	owner := rt.Path
+	if rt.guard != "" {
+		owner = rt.guard
+	}
+	for _, part := range []string{rt.Host, owner, rt.AuthUser, rt.AuthHash, user, password} {
 		// The length first, so that parts cannot run into each other.
 		h.Write([]byte{byte(len(part) >> 8), byte(len(part))})
 		h.Write([]byte(part))
@@ -101,15 +122,44 @@ func (g *gate) id(rt Route, user, password string) (id [sha256.Size]byte) {
 	return id
 }
 
+// wait takes a place in the line for a route, or reports that the line
+// for it is full.
+func (g *gate) wait(route string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.waiting[route] >= authWaiting {
+		return false
+	}
+	g.waiting[route]++
+	return true
+}
+
+func (g *gate) waited(route string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.waiting[route]--; g.waiting[route] <= 0 {
+		delete(g.waiting, route)
+	}
+}
+
+// remembered reports whether credentials were verified a short while ago.
+// Each use keeps them a while longer: somebody working behind a password
+// is then not sent back to the line every five minutes, where a flood of
+// guesses could keep them out.
 func (g *gate) remembered(id [sha256.Size]byte) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	until, ok := g.verified[id]
-	if ok && !g.now().Before(until) {
+	if !ok {
+		return false
+	}
+	now := g.now()
+	if !now.Before(until) {
 		delete(g.verified, id)
 		return false
 	}
-	return ok
+	g.verified[id] = now.Add(authRemember)
+	return true
 }
 
 func (g *gate) remember(id [sha256.Size]byte) {

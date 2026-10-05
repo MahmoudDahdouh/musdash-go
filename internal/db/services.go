@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
@@ -415,6 +416,13 @@ func (d *DB) SyncEndpoints(ctx context.Context, serviceID string, names []string
 				continue
 			}
 			if host, tls := newHost(name); host != "" {
+				// Somebody else's by now: the endpoint is made without an
+				// address, as when none was offered.
+				if err := hostUnused(ctx, tx, host); errors.Is(err, ErrHostTaken) {
+					continue
+				} else if err != nil {
+					return err
+				}
 				if _, err := tx.ExecContext(ctx, `INSERT INTO domains (id, resource_kind, resource_id, host, tls, redirect_www, created_at)
 					VALUES (?, ?, ?, ?, ?, 0, ?)`, secret.RandomID(), KindService, id, host, tls, now()); err != nil {
 					return err
@@ -456,8 +464,26 @@ func (d *DB) SetEndpointDomain(ctx context.Context, serviceID, endpointID, host 
 		if _, err := tx.ExecContext(ctx, `DELETE FROM domains WHERE resource_kind = ? AND resource_id = ?`, KindService, endpointID); err != nil {
 			return err
 		}
+		if err := hostUnused(ctx, tx, host); err != nil {
+			return err
+		}
 		_, err := tx.ExecContext(ctx, `INSERT INTO domains (id, resource_kind, resource_id, host, tls, redirect_www, created_at)
 			VALUES (?, ?, ?, ?, ?, 0, ?)`, secret.RandomID(), KindService, endpointID, host, tls, now())
 		return err
 	})
+}
+
+// hostUnused reports ErrHostTaken when anything is routed on a host. A
+// service's endpoint takes a whole host: since a host can be routed more
+// than once, by path, the table no longer refuses a second row for it, and
+// the check has to be made in the transaction that writes the row.
+func hostUnused(ctx context.Context, tx *sql.Tx, host string) error {
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM domains WHERE host = ?`, host).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return ErrHostTaken
+	}
+	return nil
 }

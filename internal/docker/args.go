@@ -28,8 +28,12 @@ type Mount struct {
 
 // RunSpec describes a container to start.
 type RunSpec struct {
-	Name          string
-	Image         string
+	Name  string
+	Image string
+	// Local says the image is on the server already and must not be
+	// looked for anywhere else. Without it, an image that has gone
+	// missing would be asked of a registry under the same name.
+	Local         bool
 	Network       string
 	Alias         string // DNS name on the network
 	HostPort      int    // published on 127.0.0.1; 0 publishes nothing
@@ -144,13 +148,16 @@ func (s RunSpec) Args() ([]string, error) {
 	if !ValidImage(s.Image) {
 		return nil, fmt.Errorf("%q is not a valid image name", s.Image)
 	}
-	args := []string{
-		"run", "--detach",
+	args := []string{"run", "--detach"}
+	if s.Local {
+		args = append(args, "--pull", "never")
+	}
+	args = append(args,
 		"--name", s.Name,
 		"--restart", "unless-stopped",
 		// Bound the container's log on disk; small servers fill up otherwise.
 		"--log-driver", "json-file", "--log-opt", "max-size=10m", "--log-opt", "max-file=3",
-	}
+	)
 	if s.Network != "" {
 		if !ValidName(s.Network) {
 			return nil, fmt.Errorf("bad network name %q", s.Network)

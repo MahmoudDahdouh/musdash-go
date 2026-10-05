@@ -109,7 +109,44 @@ func ReadEvent(body io.Reader, secret []byte, header, event string) (Push, PullR
 - [x] Tests: opened → a child app with the branch, variables and address; synchronize → redeploy, not a second child; closed → destroyed; a fork → nothing; the limit; another repository's event with a valid signature → nothing.
 
 ### Task 4 — End
-- [ ] Independent review; README; RSS on Linux for the proxy with basic auth routes.
+- [x] Independent review; README; RSS on Linux for the proxy with basic auth routes.
+
+## Outcome
+
+- **Done when:** a pull request event creates a preview with an address of its own, and the closing event removes it. Shown by `TestPullRequestsThroughAGitHubApp` (signed events through the webhook endpoint) and, with the real `git` and Docker, by `TestGitDeployWithDocker`: a branch is cloned, built and served next to the app with `MUSDASH_PREVIEW` and `MUSDASH_PULL_REQUEST` set, and removed again with its container and images.
+- `TestDeployWithDocker` rolls back to the first deployment's kept image on real Docker (the container runs `musdash/<app>:d-<deployment>`, nothing is pulled), and asks the real proxy for a path of a host with its prefix removed and a password in front: no password and a wrong one are refused, `/x/../docs/` is sent to `/docs/` first, and the rest of the host answers nothing.
+- Idle memory on Linux, seven runs: server 21 to 24 MB, proxy 15 to 18 MB. The proxy's figure is now taken with fifty hosts loaded, some routed by path and some behind a password, after right and wrong passwords were tried.
+- No new module: bcrypt and the tar reader for the image filter are in what the project already uses.
+- Found while building it:
+  - Docker lists images by when they were made, not when they were deployed, so "keep the newest five" asked of Docker would have removed an image that was just rolled back to. The deployments table is asked instead.
+  - Copying a parent's variables into each preview would have left ten copies of every secret to keep in step. A preview reads its parent's at each deployment instead.
+  - Two teams sharing a host by path would let either take the other's traffic with a longer path. A host is shared only within one team, on one server.
+- Not verifiable here, to check on a server with a real repository:
+  - A real GitHub App delivering `pull_request` events, and the comment on the pull request (it needs the App to have "Pull requests: read and write"; an App made before this phase has to be given it on GitHub).
+  - Certificates for preview hosts under a wildcard DNS record. Each preview asks for a certificate of its own, and Let's Encrypt limits how many a domain gets in a week: a busy repository can reach that.
+  - A browser's own handling of the password prompt, and of the 308 redirect for a path that is not in its simplest form.
+- Upgrading: a proxy from before this phase does not know paths or passwords. Hosts that use either are written under a key it does not read, so it answers "nothing is deployed" for them instead of serving them open. The local proxy is restarted by the install script; on a remote server, choose Install proxy again.
+- Not done in this phase: paths and passwords for a service's endpoint (it keeps a whole host); previews for stacks from a Git repository; a preview's own variables (it has its parent's).
+
+## Independent review
+
+A second reader went through the phase against the threat list below. It could not get code from outside an app's repository built as a preview, found no way off-site through the redirect, no way to make a deployment row run another app's image, and no cache confusion in the password check. What it did find, all fixed:
+
+| Finding | Fix |
+|---|---|
+| A proxy from before this phase ignores a route's path and password: on a server whose proxy was not replaced, a guarded domain was served open and a `/api` route took its whole host | Every route of a host that has a path or a password is written under `routes_v2`, which an older proxy does not read. To it the host is not deployed |
+| One app routed twice on a host, open at `/` and guarded at `/admin`: `/Admin`, `/admin;x`, `/x/..;/admin`, `/%5Cadmin` and `/%252e%252e/admin` went to the open route, and an app that reads paths more loosely than the proxy would serve its admin page | `Table.Guard`: a request whose path, read loosely (decoded again, without case, backslash as slash, without what follows a semicolon), is under a guarded route of the host asks for that route's password, whichever route serves it |
+| A rollback waiting in the queue counted as "a deployment is waiting", so a push, an API deploy or a pull request update that arrived meanwhile queued nothing and was never deployed | `QueuedDeployment` leaves rollbacks out |
+| Wrong guesses at one guarded route filled the one line for password comparisons, and somebody signing in at another site got "try again" | Four places in the line per route, the rest refused at once; verified credentials stay remembered while they are used |
+| A preview's port, Dockerfile path, repository and the rest were copied once, when it was made, while its pages said to change them on the parent | `RefreshPreview` gives a preview its parent's settings at the start of every deployment |
+| A service's endpoint took a host on the strength of a check made outside the transaction; with the table no longer refusing a second row per host, two teams could end up sharing one | The check is made in the transaction that writes the row |
+| An unrelated resource named like a preview made the webhook answer 500 | No preview, and a line in the log |
+| The removal of a preview was tried five times in seven minutes and then given up; closed and reopened quickly, a pull request lost its preview and its deployment found the app gone | Twelve tries over most of a day; a removal is skipped when the preview has a newer deployment than when it was asked for |
+| The same commit built again moved the tag an earlier successful deployment rolled back to, before the new build had passed its health check | Every deployment's image is kept under `d-<deployment>`, built ones too |
+| A pull request arriving while its app was being deleted left the app stopped, its files and images gone, and its row still there | Nothing is torn down while a preview exists |
+| The checks for the dashboard's own domain passed when the setting could not be read, and a row on that host displaced the dashboard's route | They refuse on an error, and `BuildRoutes` always routes that host to the dashboard |
+| Gitea and Forgejo call new commits `synchronized` | Both spellings are read |
+| `docker run` would have asked a registry for a kept image that had gone missing | App containers start with `--pull never` |
 
 ## Review focus
 

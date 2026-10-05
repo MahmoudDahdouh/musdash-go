@@ -504,6 +504,21 @@ func (d *DB) PreviewsForPullRequest(ctx context.Context, sourceID, repoName stri
 	return d.queryApps(ctx, query+` ORDER BY a.created_at, a.rowid`, args...)
 }
 
+// RefreshPreview gives a preview its parent's build and run settings as
+// they are now. Everything but what makes it this preview: its name, its
+// branch, and what it is running.
+func (d *DB) RefreshPreview(ctx context.Context, id string) error {
+	_, err := d.ExecContext(ctx, `UPDATE apps SET (source, image, port, memory_mb, cpus, health_path, health_cmd, health_timeout,
+			repo_url, repo_name, build_pack, dockerfile_path, base_dir, publish_dir, spa_fallback,
+			git_source_id, ssh_key_id, start_command, docker_options, build_server_id)
+		= (SELECT p.source, p.image, p.port, p.memory_mb, p.cpus, p.health_path, p.health_cmd, p.health_timeout,
+			p.repo_url, p.repo_name, p.build_pack, p.dockerfile_path, p.base_dir, p.publish_dir, p.spa_fallback,
+			p.git_source_id, p.ssh_key_id, p.start_command, p.docker_options, p.build_server_id
+			FROM apps p WHERE p.id = apps.preview_of)
+		WHERE id = ? AND preview_of <> '' AND EXISTS (SELECT 1 FROM apps p WHERE p.id = apps.preview_of)`, id)
+	return err
+}
+
 // SetAppBranch changes the branch an app is built from.
 func (d *DB) SetAppBranch(ctx context.Context, id, branch string) error {
 	return affected(d.ExecContext(ctx, `UPDATE apps SET branch = ?, updated_at = ? WHERE id = ?`, branch, now(), id))

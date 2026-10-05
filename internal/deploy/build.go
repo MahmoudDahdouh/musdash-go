@@ -384,7 +384,7 @@ func (d *Deployer) buildArgs(ctx context.Context, app db.App) (map[string]string
 // Which are the newest is asked of the deployments, not of Docker: Docker
 // orders images by when they were made, and an image that was rolled back
 // to, or a pulled one, can be old and still be what ran last.
-func (d *Deployer) pruneImages(ctx context.Context, dk docker.Client, appID, current string) {
+func (d *Deployer) pruneImages(ctx context.Context, dk docker.Client, appID string, current ...string) {
 	repo := ImageRepository(appID)
 	tags, err := dk.ImageTags(ctx, repo)
 	if err != nil {
@@ -396,7 +396,10 @@ func (d *Deployer) pruneImages(ctx context.Context, dk docker.Client, appID, cur
 		d.Log.Warn("list images to keep", "app", appID, "err", err)
 		return
 	}
-	keep := map[string]bool{current: true}
+	keep := map[string]bool{}
+	for _, image := range current {
+		keep[image] = true
+	}
 	for _, image := range recent {
 		keep[image] = true
 	}

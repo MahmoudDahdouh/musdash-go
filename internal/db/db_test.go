@@ -497,6 +497,24 @@ func TestAHostIsSharedByPathWithinOneTeamAndServer(t *testing.T) {
 		t.Fatalf("another team beside a service: %v", err)
 	}
 
+	// A service's endpoint takes a whole host: not one that anything is
+	// routed on, its own team's paths included, and the check is made
+	// where the row is written.
+	d.Exec(`INSERT INTO service_endpoints (id, service_id, name) VALUES ('ep2', 'svc1', 'API')`)
+	for _, host := range []string{"shop.example.com", "theirs.example.com", "stack.example.com"} {
+		if err := d.SetEndpointDomain(ctx, "svc1", "ep2", host, true); !errors.Is(err, ErrHostTaken) {
+			t.Fatalf("an endpoint on %s, which is in use: %v", host, err)
+		}
+	}
+	if err := d.SetEndpointDomain(ctx, "svc1", "ep2", "api.example.com", true); err != nil {
+		t.Fatal(err)
+	}
+	// Saving the same host again is not a clash with itself.
+	if err := d.SetEndpointDomain(ctx, "svc1", "ep2", "api.example.com", false); err != nil {
+		t.Fatalf("an endpoint's own host saved again: %v", err)
+	}
+	d.Exec(`DELETE FROM domains WHERE host = 'api.example.com'`)
+
 	// A row nobody can be found for shares its host with no one.
 	d.Exec(`INSERT INTO domains (id, resource_kind, resource_id, host, created_at) VALUES ('orphan', 'app', 'gone', 'old.example.com', 1)`)
 	if err := add(team, server.ID, of(web, "old.example.com", "/x")); !errors.Is(err, ErrHostTaken) {

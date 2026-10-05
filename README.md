@@ -115,13 +115,15 @@ Apps in one environment reach each other by name (`web:80`) on that network. Fro
 
 ### Rolling back
 
-Every deployment's image stays on the server under a name of the app's own, the newest five of them. Open an earlier deployment and choose **Roll back**: that image runs again through the same health check and switch. Nothing is pulled or built, so a tag such as `nginx:latest` that has moved since does not matter. The app's settings and variables stay as they are today; only the image goes back.
+Every deployment's image stays on the server under a name of that deployment's own, the newest five of them. Open an earlier deployment and choose **Roll back**: that image runs again through the same health check and switch. Nothing is pulled or built, so a tag such as `nginx:latest` that has moved since does not matter. The app's settings and variables stay as they are today; only the image goes back.
 
 ### Domains, paths and passwords
 
 A domain can be limited to a path: with `/api`, the app answers `app.example.com/api` and what is below it, and another app of yours on the same server can take the rest of the domain. The longest path that matches wins, on whole segments (`/api` is not `/apix`). The path can be removed before the request is passed on, for apps that expect to live at `/`.
 
-A domain can also ask for a user name and password before anything reaches the app. The password is stored as a hash. Over plain HTTP it travels unencrypted, so use it with HTTPS.
+A domain can also ask for a user name and password before anything reaches the app. The password is stored as a hash. Over plain HTTP it travels unencrypted, so use it with HTTPS. When one app is routed both openly and, under a path, behind a password, anything an app might read as that path asks for the password too: `/Admin` as well as `/admin`.
+
+Both need a proxy of this version. A proxy that was running before the upgrade answers "nothing is deployed" for such a domain until it is restarted (`systemctl restart musdash-proxy`; the install script does it) or, on another server, installed again from the Servers page.
 
 ### Deploying from Git
 

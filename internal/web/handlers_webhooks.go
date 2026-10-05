@@ -164,7 +164,8 @@ func (s *Server) pullRequest(w http.ResponseWriter, r *http.Request, sourceID st
 		none("")
 		return
 	}
-	opened := pr.Action == "opened" || pr.Action == "reopened" || pr.Action == "synchronize"
+	// "synchronized" is how Gitea and Forgejo spell new commits.
+	opened := pr.Action == "opened" || pr.Action == "reopened" || pr.Action == "synchronize" || pr.Action == "synchronized"
 	if !opened && pr.Action != "closed" {
 		// Labels, reviews, edits: nothing that changes what is deployed.
 		none("")

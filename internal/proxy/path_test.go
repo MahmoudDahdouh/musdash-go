@@ -389,3 +389,170 @@ func TestParseValidatesPathsAndPasswords(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// One app routed twice on a host: open at "/", behind a password at
+// "/admin". Whatever spelling an app might still read as "/admin" asks for
+// the password, though the proxy itself would send it to the open route.
+func TestAGuardedPathIsGuardedHoweverAnAppMightReadIt(t *testing.T) {
+	app := backend(t, "app")
+	p, _ := newProxy(t, false,
+		Route{Host: "example.com", Target: app},
+		Route{Host: "example.com", Path: "/admin", Target: app, AuthUser: "ada", AuthHash: hashOf(t, "pw")},
+		Route{Host: "example.com", Path: "/admin/public", Target: app},
+		Route{Host: "plain.example.com", Target: app},
+		Route{Host: "plain.example.com", Path: "/admin", Target: app})
+
+	guarded := []string{"/Admin", "/ADMIN/users", "/admin;x", "/admin;jsessionid=1/users", "/x/..;/admin", "/x/..;a=b/admin/",
+		"/%5Cadmin", "/x/..%5Cadmin", "/%252e%252e/admin", "/x/%252e%252e/admin", "/%2561dmin", "/aDmIn/", "/admin%3Bx"}
+	for _, path := range guarded {
+		rec := request(p.HTTP(), "GET", "example.com", path, nil)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s without a password: %d %s", path, rec.Code, rec.Body)
+			continue
+		}
+		if rec := request(p.HTTP(), "GET", "example.com", path, basic("ada", "pw")); rec.Code != 200 {
+			t.Errorf("%s with the password: %d", path, rec.Code)
+		}
+		if rec := request(p.HTTP(), "GET", "example.com", path, basic("ada", "guess")); rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s with a wrong password: %d", path, rec.Code)
+		}
+	}
+	// What is not the guarded path stays open, and so does what was opened
+	// below it on purpose.
+	for _, path := range []string{"/", "/administrator", "/admins", "/x/admin", "/about;admin", "/admin/public", "/admin/public/x", "/public/Admin"} {
+		if rec := request(p.HTTP(), "GET", "example.com", path, nil); rec.Code != 200 {
+			t.Errorf("%s asks for a password: %d", path, rec.Code)
+		}
+	}
+	// A host with no password asks for none.
+	if rec := request(p.HTTP(), "GET", "plain.example.com", "/Admin", nil); rec.Code != 200 {
+		t.Errorf("a host without passwords: %d", rec.Code)
+	}
+}
+
+func TestLoose(t *testing.T) {
+	for in, want := range map[string]string{
+		"/Admin":            "/admin",
+		"/admin;x/Users":    "/admin/users",
+		"/x/..;/admin":      "/admin",
+		`/\admin`:           "/admin",
+		"/%2e%2e/admin":     "/admin",
+		"/%252e%252e/admin": "/admin",
+		"/a%zz":             "/a%zz",
+		"/":                 "/",
+	} {
+		if got := loose(in); got != want {
+			t.Errorf("loose(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The file as a proxy from before paths and passwords reads it: it knows
+// "routes" and, of a route, the host and target. Hosts kept under the
+// newer key do not exist for it.
+func TestRoutesOfGuardedHostsAreUnderTheirOwnKey(t *testing.T) {
+	doc := `{"routes":[{"host":"open.example.com","target":"127.0.0.1:1"}],
+		"routes_v2":[{"host":"locked.example.com","target":"127.0.0.1:2","auth_user":"ada","auth_hash":"` + hashOf(t, "pw") + `"},
+			{"host":"split.example.com","target":"127.0.0.1:3"},{"host":"split.example.com","path":"/api","target":"127.0.0.1:4"}]}`
+	tab, err := Parse(strings.NewReader(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rt, ok := tab.Lookup("locked.example.com", "/"); !ok || rt.AuthUser != "ada" {
+		t.Fatalf("the guarded host: %+v %v", rt, ok)
+	}
+	if rt, _ := tab.Lookup("split.example.com", "/api/x"); rt.Target != "127.0.0.1:4" {
+		t.Fatalf("the host routed by path: %+v", rt)
+	}
+	if tab.Len() != 3 {
+		t.Fatalf("%d hosts", tab.Len())
+	}
+	// One host in both lists is one host: the same path twice is refused.
+	both := `{"routes":[{"host":"a.example.com","target":"127.0.0.1:1"}],"routes_v2":[{"host":"a.example.com","target":"127.0.0.1:2"}]}`
+	if _, err := Parse(strings.NewReader(both)); err == nil {
+		t.Fatal("a host routed in both lists was accepted")
+	}
+}
+
+// A flood of guesses at one site takes a few places in the line for a
+// comparison, not all of them: the rest are refused at once, and somebody
+// signing in elsewhere is not kept waiting behind them.
+func TestGuessesAtOneRouteDoNotFillTheLine(t *testing.T) {
+	g := newGate()
+	flooded := Route{Host: "a.example.com", AuthUser: "ada", AuthHash: hashOf(t, "pw")}
+	g.turn <- struct{}{} // a comparison that takes its time
+	ctx, cancel := context.WithCancel(context.Background())
+	results := make(chan authResult, 64)
+	guess := func(i int) {
+		req, _ := http.NewRequestWithContext(ctx, "GET", "http://a.example.com/", nil)
+		req.Header = basic("ada", "guess "+string(rune('a'+i)))
+		results <- g.check(req, flooded)
+	}
+	for i := range authWaiting {
+		go guess(i)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		g.mu.Lock()
+		n := g.waiting["a.example.com\x00"]
+		g.mu.Unlock()
+		if n == authWaiting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d requests waiting, want %d", n, authWaiting)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	// The line for this route is full: the next guess is turned away
+	// without waiting.
+	start := time.Now()
+	guess(20)
+	if got := <-results; got != authBusy || time.Since(start) > time.Second {
+		t.Fatalf("a guess beyond the line: %v after %s", got, time.Since(start))
+	}
+	// Another route still has its own places.
+	other := Route{Host: "b.example.com", AuthUser: "bob", AuthHash: hashOf(t, "secret")}
+	done := make(chan authResult, 1)
+	go func() {
+		req, _ := http.NewRequest("GET", "http://b.example.com/", nil)
+		req.Header = basic("bob", "secret")
+		done <- g.check(req, other)
+	}()
+	cancel() // the guessers leave
+	for range authWaiting {
+		if got := <-results; got != authDenied {
+			t.Fatalf("a guesser who left: %v", got)
+		}
+	}
+	<-g.turn
+	if got := <-done; got != authOK {
+		t.Fatalf("a sign-in at another site: %v", got)
+	}
+	g.mu.Lock()
+	left := len(g.waiting)
+	g.mu.Unlock()
+	if left != 0 {
+		t.Fatalf("%d routes still counted as waited for", left)
+	}
+}
+
+// Somebody working behind a password is not sent back to the line while
+// they keep working.
+func TestUsingAPasswordKeepsItRemembered(t *testing.T) {
+	g := newGate()
+	now := time.Unix(1_700_000_000, 0)
+	g.now = func() time.Time { return now }
+	id := sha256.Sum256([]byte("x"))
+	g.remember(id)
+	for range 10 {
+		now = now.Add(authRemember - time.Second)
+		if !g.remembered(id) {
+			t.Fatal("credentials in use were forgotten")
+		}
+	}
+	now = now.Add(authRemember + time.Second)
+	if g.remembered(id) {
+		t.Fatal("credentials nobody used for a while are still remembered")
+	}
+}
