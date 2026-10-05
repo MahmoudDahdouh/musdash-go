@@ -45,6 +45,7 @@ Commands:
   proxy            Run the edge proxy for deployed apps
   migrate          Apply database migrations and exit
   reset-password   Print a one-time link to reset an account's password
+  disable-2fa      Turn off an account's two-step sign-in
   version          Print the version
 
 Run "musdash <command> -h" for a command's flags.
@@ -65,6 +66,8 @@ func main() {
 		err = runMigrate(args)
 	case "reset-password":
 		err = runResetPassword(args)
+	case "disable-2fa":
+		err = runDisableTwoStep(args)
 	case "version", "-v", "--version":
 		fmt.Println("musdash", version)
 	case "help", "-h", "--help":
@@ -422,5 +425,45 @@ func runResetPassword(args []string) error {
 		return err
 	}
 	fmt.Printf("Open this link within one hour to choose a new password for %s:\n\n  %s/reset/%s\n", user.Email, strings.TrimRight(*baseURL, "/"), token)
+	return nil
+}
+
+// runDisableTwoStep is the way back in for somebody who lost their phone
+// and their recovery codes when nobody in the team can turn the second
+// step off for them: the only Owner, typically.
+func runDisableTwoStep(args []string) error {
+	fs := flag.NewFlagSet("disable-2fa", flag.ExitOnError)
+	cfg := commonFlags(fs)
+	fs.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage: musdash disable-2fa [flags] <email>")
+		fs.PrintDefaults()
+	}
+	fs.Parse(args)
+	if fs.NArg() != 1 {
+		fs.Usage()
+		os.Exit(2)
+	}
+
+	ctx := context.Background()
+	d, err := openDB(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	user, err := d.UserByEmail(ctx, strings.ToLower(strings.TrimSpace(fs.Arg(0))))
+	if errors.Is(err, db.ErrNotFound) {
+		return fmt.Errorf("no account uses %s", fs.Arg(0))
+	}
+	if err != nil {
+		return err
+	}
+	if !user.TwoStep() {
+		fmt.Printf("%s does not have two-step sign-in turned on.\n", user.Email)
+		return nil
+	}
+	if err := d.DisableTOTP(ctx, user.ID); err != nil {
+		return err
+	}
+	fmt.Printf("Two-step sign-in is off for %s. They sign in with their password and can set it up again under Account.\n", user.Email)
 	return nil
 }

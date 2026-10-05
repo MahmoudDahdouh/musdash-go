@@ -136,11 +136,11 @@ func (s *Server) handle(mux *http.ServeMux, pattern string, who access, h http.H
 - [x] Tests: a Member is refused at every admin route in the table (the done-when: deleting a server), and reaches every member route; every route under Servers, Sources, Settings and Team that changes something asks for an Admin; role changes and removal by each role; the last Owner; an invitation used twice, expired, for a member's email, cancelled; a removed member's session and tokens are gone; the invitation token never in a log.
 
 ### Task 2 — Second step
-- [ ] `auth` TOTP with the RFC 6238 test vectors; a code is not accepted twice; a code outside the window.
-- [ ] Account page: turn on (password → key → code → recovery codes), turn off, new recovery codes.
-- [ ] Sign-in: password → code or recovery code → session. The sealed cookie between the two.
-- [ ] Team page: turn another member's off. `musdash disable-2fa`.
-- [ ] Tests: no session before the code; the limit on guesses; a recovery code once; the cookie expired, tampered with, or another account's; turning on needs the password; other sessions end when it is turned on.
+- [x] `auth` TOTP with the RFC 6238 test vectors; a code is not accepted twice; a code outside the window.
+- [x] Account page: turn on (password → key → code → recovery codes), turn off, new recovery codes.
+- [x] Sign-in: password → code or recovery code → session. The sealed cookie between the two.
+- [x] Team page: turn another member's off. `musdash disable-2fa`.
+- [x] Tests: no session before the code; the limit on guesses; a recovery code once; the cookie expired, tampered with, or another account's; turning on needs the password; other sessions end when it is turned on.
 
 ### Task 3 — Shared variables
 - [ ] `SharedRefs` / `ExpandShared`, table-tested first: the exact form, several in one value, an unknown scope left alone, a missing name reported.

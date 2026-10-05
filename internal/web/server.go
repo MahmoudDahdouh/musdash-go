@@ -92,6 +92,8 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /setup", signedOut, s.setupSubmit)
 	handle("GET /login", signedOut, s.loginForm)
 	handle("POST /login", signedOut, s.loginSubmit)
+	handle("GET /login/code", signedOut, s.loginCodeForm)
+	handle("POST /login/code", signedOut, s.loginCodeSubmit)
 	handle("GET /reset/{token}", signedOut, s.resetForm)
 	handle("POST /reset/{token}", signedOut, s.resetSubmit)
 	handle("GET /invite/{token}", signedOut, s.inviteForm)
@@ -102,6 +104,10 @@ func (s *Server) Handler() http.Handler {
 	handle("GET /account", member, s.accountPage)
 	handle("POST /account/profile", member, s.accountProfile)
 	handle("POST /account/password", member, s.accountPassword)
+	handle("POST /account/two-step/start", member, s.twoStepStart)
+	handle("POST /account/two-step/confirm", member, s.twoStepConfirm)
+	handle("POST /account/two-step/codes", member, s.twoStepCodes)
+	handle("POST /account/two-step/off", member, s.twoStepOff)
 	handle("GET /sys/mem", member, s.memReadout)
 
 	handle("GET /{$}", member, s.projectList)
@@ -210,6 +216,7 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /team/invitations/{id}/delete", admin, s.invitationDelete)
 	handle("POST /team/members/{id}/role", owner, s.memberRole)
 	handle("POST /team/members/{id}/reset", admin, s.memberReset)
+	handle("POST /team/members/{id}/two-step-off", admin, s.memberTwoStepOff)
 	handle("POST /team/members/{id}/delete", admin, s.memberRemove)
 
 	handle("GET /settings", admin, s.settingsPage)

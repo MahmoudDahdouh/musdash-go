@@ -1,0 +1,222 @@
+package pages
+
+import (
+	"strconv"
+	"strings"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// AccountView is what the Account page shows besides the person's name
+// and address.
+type AccountView struct {
+	TwoStep       bool
+	RecoveryCodes int // how many are left
+}
+
+// groupKey writes a key in groups of four, which is how people copy one
+// by hand.
+func groupKey(key string) string {
+	var b strings.Builder
+	for i := 0; i < len(key); i += 4 {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(key[i:min(i+4, len(key))])
+	}
+	return b.String()
+}
+
+func codesLeft(n int) string {
+	if n == 1 {
+		return "1 recovery code left"
+	}
+	return strconv.Itoa(n) + " recovery codes left"
+}
+
+var codeAttrs = templ.Attributes{"inputmode": "numeric", "maxlength": "7", "autocapitalize": "off", "spellcheck": "false"}
+
+var anyCodeAttrs = templ.Attributes{"maxlength": "20", "autocapitalize": "off", "spellcheck": "false"}
+
+// twoStepCard is the Account page's part about the second step.
+templ twoStepCard(s ui.Shell, v AccountView, f ui.Form) {
+	<section class="card" id="two-step">
+		<div class="card-head">
+			<div>
+				<div class="flex flex-wrap items-center gap-2.5">
+					<h2 class="card-title">Two-step sign-in</h2>
+					if v.TwoStep {
+						<span class="pill pill-ok">On</span>
+					} else {
+						<span class="pill">Off</span>
+					}
+				</div>
+				<p class="muted text-sm">After your password, signing in asks for a code from an authenticator app on your phone. A stolen password is then not enough.</p>
+			</div>
+		</div>
+		if v.TwoStep {
+			<div class="card-body grid gap-6">
+				<form class="grid gap-4" method="post" action="/account/two-step/codes">
+					@ui.CSRF(s.CSRF)
+					<div>
+						<h3 class="font-semibold">Recovery codes</h3>
+						<p class="muted text-sm">
+							{ codesLeft(v.RecoveryCodes) }. Each signs you in once when you do not have your phone. Making new ones ends the old ones.
+						</p>
+					</div>
+					@ui.TextField(f, "Code from your app", "", ui.InputProps{ID: "codes_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: codeAttrs})
+					<div>
+						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh"}) {
+							Make new recovery codes
+						}
+					</div>
+				</form>
+				<form class="grid gap-4 border-t border-line pt-6" method="post" action="/account/two-step/off">
+					@ui.CSRF(s.CSRF)
+					<div>
+						<h3 class="font-semibold">Turn off</h3>
+						<p class="muted text-sm">Signing in then needs your password only.</p>
+					</div>
+					@ui.TextField(f, "Current password", "", ui.InputProps{ID: "off_password", Type: "password", Autocomplete: "current-password", Required: true})
+					@ui.TextField(f, "Code from your app, or a recovery code", "", ui.InputProps{ID: "off_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: anyCodeAttrs})
+					<div>
+						@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Type: "submit"}) {
+							Turn off two-step sign-in
+						}
+					</div>
+				</form>
+			</div>
+		} else {
+			<form method="post" action="/account/two-step/start">
+				@ui.CSRF(s.CSRF)
+				<div class="card-body grid gap-4">
+					@ui.TextField(f, "Current password", "So that a session left open is not enough to set this up.", ui.InputProps{ID: "start_password", Type: "password", Autocomplete: "current-password", Required: true})
+				</div>
+				<div class="card-foot">
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+						Set up two-step sign-in
+					}
+				</div>
+			</form>
+		}
+	</section>
+}
+
+// TwoStepSetup shows a new key once, and asks for a code to prove the app
+// has it.
+templ TwoStepSetup(s ui.Shell, key, link string, f ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Set up two-step sign-in", "Nothing changes until you enter a code below.")
+		<div class="grid max-w-2xl gap-6">
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">1. Add this key to your authenticator app</h2>
+						<p class="muted text-sm">In the app, choose to add an account by entering a setup key: time-based, six digits. A password manager takes the same key. It is shown this once.</p>
+					</div>
+				</div>
+				<div class="card-body grid gap-3">
+					<p class="code block text-base break-all" id="totp-key">{ groupKey(key) }</p>
+					<div class="flex flex-wrap gap-2">
+						<button type="button" class="btn btn-secondary btn-sm" data-copy={ key }>
+							@ui.Icon("copy")
+							<span data-copy-label>Copy key</span>
+						</button>
+						<a class="btn btn-secondary btn-sm" href={ templ.SafeURL(link) }>
+							@ui.Icon("external")
+							Open in an app on this device
+						</a>
+					</div>
+				</div>
+			</section>
+			@confirmCodeCard(s, "2. Enter the code the app shows", f)
+		</div>
+	}
+}
+
+templ confirmCodeCard(s ui.Shell, title string, f ui.Form) {
+	@ui.FormCard(title, "Six digits, new every thirty seconds.", "/account/two-step/confirm", s.CSRF, "Turn on two-step sign-in") {
+		@ui.TextField(f, "Code", "", ui.InputProps{ID: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Autofocus: true, Attrs: codeAttrs})
+	}
+}
+
+// TwoStepConfirm asks for the code again after a wrong one. The key is
+// not shown a second time: the app already has it.
+templ TwoStepConfirm(s ui.Shell, f ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Set up two-step sign-in", "Nothing changes until a code is right.")
+		<div class="grid max-w-2xl gap-6">
+			@confirmCodeCard(s, "Enter the code the app shows now", f)
+			<p class="muted text-sm">
+				The key is not shown again. When the app does not have it,
+				<a href="/account#two-step">start over with a new key</a>.
+			</p>
+		</div>
+	}
+}
+
+func codesTitle(justOn bool) string {
+	if justOn {
+		return "Two-step sign-in is on"
+	}
+	return "New recovery codes"
+}
+
+func codesNote(justOn bool) string {
+	if justOn {
+		return "Other devices were signed out."
+	}
+	return "The old ones no longer work."
+}
+
+// RecoveryCodes shows a new set of recovery codes, once.
+templ RecoveryCodes(s ui.Shell, codes []string, justOn bool) {
+	@ui.Layout(s) {
+		@ui.PageHeader(codesTitle(justOn), codesNote(justOn))
+		<div class="grid max-w-2xl gap-6">
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Keep these recovery codes</h2>
+						<p class="muted text-sm">Each signs you in once, in place of a code from your phone. They are shown this once: keep them where you keep passwords.</p>
+					</div>
+				</div>
+				<div class="card-body grid gap-4">
+					<ul class="grid grid-cols-2 gap-x-6 gap-y-1.5" id="recovery-codes">
+						for _, c := range codes {
+							<li class="fact">{ c }</li>
+						}
+					</ul>
+					<div>
+						<button type="button" class="btn btn-secondary btn-sm" data-copy={ strings.Join(codes, "\n") }>
+							@ui.Icon("copy")
+							<span data-copy-label>Copy all</span>
+						</button>
+					</div>
+				</div>
+				<div class="card-foot">
+					@ui.LinkButton("/account#two-step", ui.ButtonProps{Variant: ui.Primary}) {
+						I have kept them
+					}
+				</div>
+			</section>
+		</div>
+	}
+}
+
+// LoginCode is the second step of signing in.
+templ LoginCode(f ui.Form, csrf string) {
+	@ui.AuthLayout("Sign in", nil) {
+		@authCard("Enter your code", "The six digits your authenticator app shows for musdash.", "/login/code", csrf, "Sign in") {
+			if f.E("form") != "" {
+				@ui.Notice(ui.ToneDanger) {
+					{ f.E("form") }
+				}
+			}
+			@ui.TextField(f, "Code", "No phone? Enter one of your recovery codes instead.", ui.InputProps{ID: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Autofocus: true, Attrs: anyCodeAttrs})
+		}
+		<p class="muted text-sm">
+			<a href="/login">Sign in as somebody else</a>
+		</p>
+	}
+}

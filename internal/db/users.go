@@ -13,6 +13,23 @@ type User struct {
 	Name         string
 	PasswordHash string
 	CreatedAt    int64
+	// The second step: a sealed TOTP key, '' when the person has none.
+	// TOTPPending is a key that was shown but not yet confirmed with a
+	// code, and TOTPStep the last step a code was accepted for.
+	TOTPSecret  string
+	TOTPPending string
+	TOTPStep    int64
+}
+
+// TwoStep reports whether the person signs in with a second step.
+func (u User) TwoStep() bool { return u.TOTPSecret != "" }
+
+const userColumns = `id, email, name, password_hash, created_at, totp_secret, totp_pending, totp_step`
+
+func scanUser(row interface{ Scan(...any) error }) (User, error) {
+	var u User
+	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.CreatedAt, &u.TOTPSecret, &u.TOTPPending, &u.TOTPStep)
+	return u, notFound(err)
 }
 
 type Session struct {
@@ -69,17 +86,11 @@ func (d *DB) CreateFirstUser(ctx context.Context, email, name, passwordHash stri
 }
 
 func (d *DB) UserByEmail(ctx context.Context, email string) (User, error) {
-	var u User
-	err := d.QueryRowContext(ctx, `SELECT id, email, name, password_hash, created_at FROM users WHERE email = ?`, email).
-		Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.CreatedAt)
-	return u, notFound(err)
+	return scanUser(d.QueryRowContext(ctx, `SELECT `+userColumns+` FROM users WHERE email = ?`, email))
 }
 
 func (d *DB) UserByID(ctx context.Context, id string) (User, error) {
-	var u User
-	err := d.QueryRowContext(ctx, `SELECT id, email, name, password_hash, created_at FROM users WHERE id = ?`, id).
-		Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.CreatedAt)
-	return u, notFound(err)
+	return scanUser(d.QueryRowContext(ctx, `SELECT `+userColumns+` FROM users WHERE id = ?`, id))
 }
 
 // FirstTeamOf returns the team a user lands in after login.
@@ -120,13 +131,14 @@ func (d *DB) SessionByHash(ctx context.Context, tokenHash string) (Session, erro
 	var s Session
 	err := d.QueryRowContext(ctx, `
 		SELECT s.token_hash, s.user_id, s.team_id, s.csrf_token, s.expires_at,
-		       u.id, u.email, u.name, u.password_hash, u.created_at, m.role
+		       u.id, u.email, u.name, u.password_hash, u.created_at, u.totp_secret, u.totp_pending, u.totp_step, m.role
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		JOIN team_members m ON m.team_id = s.team_id AND m.user_id = s.user_id
 		WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash, now()).
 		Scan(&s.TokenHash, &s.UserID, &s.TeamID, &s.CSRFToken, &s.ExpiresAt,
-			&s.User.ID, &s.User.Email, &s.User.Name, &s.User.PasswordHash, &s.User.CreatedAt, &s.Role)
+			&s.User.ID, &s.User.Email, &s.User.Name, &s.User.PasswordHash, &s.User.CreatedAt,
+			&s.User.TOTPSecret, &s.User.TOTPPending, &s.User.TOTPStep, &s.Role)
 	return s, notFound(err)
 }
 

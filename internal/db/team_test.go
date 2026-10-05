@@ -156,3 +156,86 @@ func TestRoleRank(t *testing.T) {
 		t.Fatal("roles are out of order")
 	}
 }
+
+func TestSecondStepStorage(t *testing.T) {
+	ctx := context.Background()
+	d := openTest(t)
+	u, team, _ := d.CreateFirstUser(ctx, "owner@example.com", "Owner", "hash")
+	for _, h := range []string{"here", "elsewhere"} {
+		if err := d.CreateSession(ctx, Session{TokenHash: h, UserID: u.ID, TeamID: team, CSRFToken: "c", ExpiresAt: now() + 60}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Nothing is on until a pending key is confirmed, and only that key.
+	if err := d.UseTOTPStep(ctx, u.ID, 100); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a step was taken without a second step: %v", err)
+	}
+	if err := d.SetTOTPPending(ctx, u.ID, "sealed-key"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := d.UserByID(ctx, u.ID); got.TwoStep() || got.TOTPPending != "sealed-key" {
+		t.Fatalf("pending: %+v", got)
+	}
+	if err := d.EnableTOTP(ctx, u.ID, "another-key", 100, "here", nil); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a key that was not the pending one was enabled: %v", err)
+	}
+	if err := d.EnableTOTP(ctx, u.ID, "sealed-key", 100, "here", []string{"c1", "c2"}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := d.UserByID(ctx, u.ID)
+	if !got.TwoStep() || got.TOTPPending != "" || got.TOTPStep != 100 {
+		t.Fatalf("enabled: %+v", got)
+	}
+	// Other sessions ended; this one carries the new state.
+	if _, err := d.SessionByHash(ctx, "elsewhere"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("another session survived: %v", err)
+	}
+	if s, err := d.SessionByHash(ctx, "here"); err != nil || !s.User.TwoStep() {
+		t.Fatalf("this session: %+v %v", s.User, err)
+	}
+	if list, _ := d.ListMembers(ctx, team); len(list) != 1 || !list[0].TwoStep {
+		t.Fatalf("members: %+v", list)
+	}
+
+	// A step is taken once, and never an earlier one after it.
+	if err := d.UseTOTPStep(ctx, u.ID, 100); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("the confirming code's step was taken again: %v", err)
+	}
+	if err := d.UseTOTPStep(ctx, u.ID, 102); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []int64{101, 102} {
+		if err := d.UseTOTPStep(ctx, u.ID, step); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("step %d after 102: %v", step, err)
+		}
+	}
+
+	// Recovery codes: the person's own, once.
+	if n, _ := d.CountRecoveryCodes(ctx, u.ID); n != 2 {
+		t.Fatalf("%d codes", n)
+	}
+	if err := d.UseRecoveryCode(ctx, "someoneelse", "c1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("another person's code: %v", err)
+	}
+	if err := d.UseRecoveryCode(ctx, u.ID, "c1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.UseRecoveryCode(ctx, u.ID, "c1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a code twice: %v", err)
+	}
+	if err := d.ReplaceRecoveryCodes(ctx, u.ID, []string{"n1", "n2", "n3"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.UseRecoveryCode(ctx, u.ID, "c2"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("an old code after new ones were made: %v", err)
+	}
+
+	if err := d.DisableTOTP(ctx, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = d.UserByID(ctx, u.ID)
+	if n, _ := d.CountRecoveryCodes(ctx, u.ID); got.TwoStep() || got.TOTPStep != 0 || n != 0 {
+		t.Fatalf("disabled: %+v, %d codes", got, n)
+	}
+}

@@ -206,6 +206,17 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logins.Reset(keys...)
 
+	// With a second step, the password is half of signing in. No session
+	// exists until the code is right.
+	if user.TwoStep() {
+		if err := s.awaitCode(w, r, user.ID); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		redirect(w, r, "/login/code")
+		return
+	}
+
 	teamID, err := s.DB.FirstTeamOf(r.Context(), user.ID)
 	if err != nil {
 		s.fail(w, r, err)
@@ -274,7 +285,7 @@ func (s *Server) resetSubmit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) accountPage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, http.StatusOK, pages.Account(s.shell(w, r, "Account", "account"), ui.Form{}, ui.Form{}))
+	s.renderAccount(w, r, http.StatusOK, ui.Form{}, ui.Form{}, ui.Form{})
 }
 
 func (s *Server) accountProfile(w http.ResponseWriter, r *http.Request) {
@@ -301,7 +312,7 @@ func (s *Server) accountProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.render(w, r, http.StatusUnprocessableEntity, pages.Account(s.shell(w, r, "Account", "account"), f, ui.Form{}))
+		s.renderAccount(w, r, http.StatusUnprocessableEntity, f, ui.Form{}, ui.Form{})
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Profile saved.")
@@ -317,7 +328,7 @@ func (s *Server) accountPassword(w http.ResponseWriter, r *http.Request) {
 	key := "password:" + sess.UserID
 	if ok, wait := s.logins.Take(key); !ok {
 		f.Fail("current", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
-		s.render(w, r, http.StatusTooManyRequests, pages.Account(s.shell(w, r, "Account", "account"), ui.Form{}, f))
+		s.renderAccount(w, r, http.StatusTooManyRequests, ui.Form{}, f, ui.Form{})
 		return
 	}
 	if s.checkPassword(r, sess.User.PasswordHash, r.PostFormValue("current")) {
@@ -329,7 +340,7 @@ func (s *Server) accountPassword(w http.ResponseWriter, r *http.Request) {
 		f.Fail("password", err.Error())
 	}
 	if !f.OK() {
-		s.render(w, r, http.StatusUnprocessableEntity, pages.Account(s.shell(w, r, "Account", "account"), ui.Form{}, f))
+		s.renderAccount(w, r, http.StatusUnprocessableEntity, ui.Form{}, f, ui.Form{})
 		return
 	}
 	hash, err := auth.HashPassword(password)

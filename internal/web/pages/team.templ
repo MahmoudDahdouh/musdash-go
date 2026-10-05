@@ -124,6 +124,14 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 												Reset link
 											}
 										</form>
+										if m.TwoStep {
+											<form method="post" action={ templ.SafeURL("/team/members/" + m.UserID + "/two-step-off") }>
+												@ui.CSRF(s.CSRF)
+												@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "lock"}) {
+													Turn off second step
+												}
+											</form>
+										}
 										@ui.Confirm(ui.ConfirmProps{
 											ID: "remove-" + m.UserID, Title: "Remove " + m.Name, Action: "/team/members/" + m.UserID + "/delete",
 											CSRF: s.CSRF, Match: m.Email, Submit: "Remove member", Trigger: "Remove",
@@ -174,7 +182,7 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 					<p class="card-body muted">Nobody is invited at the moment.</p>
 				}
 				if s.Admin {
-					<form class="card-body grid gap-4 border-t border-line" method="post" action="/team/invitations">
+					<form class={ "card-body grid gap-4", templ.KV("border-t border-line", len(v.Invitations) > 0) } method="post" action="/team/invitations">
 						@ui.CSRF(s.CSRF)
 						<div class="grid gap-4 sm:grid-cols-[1fr_12rem]">
 							@ui.TextField(invite, "Email", "The address they will sign in with.", ui.InputProps{ID: "email", Type: "email", Required: true, Autocomplete: "off"})

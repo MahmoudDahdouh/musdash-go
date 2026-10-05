@@ -885,7 +885,7 @@ func ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, e
 	})
 }
 
-func Account(s ui.Shell, profile, password ui.Form) templ.Component {
+func Account(s ui.Shell, profile, password, twoStep ui.Form, v AccountView) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -975,6 +975,10 @@ func Account(s ui.Shell, profile, password ui.Form) templ.Component {
 				return nil
 			})
 			templ_7745c5c3_Err = ui.FormCard("Password", "Changing it signs you out everywhere else.", "/account/password", s.CSRF, "Change password").Render(templ.WithChildren(ctx, templ_7745c5c3_Var38), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = twoStepCard(s, v, twoStep).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
