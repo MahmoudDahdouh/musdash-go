@@ -15,8 +15,10 @@ type ServiceView struct {
 	Project   db.Project
 	Env       db.Environment
 	Endpoints []db.Endpoint
-	// Tags are the service's tags, filled in for the Settings page.
-	Tags []string
+	// Tags are the service's tags and TeamTags all of the team's, filled in
+	// for the Settings page.
+	Tags     []string
+	TeamTags []string
 }
 
 func (v ServiceView) base() string { return "/services/" + v.Service.ID }
@@ -487,7 +489,7 @@ templ ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) {
 					</form>
 				}
 			</section>
-			@tagsCard(s.CSRF, v.base()+"/tags", v.Tags)
+			@tagsCard(s.CSRF, v.base()+"/tags", v.Tags, v.TeamTags)
 			<section class="card card-danger">
 				<div class="card-head">
 					<div>

@@ -242,7 +242,10 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /services/{id}/delete", member, s.serviceDelete)
 
 	handle("GET /tags", member, s.tagList)
+	handle("POST /tags", member, s.tagCreate)
 	handle("GET /tags/{tag}", member, s.tagShow)
+	handle("POST /tags/{tag}", member, s.tagRename)
+	handle("POST /tags/{tag}/delete", member, s.tagDelete)
 	handle("POST /tags/{tag}/deploy", member, s.tagDeploy)
 
 	handle("GET /sources", member, s.sourcesPage)

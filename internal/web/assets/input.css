@@ -685,11 +685,11 @@
     gap: 4px;
     min-width: 0;
   }
-  /* A control on a tile stands above the link that covers it. */
-  .tile-action {
+  /* A figure that explains itself when pointed at stands above the link
+     that covers the tile, or its explanation would never be shown. */
+  .tile-meta > [title] {
     position: relative;
     z-index: 1;
-    margin-left: auto;
   }
   /* Compact: a choice in a long list of them. No square behind the icon
      and less room around it. */

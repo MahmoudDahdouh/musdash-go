@@ -72,11 +72,14 @@ func (s *Server) menuNote(w http.ResponseWriter, r *http.Request, text string) {
 func (s *Server) switchEnvironments(w http.ResponseWriter, r *http.Request) {
 	teamID := sessionFrom(r).TeamID
 	p, err := s.DB.Project(r.Context(), teamID, r.PathValue("id"))
-	if err != nil {
+	if errors.Is(err, db.ErrNotFound) {
 		s.menuNote(w, r, "The project is gone.")
 		return
 	}
-	envs, err := s.DB.ListEnvironments(r.Context(), p.ID)
+	var envs []db.Environment
+	if err == nil {
+		envs, err = s.DB.ListEnvironments(r.Context(), p.ID)
+	}
 	if err != nil {
 		s.Log.Error("switcher", "route", logRoute(r), "err", err)
 		s.menuNote(w, r, "The environments could not be listed.")
@@ -90,11 +93,14 @@ func (s *Server) switchEnvironments(w http.ResponseWriter, r *http.Request) {
 func (s *Server) switchResources(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	env, err := s.DB.Environment(ctx, sessionFrom(r).TeamID, r.PathValue("id"))
-	if err != nil {
+	if errors.Is(err, db.ErrNotFound) {
 		s.menuNote(w, r, "The environment is gone.")
 		return
 	}
-	res, err := s.envResources(r, env.ID)
+	var res pages.Resources
+	if err == nil {
+		res, err = s.envResources(r, env.ID)
+	}
 	if err != nil {
 		s.Log.Error("switcher", "route", logRoute(r), "err", err)
 		s.menuNote(w, r, "The resources could not be listed.")

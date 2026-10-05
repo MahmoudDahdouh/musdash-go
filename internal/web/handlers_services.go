@@ -662,7 +662,7 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 // endpoint whose form was refused.
 func (s *Server) renderServiceSettings(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, failed string, f ui.Form) {
 	var err error
-	if v.Tags, err = s.DB.TagsOf(r.Context(), sessionFrom(r).TeamID, db.KindService, v.Service.ID); err != nil {
+	if v.Tags, v.TeamTags, err = s.tagChoices(r, db.KindService, v.Service.ID); err != nil {
 		s.fail(w, r, err)
 		return
 	}

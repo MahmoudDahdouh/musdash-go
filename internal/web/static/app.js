@@ -35,8 +35,8 @@
     if (!dialog || !el.form) return;
     e.preventDefault();
     // What the browser would have said about the form, it says first.
-    if (!el.form.reportValidity()) return;
-    asking = el;
+    if (!el.formNoValidate && !el.form.reportValidity()) return;
+    asking = { el, action: el.form.getAttribute("action"), name: el.name, value: el.value };
     dialog.querySelector("#confirm-title").textContent = el.dataset.confirmTitle || "Are you sure?";
     dialog.querySelector("#confirm-text").textContent = el.dataset.confirm;
     const ok = dialog.querySelector("#confirm-ok");
@@ -45,10 +45,19 @@
     dialog.showModal();
   });
   on("click", "#confirm-ok", (ok) => {
-    const el = asking;
+    const asked = asking;
     asking = null;
     ok.closest("dialog").close();
-    if (el?.isConnected) el.form.requestSubmit(el);
+    if (!asked) return;
+    let el = asked.el;
+    if (!el.isConnected) {
+      // The page replaced the form while the dialog was open: a header that
+      // refreshes itself does. The same button of the form that took its
+      // place is the one that was meant.
+      const form = [...document.forms].find((f) => f.getAttribute("action") === asked.action);
+      el = [...(form?.querySelectorAll("[data-confirm]") || [])].find((b) => b.name === asked.name && b.value === asked.value);
+    }
+    el?.form.requestSubmit(el);
   });
 
   // data-filter="<id>" on a field narrows what is inside that element to the
@@ -177,10 +186,13 @@
   const narrow = (list) => {
     const text = list.querySelector("[data-select-filter]").value.trim().toLowerCase();
     const all = optionsOf(list);
-    all.forEach((o) => (o.hidden = !(o.dataset.search ?? o.textContent).toLowerCase().includes(text)));
+    // An option marked data-keep is not one of the things listed but what
+    // else the menu offers; it stays whatever is typed.
+    const keep = (o) => o.dataset.keep !== undefined;
+    all.forEach((o) => (o.hidden = !keep(o) && !(o.dataset.search ?? o.textContent).toLowerCase().includes(text)));
     const shown = all.filter((o) => !o.hidden);
     const none = list.querySelector("[data-select-empty]");
-    if (none) none.hidden = shown.length > 0 || all.length === 0;
+    if (none) none.hidden = shown.some((o) => !keep(o)) || all.length === 0;
     setActive(list, (!text && shown.find((o) => o.getAttribute("aria-selected") === "true")) || shown[0]);
   };
   // toggle does not bubble, hence the capture.
@@ -269,9 +281,10 @@
     const current = filtered ? list.querySelector("[data-active]") : document.activeElement;
     const i = all.indexOf(current);
     let next;
-    // Space chooses the focused option, as Enter does. On a link it would
-    // scroll the page instead, which closes the list.
-    if (e.key === " " && !filtered && current?.matches("[role=option]")) {
+    // Space chooses a focused link, as Enter does: on its own it would
+    // scroll the page, which closes the list. An option that is a button
+    // is pressed by Space already.
+    if (e.key === " " && !filtered && current?.matches("a[role=option]")) {
       e.preventDefault();
       current.click();
       return;

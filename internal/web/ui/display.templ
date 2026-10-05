@@ -124,9 +124,9 @@ templ SwitchOption(href, icon, label string, current bool) {
 }
 
 // MenuAction is a link at the foot of a menu that goes somewhere else than
-// the places above it: to add one, to manage them.
+// the places above it: to add one, to manage them. A filter does not hide it.
 templ MenuAction(href, icon, label string) {
-	<a class="menu-item" role="option" href={ templ.SafeURL(href) } aria-selected="false" tabindex="-1" data-search={ label }>
+	<a class="menu-item" role="option" href={ templ.SafeURL(href) } aria-selected="false" tabindex="-1" data-keep>
 		@Icon(icon, "text-ink-mute")
 		<span class="min-w-0 flex-1 truncate">{ label }</span>
 	</a>
