@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +44,50 @@ func (c Client) Pull(ctx context.Context, image string, log io.Writer) error {
 	cm := cmd("pull", image)
 	cm.Stdout, cm.Stderr = log, log
 	return c.R.Run(ctx, cm)
+}
+
+// HasImage reports whether an image is already on the server.
+func (c Client) HasImage(ctx context.Context, image string) (bool, error) {
+	if !ValidImage(image) {
+		return false, fmt.Errorf("%q is not a valid image name", image)
+	}
+	_, err := c.R.Output(ctx, cmd("image", "inspect", "--format", "{{.Id}}", image))
+	var ee *runner.ExitError
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.As(err, &ee):
+		// Any refusal from docker here means the image cannot be used as it
+		// is; the pull that follows reports what is actually wrong.
+		return false, nil
+	}
+	return false, err
+}
+
+// ImageVolumes returns the paths an image on the server declares as
+// volumes: where the software in it expects its data to be kept.
+func (c Client) ImageVolumes(ctx context.Context, image string) ([]string, error) {
+	if !ValidImage(image) {
+		return nil, fmt.Errorf("%q is not a valid image name", image)
+	}
+	out, err := c.R.Output(ctx, cmd("image", "inspect", "--format", "{{json .Config.Volumes}}", image))
+	if err != nil {
+		return nil, err
+	}
+	// null when the image declares none.
+	var declared map[string]json.RawMessage
+	if out = bytes.TrimSpace(out); len(out) == 0 {
+		return nil, nil
+	}
+	if err := json.Unmarshal(out, &declared); err != nil {
+		return nil, fmt.Errorf("docker image inspect: %w", err)
+	}
+	paths := make([]string, 0, len(declared))
+	for p := range declared {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	return paths, nil
 }
 
 // ErrPortTaken is returned by Run when the host port is already in use.
@@ -194,8 +239,10 @@ func (c Client) List(ctx context.Context) ([]Listed, error) {
 		return nil, err
 	}
 	var list []Listed
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		f := strings.Split(line, "\t")
+	// Only the line ends are trimmed: a container without a deployment
+	// label, such as a database, ends its line with an empty field.
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Split(strings.TrimRight(line, "\r"), "\t")
 		if len(f) != 5 {
 			continue
 		}

@@ -30,31 +30,34 @@ type asset struct {
 	gz   []byte // built on first request, so an idle server never pays for it
 }
 
-var assets = map[string]*asset{}
-
-func init() {
+// assets reads and hashes the embedded files on first use, not when the
+// program starts: the proxy is the same binary and never serves them, and
+// reading them copies them onto the heap.
+var assets = sync.OnceValue(func() map[string]*asset {
 	entries, err := files.ReadDir(".")
 	if err != nil {
 		panic(err)
 	}
+	all := make(map[string]*asset, len(entries))
 	for _, e := range entries {
 		raw, err := files.ReadFile(e.Name())
 		if err != nil {
 			panic(err)
 		}
 		sum := sha256.Sum256(raw)
-		assets[e.Name()] = &asset{
+		all[e.Name()] = &asset{
 			name: e.Name(),
 			raw:  raw,
 			hash: hex.EncodeToString(sum[:6]),
 			mime: mime.TypeByExtension(path.Ext(e.Name())),
 		}
 	}
-}
+	return all
+})
 
 // URL returns the cache-busting URL of an embedded asset.
 func URL(name string) string {
-	a, ok := assets[name]
+	a, ok := assets()[name]
 	if !ok {
 		panic("static: unknown asset " + name)
 	}
@@ -64,7 +67,7 @@ func URL(name string) string {
 // Handler serves GET /static/{name}.
 func Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		a, ok := assets[r.PathValue("name")]
+		a, ok := assets()[r.PathValue("name")]
 		if !ok {
 			http.NotFound(w, r)
 			return

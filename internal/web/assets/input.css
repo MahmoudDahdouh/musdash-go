@@ -368,6 +368,9 @@
     background: var(--color-paper);
     border: 1px solid var(--color-line);
     border-radius: var(--radius-lg);
+    /* As a grid or flex item a card may shrink below its content's width,
+       so a long unbroken value inside is cut off instead of widening it. */
+    min-width: 0;
   }
   .card-head {
     display: flex;
@@ -380,6 +383,12 @@
   .card-title {
     font-size: var(--text-base);
     font-weight: 600;
+  }
+  /* The heading of a list that sits directly on the canvas. */
+  .section-title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-ink-soft);
   }
   .card-body {
     padding: 16px;

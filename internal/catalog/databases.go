@@ -23,8 +23,17 @@ type DBTemplate struct {
 	Command []string
 	// VolumePath is where the engine keeps its data inside the container.
 	VolumePath string
+	// OtherVolumePaths are where other versions of the image keep it. The
+	// path an image itself declares as a volume is the one that is used.
+	OtherVolumePaths []string
 	// HealthCmd runs inside the container and exits 0 once the engine
-	// accepts connections. Empty means the image's own health check is used.
+	// accepts connections from other containers. Empty means the image's
+	// own health check is used.
+	//
+	// Most images first run a private server to set up users and databases
+	// and then restart it. A health command must not pass against that
+	// first server, so each one asks over the network interface the first
+	// server does not listen on, not over a socket or the loopback address.
 	HealthCmd []string
 	// URLFormat is the connection string, with {{.Host}} and {{.Port}} as
 	// well as the credentials.
@@ -85,50 +94,64 @@ func (t DBTemplate) URL(c Creds, host string, port int) string {
 	).Replace(t.URLFormat)
 }
 
-// Shell snippets shared by the Redis-compatible engines. The password is
-// read from the container's own environment, so it never appears in the
-// arguments musdash passes to docker.
+// The Redis-compatible engines take their password as a server setting, not
+// from a variable. The container's own shell writes it into a private
+// configuration file, so it is in no argument list: not docker's, and not
+// the server's own inside the container. The image's entry point is then
+// run as usual, which drops from root to the engine's own user. The clients
+// read the password from REDISCLI_AUTH.
 const (
-	redisHealth = `redis-cli -a "$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG`
-	redisURL    = "redis://default:{{.Pass}}@{{.Host}}:{{.Port}}/0"
+	redisCommand = `umask 077 && printf 'requirepass %s\nappendonly yes\n' "$REDIS_PASSWORD" > /tmp/musdash.conf && chown redis /tmp/musdash.conf && exec docker-entrypoint.sh redis-server /tmp/musdash.conf`
+	keydbCommand = `umask 077 && printf 'requirepass %s\nappendonly yes\n' "$REDIS_PASSWORD" > /tmp/musdash.conf && chown keydb /tmp/musdash.conf && exec docker-entrypoint.sh keydb-server /tmp/musdash.conf`
+	redisURL     = "redis://default:{{.Pass}}@{{.Host}}:{{.Port}}/0"
 )
 
 var databases = []DBTemplate{
 	{
 		Engine: "postgres", Label: "PostgreSQL", About: "The general-purpose relational database.",
 		Image: "postgres:17-alpine", Port: 5432,
-		Env:         map[string]string{"POSTGRES_USER": "{{.User}}", "POSTGRES_PASSWORD": "{{.Pass}}", "POSTGRES_DB": "{{.DB}}"},
-		VolumePath:  "/var/lib/postgresql/data",
-		HealthCmd:   []string{"pg_isready", "-U", "{{.User}}", "-d", "{{.DB}}"},
-		URLFormat:   "postgres://{{.User}}:{{.Pass}}@{{.Host}}:{{.Port}}/{{.DB}}",
-		DumpCmd:     `pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"`,
-		RestoreCmd:  `pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner`,
-		DefaultUser: "postgres", DefaultDB: "postgres",
+		Env:        map[string]string{"POSTGRES_USER": "{{.User}}", "POSTGRES_PASSWORD": "{{.Pass}}", "POSTGRES_DB": "{{.DB}}"},
+		VolumePath: "/var/lib/postgresql/data",
+		// From version 18 the image keeps each major version's data in its
+		// own directory below this one.
+		OtherVolumePaths: []string{"/var/lib/postgresql"},
+		HealthCmd:        []string{"pg_isready", "-h", "127.0.0.1", "-U", "{{.User}}", "-d", "{{.DB}}"},
+		URLFormat:        "postgres://{{.User}}:{{.Pass}}@{{.Host}}:{{.Port}}/{{.DB}}",
+		DumpCmd:          `pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"`,
+		RestoreCmd:       `pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner`,
+		DefaultUser:      "postgres", DefaultDB: "postgres",
 	},
 	{
 		Engine: "mysql", Label: "MySQL", About: "The widely used relational database.",
 		Image: "mysql:8.4", Port: 3306,
+		// The administrator shares the generated password but can only log
+		// in from inside the container, which is how backups run. What an
+		// app is given is the ordinary user of the one database.
 		Env: map[string]string{
-			"MYSQL_ROOT_PASSWORD": "{{.Pass}}", "MYSQL_USER": "{{.User}}", "MYSQL_PASSWORD": "{{.Pass}}", "MYSQL_DATABASE": "{{.DB}}",
+			"MYSQL_ROOT_PASSWORD": "{{.Pass}}", "MYSQL_ROOT_HOST": "localhost",
+			"MYSQL_USER": "{{.User}}", "MYSQL_PASSWORD": "{{.Pass}}", "MYSQL_DATABASE": "{{.DB}}",
 		},
-		VolumePath:  "/var/lib/mysql",
-		HealthCmd:   []string{"sh", "-c", `mysqladmin ping -h 127.0.0.1 -u root -p"$MYSQL_ROOT_PASSWORD" --silent`},
+		VolumePath: "/var/lib/mysql",
+		// Answers 0 as soon as the server replies at all, also with "access
+		// denied", so it needs no password.
+		HealthCmd:   []string{"mysqladmin", "ping", "-h", "127.0.0.1", "--silent"},
 		URLFormat:   "mysql://{{.User}}:{{.Pass}}@{{.Host}}:{{.Port}}/{{.DB}}",
-		DumpCmd:     `mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --databases "$MYSQL_DATABASE"`,
-		RestoreCmd:  `mysql -u root -p"$MYSQL_ROOT_PASSWORD"`,
+		DumpCmd:     `MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -u root --single-transaction --routines --databases "$MYSQL_DATABASE"`,
+		RestoreCmd:  `MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root`,
 		DefaultUser: "app", DefaultDB: "app",
 	},
 	{
 		Engine: "mariadb", Label: "MariaDB", About: "A community-developed fork of MySQL.",
 		Image: "mariadb:11", Port: 3306,
 		Env: map[string]string{
-			"MARIADB_ROOT_PASSWORD": "{{.Pass}}", "MARIADB_USER": "{{.User}}", "MARIADB_PASSWORD": "{{.Pass}}", "MARIADB_DATABASE": "{{.DB}}",
+			"MARIADB_ROOT_PASSWORD": "{{.Pass}}", "MARIADB_ROOT_HOST": "localhost",
+			"MARIADB_USER": "{{.User}}", "MARIADB_PASSWORD": "{{.Pass}}", "MARIADB_DATABASE": "{{.DB}}",
 		},
 		VolumePath:  "/var/lib/mysql",
 		HealthCmd:   []string{"healthcheck.sh", "--connect", "--innodb_initialized"},
 		URLFormat:   "mysql://{{.User}}:{{.Pass}}@{{.Host}}:{{.Port}}/{{.DB}}",
-		DumpCmd:     `mariadb-dump -u root -p"$MARIADB_ROOT_PASSWORD" --single-transaction --routines --databases "$MARIADB_DATABASE"`,
-		RestoreCmd:  `mariadb -u root -p"$MARIADB_ROOT_PASSWORD"`,
+		DumpCmd:     `MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb-dump -u root --single-transaction --routines --databases "$MARIADB_DATABASE"`,
+		RestoreCmd:  `MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb -u root`,
 		DefaultUser: "app", DefaultDB: "app",
 	},
 	{
@@ -136,7 +159,7 @@ var databases = []DBTemplate{
 		Image: "mongo:8", Port: 27017,
 		Env:         map[string]string{"MONGO_INITDB_ROOT_USERNAME": "{{.User}}", "MONGO_INITDB_ROOT_PASSWORD": "{{.Pass}}"},
 		VolumePath:  "/data/db",
-		HealthCmd:   []string{"sh", "-c", `mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' | grep -q 1`},
+		HealthCmd:   []string{"sh", "-c", `mongosh --quiet --host "$(hostname)" --eval 'db.adminCommand({ping:1}).ok' | grep -q 1`},
 		URLFormat:   "mongodb://{{.User}}:{{.Pass}}@{{.Host}}:{{.Port}}/?authSource=admin",
 		DumpCmd:     `mongodump --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --archive`,
 		RestoreCmd:  `mongorestore --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --archive --drop`,
@@ -145,21 +168,21 @@ var databases = []DBTemplate{
 	{
 		Engine: "redis", Label: "Redis", About: "An in-memory key-value store, saved to disk.",
 		Image: "redis:7-alpine", Port: 6379,
-		Env:         map[string]string{"REDIS_PASSWORD": "{{.Pass}}"},
-		Command:     []string{"sh", "-c", `exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"`},
+		Env:         map[string]string{"REDIS_PASSWORD": "{{.Pass}}", "REDISCLI_AUTH": "{{.Pass}}"},
+		Command:     []string{"sh", "-c", redisCommand},
 		VolumePath:  "/data",
-		HealthCmd:   []string{"sh", "-c", redisHealth},
+		HealthCmd:   []string{"sh", "-c", `redis-cli -h "$(hostname)" ping | grep -q PONG`},
 		URLFormat:   redisURL,
-		DumpCmd:     `redis-cli -a "$REDIS_PASSWORD" --no-auth-warning --rdb /tmp/musdash.rdb >/dev/null && cat /tmp/musdash.rdb && rm -f /tmp/musdash.rdb`,
+		DumpCmd:     `redis-cli --rdb /tmp/musdash.rdb >/dev/null && cat /tmp/musdash.rdb && rm -f /tmp/musdash.rdb`,
 		DefaultUser: "default",
 	},
 	{
 		Engine: "keydb", Label: "KeyDB", About: "A multithreaded, Redis-compatible store.",
 		Image: "eqalpha/keydb:latest", Port: 6379,
-		Env:         map[string]string{"REDIS_PASSWORD": "{{.Pass}}"},
-		Command:     []string{"sh", "-c", `exec keydb-server --appendonly yes --requirepass "$REDIS_PASSWORD"`},
+		Env:         map[string]string{"REDIS_PASSWORD": "{{.Pass}}", "REDISCLI_AUTH": "{{.Pass}}"},
+		Command:     []string{"sh", "-c", keydbCommand},
 		VolumePath:  "/data",
-		HealthCmd:   []string{"sh", "-c", `keydb-cli -a "$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG`},
+		HealthCmd:   []string{"sh", "-c", `keydb-cli -h "$(hostname)" ping | grep -q PONG`},
 		URLFormat:   redisURL,
 		DefaultUser: "default",
 	},
@@ -181,7 +204,7 @@ var databases = []DBTemplate{
 			"CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT": "1",
 		},
 		VolumePath:  "/var/lib/clickhouse",
-		HealthCmd:   []string{"sh", "-c", `wget -q -O- http://127.0.0.1:8123/ping | grep -q Ok`},
+		HealthCmd:   []string{"sh", "-c", `wget -q -O- "http://$(hostname):8123/ping" | grep -q Ok`},
 		URLFormat:   "clickhouse://{{.User}}:{{.Pass}}@{{.Host}}:{{.Port}}/{{.DB}}",
 		DefaultUser: "app", DefaultDB: "app",
 	},

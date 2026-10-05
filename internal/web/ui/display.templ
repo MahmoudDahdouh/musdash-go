@@ -304,8 +304,30 @@ templ Fact(value string) {
 
 // Copyable is a Fact with a copy button.
 templ Copyable(value string) {
-	<span class="inline-flex max-w-full items-center gap-1.5">
+	<span class="inline-flex max-w-full min-w-0 items-center gap-1.5">
 		<span class="code truncate">{ value }</span>
+		<button type="button" class="btn btn-ghost btn-sm" data-copy={ value }>
+			@Icon("copy")
+			<span data-copy-label>Copy</span>
+		</button>
+	</span>
+}
+
+// mask replaces the secret part of a value with bullets.
+func mask(value, hidden string) string {
+	if hidden == "" {
+		return value
+	}
+	return strings.ReplaceAll(value, hidden, "••••••••")
+}
+
+// Secret is a Copyable that does not show all of its value: the hidden part
+// (a password inside a connection string, or the whole value) is drawn as
+// bullets, and the copy button yields the real thing. It keeps a password
+// off the screen during a screen share, not out of the page.
+templ Secret(value, hidden string) {
+	<span class="inline-flex max-w-full min-w-0 items-center gap-1.5">
+		<span class="code truncate">{ mask(value, hidden) }</span>
 		<button type="button" class="btn btn-ghost btn-sm" data-copy={ value }>
 			@Icon("copy")
 			<span data-copy-label>Copy</span>

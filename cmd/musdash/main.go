@@ -136,6 +136,18 @@ func tuneMemory(limitMiB int64) {
 	}
 }
 
+// settle hands back to the operating system the memory that starting up
+// used and no longer needs: package initialisation and the first reads of
+// configuration leave a few megabytes of garbage that the runtime would
+// otherwise keep mapped for minutes.
+func settle(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+	case <-time.After(2 * time.Second):
+		debug.FreeOSMemory()
+	}
+}
+
 // newLogger writes structured logs to stderr; systemd's journal collects them.
 func newLogger(dev bool) *slog.Logger {
 	level := slog.LevelInfo
@@ -209,6 +221,10 @@ func runServer(args []string) error {
 	if err := d.ResetStuckDeploying(ctx); err != nil {
 		return err
 	}
+	if err := d.ResetStuckDatabases(ctx, "musdash stopped while this database was starting; start it again"); err != nil {
+		return err
+	}
+	go settle(ctx)
 	go republishRoutes(ctx, d, deployer, log)
 	go monitorServers(ctx, d, deployer, log)
 
@@ -327,6 +343,7 @@ func runProxy(args []string) error {
 	}
 	ctx, stop := signalContext()
 	defer stop()
+	go settle(ctx)
 	return proxy.Run(ctx, proxy.Options{
 		HTTPAddr:   *httpAddr,
 		HTTPSAddr:  *httpsAddr,

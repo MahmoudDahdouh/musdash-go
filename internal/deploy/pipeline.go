@@ -106,7 +106,7 @@ func New(d *db.DB, box *secret.Box, q *jobs.Queue, r Runners, cfg *config.Config
 		drain:          3 * time.Second,
 		stopGrace:      30 * time.Second,
 		pollWait:       4 * time.Second,
-		dbStartTimeout: 120 * time.Second,
+		dbStartTimeout: 5 * time.Minute,
 		dbStopGrace:    60 * time.Second,
 		cloneTimeout:   10 * time.Minute,
 		buildTimeout:   30 * time.Minute,

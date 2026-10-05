@@ -16,7 +16,7 @@ The full design is in [docs/spec.md](docs/spec.md). Each phase has an implementa
 | 0 | Skeleton: accounts, projects, job queue, design system, memory test | Done |
 | 1 | Deploy Docker images with domains, HTTPS, storage, live logs and rolling updates | Done |
 | 2 | Deploy from Git: Dockerfile and static builds, GitHub App, deploy keys, push webhooks, deploy token | Done |
-| 3 | Databases | Planned |
+| 3 | Databases: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, KeyDB, Dragonfly, ClickHouse | Done |
 | 4 | One-click services | Planned |
 | 5–9 | Backups, multi-server, previews, teams, extras | Planned |
 
@@ -133,6 +133,17 @@ A CI pipeline can start a deployment with the app's deploy token, created on the
 curl -X POST -H "Authorization: Bearer $MUSDASH_DEPLOY_TOKEN" "https://musdash.example.com/api/v1/deploy?uuid=APP_ID"
 ```
 
+## Databases
+
+**New database** on a project page offers eight engines. musdash generates a user and a 32-character password, creates a Docker volume for the data and starts the engine on the environment's network.
+
+- Apps in the same environment connect by the database's name, for example `postgres://postgres:…@maindb:5432/postgres`. The Overview page has the connection string ready to copy into an app's variables.
+- Nothing outside the environment can reach a database until you switch on its **public port** in Settings. It is then open on the server to anyone with the password. Docker publishes the port past ufw and firewalld, so only a firewall in front of the server, such as your provider's, can narrow who reaches it.
+- Restart replaces the container and keeps the volume, so expect a few seconds of downtime. Saving a change in Settings (image tag, public port, limits) restarts a running database to apply it.
+- An image already on the server is not downloaded again. To move to another version of the same major release, change the tag. A new major version usually cannot open the old data: create a new database and move the data.
+- MongoDB does not start on servers whose Linux kernel is 6.19 or newer; that is MongoDB's own limitation, and its message is shown on the database's page.
+- Deleting a database keeps its volume unless you tick "Also delete the data".
+
 ## Tests
 
 ```bash
@@ -150,6 +161,18 @@ MUSDASH_DOCKER_TEST=1 go test ./internal/deploy -run TestGitDeployWithDocker -v
 ```
 
 This one clones a local repository with the real `git`, builds it with Docker and serves two commits in turn.
+
+```bash
+MUSDASH_DOCKER_TEST=1 go test ./internal/deploy -run TestDatabasesWithDocker -v
+```
+
+Starts PostgreSQL and Redis, connects from a second container by name, restarts them and checks the data is still there, opens a public port, then deletes them.
+
+```bash
+MUSDASH_DOCKER_TEST_ENGINES=1 go test ./internal/deploy -run TestEveryEngineStartsWithDocker -v -timeout 60m
+```
+
+Starts each of the eight engines in turn and waits for its health check. It downloads several gigabytes of images and removes the ones that were not there before.
 
 ## Memory
 

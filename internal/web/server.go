@@ -130,6 +130,18 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /apps/{id}/webhook-secret", s.authed(s.appWebhookSecret))
 	mux.Handle("POST /apps/{id}/deploy-token", s.authed(s.appDeployToken))
 
+	mux.Handle("GET /projects/{id}/databases/new", s.authed(s.databaseNew))
+	mux.Handle("POST /projects/{id}/databases", s.authed(s.databaseCreate))
+	mux.Handle("GET /databases/{id}", s.authed(s.databaseOverview))
+	mux.Handle("GET /databases/{id}/status", s.authed(s.databaseStatus))
+	mux.Handle("POST /databases/{id}/start", s.authed(s.databaseStart))
+	mux.Handle("POST /databases/{id}/stop", s.authed(s.databaseStop))
+	mux.Handle("GET /databases/{id}/logs", s.authed(s.databaseLogs))
+	mux.Handle("GET /databases/{id}/logs/stream", s.authed(s.databaseLogsStream))
+	mux.Handle("GET /databases/{id}/settings", s.authed(s.databaseSettings))
+	mux.Handle("POST /databases/{id}/settings", s.authed(s.databaseSettingsSave))
+	mux.Handle("POST /databases/{id}/delete", s.authed(s.databaseDelete))
+
 	mux.Handle("GET /sources", s.authed(s.sourcesPage))
 	mux.Handle("POST /sources/github", s.authed(s.githubStart))
 	mux.Handle("GET /sources/github/callback", s.authed(s.githubCallback))

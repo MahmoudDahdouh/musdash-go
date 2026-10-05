@@ -255,6 +255,15 @@ func TestList(t *testing.T) {
 	if err != nil || len(got) != 2 || got[1] != (Listed{Name: "musdash-b-2", State: "exited", Kind: "app", Resource: "b", Deployment: "d2"}) {
 		t.Fatalf("%+v %v", got, err)
 	}
+	// A database's container has no deployment label, so its line ends
+	// with an empty field. It must be listed, also as the last line.
+	last := &scripted{answers: map[string]answer{
+		"docker ps": {out: "musdash-a-1\trunning\tapp\ta\td1\nmusdash-db-x\trunning\tdatabase\tx\t\n"},
+	}}
+	got, err = Client{R: last}.List(context.Background())
+	if err != nil || len(got) != 2 || got[1] != (Listed{Name: "musdash-db-x", State: "running", Kind: "database", Resource: "x"}) {
+		t.Fatalf("%+v %v", got, err)
+	}
 	empty := &scripted{}
 	if got, err := (Client{R: empty}).List(context.Background()); err != nil || len(got) != 0 {
 		t.Fatalf("empty: %+v %v", got, err)

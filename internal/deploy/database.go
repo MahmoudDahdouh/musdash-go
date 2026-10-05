@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -19,12 +20,6 @@ import (
 
 // JobDatabase is the job kind that starts or restarts a database.
 const JobDatabase = "database"
-
-// Public ports handed to databases whose public port is switched on.
-const (
-	publicPortMin = 30000
-	publicPortMax = 30999
-)
 
 // A database has one container, replaced in place. Its data directory can
 // be opened by one server process only, so two versions never run together.
@@ -41,11 +36,28 @@ type databasePayload struct {
 
 // EnqueueDatabase queues a start (or restart) of a database. The status
 // changes at once so the page shows that work is under way.
-func (d *Deployer) EnqueueDatabase(ctx context.Context, m db.Database) error {
-	if err := d.DB.SetDatabaseState(ctx, m.ID, db.AppDeploying, m.Container, ""); err != nil {
+//
+// A database that is already starting answers ErrBusy, so two clicks queue
+// one start. again queues a further start regardless, for a change of
+// settings that the start in progress may have been too early to see.
+func (d *Deployer) EnqueueDatabase(ctx context.Context, m db.Database, again bool) error {
+	began, err := d.DB.BeginDatabaseStart(ctx, m.ID)
+	if err != nil {
 		return err
 	}
-	_, err := d.Queue.Enqueue(ctx, JobDatabase, databasePayload{ID: m.ID}, jobs.WithLockKey("database:"+m.ID), jobs.WithMaxAttempts(1))
+	if !began && !again {
+		return ErrBusy
+	}
+	_, err = d.Queue.Enqueue(ctx, JobDatabase, databasePayload{ID: m.ID}, jobs.WithLockKey("database:"+m.ID), jobs.WithMaxAttempts(1))
+	if err != nil && began {
+		// Nothing will run, so nothing would ever move it on from
+		// "starting". Recorded even if the request has gone away.
+		rec, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		defer cancel()
+		if serr := d.DB.SetDatabaseState(rec, m.ID, db.AppFailed, m.Container, "the start could not be queued: "+err.Error()); serr != nil {
+			d.Log.Error("record database failure", "database", m.ID, "err", serr)
+		}
+	}
 	return err
 }
 
@@ -71,7 +83,13 @@ func (d *Deployer) runDatabaseJob(ctx context.Context, raw []byte) error {
 	}
 	rec, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
-	if serr := d.DB.SetDatabaseState(rec, m.ID, db.AppFailed, "", err.Error()); serr != nil {
+	// The container, if one was started, stays on record: it may still be
+	// running, and Stop, Logs and the monitor find it by that name.
+	container := ""
+	if cur, cerr := d.DB.DatabaseByID(rec, m.ID); cerr == nil {
+		container = cur.Container
+	}
+	if serr := d.DB.SetDatabaseState(rec, m.ID, db.AppFailed, container, err.Error()); serr != nil {
 		d.Log.Error("record database failure", "database", m.ID, "err", serr)
 	}
 	return jobs.Permanent(err)
@@ -108,11 +126,21 @@ func (d *Deployer) startDatabase(ctx context.Context, m db.Database) error {
 	dk := docker.Client{R: r}
 	container := DatabaseContainer(m.ID)
 
-	// Progress is not shown anywhere, but a failed pull's last lines are
-	// what explains the failure.
-	pullOut := &tail{limit: 2048}
-	if err := dk.Pull(ctx, m.Image, pullOut); err != nil {
-		return fmt.Errorf("pull %s: %w %s", m.Image, err, pullOut.String())
+	// An image already on the server is used as it is. A database then
+	// starts without the registry being reachable, and a restart never
+	// moves it to a newer build of the same tag behind the person's back;
+	// changing the tag is how a version is changed.
+	have, err := dk.HasImage(ctx, m.Image)
+	if err != nil {
+		return err
+	}
+	if !have {
+		// Progress is not shown anywhere, but a failed pull's last lines
+		// are what explains the failure.
+		pullOut := &tail{limit: 2048}
+		if err := dk.Pull(ctx, m.Image, pullOut); err != nil {
+			return fmt.Errorf("pull %s: %w %s", m.Image, err, pullOut.String())
+		}
 	}
 	if err := dk.EnsureNetwork(ctx, NetworkName(m.EnvironmentID)); err != nil {
 		return fmt.Errorf("network: %w", err)
@@ -138,6 +166,13 @@ func (d *Deployer) startDatabase(ctx context.Context, m db.Database) error {
 		return fmt.Errorf("write env file: %w", err)
 	}
 
+	// Decided before the running database is touched: an image that keeps
+	// its data somewhere else must not replace one that is working.
+	volumePath, err := d.databaseVolumePath(ctx, dk, tpl, m)
+	if err != nil {
+		return err
+	}
+
 	// The old container must be gone before the new one opens the data.
 	if err := dk.Stop(ctx, container, d.dbStopGrace); err != nil {
 		return fmt.Errorf("stop the running database: %w", err)
@@ -145,12 +180,18 @@ func (d *Deployer) startDatabase(ctx context.Context, m db.Database) error {
 	if err := dk.Remove(ctx, container); err != nil {
 		return err
 	}
+	if err := d.DB.SetDatabaseState(ctx, m.ID, db.AppDeploying, "", ""); err != nil {
+		return err
+	}
+	if err := d.DB.SetDatabaseVolumePath(ctx, m.ID, volumePath); err != nil {
+		return err
+	}
 
 	spec := docker.RunSpec{
 		Name: container, Image: m.Image, Network: NetworkName(m.EnvironmentID), Alias: m.Name,
 		ContainerPort: tpl.Port, PublicPort: m.PublicPort,
 		EnvFile: envPath, MemoryMB: m.MemoryMB, CPUs: m.CPUs,
-		Mounts:  []docker.Mount{{Kind: docker.MountVolume, Source: DatabaseVolume(m.ID), Target: tpl.VolumePath}},
+		Mounts:  []docker.Mount{{Kind: docker.MountVolume, Source: DatabaseVolume(m.ID), Target: volumePath}},
 		Command: tpl.Command,
 		Labels: map[string]string{
 			docker.ManagedLabel:  "true",
@@ -175,6 +216,33 @@ func (d *Deployer) startDatabase(ctx context.Context, m db.Database) error {
 		return err
 	}
 	return d.DB.SetDatabaseState(ctx, m.ID, db.AppRunning, container, "")
+}
+
+// databaseVolumePath decides where the data volume is mounted in the
+// container: the path the image itself declares as its volume, when that is
+// one the engine's template knows, otherwise the template's default.
+//
+// Once a database has started, the path is fixed. An image that expects
+// its data elsewhere (PostgreSQL 18 moved it) would start on an empty
+// directory and look like a database that lost everything, so it is
+// refused instead.
+func (d *Deployer) databaseVolumePath(ctx context.Context, dk docker.Client, tpl catalog.DBTemplate, m db.Database) (string, error) {
+	declared, err := dk.ImageVolumes(ctx, m.Image)
+	if err != nil {
+		return "", fmt.Errorf("inspect %s: %w", m.Image, err)
+	}
+	path := tpl.VolumePath
+	for _, known := range append([]string{tpl.VolumePath}, tpl.OtherVolumePaths...) {
+		if slices.Contains(declared, known) {
+			path = known
+			break
+		}
+	}
+	if m.VolumePath != "" && m.VolumePath != path {
+		return "", fmt.Errorf("the image %s keeps its data in %s, but this database's data was created in %s by another version. "+
+			"Moving between such versions needs a dump and a restore into a new database; set the image back to keep using this one", m.Image, path, m.VolumePath)
+	}
+	return path, nil
 }
 
 // waitDatabase polls until the engine answers its health command. Without a
@@ -204,7 +272,14 @@ func (d *Deployer) waitDatabase(ctx context.Context, dk docker.Client, container
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("the database did not accept connections within %s", d.dbStartTimeout)
+			// The container is left as it is: a first start on a slow disk
+			// may simply need longer, and stopping it now would interrupt
+			// the engine while it creates its files.
+			out := &tail{limit: 1500}
+			logCtx, cancelLog := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+			dk.Logs(logCtx, container, 30, false, out)
+			cancelLog()
+			return fmt.Errorf("the database did not accept connections within %s. It was left running; if it is still setting up, it may yet come up. Its last output: %s", d.dbStartTimeout, out.String())
 		case <-ticker.C:
 		}
 	}
@@ -283,19 +358,11 @@ func (d *Deployer) DestroyDatabase(ctx context.Context, id string, deleteData bo
 	return d.DB.DeleteDatabase(ctx, m.ID)
 }
 
-// PickPublicPort returns an unused public port for a database on a server,
-// or 0 when the range is full.
-func (d *Deployer) PickPublicPort(ctx context.Context, serverID string) (int, error) {
-	used, err := d.DB.PublicPortsInUse(ctx, serverID)
-	if err != nil {
-		return 0, err
-	}
-	for p := publicPortMin; p <= publicPortMax; p++ {
-		if !used[p] {
-			return p, nil
-		}
-	}
-	return 0, nil
+// ValidPublicPort reports whether a person may choose this public port for
+// a database: unprivileged, and outside the range musdash hands to apps on
+// the loopback interface, where it would collide with one of them.
+func ValidPublicPort(p int) bool {
+	return p >= 1024 && p <= 65535 && (p < portMin || p > portMax)
 }
 
 // tail keeps the last limit bytes written to it.

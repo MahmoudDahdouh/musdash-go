@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
 )
 
 // A person may add options to an app's `docker run`. They are parsed here
@@ -38,12 +40,6 @@ var (
 
 func matches(re *regexp.Regexp) optionRule { return re.MatchString }
 
-// safeCaps are capabilities that do not let a container act on the host.
-var safeCaps = map[string]bool{
-	"NET_BIND_SERVICE": true, "CHOWN": true, "SETUID": true, "SETGID": true,
-	"DAC_OVERRIDE": true, "FOWNER": true, "KILL": true, "IPC_LOCK": true,
-}
-
 var allowedOptions = map[string]optionRule{
 	"--init":               nil,
 	"--read-only":          nil,
@@ -61,7 +57,7 @@ var allowedOptions = map[string]optionRule{
 	"--memory-reservation": matches(sizeRE),
 	"--sysctl":             matches(sysctlRE),
 	"--cap-drop":           func(v string) bool { return regexp.MustCompile(`^[A-Z_]{2,24}$`).MatchString(v) },
-	"--cap-add":            func(v string) bool { return safeCaps[strings.TrimPrefix(v, "CAP_")] },
+	"--cap-add":            docker.SafeCapability,
 	// Only the hardening direction of --security-opt.
 	"--security-opt": func(v string) bool { return v == "no-new-privileges" || v == "no-new-privileges:true" },
 }

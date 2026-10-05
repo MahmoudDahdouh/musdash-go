@@ -70,24 +70,43 @@ func projectTabs(p db.Project, envs []db.Environment) []ui.Tab {
 }
 
 // ProjectShow lists what is deployed in one environment of a project.
-templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, current db.Environment, apps []db.App) {
+templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, current db.Environment, apps []db.App, databases []db.Database) {
 	@ui.Layout(s) {
 		@ui.PageHeader(p.Name, p.Description) {
-			if len(apps) > 0 {
+			if len(apps)+len(databases) > 0 {
+				@ui.LinkButton("/projects/"+p.ID+"/databases/new?env="+current.ID, ui.ButtonProps{Icon: "database"}) {
+					New database
+				}
 				@ui.LinkButton("/projects/"+p.ID+"/apps/new?env="+current.ID, ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
 					New app
 				}
 			}
 		}
 		@ui.Tabs(projectTabs(p, envs), current.ID)
-		if len(apps) == 0 {
-			@ui.EmptyState("box", "Nothing is deployed in "+current.Name, "Start with an app from a Docker image.") {
+		if len(apps)+len(databases) == 0 {
+			@ui.EmptyState("box", "Nothing is deployed in "+current.Name, "Start with an app from a Docker image or a Git repository, or with a database.") {
 				@ui.LinkButton("/projects/"+p.ID+"/apps/new?env="+current.ID, ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
 					New app
 				}
+				@ui.LinkButton("/projects/"+p.ID+"/databases/new?env="+current.ID, ui.ButtonProps{Icon: "database"}) {
+					New database
+				}
 			}
 		} else {
-			@AppRows(apps)
+			<div class="grid gap-6">
+				if len(apps) > 0 {
+					<section class="grid gap-2">
+						<h2 class="section-title">Apps</h2>
+						@AppRows(apps)
+					</section>
+				}
+				if len(databases) > 0 {
+					<section class="grid gap-2">
+						<h2 class="section-title">Databases</h2>
+						@DatabaseRows(databases)
+					</section>
+				}
+			</div>
 		}
 	}
 }

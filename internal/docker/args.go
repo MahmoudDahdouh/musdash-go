@@ -92,6 +92,20 @@ var deniedBinds = []string{
 	"/etc", "/root", "/proc", "/sys", "/dev", "/boot", "/usr", "/bin", "/sbin", "/lib", "/lib64",
 }
 
+// safeCaps are capabilities that do not let a container act on the host.
+// SYS_NICE is left out although it cannot reach the host: it would let one
+// container take the processor from the proxy and the dashboard.
+var safeCaps = map[string]bool{
+	"NET_BIND_SERVICE": true, "CHOWN": true, "SETUID": true, "SETGID": true,
+	"DAC_OVERRIDE": true, "FOWNER": true, "KILL": true, "IPC_LOCK": true,
+}
+
+// SafeCapability reports whether a container may be given a capability,
+// written with or without its CAP_ prefix.
+func SafeCapability(name string) bool {
+	return safeCaps[strings.TrimPrefix(name, "CAP_")]
+}
+
 // CheckBindSource reports why a host path may not be bind-mounted, or nil.
 // protected lists further directories to keep out of containers; musdash
 // passes its own data directory, which holds the master key and database.

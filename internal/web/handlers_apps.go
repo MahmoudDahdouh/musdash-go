@@ -97,6 +97,27 @@ func parsePort(f *ui.Form, key, value string) int {
 	return n
 }
 
+// parseLimits reads the memory and CPU limit fields. Empty means no limit.
+func parseLimits(f *ui.Form, memory, cpus string) (memoryMB int, cores float64) {
+	if memory != "" {
+		// Docker refuses limits below 6 MB.
+		if n, err := strconv.Atoi(memory); err != nil || n < 6 || n > 1<<20 {
+			f.Fail("memory_mb", "Enter a whole number of megabytes, 6 or more, or leave it empty.")
+		} else {
+			memoryMB = n
+		}
+	}
+	if cpus != "" {
+		// Written so that NaN, which compares false with everything, fails.
+		if c, err := strconv.ParseFloat(cpus, 64); err != nil || !(c >= 0.01 && c <= 512) {
+			f.Fail("cpus", "Enter a number of cores such as 0.5 or 2, or leave it empty.")
+		} else {
+			cores = c
+		}
+	}
+	return memoryMB, cores
+}
+
 // generatedDomain builds an address that resolves to the server without any
 // DNS setup: sslip.io answers <anything>.<ip>.sslip.io with <ip>.
 func generatedDomain(server db.Server) string {
@@ -721,24 +742,7 @@ func (s *Server) appSettingsSave(w http.ResponseWriter, r *http.Request) {
 	}
 	app.Port = parsePort(&f, "port", form("port"))
 
-	app.MemoryMB = 0
-	if raw := form("memory_mb"); raw != "" {
-		// Docker refuses limits below 6 MB.
-		if n, err := strconv.Atoi(raw); err != nil || n < 6 || n > 1<<20 {
-			f.Fail("memory_mb", "Enter a whole number of megabytes, 6 or more, or leave it empty.")
-		} else {
-			app.MemoryMB = n
-		}
-	}
-	app.CPUs = 0
-	if raw := form("cpus"); raw != "" {
-		// Written so that NaN, which compares false with everything, fails.
-		if c, err := strconv.ParseFloat(raw, 64); err != nil || !(c >= 0.01 && c <= 512) {
-			f.Fail("cpus", "Enter a number of cores such as 0.5 or 2, or leave it empty.")
-		} else {
-			app.CPUs = c
-		}
-	}
+	app.MemoryMB, app.CPUs = parseLimits(&f, form("memory_mb"), form("cpus"))
 	app.HealthPath = form("health_path")
 	if app.HealthPath != "" && !deploy.ValidHealthPath(app.HealthPath) {
 		f.Fail("health_path", "Enter a path that starts with a single /, such as /healthz.")
