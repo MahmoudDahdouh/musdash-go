@@ -2,6 +2,18 @@ package pages
 
 import "github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 
+var galleryRegions = []ui.Option{
+	{Value: "ams", Label: "Amsterdam"},
+	{Value: "blr", Label: "Bangalore"},
+	{Value: "fra", Label: "Frankfurt"},
+	{Value: "lon", Label: "London"},
+	{Value: "nyc", Label: "New York"},
+	{Value: "sfo", Label: "San Francisco"},
+	{Value: "sgp", Label: "Singapore"},
+	{Value: "syd", Label: "Sydney"},
+	{Value: "tor", Label: "Toronto"},
+}
+
 templ swatch(name, class string) {
 	<div class="grid gap-1">
 		<div class={ "h-10 rounded-md border border-line", class }></div>
@@ -48,17 +60,34 @@ templ Gallery(s ui.Shell) {
 					@swatch("canvas", "bg-canvas")
 					@swatch("paper", "bg-paper")
 					@swatch("sunk", "bg-sunk")
+					@swatch("sunk-strong", "bg-sunk-strong")
+					@swatch("sunk-press", "bg-sunk-press")
+					@swatch("veil", "bg-veil")
+					@swatch("veil-strong", "bg-veil-strong")
+					@swatch("line", "bg-line")
 					@swatch("line-strong", "bg-line-strong")
+					@swatch("line-veil", "bg-line-veil")
 					@swatch("ink", "bg-ink")
 					@swatch("ink-soft", "bg-ink-soft")
 					@swatch("ink-mute", "bg-ink-mute")
+					@swatch("ink-faint", "bg-ink-faint")
 					@swatch("idle", "bg-idle")
+					@swatch("idle-soft", "bg-idle-soft")
+					@swatch("idle-line", "bg-idle-line")
+					@swatch("info", "bg-info")
+					@swatch("info-soft", "bg-info-soft")
+					@swatch("info-line", "bg-info-line")
 					@swatch("ok", "bg-ok")
 					@swatch("ok-soft", "bg-ok-soft")
+					@swatch("ok-line", "bg-ok-line")
 					@swatch("warn", "bg-warn")
+					@swatch("warn-mark", "bg-warn-mark")
 					@swatch("warn-soft", "bg-warn-soft")
+					@swatch("warn-line", "bg-warn-line")
 					@swatch("danger", "bg-danger")
+					@swatch("danger-strong", "bg-danger-strong")
 					@swatch("danger-soft", "bg-danger-soft")
+					@swatch("danger-line", "bg-danger-line")
 				</div>
 			}
 			@gallerySection("Type") {
@@ -115,12 +144,27 @@ templ Gallery(s ui.Shell) {
 					@ui.Field(ui.FieldProps{Label: "Build pack", For: "g-pack"}) {
 						@ui.Select("g-pack", []ui.Option{{Value: "dockerfile", Label: "Dockerfile"}, {Value: "static", Label: "Static site"}, {Value: "image", Label: "Docker image"}}, "static", nil)
 					}
+					@ui.Field(ui.FieldProps{Label: "Region", For: "g-region", Hint: "A Combobox: the field in its menu narrows the options."}) {
+						@ui.Combobox("g-region", galleryRegions, "fra", templ.Attributes{"aria-describedby": "g-region-hint"})
+					}
 					@ui.Field(ui.FieldProps{Label: "Environment variables", For: "g-env", Hint: "One KEY=value per line."}) {
 						@ui.Textarea(ui.InputProps{ID: "g-env", Mono: true, Rows: 3, Described: true, Value: "NODE_ENV=production\nPORT=3000"})
 					}
 					@ui.Checkbox("g-auto", true, nil) {
 						Deploy automatically when the branch changes
 					}
+					<fieldset class="grid gap-2">
+						<legend class="field-label">Restart policy</legend>
+						@ui.Radio("g-restart", "g-restart-always", "always", true, nil) {
+							Always
+						}
+						@ui.Radio("g-restart", "g-restart-failure", "on-failure", false, nil) {
+							Only after a failure
+						}
+						@ui.Radio("g-restart", "g-restart-never", "never", false, templ.Attributes{"disabled": true}) {
+							Never
+						}
+					</fieldset>
 					@ui.TextField(ui.Form{}, "Disabled", "", ui.InputProps{ID: "g-disabled", Value: "Cannot be edited", Disabled: true})
 				</div>
 			}

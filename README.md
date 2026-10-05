@@ -444,7 +444,7 @@ The design system lives in two places:
 - Tokens and component styles: `internal/web/assets/input.css`
 - Components: `internal/web/ui`
 
-Icons follow the [Lucide](https://lucide.dev) set (ISC licence).
+Icons are from the free [Hugeicons](https://hugeicons.com) set, Stroke Rounded (MIT licence, `internal/web/ui/icons.LICENSE`).
 
 ## Layout
 

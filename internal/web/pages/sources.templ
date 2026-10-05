@@ -166,25 +166,24 @@ templ GitHubHandoff(s ui.Shell, name, action, manifest string) {
 	}
 }
 
-// RepoList is the repository picker's content. Choosing a row fills the
-// repository field of the form it was loaded into.
+// RepoList is what the repository picker (ui.Picker) loads when it is first
+// opened. Choosing a repository fills the repository field of the form the
+// picker is in.
 templ RepoList(repos []source.RepoInfo, problem string) {
-	<div id="repo-list" class="card rows max-h-64 overflow-y-auto">
-		if problem != "" {
-			<p class="card-body text-sm text-danger">{ problem }</p>
-		} else if len(repos) == 0 {
-			<p class="card-body muted text-sm">This App is not installed on any repository yet. Use Choose repositories on the Sources page.</p>
-		} else {
-			for _, repo := range repos {
-				<button type="button" class="row w-full cursor-pointer text-left hover:bg-canvas" data-fill="repo" data-value={ "https://github.com/" + repo.FullName }>
-					@ui.Icon("git-branch", "text-ink-mute")
-					<span class="fact min-w-0 flex-1 truncate">{ repo.FullName }</span>
-					if repo.Private {
-						@ui.Badge("Private", ui.ToneNeutral)
-					}
-					<span class="muted text-sm">{ repo.DefaultBranch }</span>
-				</button>
+	if problem != "" {
+		@ui.MenuNote(problem, true)
+	} else if len(repos) == 0 {
+		@ui.MenuNote("This App is not installed on any repository yet. Use Choose repositories on the Sources page.", false)
+	} else {
+		for _, repo := range repos {
+			@ui.PickerOption("repo", "https://github.com/"+repo.FullName, repo.FullName) {
+				@ui.Icon("git-branch", "text-ink-mute")
+				<span class="fact min-w-0 flex-1 break-all">{ repo.FullName }</span>
+				if repo.Private {
+					@ui.Badge("Private", ui.ToneNeutral)
+				}
+				<span class="muted text-xs">{ repo.DefaultBranch }</span>
 			}
 		}
-	</div>
+	}
 }

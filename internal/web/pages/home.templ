@@ -1,0 +1,479 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// HomeView is what Home shows of a team. All of it is read from the
+// database: the page asks no server anything, so a server that hangs does
+// not hold it up.
+type HomeView struct {
+	// Admin says the reader may connect a source.
+	Admin    bool
+	Totals   db.Totals
+	Troubles []db.Trouble
+	Events   []db.Event
+	Projects []db.ActiveProject
+	Servers  []HomeServer
+	// Next is where the page asks again, and Every how often. Next is
+	// empty unless something is in progress: a page on which nothing is
+	// happening asks nothing.
+	Next, Every string
+}
+
+// HomeServer is a server with its newest stored reading.
+type HomeServer struct {
+	Server db.Server
+	// Meters is empty when the server's usage is not recorded, or its last
+	// reading is too old to be what it uses now.
+	Meters []ui.MeterProps
+	// DiskFull is how full the disk is, in words, when it is nearly full.
+	DiskFull string
+}
+
+// serverIssue is what is wrong with a server: the sentence, and the words
+// and the state of its pill.
+type serverIssue struct {
+	Name, Text, Label, State string
+}
+
+// issue is what is wrong with a server, if anything is.
+func (h HomeServer) issue() (serverIssue, bool) {
+	switch {
+	case h.Server.Status == db.ServerUnreachable:
+		return serverIssue{h.Server.Name, "It cannot be reached. What runs on it may still be running, but nothing can be deployed there.", "Not reachable", "failed"}, true
+	case h.Server.Status == db.ServerProblem:
+		return serverIssue{h.Server.Name, "It was reached, but something a deployment needs is missing.", "Needs attention", "degraded"}, true
+	case h.DiskFull != "":
+		return serverIssue{h.Server.Name, "Its disk is nearly full: " + h.DiskFull + ".", "Disk nearly full", "degraded"}, true
+	}
+	return serverIssue{}, false
+}
+
+func (v HomeView) serverIssues() []serverIssue {
+	var out []serverIssue
+	for _, h := range v.Servers {
+		if issue, ok := h.issue(); ok {
+			out = append(out, issue)
+		}
+	}
+	return out
+}
+
+func issuePill(state string) string {
+	if state == "failed" {
+		return "pill pill-danger"
+	}
+	return "pill pill-warn"
+}
+
+func resourceHref(kind, id string) string {
+	switch kind {
+	case db.KindDatabase:
+		return "/databases/" + id
+	case db.KindService:
+		return "/services/" + id
+	}
+	return "/apps/" + id
+}
+
+func resourceIcon(kind string) string {
+	switch kind {
+	case db.KindDatabase:
+		return "database"
+	case db.KindService:
+		return "layers"
+	}
+	return "box"
+}
+
+// troubleHref is the page on which a trouble can be looked into.
+func troubleHref(t db.Trouble) string {
+	switch t.What {
+	case db.TroubleDeploy:
+		return "/apps/" + t.ID + "/deployments/" + t.Ref
+	case db.TroubleBackup:
+		return "/databases/" + t.ID + "/backups"
+	case db.TroubleTask:
+		return "/apps/" + t.ID + "/tasks/" + t.Ref
+	}
+	return resourceHref(t.Kind, t.ID)
+}
+
+func troubleText(t db.Trouble) string {
+	switch t.What {
+	case db.TroubleDeploy:
+		return "The last deployment failed. The one before it is still serving."
+	case db.TroubleBackup:
+		return "The last backup failed."
+	case db.TroubleTask:
+		return "The scheduled task " + t.Detail + " failed when it last ran."
+	}
+	switch t.Status {
+	case db.AppDegraded:
+		return "Some of its containers are not running."
+	case db.AppFailed:
+		return "It could not be started."
+	}
+	return "It stopped on its own."
+}
+
+// troubleState is the state a trouble's row is drawn in. A resource that
+// is down is an outage; one that runs, with something failed behind it or
+// with part of it missing, is a warning.
+func troubleState(t db.Trouble) string {
+	if t.What == db.TroubleDown && t.Status != db.AppDegraded {
+		return "failed"
+	}
+	return "degraded"
+}
+
+func troubleLabel(t db.Trouble) string {
+	switch t.What {
+	case db.TroubleDeploy:
+		return "Deployment failed"
+	case db.TroubleBackup:
+		return "Backup failed"
+	case db.TroubleTask:
+		return "Task failed"
+	}
+	return ui.StateLabel(t.Status)
+}
+
+func troublePill(t db.Trouble) string {
+	return issuePill(troubleState(t))
+}
+
+func eventHref(e db.Event) string {
+	switch e.Kind {
+	case db.EventBackup:
+		return "/databases/" + e.ResourceID + "/backups"
+	case db.EventTask:
+		return "/apps/" + e.ResourceID + "/tasks/" + e.TaskID
+	}
+	return "/apps/" + e.ResourceID + "/deployments/" + e.ID
+}
+
+func eventIcon(kind string) string {
+	switch kind {
+	case db.EventBackup:
+		return "drive"
+	case db.EventTask:
+		return "clock"
+	}
+	return "deploy"
+}
+
+// eventWhat names what was done, after the resource's name. It does not
+// say how it went: the pill does.
+func eventWhat(e db.Event) string {
+	switch e.Kind {
+	case db.EventBackup:
+		return "backup"
+	case db.EventTask:
+		return "task " + e.Detail
+	}
+	return "deployment"
+}
+
+// eventState is the state an event's row is drawn in. A deployment that is
+// "running" is in progress, which is not what "running" says of an app,
+// so it is given the state of something being deployed.
+func eventState(e db.Event) string {
+	if e.Status == db.DeployRunning {
+		return "deploying"
+	}
+	return e.Status
+}
+
+func eventLabel(e db.Event) string {
+	if e.Status == db.DeployRunning {
+		return "In progress"
+	}
+	return ui.StateLabel(e.Status)
+}
+
+func eventPill(e db.Event) string {
+	switch e.Status {
+	case db.DeploySuccess:
+		return "pill pill-ok"
+	case db.DeployFailed:
+		return "pill pill-danger"
+	}
+	return "pill pill-busy"
+}
+
+// eventCommit is a deployment's commit, shortened, or "".
+func eventCommit(e db.Event) string {
+	if e.Kind != db.EventDeployment || len(e.Detail) < 7 {
+		return ""
+	}
+	return e.Detail[:7]
+}
+
+func projectLine(p db.ActiveProject) string {
+	if p.Resources == 0 {
+		return "Nothing deployed yet"
+	}
+	return strconv.Itoa(p.Running) + " of " + strconv.Itoa(p.Resources) + " running"
+}
+
+func runningLine(t db.Totals) string {
+	if t.Running == t.Resources {
+		return "Everything that is deployed here is running."
+	}
+	return strconv.Itoa(t.Running) + " of " + strconv.Itoa(t.Resources) + " apps, databases and services are running. The others were stopped or have not been deployed."
+}
+
+func serverHost(s db.Server) string {
+	if s.Kind == db.ServerLocal {
+		return orDefault(s.IP, "localhost")
+	}
+	return s.Host
+}
+
+// Home is the page a person lands on.
+templ Home(s ui.Shell, v HomeView) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Home", "What needs attention, what was done lately, and where it all runs.") {
+			if v.Totals.Projects > 0 {
+				@ui.LinkButton("/projects/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					New project
+				}
+			}
+		}
+		@HomeLive(v)
+	}
+}
+
+// HomeLive is everything on Home under its title. While a deployment, a
+// backup or a task is in progress it asks for itself again; once nothing
+// is, it stops.
+templ HomeLive(v HomeView) {
+	<div
+		id="home-live"
+		class="grid gap-6"
+		if v.Next != "" {
+			hx-get={ v.Next }
+			hx-trigger={ "every " + v.Every }
+			hx-swap="outerHTML"
+		}
+	>
+		if v.Totals.Resources == 0 {
+			@homeStart(v)
+		}
+		@homeAttention(v)
+		<div class="grid items-start gap-6 xl:grid-cols-3">
+			<div class="grid min-w-0 gap-6 xl:col-span-2">
+				@homeActivity(v)
+			</div>
+			<div class="grid min-w-0 gap-6">
+				@homeProjects(v)
+				@homeServers(v)
+			</div>
+		</div>
+	</div>
+}
+
+// homeStart is the way in for an install with nothing deployed on it yet.
+templ homeStart(v HomeView) {
+	<section class="card" aria-labelledby="home-start">
+		<div class="card-head">
+			<div>
+				<h2 class="card-title" id="home-start">Getting started</h2>
+				<p class="muted text-sm">Nothing is deployed yet. These steps get the first thing running.</p>
+			</div>
+		</div>
+		<ol class="rows steps">
+			@homeStep(v.Totals.Projects > 0, "Create a project", "A project groups the apps, databases and services of one product.") {
+				if v.Totals.Projects == 0 {
+					@ui.LinkButton("/projects/new", ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus"}) {
+						New project
+					}
+				}
+			}
+			if v.Admin {
+				@homeStep(v.Totals.Sources > 0, "Connect GitHub (optional)", "To deploy from private repositories and on every push. Public repositories and Docker images need nothing.") {
+					if v.Totals.Sources == 0 {
+						@ui.LinkButton("/sources", ui.ButtonProps{Small: true, Icon: "git-branch"}) {
+							Sources
+						}
+					}
+				}
+			}
+			@homeStep(false, "Deploy an app, a database or a service", "From a Docker image, a Git repository, or a ready-made template such as WordPress or n8n.") {
+				if len(v.Projects) > 0 {
+					@ui.LinkButton("/projects/"+v.Projects[0].ID, ui.ButtonProps{Variant: ui.Primary, Small: true}) {
+						Open { v.Projects[0].Name }
+					}
+				}
+			}
+		</ol>
+	</section>
+}
+
+templ homeStep(done bool, title, description string) {
+	<li class="row step" data-done?={ done }>
+		<div class="min-w-0 flex-1">
+			<p class="font-semibold">
+				{ title }
+				if done {
+					<span class="muted font-normal">· Done</span>
+				}
+			</p>
+			<p class="muted text-sm">{ description }</p>
+		</div>
+		{ children... }
+	</li>
+}
+
+// homeAttention lists what is wrong now. Each row says it in a sentence,
+// so on a narrow screen its pill, which only repeats that, gives way.
+templ homeAttention(v HomeView) {
+	if len(v.Troubles)+len(v.serverIssues()) > 0 {
+		<section class="grid gap-2" aria-labelledby="home-attention">
+			<h2 class="section-title" id="home-attention">Needs attention</h2>
+			<div class="card rows">
+				for _, issue := range v.serverIssues() {
+					<a class="row rail" data-state={ issue.State } href="/servers">
+						@ui.Icon("server", "text-ink-mute")
+						<div class="min-w-0 flex-1">
+							<p class="truncate font-semibold">{ issue.Name }</p>
+							<p class="muted text-sm">{ issue.Text }</p>
+						</div>
+						<span class={ issuePill(issue.State), "hidden sm:inline-flex" }>{ issue.Label }</span>
+						@ui.Icon("chevron-right", "text-ink-mute")
+					</a>
+				}
+				for _, t := range v.Troubles {
+					<a class="row rail" data-state={ troubleState(t) } href={ templ.SafeURL(troubleHref(t)) }>
+						@ui.Icon(resourceIcon(t.Kind), "text-ink-mute")
+						<div class="min-w-0 flex-1">
+							<p class="truncate">
+								<span class="font-semibold">{ t.Name }</span>
+								<span class="muted text-sm">{ t.Project } / { t.Environment }</span>
+							</p>
+							<p class="muted text-sm">{ troubleText(t) }</p>
+						</div>
+						<span class="muted hidden text-sm whitespace-nowrap sm:inline">{ ui.Ago(t.At) }</span>
+						<span class={ troublePill(t), "hidden sm:inline-flex" }>{ troubleLabel(t) }</span>
+						@ui.Icon("chevron-right", "text-ink-mute")
+					</a>
+				}
+			</div>
+		</section>
+	} else if v.Totals.Resources > 0 {
+		@ui.Notice(ui.ToneOK) {
+			<p><span class="font-semibold">Nothing needs attention.</span> { runningLine(v.Totals) }</p>
+		}
+	}
+}
+
+templ homeActivity(v HomeView) {
+	<section class="card" aria-labelledby="home-activity">
+		<div class="card-head">
+			<div>
+				<h2 class="card-title" id="home-activity">Recent activity</h2>
+				<p class="muted text-sm">Deployments, and the last backup of each database and run of each scheduled task.</p>
+			</div>
+		</div>
+		if len(v.Events) == 0 {
+			<p class="card-body muted">Nothing has been deployed, backed up or run yet.</p>
+		} else {
+			<div class="rows">
+				for _, e := range v.Events {
+					<a class="row rail" data-state={ eventState(e) } href={ templ.SafeURL(eventHref(e)) }>
+						@ui.Icon(eventIcon(e.Kind), "text-ink-mute")
+						<div class="min-w-0 flex-1">
+							<p class="truncate">
+								<span class="font-semibold">{ e.Resource }</span>
+								{ eventWhat(e) }
+							</p>
+							<p class="muted truncate text-sm">
+								{ e.Project } / { e.Environment } · { ui.StateLabel(e.Trigger) }
+								if commit := eventCommit(e); commit != "" {
+									· <span class="fact">{ commit }</span>
+								}
+								if took := ui.Took(e.Started, e.Finished); took != "" {
+									· took { took }
+								}
+							</p>
+						</div>
+						<span class="muted hidden text-sm whitespace-nowrap sm:inline">{ ui.Ago(e.At) }</span>
+						<span class={ eventPill(e) }>{ eventLabel(e) }</span>
+						@ui.Icon("chevron-right", "text-ink-mute")
+					</a>
+				}
+			</div>
+		}
+	</section>
+}
+
+templ homeProjects(v HomeView) {
+	<section class="card" aria-labelledby="home-projects">
+		<div class="card-head">
+			<h2 class="card-title" id="home-projects">Projects</h2>
+			if v.Totals.Projects > 0 {
+				<a class="text-sm" href="/projects">All { plural(v.Totals.Projects, "project", "projects") }</a>
+			}
+		</div>
+		if len(v.Projects) == 0 {
+			<p class="card-body muted">No projects yet.</p>
+		} else {
+			<div class="rows">
+				for _, p := range v.Projects {
+					<a class="row" href={ templ.SafeURL("/projects/" + p.ID) }>
+						@ui.Icon("folder", "text-ink-mute")
+						<div class="min-w-0 flex-1">
+							<p class="truncate font-semibold">{ p.Name }</p>
+							<p class="muted truncate text-sm">{ projectLine(p) }</p>
+						</div>
+						if p.Down > 0 {
+							@ui.Badge(strconv.Itoa(p.Down)+" down", ui.ToneDanger)
+						}
+						@ui.Icon("chevron-right", "text-ink-mute")
+					</a>
+				}
+			</div>
+		}
+	</section>
+}
+
+templ homeServers(v HomeView) {
+	<section class="card" aria-labelledby="home-servers">
+		<div class="card-head">
+			<h2 class="card-title" id="home-servers">Servers</h2>
+			<a class="text-sm" href="/servers">All servers</a>
+		</div>
+		<div class="rows">
+			for _, h := range v.Servers {
+				<a class="row flex-col items-stretch" href={ templ.SafeURL("/servers/" + h.Server.ID + "/metrics") }>
+					<div class="flex min-w-0 items-center gap-3">
+						@ui.Icon("server", "text-ink-mute")
+						<div class="min-w-0 flex-1">
+							<p class="truncate font-semibold">{ h.Server.Name }</p>
+							<p class="fact truncate text-ink-mute">{ serverHost(h.Server) }</p>
+						</div>
+						if h.Server.Kind == db.ServerLocal {
+							@ui.Badge("This machine", ui.ToneBrand)
+						} else {
+							<span class={ serverStateClass(h.Server) }>{ serverStateLabel(h.Server) }</span>
+						}
+					</div>
+					if len(h.Meters) > 0 {
+						<div class="grid gap-3">
+							for _, m := range h.Meters {
+								@ui.Meter(m)
+							}
+						</div>
+					} else {
+						<p class="muted text-sm">No recent reading of what it uses.</p>
+					}
+				</a>
+			}
+		</div>
+	</section>
+}

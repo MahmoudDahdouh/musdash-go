@@ -549,7 +549,7 @@ func TestServiceFailureStopAndDelete(t *testing.T) {
 	wantStatus(t, res, http.StatusNotFound)
 
 	res, _ = a.post(projectSettings, "/projects/"+projectID+"/delete", url.Values{"confirm": {"Shop"}})
-	wantRedirect(t, res, "/")
+	wantRedirect(t, res, "/projects")
 }
 
 func TestOtherTeamsServiceIsNotFound(t *testing.T) {

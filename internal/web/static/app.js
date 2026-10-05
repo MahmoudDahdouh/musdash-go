@@ -80,6 +80,165 @@
     input.focus();
   });
 
+  // Select, Combobox and Picker (ui): a button and a popover listing the
+  // options, with a hidden input for the value or a field to fill. The
+  // browser opens and closes the popover itself (the button's popovertarget,
+  // Escape, a click elsewhere); what is left is to put it by its button, to
+  // move through the options and to record the choice.
+  //
+  // Without a filter field, focus moves from option to option. With one it
+  // stays in the field, so typing keeps narrowing the list, and the arrow
+  // keys move a marker (data-active) the field reports as its current option.
+  let openList = null;
+  let optionIDs = 0;
+  const shut = (list) => list?.isConnected && list.matches(":popover-open") && list.hidePopover();
+  const optionsOf = (list) => [...list.querySelectorAll("[role=option]")];
+  const place = (list, button) => {
+    const r = button.getBoundingClientRect();
+    const gap = 4;
+    const edge = 8;
+    // At least as wide as the button; the stylesheet reads this.
+    list.style.setProperty("--select-width", r.width + "px");
+    list.style.removeProperty("--select-room");
+    const below = innerHeight - r.bottom;
+    // Above the button only when it does not fit below and there is more room.
+    const up = below < list.offsetHeight + gap + edge && r.top > below;
+    list.style.setProperty("--select-room", (up ? r.top : below) - gap - edge + "px");
+    // Held by the edge next to the button, so a list that gets shorter as it
+    // is filtered stays against it.
+    list.style.top = up ? "auto" : r.bottom + gap + "px";
+    list.style.bottom = up ? innerHeight - r.top + gap + "px" : "auto";
+    list.style.left = Math.max(edge, Math.min(r.left, innerWidth - list.offsetWidth - edge)) + "px";
+  };
+  const setActive = (list, option, reveal = true) => {
+    const filter = list.querySelector("[data-select-filter]");
+    list.querySelectorAll("[data-active]").forEach((o) => delete o.dataset.active);
+    if (!option) return filter.removeAttribute("aria-activedescendant");
+    option.dataset.active = "1";
+    option.id ||= "option-" + ++optionIDs;
+    filter.setAttribute("aria-activedescendant", option.id);
+    if (!reveal) return;
+    // Scrolled by hand: scrollIntoView may move the page, which closes the list.
+    const box = option.parentElement;
+    if (option.offsetTop < box.scrollTop) box.scrollTop = option.offsetTop - 8;
+    else if (option.offsetTop + option.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = option.offsetTop + option.offsetHeight - box.clientHeight + 8;
+  };
+  // narrow shows the options that contain the filter's text and marks the one
+  // Enter would choose: the selected one in an unfiltered list, else the first.
+  const narrow = (list) => {
+    const text = list.querySelector("[data-select-filter]").value.trim().toLowerCase();
+    const all = optionsOf(list);
+    all.forEach((o) => (o.hidden = !(o.dataset.search ?? o.textContent).toLowerCase().includes(text)));
+    const shown = all.filter((o) => !o.hidden);
+    const none = list.querySelector("[data-select-empty]");
+    if (none) none.hidden = shown.length > 0 || all.length === 0;
+    setActive(list, (!text && shown.find((o) => o.getAttribute("aria-selected") === "true")) || shown[0]);
+  };
+  // toggle does not bubble, hence the capture.
+  document.addEventListener(
+    "toggle",
+    (e) => {
+      const list = e.target;
+      const box = list instanceof Element ? list.closest("[data-select]") : null;
+      if (!box) return;
+      const button = box.querySelector("[popovertarget]");
+      const open = e.newState === "open";
+      button.setAttribute("aria-expanded", String(open));
+      if (!open) {
+        delete list.dataset.placed;
+        if (openList === list) openList = null;
+        return;
+      }
+      openList = list;
+      // A Picker asks the server for its options (hx-trigger) until it has some.
+      if (!list.querySelector("[role=option]")) list.dispatchEvent(new Event("select-load"));
+      const filter = list.querySelector("[data-select-filter]");
+      if (filter) {
+        filter.value = "";
+        narrow(list);
+      }
+      place(list, button);
+      list.dataset.placed = "1";
+      (filter || list.querySelector("[aria-selected=true]") || list.querySelector("[role=option]"))?.focus();
+    },
+    true,
+  );
+  // Options that arrived while the list was open: apply what has been typed
+  // meanwhile, and place the list again now that it has its real height.
+  document.addEventListener("htmx:afterSettle", (e) => {
+    const list = e.target.closest?.("[data-select] [popover]");
+    if (!list || list !== openList) return;
+    narrow(list);
+    place(list, list.closest("[data-select]").querySelector("[popovertarget]"));
+  });
+  // The list is fixed to the window, so it would be left behind when the page
+  // under it moves. Scrolling the list itself is not that.
+  const shutUnlessInside = (e) => {
+    if (openList && !(e.target instanceof Node && openList.contains(e.target))) shut(openList);
+  };
+  document.addEventListener("scroll", shutUnlessInside, true);
+  window.addEventListener("resize", shutUnlessInside);
+  on("input", "[data-select-filter]", (el) => narrow(el.closest("[popover]")));
+  on("mouseover", "[data-select] [role=option]", (el) => {
+    const list = el.closest("[popover]");
+    if (list.querySelector("[data-select-filter]")) setActive(list, el, false);
+  });
+  on("click", "[data-select] [role=option]", (el) => {
+    const box = el.closest("[data-select]");
+    const list = el.closest("[popover]");
+    shut(list);
+    box.querySelector("[popovertarget]").focus();
+    // A Picker's option has filled its field already (data-fill) and there is
+    // no value here to keep.
+    const input = box.querySelector("input[type=hidden]");
+    if (!input) return;
+    optionsOf(list).forEach((o) => o.setAttribute("aria-selected", String(o === el)));
+    box.querySelector("[data-select-label]").textContent = el.textContent.trim();
+    if (input.value === el.dataset.value) return;
+    input.value = el.dataset.value;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  on("keydown", "[data-select]", (box, e) => {
+    const list = box.querySelector("[popover]");
+    if (e.target.closest("[popovertarget]")) {
+      // Enter and Space open it as they press any button; so do the arrows.
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !list.matches(":popover-open")) {
+        e.preventDefault();
+        list.showPopover();
+      }
+      return;
+    }
+    if (e.key === "Tab") {
+      // Closing gives focus back to the button, and Tab then leaves from there.
+      shut(list);
+      return;
+    }
+    const filtered = e.target.matches("[data-select-filter]");
+    const all = optionsOf(list).filter((o) => !o.hidden);
+    const current = filtered ? list.querySelector("[data-active]") : document.activeElement;
+    const i = all.indexOf(current);
+    let next;
+    if (e.key === "ArrowDown") next = all[(i + 1) % all.length];
+    else if (e.key === "ArrowUp") next = all[(i - 1 + all.length) % all.length];
+    else if (filtered) {
+      // Enter here would send the form the list is in.
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      current?.click();
+      return;
+    } else if (e.key === "Home") next = all[0];
+    else if (e.key === "End") next = all[all.length - 1];
+    else if (e.key.length === 1 && e.key !== " " && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // A letter goes to the next option that starts with it.
+      const key = e.key.toLowerCase();
+      next = [...all.slice(i + 1), ...all.slice(0, i + 1)].find((o) => o.textContent.trim().toLowerCase().startsWith(key));
+    }
+    if (!next) return;
+    e.preventDefault();
+    if (filtered) setActive(list, next);
+    else next.focus();
+  });
+
   // Toasts that confirm an action leave on their own; errors stay until closed.
   const armToasts = (root) =>
     root.querySelectorAll("[data-autodismiss]").forEach((t) => {

@@ -288,7 +288,7 @@ templ Toasts(f *Flash) {
 templ EmptyState(icon, title, description string) {
 	<div class="empty">
 		@Icon(icon, "icon-lg text-ink-mute")
-		<h2 class="font-semibold">{ title }</h2>
+		<h2 class="empty-title">{ title }</h2>
 		<p class="muted max-w-sm">{ description }</p>
 		<div class="mt-2 flex flex-wrap justify-center gap-2">
 			{ children... }

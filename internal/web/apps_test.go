@@ -384,7 +384,7 @@ func TestStopRedeployAndDeleteApp(t *testing.T) {
 	wantStatus(t, res, http.StatusNotFound)
 
 	res, _ = a.post(settings, "/projects/"+projectID+"/delete", url.Values{"confirm": {"Shop"}})
-	wantRedirect(t, res, "/")
+	wantRedirect(t, res, "/projects")
 }
 
 func TestRuntimeLogStreamEscapesOutput(t *testing.T) {

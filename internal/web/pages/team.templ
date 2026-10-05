@@ -101,11 +101,7 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 									<form class="flex items-center gap-2" method="post" action={ templ.SafeURL("/team/members/" + m.UserID + "/role") }>
 										@ui.CSRF(s.CSRF)
 										<label class="sr-only" for={ "role-" + m.UserID }>Role of { m.Name }</label>
-										<select id={ "role-" + m.UserID } name="role" class="input">
-											for _, o := range roleOptions {
-												<option value={ o.Value } selected?={ o.Value == m.Role }>{ o.Label }</option>
-											}
-										</select>
+										@ui.SelectNamed("role-"+m.UserID, "role", roleOptions, m.Role, nil)
 										@ui.Button(ui.ButtonProps{Small: true, Type: "submit"}) {
 											Save
 										}

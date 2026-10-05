@@ -48,7 +48,7 @@ func (s *Server) loadProject(w http.ResponseWriter, r *http.Request) (db.Project
 }
 
 func projectCrumbs(p db.Project) []ui.Crumb {
-	return []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name}}
+	return []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: p.Name}}
 }
 
 func (s *Server) projectList(w http.ResponseWriter, r *http.Request) {
@@ -61,14 +61,14 @@ func (s *Server) projectList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) projectNew(w http.ResponseWriter, r *http.Request) {
-	crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: "New project"}}
+	crumbs := []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: "New project"}}
 	s.render(w, r, http.StatusOK, pages.ProjectNew(s.shell(w, r, "New project", "projects", crumbs...), ui.Form{}))
 }
 
 func (s *Server) projectCreate(w http.ResponseWriter, r *http.Request) {
 	name, description, f := projectForm(r)
 	if !f.OK() {
-		crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: "New project"}}
+		crumbs := []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: "New project"}}
 		s.render(w, r, http.StatusUnprocessableEntity, pages.ProjectNew(s.shell(w, r, "New project", "projects", crumbs...), f))
 		return
 	}
@@ -184,7 +184,7 @@ func (s *Server) projectDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Project deleted.")
-	redirect(w, r, "/")
+	redirect(w, r, "/projects")
 }
 
 func (s *Server) environmentCreate(w http.ResponseWriter, r *http.Request) {

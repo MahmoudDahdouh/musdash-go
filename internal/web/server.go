@@ -146,7 +146,9 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /account/tokens/{id}/delete", member, s.tokenDelete)
 	handle("GET /sys/mem", member, s.memReadout)
 
-	handle("GET /{$}", member, s.projectList)
+	handle("GET /{$}", member, s.home)
+	handle("GET /home/live", member, s.homeLive)
+	handle("GET /projects", member, s.projectList)
 	handle("GET /projects/new", member, s.projectNew)
 	handle("POST /projects", member, s.projectCreate)
 	handle("GET /projects/{id}", member, s.projectShow)

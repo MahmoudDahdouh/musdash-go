@@ -34,14 +34,56 @@ type NavItem struct {
 	Admin bool
 }
 
-// Nav is the sidebar's content. Later phases append their sections here.
-var Nav = []NavItem{
-	{Key: "projects", Label: "Projects", Href: "/", Icon: "folder"},
-	{Key: "tags", Label: "Tags", Href: "/tags", Icon: "tag"},
-	{Key: "sources", Label: "Sources", Href: "/sources", Icon: "git-branch"},
-	{Key: "servers", Label: "Servers", Href: "/servers", Icon: "server"},
-	{Key: "team", Label: "Team", Href: "/team", Icon: "users"},
-	{Key: "settings", Label: "Settings", Href: "/settings", Icon: "settings", Admin: true},
+// NavGroup is the sidebar entries that serve one purpose, under a heading.
+// The first group has none: it is what the product is for.
+type NavGroup struct {
+	Title string
+	Items []NavItem
+	// Dev groups are drawn only in development mode.
+	Dev bool
+}
+
+// Nav is the sidebar's content, grouped by what a person comes to do: run
+// things, say where they run and where their code comes from, and manage
+// the install itself. A new entry goes in the group whose purpose it shares.
+var Nav = []NavGroup{
+	{Items: []NavItem{
+		{Key: "home", Label: "Home", Href: "/", Icon: "home"},
+		{Key: "projects", Label: "Projects", Href: "/projects", Icon: "folder"},
+		{Key: "tags", Label: "Tags", Href: "/tags", Icon: "tag"},
+	}},
+	{Title: "Infrastructure", Items: []NavItem{
+		{Key: "servers", Label: "Servers", Href: "/servers", Icon: "server"},
+		{Key: "sources", Label: "Sources", Href: "/sources", Icon: "git-branch"},
+	}},
+	{Title: "Administration", Items: []NavItem{
+		{Key: "team", Label: "Team", Href: "/team", Icon: "users"},
+		{Key: "settings", Label: "Settings", Href: "/settings", Icon: "settings", Admin: true},
+	}},
+	{Title: "Development", Dev: true, Items: []NavItem{
+		{Key: "ui", Label: "Components", Href: "/_ui", Icon: "layers"},
+	}},
+}
+
+// navGroups is the part of Nav this person sees: without the entries their
+// role cannot use, and without a group that is left with none.
+func navGroups(s Shell) []NavGroup {
+	var out []NavGroup
+	for _, g := range Nav {
+		if g.Dev && !s.Dev {
+			continue
+		}
+		shown := NavGroup{Title: g.Title}
+		for _, item := range g.Items {
+			if !item.Admin || s.Admin {
+				shown.Items = append(shown.Items, item)
+			}
+		}
+		if len(shown.Items) > 0 {
+			out = append(out, shown)
+		}
+	}
+	return out
 }
 
 func csrfHeader(token string) string {
@@ -82,35 +124,34 @@ templ sidebar(s Shell) {
 			@Mark("size-6")
 			<span class="text-lg font-semibold tracking-tight">musdash</span>
 		</a>
-		<nav class="grid gap-0.5 px-2 py-2">
-			for _, item := range Nav {
-				if !item.Admin || s.Admin {
-					<a
-						class="nav-item"
-						href={ templ.SafeURL(item.Href) }
-						if item.Key == s.Active {
-							aria-current="page"
-						}
-					>
-						@Icon(item.Icon)
-						{ item.Label }
-					</a>
-				}
-			}
-			if s.Dev {
-				<a
-					class="nav-item"
-					href="/_ui"
-					if s.Active == "ui" {
-						aria-current="page"
+		<nav class="nav px-4 py-2">
+			for i, g := range navGroups(s) {
+				<div
+					class="nav-group"
+					if g.Title != "" {
+						role="group"
+						aria-labelledby={ "nav-group-" + strconv.Itoa(i) }
 					}
 				>
-					@Icon("layers")
-					Components
-				</a>
+					if g.Title != "" {
+						<h2 class="nav-heading" id={ "nav-group-" + strconv.Itoa(i) }>{ g.Title }</h2>
+					}
+					for _, item := range g.Items {
+						<a
+							class="nav-item"
+							href={ templ.SafeURL(item.Href) }
+							if item.Key == s.Active {
+								aria-current="page"
+							}
+						>
+							@Icon(item.Icon)
+							{ item.Label }
+						</a>
+					}
+				</div>
 			}
 		</nav>
-		<div class="mt-auto grid gap-0.5 border-t border-line px-2 py-2">
+		<div class="mt-auto grid gap-0.5 border-t border-line px-4 py-2">
 			<a
 				class="nav-item"
 				href="/account"
@@ -128,7 +169,7 @@ templ sidebar(s Shell) {
 					Sign out
 				</button>
 			</form>
-			<p class="flex items-center justify-between px-2.5 pt-2 pb-1 text-xs text-ink-mute" title="Memory musdash itself is using right now">
+			<p class="flex items-center justify-between px-2 pt-2 pb-1 text-xs text-ink-mute" title="Memory musdash itself is using right now">
 				<span>musdash is using</span>
 				@MemReadout(s.MemMB)
 			</p>

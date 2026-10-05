@@ -49,14 +49,14 @@ func (s *Server) loadService(w http.ResponseWriter, r *http.Request) (pages.Serv
 
 func (s *Server) serviceShell(w http.ResponseWriter, r *http.Request, v pages.ServiceView) ui.Shell {
 	return s.shell(w, r, v.Service.Name, "projects",
-		ui.Crumb{Label: "Projects", Href: "/"},
+		ui.Crumb{Label: "Projects", Href: "/projects"},
 		ui.Crumb{Label: v.Project.Name, Href: "/projects/" + v.Project.ID + "?env=" + v.Env.ID},
 		ui.Crumb{Label: v.Service.Name},
 	)
 }
 
 func newServiceCrumbs(p db.Project, env db.Environment) []ui.Crumb {
-	return []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New service"}}
+	return []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New service"}}
 }
 
 // serviceTemplate resolves the template of a new service: a catalogue entry

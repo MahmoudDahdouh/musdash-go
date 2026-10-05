@@ -69,7 +69,7 @@ func (s *Server) loadApp(w http.ResponseWriter, r *http.Request) (pages.AppView,
 
 func appCrumbs(v pages.AppView) []ui.Crumb {
 	crumbs := []ui.Crumb{
-		{Label: "Projects", Href: "/"},
+		{Label: "Projects", Href: "/projects"},
 		{Label: v.Project.Name, Href: "/projects/" + v.Project.ID + "?env=" + v.Env.ID},
 	}
 	if v.Parent != nil {
@@ -263,7 +263,7 @@ func (s *Server) appNew(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
+	crumbs := []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
 	s.render(w, r, http.StatusOK, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, ui.Form{}, generatedDomain(server), src, choices, serverList))
 }
 
@@ -336,7 +336,7 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rerender := func(status int) {
-		crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
+		crumbs := []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
 		s.render(w, r, status, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, f, rawDomain, src, choices, serverList))
 	}
 	if !f.OK() {

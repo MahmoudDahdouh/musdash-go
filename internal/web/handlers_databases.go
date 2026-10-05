@@ -54,7 +54,7 @@ func (s *Server) loadDatabase(w http.ResponseWriter, r *http.Request) (pages.Dat
 
 func (s *Server) databaseShell(w http.ResponseWriter, r *http.Request, v pages.DatabaseView) ui.Shell {
 	return s.shell(w, r, v.DB.Name, "projects",
-		ui.Crumb{Label: "Projects", Href: "/"},
+		ui.Crumb{Label: "Projects", Href: "/projects"},
 		ui.Crumb{Label: v.Project.Name, Href: "/projects/" + v.Project.ID + "?env=" + v.Env.ID},
 		ui.Crumb{Label: v.DB.Name},
 	)
@@ -80,7 +80,7 @@ func (s *Server) newDatabaseTarget(w http.ResponseWriter, r *http.Request, envID
 }
 
 func newDatabaseCrumbs(p db.Project, env db.Environment) []ui.Crumb {
-	return []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New database"}}
+	return []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New database"}}
 }
 
 func (s *Server) databaseNew(w http.ResponseWriter, r *http.Request) {

@@ -221,16 +221,10 @@ templ gitRepoFields(f ui.Form, c GitChoices, app db.App) {
 	}
 	@ui.TextField(f, "Repository", "For example https://github.com/acme/shop, or with a deploy key git@github.com:acme/shop.git or git@gitlab.com:group/shop.git.", ui.InputProps{ID: "repo", Mono: true, Required: true, Value: app.RepoURL, Placeholder: "https://github.com/acme/shop"})
 	if len(c.Sources) > 0 {
-		<div class="grid gap-2">
-			<div class="flex flex-wrap gap-2">
-				for _, g := range c.Sources {
-					<button type="button" class="btn btn-secondary btn-sm" hx-get={ "/sources/github/" + g.ID + "/repos" } hx-target="#repo-list" hx-swap="outerHTML">
-						@ui.Icon("git-branch")
-						Browse { g.Name }
-					</button>
-				}
-			</div>
-			<div id="repo-list"></div>
+		<div class="flex flex-wrap gap-2">
+			for _, g := range c.Sources {
+				@ui.Picker(ui.PickerProps{ID: "repos-" + g.ID, Label: "Choose from " + g.Name, Icon: "git-branch", Filter: "Find a repository", Src: "/sources/github/" + g.ID + "/repos"})
+			}
 		</div>
 	}
 	@ui.TextField(f, "Branch", "", ui.InputProps{ID: "branch", Mono: true, Required: true, Value: orDefault(app.Branch, "main")})

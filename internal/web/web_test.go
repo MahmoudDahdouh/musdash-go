@@ -225,8 +225,13 @@ func TestFreshInstallGoesToSetupThenCloses(t *testing.T) {
 	a.setup()
 	res, body := a.get("/")
 	wantStatus(t, res, http.StatusOK)
+	if !strings.Contains(body, "Getting started") {
+		t.Fatal("Home did not show a new install where to start")
+	}
+	res, body = a.get("/projects")
+	wantStatus(t, res, http.StatusOK)
 	if !strings.Contains(body, "No projects yet") {
-		t.Fatal("dashboard did not render the empty state")
+		t.Fatal("the Projects page did not render the empty state")
 	}
 
 	// A second browser cannot run setup again.
@@ -542,7 +547,7 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	res, _ = a.post(settings, path+"/delete", url.Values{"confirm": {"wrong"}})
 	wantRedirect(t, res, settings)
 	res, _ = a.post(settings, path+"/delete", url.Values{"confirm": {"Shop"}})
-	wantRedirect(t, res, "/")
+	wantRedirect(t, res, "/projects")
 	res, _ = a.get(path)
 	wantStatus(t, res, http.StatusNotFound)
 }

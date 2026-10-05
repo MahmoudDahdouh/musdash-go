@@ -391,7 +391,7 @@ func TestStopStartAndDeleteDatabase(t *testing.T) {
 	}
 
 	res, _ = a.post(projectSettings, "/projects/"+projectID+"/delete", url.Values{"confirm": {"Shop"}})
-	wantRedirect(t, res, "/")
+	wantRedirect(t, res, "/projects")
 }
 
 func TestOtherTeamsDatabaseIsNotFound(t *testing.T) {
