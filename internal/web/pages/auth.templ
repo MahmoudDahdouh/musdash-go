@@ -48,7 +48,7 @@ templ Login(f ui.Form, csrf string, flash *ui.Flash) {
 			@ui.TextField(f, "Password", "", ui.InputProps{ID: "password", Type: "password", Autocomplete: "current-password", Required: true})
 		}
 		<p class="muted text-sm">
-			Forgot your password? On the server, run
+			Forgot your password? Ask an Owner or an Admin of your team for a reset link. With a shell on the server, run
 			<span class="code">musdash reset-password you@example.com</span>
 			and open the link it prints.
 		</p>
@@ -70,7 +70,7 @@ templ ResetInvalid() {
 		@ui.Notice(ui.ToneWarn) {
 			<p class="font-semibold">This reset link has expired or was already used.</p>
 			<p class="muted mt-1">
-				Run <span class="code">musdash reset-password you@example.com</span> on the server for a new one.
+				Ask an Owner or an Admin of your team for a new one, or run <span class="code">musdash reset-password you@example.com</span> on the server.
 			</p>
 		}
 		<p><a href="/login">Back to sign in</a></p>

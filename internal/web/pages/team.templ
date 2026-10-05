@@ -1,0 +1,242 @@
+package pages
+
+import (
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// TeamView is what the Team page shows.
+type TeamView struct {
+	Team        db.Team
+	Me          string // the reader's own user id
+	Role        string // and their role
+	Members     []db.Member
+	Invitations []db.Invitation
+	// Link is a link that was just made and is shown this once: an
+	// invitation, or a password reset. LinkFor says whose it is.
+	Link     string
+	LinkFor  string
+	LinkKind string // "invitation" or "reset"
+}
+
+// RoleLabel is a role as a person reads it.
+func RoleLabel(role string) string {
+	switch role {
+	case db.RoleOwner:
+		return "Owner"
+	case db.RoleAdmin:
+		return "Admin"
+	}
+	return "Member"
+}
+
+func roleTone(role string) string {
+	if role == db.RoleOwner {
+		return ui.ToneBrand
+	}
+	return ui.ToneNeutral
+}
+
+var roleOptions = []ui.Option{
+	{Value: db.RoleMember, Label: "Member"},
+	{Value: db.RoleAdmin, Label: "Admin"},
+	{Value: db.RoleOwner, Label: "Owner"},
+}
+
+func twoStepLabel(on bool) string {
+	if on {
+		return "On"
+	}
+	return "Off"
+}
+
+templ oneTimeLink(v TeamView) {
+	if v.Link != "" {
+		@ui.Notice(ui.ToneOK) {
+			if v.LinkKind == "reset" {
+				<p class="font-semibold">Reset link for { v.LinkFor }</p>
+				<p>Send it to them. It works once, within one hour, and is not shown again.</p>
+			} else {
+				<p class="font-semibold">Invitation link for { v.LinkFor }</p>
+				<p>Send it to them. It works once, within seven days, and is not shown again.</p>
+			}
+			<p class="code mt-2 block break-all">{ v.Link }</p>
+			<p class="mt-2">
+				<button type="button" class="btn btn-secondary btn-sm" data-copy={ v.Link }>
+					@ui.Icon("copy")
+					<span data-copy-label>Copy link</span>
+				</button>
+			</p>
+		}
+	}
+}
+
+templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Team", "Who can sign in to this musdash, and what each of them may do.")
+		<div class="grid max-w-4xl gap-6">
+			@oneTimeLink(v)
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Members</h2>
+						<p class="muted text-sm">A Member works with projects and what is in them. An Admin also manages servers, sources, settings and invitations. An Owner also decides who holds which role.</p>
+					</div>
+				</div>
+				@ui.Table("Name", "Role", "Second step", "Joined", "") {
+					for _, m := range v.Members {
+						<tr>
+							<td>
+								<p class="font-semibold">
+									{ m.Name }
+									if m.UserID == v.Me {
+										<span class="muted font-normal">(you)</span>
+									}
+								</p>
+								<p class="muted text-sm break-all">{ m.Email }</p>
+							</td>
+							<td>
+								if s.Owner {
+									<form class="flex items-center gap-2" method="post" action={ templ.SafeURL("/team/members/" + m.UserID + "/role") }>
+										@ui.CSRF(s.CSRF)
+										<label class="sr-only" for={ "role-" + m.UserID }>Role of { m.Name }</label>
+										<select id={ "role-" + m.UserID } name="role" class="input">
+											for _, o := range roleOptions {
+												<option value={ o.Value } selected?={ o.Value == m.Role }>{ o.Label }</option>
+											}
+										</select>
+										@ui.Button(ui.ButtonProps{Small: true, Type: "submit"}) {
+											Save
+										}
+									</form>
+								} else {
+									@ui.Badge(RoleLabel(m.Role), roleTone(m.Role))
+								}
+							</td>
+							<td>{ twoStepLabel(m.TwoStep) }</td>
+							<td class="whitespace-nowrap">{ ui.Ago(m.JoinedAt) }</td>
+							<td>
+								if db.CanManage(v.Role, v.Me, m) {
+									<div class="flex flex-wrap justify-end gap-2">
+										<form method="post" action={ templ.SafeURL("/team/members/" + m.UserID + "/reset") }>
+											@ui.CSRF(s.CSRF)
+											@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "key"}) {
+												Reset link
+											}
+										</form>
+										@ui.Confirm(ui.ConfirmProps{
+											ID: "remove-" + m.UserID, Title: "Remove " + m.Name, Action: "/team/members/" + m.UserID + "/delete",
+											CSRF: s.CSRF, Match: m.Email, Submit: "Remove member", Trigger: "Remove",
+										}) {
+											<p>{ m.Name } is signed out everywhere and their account, API tokens and second step are deleted. What they deployed stays. To let them back in, invite them again.</p>
+										}
+									</div>
+								}
+							</td>
+						</tr>
+					}
+				}
+			</section>
+			<section class="card" id="invitations">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Invitations</h2>
+						<p class="muted text-sm">An invitation is a link. Whoever opens it chooses a name and a password and becomes a member.</p>
+					</div>
+				</div>
+				if len(v.Invitations) > 0 {
+					<div class="rows">
+						for _, inv := range v.Invitations {
+							<div class="row">
+								@ui.Icon("user", "text-ink-mute")
+								<div class="min-w-0 flex-1">
+									<p class="truncate font-semibold">{ inv.Email }</p>
+									<p class="muted text-sm">
+										{ RoleLabel(inv.Role) }
+										if inv.InvitedBy != "" {
+											· invited by { inv.InvitedBy }
+										}
+										· made { ui.Ago(inv.CreatedAt) }
+									</p>
+								</div>
+								if s.Admin {
+									<form method="post" action={ templ.SafeURL("/team/invitations/" + inv.ID + "/delete") }>
+										@ui.CSRF(s.CSRF)
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+											Cancel
+										}
+									</form>
+								}
+							</div>
+						}
+					</div>
+				} else if !s.Admin {
+					<p class="card-body muted">Nobody is invited at the moment.</p>
+				}
+				if s.Admin {
+					<form class="card-body grid gap-4 border-t border-line" method="post" action="/team/invitations">
+						@ui.CSRF(s.CSRF)
+						<div class="grid gap-4 sm:grid-cols-[1fr_12rem]">
+							@ui.TextField(invite, "Email", "The address they will sign in with.", ui.InputProps{ID: "email", Type: "email", Required: true, Autocomplete: "off"})
+							if s.Owner {
+								@ui.Field(ui.FieldProps{Label: "Role", For: "role", Error: invite.E("role")}) {
+									@ui.Select("role", roleOptions[:2], orDefault(invite.V("role"), db.RoleMember), nil)
+								}
+							}
+						</div>
+						<div>
+							@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "plus"}) {
+								Create invitation link
+							}
+						</div>
+					</form>
+				}
+			</section>
+			if s.Admin {
+				@ui.FormCard("Team name", "", "/team", s.CSRF, "Save name") {
+					@ui.TextField(rename, "Name", "", ui.InputProps{ID: "name", Value: v.Team.Name, Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
+				}
+			}
+		</div>
+	}
+}
+
+// Invite is the page an invitation link opens: it creates the account.
+templ Invite(f ui.Form, csrf, token string, inv db.Invitation, team string) {
+	@ui.AuthLayout("Join "+team, nil) {
+		@authCard("Join "+team, "You were invited as "+RoleLabel(inv.Role)+". Choose how you sign in.", "/invite/"+token, csrf, "Create account") {
+			if f.E("form") != "" {
+				@ui.Notice(ui.ToneDanger) {
+					{ f.E("form") }
+				}
+			}
+			@ui.Field(ui.FieldProps{Label: "Email", For: "email"}) {
+				@ui.Input(ui.InputProps{ID: "email", Type: "email", Value: inv.Email, Disabled: true, Autocomplete: "username"})
+			}
+			@ui.TextField(f, "Name", "", ui.InputProps{ID: "name", Autocomplete: "name", Required: true, Autofocus: true})
+			@ui.TextField(f, "Password", "10 to 72 characters.", ui.InputProps{ID: "password", Type: "password", Autocomplete: "new-password", Required: true})
+		}
+	}
+}
+
+// InviteInvalid is shown for an unknown, used, cancelled or expired link.
+templ InviteInvalid() {
+	@ui.AuthLayout("Invitation", nil) {
+		@ui.Notice(ui.ToneWarn) {
+			<p class="font-semibold">This invitation has expired, was cancelled or was already used.</p>
+			<p class="muted mt-1">Ask whoever invited you for a new link.</p>
+		}
+		<p><a href="/login">Go to sign in</a></p>
+	}
+}
+
+// Forbidden is the page for a request the person's role does not allow.
+templ Forbidden(s ui.Shell, needs string) {
+	@ui.Layout(s) {
+		@ui.EmptyState("lock", "Your role does not allow this", "It needs "+needs+" of the team. Ask one of them to do it, or to change your role.") {
+			@ui.LinkButton("/team", ui.ButtonProps{}) {
+				See who is in the team
+			}
+		}
+	}
+}

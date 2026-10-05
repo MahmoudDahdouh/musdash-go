@@ -141,14 +141,15 @@ func (d *DB) DeleteSession(ctx context.Context, tokenHash string) error {
 	return err
 }
 
-// DeleteExpired removes expired sessions and reset tokens.
+// DeleteExpired removes expired sessions, reset tokens and invitations.
 func (d *DB) DeleteExpired(ctx context.Context) error {
 	t := now()
-	if _, err := d.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at <= ?`, t); err != nil {
-		return err
+	for _, table := range []string{"sessions", "password_resets", "invitations"} {
+		if _, err := d.ExecContext(ctx, `DELETE FROM `+table+` WHERE expires_at <= ?`, t); err != nil {
+			return err
+		}
 	}
-	_, err := d.ExecContext(ctx, `DELETE FROM password_resets WHERE expires_at <= ?`, t)
-	return err
+	return nil
 }
 
 func (d *DB) CreatePasswordReset(ctx context.Context, tokenHash, userID string, expiresAt int64) error {

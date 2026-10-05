@@ -76,17 +76,19 @@ templ Servers(s ui.Shell, list []ServerInfo, keys []db.SSHKey, f ui.Form) {
 					@remoteServerCard(s, info)
 				}
 			}
-			@ui.FormCard("Add a server", "Another machine with Docker, reached over SSH. Nothing of musdash is installed on it except, if you choose so, the proxy that serves its domains.", "/servers", s.CSRF, "Add server") {
-				@ui.TextField(f, "Name", "What you call it here, such as Frankfurt.", ui.InputProps{ID: "name", Required: true})
-				<div class="grid gap-4 sm:grid-cols-[1fr_8rem]">
-					@ui.TextField(f, "Address", "An IP address or a host name.", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "203.0.113.20"})
-					@ui.TextField(f, "SSH port", "", ui.InputProps{ID: "port", Mono: true, Value: "22", Attrs: templ.Attributes{"inputmode": "numeric"}})
-				</div>
-				@ui.TextField(f, "Account", "The account musdash signs in as. It must be able to run docker: root, or a member of the docker group.", ui.InputProps{ID: "ssh_user", Mono: true, Required: true, Value: "root"})
-				@ui.Field(ui.FieldProps{Label: "Sign in with", For: "key", Hint: "After adding the server you are shown the public key to put in the account's ~/.ssh/authorized_keys.", Error: f.E("key")}) {
-					@ui.Select("key", keyOptions(keys), orDefault(f.V("key"), "new"), templ.Attributes{"aria-describedby": "key-hint"})
+			if s.Admin {
+				@ui.FormCard("Add a server", "Another machine with Docker, reached over SSH. Nothing of musdash is installed on it except, if you choose so, the proxy that serves its domains.", "/servers", s.CSRF, "Add server") {
+					@ui.TextField(f, "Name", "What you call it here, such as Frankfurt.", ui.InputProps{ID: "name", Required: true})
+					<div class="grid gap-4 sm:grid-cols-[1fr_8rem]">
+						@ui.TextField(f, "Address", "An IP address or a host name.", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "203.0.113.20"})
+						@ui.TextField(f, "SSH port", "", ui.InputProps{ID: "port", Mono: true, Value: "22", Attrs: templ.Attributes{"inputmode": "numeric"}})
+					</div>
+					@ui.TextField(f, "Account", "The account musdash signs in as. It must be able to run docker: root, or a member of the docker group.", ui.InputProps{ID: "ssh_user", Mono: true, Required: true, Value: "root"})
+					@ui.Field(ui.FieldProps{Label: "Sign in with", For: "key", Hint: "After adding the server you are shown the public key to put in the account's ~/.ssh/authorized_keys.", Error: f.E("key")}) {
+						@ui.Select("key", keyOptions(keys), orDefault(f.V("key"), "new"), templ.Attributes{"aria-describedby": "key-hint"})
+					}
+					@ui.TextField(f, "Data directory", "Where musdash keeps its files on the server. Empty uses /var/lib/musdash for root and ~/.musdash otherwise.", ui.InputProps{ID: "data_dir", Mono: true})
 				}
-				@ui.TextField(f, "Data directory", "Where musdash keeps its files on the server. Empty uses /var/lib/musdash for root and ~/.musdash otherwise.", ui.InputProps{ID: "data_dir", Mono: true})
 			}
 		</div>
 	}
@@ -124,16 +126,22 @@ templ localServerCard(s ui.Shell, info ServerInfo, f ui.Form) {
 				</dd>
 				<dt>Runs</dt>
 				<dd class="fact">{ strconv.Itoa(info.Apps) }</dd>
+				if !s.Admin && info.Server.IP != "" {
+					<dt>Public IP address</dt>
+					<dd class="fact">{ info.Server.IP }</dd>
+				}
 			</dl>
-			<form class="grid gap-3 border-t border-line pt-4" method="post" action={ templ.SafeURL("/servers/" + info.Server.ID) }>
-				@ui.CSRF(s.CSRF)
-				@ui.TextField(f, "Public IP address", "Used to build the generated address of new apps, such as abc123.203.0.113.7.sslip.io.", ui.InputProps{ID: "ip", Mono: true, Value: info.Server.IP, Placeholder: "203.0.113.7"})
-				<div>
-					@ui.Button(ui.ButtonProps{Type: "submit"}) {
-						Save address
-					}
-				</div>
-			</form>
+			if s.Admin {
+				<form class="grid gap-3 border-t border-line pt-4" method="post" action={ templ.SafeURL("/servers/" + info.Server.ID) }>
+					@ui.CSRF(s.CSRF)
+					@ui.TextField(f, "Public IP address", "Used to build the generated address of new apps, such as abc123.203.0.113.7.sslip.io.", ui.InputProps{ID: "ip", Mono: true, Value: info.Server.IP, Placeholder: "203.0.113.7"})
+					<div>
+						@ui.Button(ui.ButtonProps{Type: "submit"}) {
+							Save address
+						}
+					</div>
+				</form>
+			}
 		</div>
 	</section>
 }
@@ -146,12 +154,14 @@ templ remoteServerCard(s ui.Shell, info ServerInfo) {
 				<h2 class="card-title">{ info.Server.Name }</h2>
 				<span class={ serverStateClass(info.Server) }>{ serverStateLabel(info.Server) }</span>
 			</div>
-			<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/check") }>
-				@ui.CSRF(s.CSRF)
-				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "refresh"}) {
-					Check
-				}
-			</form>
+			if s.Admin {
+				<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/check") }>
+					@ui.CSRF(s.CSRF)
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "refresh"}) {
+						Check
+					}
+				</form>
+			}
 		</div>
 		<div class="card-body grid gap-4">
 			if info.Report != nil {
@@ -213,44 +223,46 @@ templ remoteServerCard(s ui.Shell, info ServerInfo) {
 				<dt>Runs</dt>
 				<dd class="fact">{ strconv.Itoa(info.Apps) }</dd>
 			</dl>
-			if info.PublicKey != "" && info.Server.Status != db.ServerOK {
+			if s.Admin && info.PublicKey != "" && info.Server.Status != db.ServerOK {
 				<div class="grid gap-2">
 					<p class="text-sm">Put this public key into <span class="code">~/.ssh/authorized_keys</span> of <span class="fact">{ info.Server.SSHUser }</span> on the server, on a line of its own, then choose Check.</p>
 					@ui.Copyable(info.PublicKey)
 				</div>
 			}
-			<div class="flex flex-wrap gap-2 border-t border-line pt-4">
-				if info.Server.Status == db.ServerOK {
-					<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/proxy") }>
-						@ui.CSRF(s.CSRF)
-						@ui.Button(ui.ButtonProps{Type: "submit"}) {
-							if info.Server.Proxy == db.ProxyInstalled {
-								Reinstall proxy
-							} else {
-								Install proxy
+			if s.Admin {
+				<div class="flex flex-wrap gap-2 border-t border-line pt-4">
+					if info.Server.Status == db.ServerOK {
+						<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/proxy") }>
+							@ui.CSRF(s.CSRF)
+							@ui.Button(ui.ButtonProps{Type: "submit"}) {
+								if info.Server.Proxy == db.ProxyInstalled {
+									Reinstall proxy
+								} else {
+									Install proxy
+								}
 							}
-						}
-					</form>
+						</form>
+					}
+					if info.Server.HostKey != "" {
+						<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/forget-host-key") }>
+							@ui.CSRF(s.CSRF)
+							@ui.Button(ui.ButtonProps{Type: "submit"}) {
+								Forget host key
+							}
+						</form>
+					}
+					if info.Apps == 0 {
+						<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/delete") }>
+							@ui.CSRF(s.CSRF)
+							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Icon: "trash", Type: "submit"}) {
+								Remove server
+							}
+						</form>
+					}
+				</div>
+				if info.Apps > 0 {
+					<p class="muted text-sm">A server can be removed once nothing runs on it.</p>
 				}
-				if info.Server.HostKey != "" {
-					<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/forget-host-key") }>
-						@ui.CSRF(s.CSRF)
-						@ui.Button(ui.ButtonProps{Type: "submit"}) {
-							Forget host key
-						}
-					</form>
-				}
-				if info.Apps == 0 {
-					<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/delete") }>
-						@ui.CSRF(s.CSRF)
-						@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Icon: "trash", Type: "submit"}) {
-							Remove server
-						}
-					</form>
-				}
-			</div>
-			if info.Apps > 0 {
-				<p class="muted text-sm">A server can be removed once nothing runs on it.</p>
 			}
 		</div>
 	</section>

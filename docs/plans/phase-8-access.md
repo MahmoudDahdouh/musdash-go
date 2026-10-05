@@ -128,12 +128,12 @@ func (s *Server) handle(mux *http.ServeMux, pattern string, who access, h http.H
 ## Tasks
 
 ### Task 1 — Roles, members, invitations
-- [ ] Migration `0013` (the whole phase's tables).
-- [ ] The route table: every route registered with who may call it. `admin` and `owner` answer 403 before the handler runs.
-- [ ] `Shell.Role`; Servers, Sources and Settings drawn for a Member without what they cannot use; Settings left out of their navigation.
-- [ ] Team page: members with roles, change a role, remove, reset link, invitations (make, cancel), rename.
-- [ ] `/invite/{token}`: the form, the account, the session.
-- [ ] Tests: a Member is refused at every admin route in the table (the done-when: deleting a server), and reaches every member route; role changes and removal by each role; the last Owner; an invitation used twice, expired, for a member's email, cancelled; a removed member's session and tokens are gone; the invitation token never in a log.
+- [x] Migration `0013` (the whole phase's tables).
+- [x] The route table: every route registered with who may call it. `admin` and `owner` answer 403 before the handler runs.
+- [x] `Shell.Role`; Servers, Sources and Settings drawn for a Member without what they cannot use; Settings left out of their navigation.
+- [x] Team page: members with roles, change a role, remove, reset link, invitations (make, cancel), rename.
+- [x] `/invite/{token}`: the form, the account, the session.
+- [x] Tests: a Member is refused at every admin route in the table (the done-when: deleting a server), and reaches every member route; every route under Servers, Sources, Settings and Team that changes something asks for an Admin; role changes and removal by each role; the last Owner; an invitation used twice, expired, for a member's email, cancelled; a removed member's session and tokens are gone; the invitation token never in a log.
 
 ### Task 2 — Second step
 - [ ] `auth` TOTP with the RFC 6238 test vectors; a code is not accepted twice; a code outside the window.

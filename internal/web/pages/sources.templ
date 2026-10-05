@@ -30,33 +30,43 @@ templ Sources(s ui.Shell, sources []db.GitSource, keys []db.SSHKey, appForm, key
 									<p class="truncate font-semibold">{ g.Name }</p>
 									<a class="fact truncate text-ink-mute" href={ templ.SafeURL(g.HTMLURL) } target="_blank" rel="noopener">{ g.Slug }</a>
 								</div>
-								@ui.LinkButton(installURL(g), ui.ButtonProps{Small: true, Icon: "external", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener"}}) {
-									Choose repositories
-								}
-								<form method="post" action={ templ.SafeURL("/sources/github/" + g.ID + "/delete") }>
-									@ui.CSRF(s.CSRF)
-									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
-										Remove
+								if s.Admin {
+									@ui.LinkButton(installURL(g), ui.ButtonProps{Small: true, Icon: "external", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener"}}) {
+										Choose repositories
 									}
-								</form>
+								}
+								if s.Admin {
+									<form method="post" action={ templ.SafeURL("/sources/github/" + g.ID + "/delete") }>
+										@ui.CSRF(s.CSRF)
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+											Remove
+										}
+									</form>
+								}
 							</div>
 						}
 					</div>
 				}
-				<form class="card-body grid gap-4 border-t border-line" method="post" action="/sources/github">
-					@ui.CSRF(s.CSRF)
-					<p class="text-sm text-ink-soft">
-						Creating the App takes two steps on GitHub: confirm its name, then choose which repositories it may read. You come back here in between.
-					</p>
-					@ui.TextField(appForm, "App name", "Shown on GitHub. It must be unique across GitHub.", ui.InputProps{ID: "name", Required: true, Attrs: templ.Attributes{"maxlength": "34"}})
-					@ui.TextField(appForm, "Organisation", "Leave empty to create the App under your own account.", ui.InputProps{ID: "organization", Mono: true, Placeholder: "acme"})
-					@ui.TextField(appForm, "This dashboard's address", "GitHub sends you back here, and sends push events here. It must be reachable from the internet for pushes to deploy.", ui.InputProps{ID: "base", Mono: true, Required: true})
-					<div>
-						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "plus"}) {
-							Create GitHub App
-						}
-					</div>
-				</form>
+				if s.Admin {
+					<form class="card-body grid gap-4 border-t border-line" method="post" action="/sources/github">
+						@ui.CSRF(s.CSRF)
+						<p class="text-sm text-ink-soft">
+							Creating the App takes two steps on GitHub: confirm its name, then choose which repositories it may read. You come back here in between.
+						</p>
+						@ui.TextField(appForm, "App name", "Shown on GitHub. It must be unique across GitHub.", ui.InputProps{ID: "name", Required: true, Attrs: templ.Attributes{"maxlength": "34"}})
+						@ui.TextField(appForm, "Organisation", "Leave empty to create the App under your own account.", ui.InputProps{ID: "organization", Mono: true, Placeholder: "acme"})
+						@ui.TextField(appForm, "This dashboard's address", "GitHub sends you back here, and sends push events here. It must be reachable from the internet for pushes to deploy.", ui.InputProps{ID: "base", Mono: true, Required: true})
+						<div>
+							@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "plus"}) {
+								Create GitHub App
+							}
+						</div>
+					</form>
+				} else {
+					if len(sources) == 0 {
+						<p class="card-body muted">No GitHub App yet. An Admin can create one.</p>
+					}
+				}
 			</section>
 			<section class="card" id="keys">
 				<div class="card-head">
@@ -92,29 +102,37 @@ templ Sources(s ui.Shell, sources []db.GitSource, keys []db.SSHKey, appForm, key
 									@ui.Icon("copy")
 									<span data-copy-label>Copy</span>
 								</button>
-								<form method="post" action={ templ.SafeURL("/sources/keys/" + k.ID + "/delete") }>
-									@ui.CSRF(s.CSRF)
-									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
-										Delete
-									}
-								</form>
+								if s.Admin {
+									<form method="post" action={ templ.SafeURL("/sources/keys/" + k.ID + "/delete") }>
+										@ui.CSRF(s.CSRF)
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+											Delete
+										}
+									</form>
+								}
 							</div>
 						}
 					</div>
 				}
-				<form class="card-foot" method="post" action="/sources/keys">
-					@ui.CSRF(s.CSRF)
-					<div class="min-w-0 flex-1">
-						<label class="sr-only" for="key_name">Name for the new deploy key</label>
-						@ui.Input(ui.InputProps{ID: "key_name", Placeholder: "shop repository", Required: true, Value: keyForm.V("key_name"), Invalid: keyForm.E("key_name") != "", Attrs: templ.Attributes{"maxlength": "60"}})
-						if keyForm.E("key_name") != "" {
-							<p class="field-error mt-1" id="key_name-error" role="alert">{ keyForm.E("key_name") }</p>
+				if s.Admin {
+					<form class="card-foot" method="post" action="/sources/keys">
+						@ui.CSRF(s.CSRF)
+						<div class="min-w-0 flex-1">
+							<label class="sr-only" for="key_name">Name for the new deploy key</label>
+							@ui.Input(ui.InputProps{ID: "key_name", Placeholder: "shop repository", Required: true, Value: keyForm.V("key_name"), Invalid: keyForm.E("key_name") != "", Attrs: templ.Attributes{"maxlength": "60"}})
+							if keyForm.E("key_name") != "" {
+								<p class="field-error mt-1" id="key_name-error" role="alert">{ keyForm.E("key_name") }</p>
+							}
+						</div>
+						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}) {
+							Create deploy key
 						}
-					</div>
-					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}) {
-						Create deploy key
+					</form>
+				} else {
+					if len(keys) == 0 {
+						<p class="card-body muted">No deploy key yet. An Admin can create one.</p>
 					}
-				</form>
+				}
 			</section>
 		</div>
 	}
