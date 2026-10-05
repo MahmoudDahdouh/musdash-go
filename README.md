@@ -62,7 +62,7 @@ The installer creates a `musdash` user, installs `/usr/local/bin/musdash` and tw
 4. For HTTPS, point a domain's DNS at the server and add it under the app's **Settings → Domains**. The certificate is issued on the first request.
 5. To put the dashboard itself on a domain with HTTPS, set it under **Settings**.
 
-Ports 80 and 443 must be reachable from the internet for certificates to be issued. Run the installer again with a newer binary to upgrade; apps keep serving while the control plane restarts.
+Ports 80 and 443 must be reachable from the internet for certificates to be issued. Run the installer again with a newer binary to upgrade. Apps keep running, and keep serving while the control plane restarts; but the proxy is the same binary and is restarted too, so new connections to apps are refused for about a second, and for up to fifteen when a long request (a download, a log stream) is under way, which the proxy lets finish first. Upgrade when that is acceptable.
 
 Use `musdash-linux-arm64` on ARM servers.
 

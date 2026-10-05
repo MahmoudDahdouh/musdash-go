@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -253,12 +252,7 @@ func runServer(args []string) error {
 	go operations.Run(ctx)
 
 	app := &web.Server{Cfg: cfg, DB: d, Box: box, Queue: queue, Deploy: deployer, Ops: operations, Pool: pool, Log: log, Pprof: *pprof, Closing: ctx}
-	srv := &http.Server{
-		Handler:           app.Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       90 * time.Second,
-		// No WriteTimeout: log and event streams stay open.
-	}
+	srv := web.HTTPServer(app.Handler())
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {
 		return err
