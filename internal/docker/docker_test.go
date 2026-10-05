@@ -18,11 +18,30 @@ func TestValidImage(t *testing.T) {
 		"nginx", "nginx:1.29-alpine", "library/nginx", "ghcr.io/acme/worker:4f2a91c",
 		"registry.example.com:5000/team/app:v1.2.3", "postgres:17", "localhost:5000/app",
 		"nginx@sha256:" + strings.Repeat("a", 64), "a/b/c/d:tag_1",
+		"nginx:1.29@sha256:" + strings.Repeat("a", 64),
+		// A registry by address, by a bare name with a port, in upper case
+		// (host names are), and localhost.
+		"127.0.0.1:5000/x", "10.0.0.5/x", "registry:5000/x", "Registry.Example.COM/team/app", "Foo/bar", "localhost/x",
+		"host:05000/x",
+		// A tag may be upper-case; a repository's words may be joined by
+		// one or two underscores.
+		"nginx:ALPINE", "my_image:1", "a__b", "a-b--c/d.e",
+		// What musdash names itself.
+		"musdash/abcdefghijkl:d-mnopqrstuvwx", "musdash/abcdefghijkl:4f2a91c0ffee", "musdash/nixpacks:1.41.0",
 	}
 	bad := []string{
 		"", "-nginx", "--privileged", "nginx --privileged", "nginx;rm -rf /", "nginx:", "nginx:-tag",
 		"NGINX/App", "nginx\n", "$(id)", "nginx:tag with space", "a//b", "nginx@sha256:short", "/nginx",
 		strings.Repeat("a", 300),
+		// Docker refuses these at the pull, which is after the deployment
+		// has started: a repository in upper case, with or without a
+		// registry before it, and separators that are none.
+		"NGINX:ALPINE", "NGINX", "foo/Bar", "a___b", "a..b", "a.-b", "a_.b/c", "a-/x", "a/-b", "nginx/",
+		// Not a host, not a port.
+		"host./x", "-host.io/x", ".io/x", "host:0/x", "host:99999/x", "host:/x", "host:5000x/y", "x/y:1:2",
+		// Docker would take these; they are refused as they always were.
+		"[::1]:5000/x", "my_reg.io/x",
+		"nginx@sha256:" + strings.Repeat("A", 64), "nginx@", "@sha256:" + strings.Repeat("a", 64), ":tag",
 	}
 	for _, ref := range good {
 		if !ValidImage(ref) {

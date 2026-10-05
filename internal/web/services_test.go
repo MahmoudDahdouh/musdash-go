@@ -90,7 +90,14 @@ func (a *app) waitService(id string) db.Service {
 		if err != nil {
 			a.t.Fatal(err)
 		}
-		if s.Status != db.AppDeploying {
+		// A deployment says "running" before it publishes the routes, so
+		// the job itself must have ended too: a test that then reads the
+		// routes file found it empty now and then.
+		var busy int
+		if err := a.db.QueryRow(`SELECT COUNT(*) FROM jobs WHERE kind = ? AND status IN ('queued', 'running')`, deploy.JobService).Scan(&busy); err != nil {
+			a.t.Fatal(err)
+		}
+		if s.Status != db.AppDeploying && busy == 0 {
 			return s
 		}
 		time.Sleep(10 * time.Millisecond)

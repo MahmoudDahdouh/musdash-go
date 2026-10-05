@@ -31,8 +31,8 @@ func (s *Server) tokenCreate(w http.ResponseWriter, r *http.Request) {
 	f.Set("token_name", name)
 	f.Set("token_ability", ability)
 	f.Set("token_expires", expires)
-	if name == "" || len(name) > 60 {
-		f.Fail("token_name", "Enter a name, up to 60 characters.")
+	if name == "" || len(name) > 60 || !plainText(name) {
+		f.Fail("token_name", labelProblem(name, "Enter a name, up to 60 characters."))
 	}
 	if ability != db.AbilityRead && ability != db.AbilityDeploy {
 		f.Fail("token_ability", "Choose what the token may do.")

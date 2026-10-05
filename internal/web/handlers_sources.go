@@ -172,7 +172,9 @@ func (s *Server) githubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pending.AppID, pending.Slug, pending.HTMLURL, pending.ClientID = res.ID, res.Slug, res.HTMLURL, res.ClientID
-	if res.Name != "" {
+	// GitHub's word for what the person typed there. It is shown like a
+	// name, so it is held to a name's rule.
+	if res.Name != "" && len(res.Name) <= 100 && plainText(res.Name) {
 		pending.Name = res.Name
 	}
 	for dst, plain := range map[*string]string{&pending.ClientSecret: res.ClientSecret, &pending.PrivateKey: res.PEM, &pending.WebhookSecret: res.WebhookSecret} {
@@ -242,8 +244,8 @@ func (s *Server) sshKeyCreate(w http.ResponseWriter, r *http.Request) {
 	var f ui.Form
 	name := strings.TrimSpace(r.PostFormValue("key_name"))
 	f.Set("key_name", name)
-	if name == "" || len(name) > 60 {
-		f.Fail("key_name", "Enter a name, up to 60 characters.")
+	if name == "" || len(name) > 60 || !plainText(name) {
+		f.Fail("key_name", labelProblem(name, "Enter a name, up to 60 characters."))
 		s.renderSources(w, r, http.StatusUnprocessableEntity, ui.Form{}, f, nil)
 		return
 	}

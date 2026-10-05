@@ -23,11 +23,11 @@ func projectForm(r *http.Request) (name, description string, f ui.Form) {
 	description = strings.TrimSpace(r.PostFormValue("description"))
 	f.Set("name", name)
 	f.Set("description", description)
-	if name == "" || len(name) > 60 {
-		f.Fail("name", "Enter a name, up to 60 characters.")
+	if name == "" || len(name) > 60 || !plainText(name) {
+		f.Fail("name", labelProblem(name, "Enter a name, up to 60 characters."))
 	}
-	if len(description) > 200 {
-		f.Fail("description", "Keep the description under 200 characters.")
+	if len(description) > 200 || !plainText(description) {
+		f.Fail("description", labelProblem(description, "Keep the description under 200 characters."))
 	}
 	return name, description, f
 }

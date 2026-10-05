@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/auth"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
@@ -28,6 +29,12 @@ func normalEmail(v string) (string, bool) {
 	}
 	a, err := mail.ParseAddress(v)
 	if err != nil || a.Address != v || !strings.Contains(v[strings.LastIndex(v, "@")+1:], ".") {
+		return v, false
+	}
+	// An address is shown, logged and returned by the API like a name, and
+	// has no use for a character nobody sees: with one, two addresses that
+	// read the same are two accounts.
+	if !plainText(v) || strings.ContainsFunc(v, func(r rune) bool { return unicode.Is(unicode.Cf, r) }) {
 		return v, false
 	}
 	return v, true
@@ -115,8 +122,8 @@ func (s *Server) setupSubmit(w http.ResponseWriter, r *http.Request) {
 	f.Set("name", name)
 	f.Set("email", email)
 
-	if name == "" || len(name) > 80 {
-		f.Fail("name", "Enter your name, up to 80 characters.")
+	if name == "" || len(name) > 80 || !plainText(name) {
+		f.Fail("name", labelProblem(name, "Enter your name, up to 80 characters."))
 	}
 	if !emailOK {
 		f.Fail("email", "Enter an email address like you@example.com.")
@@ -295,8 +302,8 @@ func (s *Server) accountProfile(w http.ResponseWriter, r *http.Request) {
 	email, emailOK := normalEmail(r.PostFormValue("email"))
 	f.Set("name", name)
 	f.Set("email", email)
-	if name == "" || len(name) > 80 {
-		f.Fail("name", "Enter your name, up to 80 characters.")
+	if name == "" || len(name) > 80 || !plainText(name) {
+		f.Fail("name", labelProblem(name, "Enter your name, up to 80 characters."))
 	}
 	if !emailOK {
 		f.Fail("email", "Enter an email address like you@example.com.")

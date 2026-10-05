@@ -55,19 +55,91 @@ type RunSpec struct {
 	Command []string
 }
 
+// The parts of an image reference, by Docker's grammar. None of them can
+// match anything that starts with "-", so a reference can never be read as
+// a flag.
 var (
-	// imageRE follows Docker's reference grammar: optional registry host and
-	// port, lower-case path components, optional tag, optional digest. It
-	// cannot match anything starting with "-", so an image name can never be
-	// read as a flag.
-	imageRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.-]*(:[0-9]+)?(/[a-z0-9]+([._-]+[a-z0-9]+)*)*(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(@sha256:[a-f0-9]{64})?$`)
+	// registryRE is a registry's host: labels of letters, digits and
+	// hyphens, with dots between. An IPv4 address is one too.
+	registryRE = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$`)
+	portRE     = regexp.MustCompile(`^[0-9]{1,8}$`)
+	// repoPartRE is one component of a repository's path: lower-case, its
+	// words joined by a dot, one or two underscores, or hyphens.
+	repoPartRE = regexp.MustCompile(`^[a-z0-9]+((\.|__?|-+)[a-z0-9]+)*$`)
+	tagRE      = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
+	digestRE   = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+
 	nameRE  = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
 	labelRE = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 )
 
 // ValidImage reports whether ref is a well-formed image reference.
+//
+// It reads the reference as Docker does, part by part, rather than by one
+// pattern: which part is the registry depends on what the first component
+// looks like. A single pattern had to let the first component be upper-case
+// in case it was a host, and so took NGINX:ALPINE, which Docker refuses at
+// the pull, after the deployment has started.
+//
+// It is asked again at every deployment, so it must not refuse what an app
+// may already be running from. Three things that Docker's own parser takes
+// are refused all the same. Two always were here: a registry written as an
+// IPv6 address in brackets, and an underscore in a registry's name. The
+// third is new: a port that is no port (0, 99999), which Docker reads and
+// then cannot pull from, so nothing runs from such a name.
 func ValidImage(ref string) bool {
-	return len(ref) <= 255 && imageRE.MatchString(ref)
+	if ref == "" || len(ref) > 255 {
+		return false
+	}
+	name := ref
+	if i := strings.IndexByte(name, '@'); i >= 0 {
+		if !digestRE.MatchString(name[i+1:]) {
+			return false
+		}
+		name = name[:i]
+	}
+	// A colon after the last slash starts the tag; one before it belongs
+	// to a registry's port.
+	if i := strings.LastIndexByte(name, ':'); i > strings.LastIndexByte(name, '/') {
+		if !tagRE.MatchString(name[i+1:]) {
+			return false
+		}
+		name = name[:i]
+	}
+	// The first component is a registry when it could not be anything
+	// else: it has a dot or a port, is localhost, or has an upper-case
+	// letter, which no repository has. Without a slash there is no
+	// registry at all.
+	repo := name
+	if i := strings.IndexByte(name, '/'); i >= 0 {
+		if first := name[:i]; strings.ContainsAny(first, ".:") || first == "localhost" || strings.ToLower(first) != first {
+			if !validRegistry(first) {
+				return false
+			}
+			repo = name[i+1:]
+		}
+	}
+	for _, part := range strings.Split(repo, "/") {
+		if !repoPartRE.MatchString(part) {
+			return false
+		}
+	}
+	return true
+}
+
+// validRegistry reports whether s is a registry's host, with or without a
+// port.
+func validRegistry(s string) bool {
+	host, port, hasPort := strings.Cut(s, ":")
+	if hasPort {
+		if !portRE.MatchString(port) {
+			return false
+		}
+		if n, _ := strconv.Atoi(port); n < 1 || n > 65535 {
+			return false
+		}
+	}
+	return registryRE.MatchString(host)
 }
 
 // ValidName reports whether s can name a container, network or volume.

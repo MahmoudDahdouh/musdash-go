@@ -131,8 +131,8 @@ func (s *Server) serverCreate(w http.ResponseWriter, r *http.Request) {
 		return v
 	}
 	server := db.Server{TeamID: teamID, Name: form("name"), Host: form("host"), SSHUser: form("ssh_user"), DataDir: form("data_dir")}
-	if server.Name == "" || len(server.Name) > 60 || strings.ContainsAny(server.Name, "\r\n\x00") {
-		f.Fail("name", "Enter a name of up to 60 characters.")
+	if server.Name == "" || len(server.Name) > 60 || !plainText(server.Name) {
+		f.Fail("name", labelProblem(server.Name, "Enter a name of up to 60 characters."))
 	}
 	if !validHost(server.Host) {
 		f.Fail("host", "Enter an IP address or a host name, without a port or a scheme.")
