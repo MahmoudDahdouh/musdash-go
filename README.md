@@ -245,7 +245,7 @@ The account made at setup is the team's first Owner. Others join by invitation: 
 | See servers, sources and deploy keys | yes | yes | yes |
 | Add, change or remove servers, sources and deploy keys | | yes | yes |
 | Settings: dashboard domain, backup storage, notifications | | yes | yes |
-| Team and server variables | names only | yes | yes |
+| Team and server variables | use by name | change | change |
 | Invite, cancel an invitation, rename the team | | Members | Members and Admins |
 | Remove a member, make them a password reset link, turn off their second step | | Members | anybody else |
 | Change a role | | | yes |
@@ -283,6 +283,7 @@ MAIL_URL=smtp://{{team.SMTP_HOST}}:587
 ```
 
 - Nothing reaches a container that did not name it.
+- Team and server variables are changed by Admins, and their values are shown only to Admins. That is not secrecy from Members: a Member can name one in an app they deploy, and the app then reads it. Keep there what the whole team may use.
 - The name is replaced at each deployment with the value stored then, so a changed value takes effect at the next deploy. A preview resolves the names as its app does.
 - A deployment that names a variable which does not exist fails and says which. Saving an app's variables warns about such names.
 - Only this exact form is read. `{{ .Name }}` and the like, for a template engine, are left alone. A shared variable's own value cannot name another one.

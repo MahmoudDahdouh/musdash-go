@@ -125,10 +125,13 @@ func TestSharedVariablesByRole(t *testing.T) {
 		if !strings.Contains(body, refused) {
 			t.Errorf("%s: not refused for the role", page)
 		}
-		// An Admin sees and saves.
+		// An Admin sees and saves, and is told who else can use them.
 		_, body = ad.get(page)
 		if !strings.Contains(body, "owner-set-secret") {
 			t.Errorf("%s does not show an Admin the value", page)
+		}
+		if !strings.Contains(body, "Every member can use these") {
+			t.Errorf("%s does not say that members can use these", page)
 		}
 		res, _ = ad.post(page, url.Values{"vars": {"TOKEN=admin-set"}})
 		wantRedirect(t, res, page)

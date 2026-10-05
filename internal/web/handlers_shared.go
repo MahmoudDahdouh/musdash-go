@@ -33,7 +33,7 @@ func (s *Server) sharedTeam(w http.ResponseWriter, r *http.Request) (sharedTarge
 		scope: db.ScopeTeam, id: sessionFrom(r).TeamID, active: "team",
 		view: pages.SharedView{
 			Title: "Team", Intro: "Who can sign in to this musdash, and what each of them may do.",
-			Scope: db.ScopeTeam, Action: "/team/variables", CanEdit: may(r, admin),
+			Scope: db.ScopeTeam, Action: "/team/variables", CanEdit: may(r, admin), AdminSet: true,
 			Tabs: pages.TeamTabs(), TabActive: "variables",
 		},
 	}, true
@@ -94,13 +94,19 @@ func (s *Server) sharedServer(w http.ResponseWriter, r *http.Request) (sharedTar
 		crumbs: []ui.Crumb{{Label: "Servers", Href: "/servers"}, {Label: server.Name + " variables"}},
 		view: pages.SharedView{
 			Title: "Variables of " + server.Name, Intro: "Shared by everything that runs on this server.",
-			Scope: db.ScopeServer, Action: "/servers/" + server.ID + "/variables", CanEdit: may(r, admin),
+			Scope: db.ScopeServer, Action: "/servers/" + server.ID + "/variables", CanEdit: may(r, admin), AdminSet: true,
 		},
 	}, true
 }
 
 // renderShared draws a scope's page. A reader who may not change the
 // variables is given their names; the values are not opened for them.
+//
+// That keeps a value off a page its reader cannot edit. It does not keep
+// the value from them: a Member may name a team or server variable in an
+// app they deploy, which is what those variables are for, and the app
+// reads it. Refusing such names to Members would take shared variables
+// away from the people who deploy; the page tells the Admin instead.
 func (s *Server) renderShared(w http.ResponseWriter, r *http.Request, status int, t sharedTarget, f ui.Form) {
 	sealed, err := s.DB.SharedVars(r.Context(), sessionFrom(r).TeamID, t.scope, t.id)
 	if err != nil {
