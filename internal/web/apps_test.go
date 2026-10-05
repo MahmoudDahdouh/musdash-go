@@ -233,8 +233,21 @@ func TestAppEnvironmentIsSealed(t *testing.T) {
 			t.Fatal("a value is stored in plain text")
 		}
 	}
+	// The tab lists the names and holds no value until one is asked for.
 	_, body = a.get(page)
-	if !strings.Contains(body, "DATABASE_URL=postgres://u:hunter2@db/app") {
+	if !strings.Contains(body, "DATABASE_URL") || strings.Contains(body, "hunter2") {
+		t.Fatal("the tab should list the names and no value")
+	}
+	if !strings.Contains(body, `hx-get="`+page+`/values"`) {
+		t.Fatal("the tab has no way to ask for the values")
+	}
+	if _, body = a.get(page + "/values"); !strings.Contains(body, "postgres://u:hunter2@db/app") || strings.Contains(body, "<html") {
+		t.Fatal("asking for the values does not answer with the list and its values")
+	}
+	if _, body = a.get(page + "/values?hide=1"); strings.Contains(body, "hunter2") || !strings.Contains(body, "DATABASE_URL") {
+		t.Fatal("hiding the values still sends one")
+	}
+	if _, body = a.get(page + "/edit"); !strings.Contains(body, "DATABASE_URL=postgres://u:hunter2@db/app") {
 		t.Fatal("the editor does not show the saved value")
 	}
 }

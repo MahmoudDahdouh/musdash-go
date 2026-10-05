@@ -509,29 +509,6 @@ templ AppLogs(s ui.Shell, v AppView) {
 	}
 }
 
-templ AppEnvironment(s ui.Shell, v AppView, f ui.Form) {
-	@appFrame(s, v, "environment") {
-		<div class="max-w-3xl">
-			@ui.FormCard("Environment variables", "Stored encrypted. Changes apply on the next deploy.", v.base()+"/environment", s.CSRF, "Save variables") {
-				@ui.Field(ui.FieldProps{Label: "Variables", For: "vars", Hint: "Given to the running app. One NAME=value per line. Lines starting with # are ignored.", Error: f.E("vars")}) {
-					@ui.Textarea(ui.InputProps{ID: "vars", Mono: true, Rows: 12, Value: f.V("vars"), Invalid: f.E("vars") != "", Described: true, Placeholder: "DATABASE_URL=postgres://…\nNODE_ENV=production"})
-				}
-				if v.App.Source == db.SourceGit {
-					@ui.Field(ui.FieldProps{Label: "Build-time variables", For: "build_vars", Hint: "Given to the image build as build arguments, where the Dockerfile reads them with ARG. They are not given to the running app. Nixpacks and Railpack take their settings here: NIXPACKS_START_CMD, NIXPACKS_BUILD_CMD, RAILPACK_START_CMD, RAILPACK_BUILD_CMD and the like.", Error: f.E("build_vars")}) {
-						@ui.Textarea(ui.InputProps{ID: "build_vars", Mono: true, Rows: 5, Value: f.V("build_vars"), Invalid: f.E("build_vars") != "", Described: true, Placeholder: "NPM_TOKEN=…"})
-					}
-				}
-				<p class="text-sm text-ink-soft">
-					A value can come from a shared variable: write
-					<span class="code">{ "{{team.NAME}}" }</span>, <span class="code">{ "{{project.NAME}}" }</span>, <span class="code">{ "{{environment.NAME}}" }</span> or <span class="code">{ "{{server.NAME}}" }</span>
-					as the value or inside it. Shared variables are kept under
-					<a href="/team/variables">Team</a>, the <a href={ templ.SafeURL("/projects/" + v.Project.ID + "/settings#variables") }>project's settings</a> and <a href="/servers">Servers</a>.
-				</p>
-			}
-		</div>
-	}
-}
-
 func storageKindLabel(kind string) string {
 	switch kind {
 	case db.StorageVolume:

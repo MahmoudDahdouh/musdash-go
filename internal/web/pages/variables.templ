@@ -1,0 +1,185 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// VarGroup is one list of variables on a VarsCard, under its own heading
+// when the card has more than one.
+type VarGroup struct {
+	Title string
+	Vars  []db.EnvVar
+}
+
+// VarsCard is a list of variables that keeps their values to itself. The
+// page it is first drawn on holds names only: Vars carry no values then,
+// and Shown is false. "Show values" fetches the card again from Values,
+// with the values; "Hide values" fetches it without. Editing is a page of
+// its own (Edit), because an editor has to hold the values.
+type VarsCard struct {
+	ID     string // element id, unique on the page
+	Title  string
+	Intro  string
+	Groups []VarGroup
+	Shown  bool
+	Values string // answers with this card; "?hide=1" for names only
+	Edit   string
+}
+
+func (c VarsCard) count() int {
+	n := 0
+	for _, g := range c.Groups {
+		n += len(g.Vars)
+	}
+	return n
+}
+
+func varCount(n int) string {
+	if n == 0 {
+		return "None"
+	}
+	return strconv.Itoa(n) + " set"
+}
+
+templ Variables(c VarsCard) {
+	<section class="card" id={ c.ID }>
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">{ c.Title }</h2>
+				if c.Intro != "" {
+					<p class="muted text-sm">{ c.Intro }</p>
+				}
+			</div>
+			<div class="flex flex-none items-center gap-2">
+				if c.count() > 0 {
+					if c.Shown {
+						<button type="button" class="btn btn-secondary btn-sm" hx-get={ c.Values + "?hide=1" } hx-target={ "#" + c.ID } hx-swap="outerHTML">
+							@ui.Icon("eye-off")
+							Hide values
+						</button>
+					} else {
+						<button type="button" class="btn btn-secondary btn-sm" hx-get={ c.Values } hx-target={ "#" + c.ID } hx-swap="outerHTML">
+							@ui.Icon("eye")
+							Show values
+						</button>
+					}
+				}
+				@ui.LinkButton(c.Edit, ui.ButtonProps{Small: true, Icon: "pencil"}) {
+					Edit
+				}
+			</div>
+		</div>
+		for i, g := range c.Groups {
+			if g.Title != "" {
+				<h3 class={ "px-4 pt-3 font-semibold", templ.KV("border-t border-line", i > 0) }>{ g.Title } <span class="muted font-normal">· { varCount(len(g.Vars)) }</span></h3>
+			}
+			if len(g.Vars) == 0 {
+				<p class="card-body muted">None yet.</p>
+			} else {
+				@ui.Table("Name", "Value") {
+					for _, v := range g.Vars {
+						<tr>
+							<td class="fact whitespace-nowrap">{ v.Key }</td>
+							if c.Shown {
+								<td class="fact break-all whitespace-pre-wrap">{ v.Value }</td>
+							} else {
+								<td class="fact text-ink-mute">{ ui.Masked }</td>
+							}
+						</tr>
+					}
+				}
+			}
+		}
+	</section>
+}
+
+// sharedHowTo is the paragraph the variable editors share about taking a
+// value from a shared variable.
+templ sharedHowTo(projectID string) {
+	<p class="text-sm text-ink-soft">
+		A value can come from a shared variable: write
+		<span class="code">{ "{{team.NAME}}" }</span>, <span class="code">{ "{{project.NAME}}" }</span>, <span class="code">{ "{{environment.NAME}}" }</span> or <span class="code">{ "{{server.NAME}}" }</span>
+		as the value or inside it. Shared variables are kept under
+		<a href="/team/variables">Team</a>, the <a href={ templ.SafeURL("/projects/" + projectID + "/settings#variables") }>project's settings</a> and <a href="/servers">Servers</a>.
+	</p>
+}
+
+// AppEnvironment is an app's Environment tab: its variables by name, their
+// values not shown until asked for.
+templ AppEnvironment(s ui.Shell, v AppView, c VarsCard) {
+	@appFrame(s, v, "environment") {
+		<div class="grid max-w-3xl gap-4">
+			@Variables(c)
+			<p class="muted text-sm">Values are stored encrypted and are not sent to this page until you ask for them. Changes apply on the next deploy.</p>
+		</div>
+	}
+}
+
+// AppEnvironmentEdit is the editor of an app's variables. It holds their
+// values, which is why it is a page a person goes to and not the tab itself.
+templ AppEnvironmentEdit(s ui.Shell, v AppView, f ui.Form) {
+	@appFrame(s, v, "environment") {
+		<div class="max-w-3xl">
+			<form class="card" method="post" action={ templ.SafeURL(v.base() + "/environment") }>
+				@ui.CSRF(s.CSRF)
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Edit environment variables</h2>
+						<p class="muted text-sm">Stored encrypted. Changes apply on the next deploy.</p>
+					</div>
+				</div>
+				<div class="card-body grid gap-4">
+					@ui.Field(ui.FieldProps{Label: "Variables", For: "vars", Hint: "Given to the running app. One NAME=value per line. Lines starting with # are ignored.", Error: f.E("vars")}) {
+						@ui.Textarea(ui.InputProps{ID: "vars", Mono: true, Rows: 12, Value: f.V("vars"), Invalid: f.E("vars") != "", Described: true, Placeholder: "DATABASE_URL=postgres://…\nNODE_ENV=production"})
+					}
+					if v.App.Source == db.SourceGit {
+						@ui.Field(ui.FieldProps{Label: "Build-time variables", For: "build_vars", Hint: "Given to the image build as build arguments, where the Dockerfile reads them with ARG. They are not given to the running app. Nixpacks and Railpack take their settings here: NIXPACKS_START_CMD, NIXPACKS_BUILD_CMD, RAILPACK_START_CMD, RAILPACK_BUILD_CMD and the like.", Error: f.E("build_vars")}) {
+							@ui.Textarea(ui.InputProps{ID: "build_vars", Mono: true, Rows: 5, Value: f.V("build_vars"), Invalid: f.E("build_vars") != "", Described: true, Placeholder: "NPM_TOKEN=…"})
+						}
+					}
+					@sharedHowTo(v.Project.ID)
+				</div>
+				<div class="card-foot">
+					@ui.LinkButton(v.base()+"/environment", ui.ButtonProps{}) {
+						Cancel
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+						Save variables
+					}
+				</div>
+			</form>
+		</div>
+	}
+}
+
+// ServiceVariablesField is the variables part of a service's Compose form.
+// Until asked for, it is a count and a button, and a hidden field that
+// tells the server to leave the stored variables as they are; Show swaps in
+// the text box with the values.
+templ ServiceVariablesField(v ServiceView, f ui.Form, variables string, shown bool, count int) {
+	<div id="service-variables">
+		if shown {
+			@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the ${NAME} references in the file, other than the generated ones. One NAME=value per line. Stored encrypted. A value can name a shared variable, such as {{project.NAME}}.", Error: f.E("variables")}) {
+				@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 5, Value: variables, Invalid: f.E("variables") != "", Described: true})
+			}
+		} else {
+			<input type="hidden" name="variables_kept" value="1"/>
+			<div class="field">
+				<span class="field-label">Variables</span>
+				<p class="field-hint">{ varCount(count) }. Their values are not shown, and saving leaves them as they are, until you ask for them.</p>
+				if f.E("variables") != "" {
+					<p class="field-error" role="alert">{ f.E("variables") }</p>
+				}
+				<div>
+					<button type="button" class="btn btn-secondary btn-sm" hx-get={ v.base() + "/compose/variables" } hx-target="#service-variables" hx-swap="outerHTML">
+						@ui.Icon("eye")
+						Show and edit
+					</button>
+				</div>
+			</div>
+		}
+	</div>
+}

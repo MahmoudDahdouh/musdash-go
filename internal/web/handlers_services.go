@@ -436,18 +436,31 @@ func (s *Server) serviceLogsStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderServiceCompose(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, f ui.Form) {
-	composeText, variables := v.Service.Compose, ""
+	composeText := v.Service.Compose
 	if _, submitted := f.Values["compose"]; submitted {
-		composeText, variables = f.V("compose"), f.V("variables")
-	} else if _, entered, _, err := s.serviceValues(v.Service); err == nil {
-		variables = deploy.FormatEnv(entered)
+		composeText = f.V("compose")
 	}
-	s.renderServiceComposeGit(w, r, status, v, f, composeText, variables, ui.Form{})
+	s.renderServiceComposeGit(w, r, status, v, f, composeText, ui.Form{})
+}
+
+// serviceComposeVariables answers "Show and edit" on the Compose tab: the
+// variables text box with what the person entered before.
+func (s *Server) serviceComposeVariables(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
+	_, entered, _, err := s.serviceValues(v.Service)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, pages.ServiceVariablesField(v, ui.Form{}, deploy.FormatEnv(entered), true, len(entered)))
 }
 
 // renderServiceComposeGit is renderServiceCompose with the state of the
 // forms only a service from Git has.
-func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, f ui.Form, composeText, variables string, src ui.Form) {
+func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, f ui.Form, composeText string, src ui.Form) {
 	var git *pages.ServiceGit
 	if v.Service.FromGit() {
 		choices, err := s.gitChoices(r)
@@ -457,7 +470,16 @@ func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request,
 		}
 		git = &pages.ServiceGit{Choices: choices, Source: src}
 	}
-	s.render(w, r, status, pages.ServiceCompose(s.serviceShell(w, r, v), v, f, composeText, variables, git))
+	// The variables are in the page only when the person typed them into
+	// the form that is coming back. Otherwise it gets their number.
+	variables, typed := f.Values["variables"]
+	count := 0
+	if !typed {
+		if _, entered, _, err := s.serviceValues(v.Service); err == nil {
+			count = len(entered)
+		}
+	}
+	s.render(w, r, status, pages.ServiceCompose(s.serviceShell(w, r, v), v, f, composeText, variables, typed, count, git))
 }
 
 // serviceSourceSave stores where a Git service's Compose file comes from.
@@ -489,8 +511,7 @@ func (s *Server) serviceSourceSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		_, entered, _, _ := s.serviceValues(v.Service)
-		s.renderServiceComposeGit(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, v.Service.Compose, deploy.FormatEnv(entered), f)
+		s.renderServiceComposeGit(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, v.Service.Compose, f)
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Source saved. Deploy to read the file from there.")
@@ -573,9 +594,21 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 		checkCompose(&f, svc.Compose)
 	}
 	f.Set("compose", svc.Compose)
-	f.Set("variables", r.PostFormValue("variables"))
 	f.Set("connect_env", r.PostFormValue("connect_env"))
-	entered := parseServiceVariables(&f, r.PostFormValue("variables"))
+	// The page did not hold the variables unless the person asked for
+	// them: a form sent without them leaves what is stored as it is.
+	variables := r.PostFormValue("variables")
+	if r.PostFormValue("variables_kept") == "1" {
+		_, kept, _, err := s.serviceValues(v.Service)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		variables = deploy.FormatEnv(kept)
+	} else {
+		f.Set("variables", variables)
+	}
+	entered := parseServiceVariables(&f, variables)
 	if !f.OK() {
 		s.renderServiceCompose(w, r, http.StatusUnprocessableEntity, v, f)
 		return

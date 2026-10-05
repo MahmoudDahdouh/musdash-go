@@ -387,7 +387,10 @@ func shortCommit(c string) string {
 	return c
 }
 
-templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables string, git *ServiceGit) {
+// ServiceCompose is a service's Compose tab. Its variables are part of the
+// form but not of the page: showVars says the person typed them and the
+// form came back, and varCount how many are stored otherwise.
+templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables string, showVars bool, varCount int, git *ServiceGit) {
 	@serviceFrame(s, v, "compose") {
 		<div class="grid max-w-3xl gap-6">
 			<form class="card" method="post" action={ templ.SafeURL(v.base() + "/compose") }>
@@ -422,9 +425,7 @@ templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variable
 							@ui.Textarea(ui.InputProps{ID: "compose", Mono: true, Rows: 22, Required: true, Value: composeText, Invalid: f.E("compose") != "", Described: true, Attrs: templ.Attributes{"wrap": "off"}})
 						}
 					}
-					@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the ${NAME} references in the file, other than the generated ones. One NAME=value per line. Stored encrypted. A value can name a shared variable, such as {{project.NAME}}.", Error: f.E("variables")}) {
-						@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 5, Value: variables, Invalid: f.E("variables") != "", Described: true})
-					}
+					@ServiceVariablesField(v, f, variables, showVars, varCount)
 					<div>
 						@ui.Checkbox("connect_env", checked(f, "connect_env", v.Service.ConnectEnv), nil) {
 							Connect to the environment's network, so its containers and the apps and databases in { v.Env.Name } reach each other by name

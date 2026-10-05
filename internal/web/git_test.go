@@ -243,7 +243,10 @@ func TestBuildTimeVariables(t *testing.T) {
 		}
 	}
 	_, body = a.get(page)
-	if !strings.Contains(body, "NPM_TOKEN=s3cret") || !strings.Contains(body, "PORT=3000") {
+	if !strings.Contains(body, "Given to the build") || !strings.Contains(body, "NPM_TOKEN") || strings.Contains(body, "s3cret") {
+		t.Fatal("the tab should list both groups by name and no value")
+	}
+	if _, body = a.get(page + "/edit"); !strings.Contains(body, "NPM_TOKEN=s3cret") || !strings.Contains(body, "PORT=3000") {
 		t.Fatal("the editor does not show both blocks")
 	}
 }
@@ -898,7 +901,7 @@ func TestPullRequestsThroughAGitHubApp(t *testing.T) {
 		res, _ := a.post(token, "/apps/"+child.ID+post, url.Values{"vars": {"X=1"}, "host": {"x.example.com"}, "name": {"renamed"}})
 		wantRedirect(t, res, "/apps/"+child.ID)
 	}
-	for _, get := range []string{"/environment", "/storage", "/tasks", "/webhook-secret"} {
+	for _, get := range []string{"/environment", "/environment/values", "/environment/edit", "/storage", "/tasks", "/webhook-secret"} {
 		if res, _ := a.get("/apps/" + child.ID + get); res.StatusCode != http.StatusSeeOther {
 			t.Errorf("GET %s on a preview: %d", get, res.StatusCode)
 		}

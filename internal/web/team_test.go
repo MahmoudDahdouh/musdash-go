@@ -149,6 +149,13 @@ func TestTeamOwnedRoutesNeedAnAdmin(t *testing.T) {
 			want = admin
 		case under("/servers") && changes, under("/team") && changes:
 			want = admin
+		case strings.HasSuffix(path, "/variables/values"), strings.HasSuffix(path, "/variables/edit"):
+			// Reading a value is as much as changing it. A project's and
+			// an environment's are a Member's to change.
+			if !under("/servers") && !under("/team") {
+				continue
+			}
+			want = admin
 		case under("/sources") && (changes || path == "/sources/github/callback"):
 			want = admin
 		default:

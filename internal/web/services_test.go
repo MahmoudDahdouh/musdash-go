@@ -330,17 +330,30 @@ func TestEditServiceComposeAndVariables(t *testing.T) {
 	before, _ := a.server.Deploy.ServiceVariables(s)
 	composePage := "/services/" + s.ID + "/compose"
 
-	// The page shows the file and the person's own variables, not the
-	// generated ones.
+	// The page shows the file. The person's own variables are sent when
+	// asked for, and the generated ones not at all.
 	_, page := a.get(composePage)
 	page = html.UnescapeString(page)
-	if !strings.Contains(page, "SERVICE_FQDN_FRONT_3000") || !strings.Contains(page, "API_KEY=k-123") || strings.Contains(page, before["SERVICE_PASSWORD_DB"]) {
-		t.Fatal("the Compose page does not show the file and the entered variables only")
+	if !strings.Contains(page, "SERVICE_FQDN_FRONT_3000") || strings.Contains(page, "k-123") || strings.Contains(page, before["SERVICE_PASSWORD_DB"]) {
+		t.Fatal("the Compose page should show the file and no variable's value")
+	}
+	if !strings.Contains(page, `name="variables_kept"`) || !strings.Contains(page, `hx-get="`+composePage+`/variables"`) {
+		t.Fatal("the Compose page has no way to ask for the variables")
+	}
+	_, field := a.get(composePage + "/variables")
+	if !strings.Contains(field, "API_KEY=k-123") || strings.Contains(field, "variables_kept") || strings.Contains(field, before["SERVICE_PASSWORD_DB"]) {
+		t.Fatalf("asking for the variables does not answer with the entered ones only:\n%s", field)
+	}
+	// A form sent from the page as it first was changes no variable.
+	res, _ := a.post(composePage, composePage, url.Values{"compose": {ownCompose}, "variables_kept": {"1"}})
+	wantRedirect(t, res, composePage)
+	if kept, _ := a.server.Deploy.ServiceVariables(s); kept["API_KEY"] != "k-123" || kept["SERVICE_PASSWORD_DB"] != before["SERVICE_PASSWORD_DB"] {
+		t.Fatalf("a form without the variables changed them: %v", kept)
 	}
 
 	// A change: one more generated value, a changed entered one, connected.
 	changed := strings.Replace(ownCompose, "- REGION=${REGION:-eu}", "- REGION=${REGION:-eu}\n      - SESSION=${SERVICE_BASE64_SESSION}", 1)
-	res, _ := a.post(composePage, composePage, url.Values{"compose": {strings.ReplaceAll(changed, "\n", "\r\n")}, "variables": {"API_KEY=k-456\nREGION=us"}, "connect_env": {"1"}})
+	res, _ = a.post(composePage, composePage, url.Values{"compose": {strings.ReplaceAll(changed, "\n", "\r\n")}, "variables": {"API_KEY=k-456\nREGION=us"}, "connect_env": {"1"}})
 	wantRedirect(t, res, composePage)
 	got, _ := a.db.ServiceByID(ctx, s.ID)
 	after, _ := a.server.Deploy.ServiceVariables(got)

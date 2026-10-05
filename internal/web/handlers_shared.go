@@ -99,44 +99,98 @@ func (s *Server) sharedServer(w http.ResponseWriter, r *http.Request) (sharedTar
 	}, true
 }
 
-// renderShared draws a scope's page. A reader who may not change the
-// variables is given their names; the values are not opened for them.
+// sharedVars lists a scope's variables. Their values are opened only when
+// asked for, and never for a reader who may not change them.
+func (s *Server) sharedVars(r *http.Request, t sharedTarget, shown bool) ([]db.EnvVar, error) {
+	sealed, err := s.DB.SharedVars(r.Context(), sessionFrom(r).TeamID, t.scope, t.id)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]db.EnvVar, 0, len(sealed))
+	for _, v := range sealed {
+		value := ""
+		if shown && t.view.CanEdit {
+			if value, err = s.Box.OpenString(v.Value); err != nil {
+				return nil, errors.New("shared variable " + v.Key + " cannot be decrypted")
+			}
+		}
+		out = append(out, db.EnvVar{Key: v.Key, Value: value})
+	}
+	return out, nil
+}
+
+func sharedCard(t sharedTarget, vars []db.EnvVar, shown bool) pages.VarsCard {
+	return pages.VarsCard{ID: "shared-vars", Title: "Variables", Shown: shown,
+		Intro:  "Stored encrypted. A resource gets the value that is here when it is deployed.",
+		Values: t.view.Action + "/values", Edit: t.view.Action + "/edit", Groups: []pages.VarGroup{{Vars: vars}}}
+}
+
+// sharedShow is the page of one scope's shared variables: their names. A
+// reader who may change them can ask for the values; one who may not is
+// given the names and no way to ask.
 //
 // That keeps a value off a page its reader cannot edit. It does not keep
 // the value from them: a Member may name a team or server variable in an
 // app they deploy, which is what those variables are for, and the app
 // reads it. Refusing such names to Members would take shared variables
 // away from the people who deploy; the page tells the Admin instead.
-func (s *Server) renderShared(w http.ResponseWriter, r *http.Request, status int, t sharedTarget, f ui.Form) {
-	sealed, err := s.DB.SharedVars(r.Context(), sessionFrom(r).TeamID, t.scope, t.id)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !t.view.CanEdit {
-		for _, v := range sealed {
-			t.view.Names = append(t.view.Names, v.Key)
-		}
-	} else if _, typed := f.Values["vars"]; !typed {
-		plain := make([]db.EnvVar, 0, len(sealed))
-		for _, v := range sealed {
-			value, err := s.Box.OpenString(v.Value)
-			if err != nil {
-				s.fail(w, r, errors.New("shared variable "+v.Key+" cannot be decrypted"))
-				return
-			}
-			plain = append(plain, db.EnvVar{Key: v.Key, Value: value})
-		}
-		f.Set("vars", deploy.FormatEnv(plain))
-	}
-	s.render(w, r, status, pages.SharedVariables(s.shell(w, r, t.view.Title, t.active, t.crumbs...), t.view, f))
-}
-
-// sharedShow is the page of one scope's shared variables.
 func (s *Server) sharedShow(load sharedLoader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		t, ok := load(w, r)
+		if !ok {
+			return
+		}
+		vars, err := s.sharedVars(r, t, false)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		for _, v := range vars {
+			t.view.Names = append(t.view.Names, v.Key)
+		}
+		s.render(w, r, http.StatusOK, pages.SharedVariables(s.shell(w, r, t.view.Title, t.active, t.crumbs...), t.view, sharedCard(t, vars, false)))
+	}
+}
+
+// sharedValues answers Show values and Hide values. Its route asks for the
+// role that may change the scope's variables.
+func (s *Server) sharedValues(load sharedLoader) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		t, ok := load(w, r)
+		if !ok {
+			return
+		}
+		shown := r.URL.Query().Get("hide") == ""
+		vars, err := s.sharedVars(r, t, shown)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.render(w, r, http.StatusOK, pages.Variables(sharedCard(t, vars, shown && t.view.CanEdit)))
+	}
+}
+
+// renderSharedEdit draws a scope's editor, which holds the values.
+func (s *Server) renderSharedEdit(w http.ResponseWriter, r *http.Request, status int, t sharedTarget, f ui.Form) {
+	if _, typed := f.Values["vars"]; !typed {
+		vars, err := s.sharedVars(r, t, true)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		f.Set("vars", deploy.FormatEnv(vars))
+	}
+	crumbs := append(append([]ui.Crumb{}, t.crumbs...), ui.Crumb{Label: "Edit"})
+	if n := len(crumbs); n >= 2 {
+		crumbs[n-2].Href = t.view.Action
+	}
+	s.render(w, r, status, pages.SharedVariablesEdit(s.shell(w, r, t.view.Title, t.active, crumbs...), t.view, f))
+}
+
+func (s *Server) sharedEdit(load sharedLoader) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if t, ok := load(w, r); ok {
-			s.renderShared(w, r, http.StatusOK, t, ui.Form{})
+			s.renderSharedEdit(w, r, http.StatusOK, t, ui.Form{})
 		}
 	}
 }
@@ -169,7 +223,7 @@ func (s *Server) sharedSave(load sharedLoader) http.HandlerFunc {
 			}
 		}
 		if !f.OK() {
-			s.renderShared(w, r, http.StatusUnprocessableEntity, t, f)
+			s.renderSharedEdit(w, r, http.StatusUnprocessableEntity, t, f)
 			return
 		}
 		for i := range vars {
