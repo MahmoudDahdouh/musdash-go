@@ -163,6 +163,30 @@ func (s *Server) handle(mux *http.ServeMux, pattern string, who access, h http.H
 ### Task 6 — End
 - [ ] Independent review; README and CLAUDE.md; RSS on Linux.
 
+## Outcome
+
+- **Done when:** a Member cannot delete a server (`TestMemberCannotDeleteAServer`: refused with a 403 for the role, the server still there, and an Admin can), and the API can trigger a deploy (`TestAPIReadsAndOperates`: a token that may deploy starts a deployment, which is followed to `success` through the API; a token that may only read is refused at every route that starts or stops something).
+- Every route is in one table with who may call it. `TestRouteTableRefusesByRole` walks it as a Member and as an Admin and checks each is refused exactly where the table says; `TestTeamOwnedRoutesNeedAnAdmin` pins what the table says for Servers, Sources, Settings and Team, so a route added there is not left to Members by default.
+- Idle memory on Linux, five runs: server 21 to 23 MB, proxy 15 to 16 MB. Unchanged from phase 7: the phase adds two limiter tables (bounded) and no goroutine.
+- No new module: TOTP is `crypto/hmac` and `crypto/sha1`, checked against the vectors of RFC 6238.
+- Found while building it:
+  - With one team, an invitation is always for somebody without an account, so accepting one is creating one. The case of "an existing account joins" does not exist, and with it went the question of whose email an invitation is bound to.
+  - An account in no team could not sign in and could not be invited again. Removing a member deletes the account.
+  - The first design let an Admin invite an Admin while not letting one make an Admin by changing a role. Invitations follow the same line now.
+  - A table that says who may call each route proves only that the table is enforced, not that it is right: loosening an entry loosened the test's expectation with it. Hence the second test, which states the rule for the team's own addresses independently.
+  - The same number for the API's limit by address and by token meant a token's own limit could never be reached from one address. The address's allowance is five times a token's.
+  - A text line in a template that starts with `for` or `if` is read by templ as a statement.
+- Not verifiable here, to check on a server:
+  - An authenticator app taking the key and its codes being accepted (the codes are the RFC's; the key is 160 bits in base32, the `otpauth://` link is as apps document it).
+  - Two people working at once in real browsers: a role changed or a member removed while they have pages open.
+- Narrower than the spec, on purpose (reasons in the decisions table):
+  - One team per install.
+  - The API reads and operates; it does not create or configure.
+  - No QR code for the second step's key.
+  - No outgoing mail: invitation and reset links are shown to whoever made them, to pass on.
+  - Databases are not tagged.
+- Built at the same time as phase 9, in the same repository. This phase is on `main`; phase 9 is on a branch of its own and will meet three things here when it is merged: migration `0013_access.sql` (its own planned migration needs the next number), the route table in `internal/web/server.go` (new routes are registered with `handle` and a role), and `ui.Shell`'s `Admin` and `Owner`.
+
 ## Review focus
 
 1. **A route a Member can reach that the table says they cannot** — the wrapper runs before the handler; the test walks the table. And the other way round: a route registered outside the table.
