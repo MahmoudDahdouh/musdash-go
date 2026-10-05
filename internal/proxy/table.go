@@ -8,13 +8,29 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"path"
+	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
-// Route says what the proxy does for one host name.
+// Route says what the proxy does for one host name, or for the part of it
+// under one path.
 type Route struct {
 	Host string `json:"host"`
+	// Path, when set, limits the route to that path and what is below it:
+	// "/api" takes "/api" and "/api/users", not "/apix". Of a host's routes
+	// the one with the longest matching path is used.
+	Path string `json:"path,omitempty"`
+	// StripPrefix removes Path from the request before it is passed on, so
+	// the app behind "/api" sees "/users" for "/api/users".
+	StripPrefix bool `json:"strip_prefix,omitempty"`
+	// AuthUser and AuthHash (bcrypt) put a user name and password in front
+	// of the route.
+	AuthUser string `json:"auth_user,omitempty"`
+	AuthHash string `json:"auth_hash,omitempty"`
 	// Target is the loopback address of the container's published port,
 	// such as "127.0.0.1:20417".
 	Target string `json:"target,omitempty"`
@@ -36,8 +52,12 @@ type File struct {
 // atomically, so a request never sees a half-updated one.
 type Table struct {
 	Email string
-	hosts map[string]Route
+	// hosts holds each host's routes, the longest path first.
+	hosts map[string][]Route
 }
+
+// maxAuthCost bounds the work one password check may cost the proxy.
+const maxAuthCost = 12
 
 // maxRoutesBytes bounds how much of routes.json is read.
 const maxRoutesBytes = 8 << 20
@@ -47,7 +67,7 @@ const maxRoutesBytes = 8 << 20
 func Load(path string) (*Table, error) {
 	f, err := os.Open(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return &Table{hosts: map[string]Route{}}, nil
+		return &Table{hosts: map[string][]Route{}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -69,19 +89,35 @@ func Parse(r io.Reader) (*Table, error) {
 	if err := json.Unmarshal(raw, &file); err != nil {
 		return nil, fmt.Errorf("routes file: %w", err)
 	}
-	t := &Table{Email: file.Email, hosts: make(map[string]Route, len(file.Routes))}
+	t := &Table{Email: file.Email, hosts: make(map[string][]Route, len(file.Routes))}
 	for i, rt := range file.Routes {
 		host := NormalizeHost(rt.Host)
 		if !ValidHost(host) {
 			return nil, fmt.Errorf("route %d: %q is not a valid host name", i, rt.Host)
 		}
-		if _, dup := t.hosts[host]; dup {
-			return nil, fmt.Errorf("route %d: host %q appears twice", i, host)
+		if !ValidPath(rt.Path) {
+			return nil, fmt.Errorf("route %d (%s): %q is not a valid path prefix", i, host, rt.Path)
+		}
+		for _, other := range t.hosts[host] {
+			if other.Path == rt.Path {
+				return nil, fmt.Errorf("route %d: %s%s appears twice", i, host, rt.Path)
+			}
+		}
+		if (rt.AuthUser == "") != (rt.AuthHash == "") {
+			return nil, fmt.Errorf("route %d (%s): a user name and a password hash go together", i, host)
+		}
+		if rt.AuthHash != "" {
+			cost, err := bcrypt.Cost([]byte(rt.AuthHash))
+			if err != nil || cost > maxAuthCost || strings.ContainsAny(rt.AuthUser, ":\r\n") {
+				return nil, fmt.Errorf("route %d (%s): bad user name or password hash", i, host)
+			}
 		}
 		rt.Host = host
 		switch {
 		case rt.RedirectTo != "" && rt.Target != "":
 			return nil, fmt.Errorf("route %d (%s): set target or redirect_to, not both", i, host)
+		case rt.RedirectTo != "" && rt.Path != "":
+			return nil, fmt.Errorf("route %d (%s): a redirect is for a whole host, not a path", i, host)
 		case rt.RedirectTo != "":
 			rt.RedirectTo = NormalizeHost(rt.RedirectTo)
 			if !ValidHost(rt.RedirectTo) || rt.RedirectTo == host {
@@ -92,15 +128,84 @@ func Parse(r io.Reader) (*Table, error) {
 				return nil, fmt.Errorf("route %d (%s): %w", i, host, err)
 			}
 		}
-		t.hosts[host] = rt
+		t.hosts[host] = append(t.hosts[host], rt)
+	}
+	for host, routes := range t.hosts {
+		// Longest path first, so the first match is the most specific.
+		sort.SliceStable(routes, func(i, j int) bool { return len(routes[i].Path) > len(routes[j].Path) })
+		// One certificate serves a whole host: if any of its paths wants
+		// HTTPS, all of them are served over it.
+		tls := false
+		for _, rt := range routes {
+			tls = tls || rt.TLS
+		}
+		for i := range routes {
+			routes[i].TLS = tls
+		}
+		t.hosts[host] = routes
 	}
 	return t, nil
 }
 
-// Lookup finds the route for a request's Host header.
-func (t *Table) Lookup(hostport string) (Route, bool) {
-	rt, ok := t.hosts[NormalizeHost(hostport)]
-	return rt, ok
+// ValidPath reports whether p can be a route's path prefix: empty for the
+// whole host, or an absolute path in its simplest form without a trailing
+// slash.
+func ValidPath(p string) bool {
+	if p == "" {
+		return true
+	}
+	if len(p) > 200 || !strings.HasPrefix(p, "/") || p == "/" || path.Clean(p) != p {
+		return false
+	}
+	for _, c := range p {
+		if c <= ' ' || c == 0x7f || c == '?' || c == '#' || c == '%' || c == '\\' {
+			return false
+		}
+	}
+	return true
+}
+
+// under reports whether a request path is the prefix or lies below it.
+func under(requestPath, prefix string) bool {
+	return prefix == "" || requestPath == prefix || strings.HasPrefix(requestPath, prefix+"/")
+}
+
+// Lookup finds the route for a request's Host header and path. The path
+// must be in its simplest form (see Plain); the proxy sends a client that
+// asked for anything else to that form first.
+func (t *Table) Lookup(hostport, requestPath string) (Route, bool) {
+	for _, rt := range t.hosts[NormalizeHost(hostport)] {
+		if under(requestPath, rt.Path) {
+			return rt, true
+		}
+	}
+	return Route{}, false
+}
+
+// Host reports whether a host is routed at all, whether it wants HTTPS,
+// and whether which of its routes serves a request depends on the path or
+// is guarded by a password.
+func (t *Table) Host(hostport string) (routed, tls, strict bool) {
+	routes := t.hosts[NormalizeHost(hostport)]
+	for _, rt := range routes {
+		tls = tls || rt.TLS
+		strict = strict || rt.Path != "" || rt.AuthUser != ""
+	}
+	return len(routes) > 0, tls, strict
+}
+
+// Plain returns a request path in its simplest form: no "." or ".."
+// segments and no doubled slashes. A trailing slash is kept, because it
+// means something to the app behind.
+func Plain(p string) string {
+	if p == "" {
+		return "/"
+	}
+	clean := path.Clean("/" + p)
+	if strings.HasSuffix(p, "/") && clean != "/" {
+		clean += "/"
+	}
+	return clean
 }
 
 // Len reports how many hosts are routed.

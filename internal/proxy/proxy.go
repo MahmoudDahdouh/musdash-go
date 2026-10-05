@@ -16,9 +16,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -49,13 +51,22 @@ type Proxy struct {
 	// https reports whether a TLS listener exists. Without one, hosts that
 	// ask for TLS are served over HTTP rather than redirected nowhere.
 	https bool
+	// auth checks the passwords of guarded routes.
+	auth *gate
 }
 
-type targetKey struct{}
+// upstream is where one request goes: the container's address and, when
+// the route's path was taken off the request, that path.
+type upstream struct {
+	target string
+	prefix string
+}
+
+type upstreamKey struct{}
 
 // New returns a proxy serving the routes in routesPath.
 func New(routesPath string, https bool, logger *slog.Logger) (*Proxy, error) {
-	p := &Proxy{log: logger, routes: routesPath, https: https}
+	p := &Proxy{log: logger, routes: routesPath, https: https, auth: newGate()}
 	if err := p.Reload(); err != nil {
 		return nil, err
 	}
@@ -64,10 +75,18 @@ func New(routesPath string, https bool, logger *slog.Logger) (*Proxy, error) {
 			// Rewrite starts from a request with every client-supplied
 			// X-Forwarded-* and Forwarded header removed, so the values set
 			// here cannot be spoofed.
+			up := pr.In.Context().Value(upstreamKey{}).(*upstream)
 			pr.Out.URL.Scheme = "http"
-			pr.Out.URL.Host = pr.In.Context().Value(targetKey{}).(string)
+			pr.Out.URL.Host = up.target
 			pr.Out.Host = pr.In.Host
 			pr.SetXForwarded()
+			// Not one of the headers Rewrite starts without, so it is set
+			// or removed here: an app must not read a client's value.
+			if up.prefix != "" {
+				pr.Out.Header.Set("X-Forwarded-Prefix", up.prefix)
+			} else {
+				pr.Out.Header.Del("X-Forwarded-Prefix")
+			}
 		},
 		Transport: &http.Transport{
 			DialContext:           (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
@@ -134,9 +153,8 @@ func (p *Proxy) Table() *Table { return p.table.Load() }
 // have HTTPS and serves the rest directly.
 func (p *Proxy) HTTP() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rt, ok := p.Table().Lookup(r.Host)
+		rt, ok := p.route(w, r)
 		if !ok {
-			noRoute(w)
 			return
 		}
 		if rt.TLS && p.https {
@@ -155,13 +173,43 @@ func (p *Proxy) HTTP() http.Handler {
 // HTTPS is the handler for the TLS listener.
 func (p *Proxy) HTTPS() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rt, ok := p.Table().Lookup(r.Host)
+		rt, ok := p.route(w, r)
 		if !ok {
-			noRoute(w)
 			return
 		}
 		p.serve(w, r, rt, "https")
 	})
+}
+
+// route finds the route for a request, and answers the request itself when
+// there is none.
+//
+// On a host where the path decides which route serves, or where a password
+// guards one, the path must be in its simplest form: a client that sends
+// "/public/../admin" or "//admin" is sent to "/admin" first. What is then
+// matched here is what the app receives, so a path cannot be one thing to
+// the proxy and another to the app behind it.
+func (p *Proxy) route(w http.ResponseWriter, r *http.Request) (Route, bool) {
+	t := p.Table()
+	routed, _, strict := t.Host(r.Host)
+	if !routed {
+		noRoute(w)
+		return Route{}, false
+	}
+	if strict {
+		if plain := Plain(r.URL.Path); plain != r.URL.Path {
+			// Built by url.URL so that nothing in the path (a backslash,
+			// say) can turn the redirect into one to another site.
+			to := url.URL{Path: plain, RawQuery: r.URL.RawQuery}
+			http.Redirect(w, r, to.String(), http.StatusPermanentRedirect)
+			return Route{}, false
+		}
+	}
+	rt, ok := t.Lookup(r.Host, r.URL.Path)
+	if !ok {
+		noRoute(w)
+	}
+	return rt, ok
 }
 
 func (p *Proxy) serve(w http.ResponseWriter, r *http.Request, rt Route, scheme string) {
@@ -169,13 +217,46 @@ func (p *Proxy) serve(w http.ResponseWriter, r *http.Request, rt Route, scheme s
 		http.Redirect(w, r, scheme+"://"+rt.RedirectTo+r.URL.RequestURI(), http.StatusPermanentRedirect)
 		return
 	}
-	p.rp.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), targetKey{}, rt.Target)))
+	if rt.AuthUser != "" {
+		switch p.auth.check(r, rt) {
+		case authOK:
+			// The password is the proxy's business; the app does not get it.
+			r.Header.Del("Authorization")
+		case authBusy:
+			w.Header().Set("Retry-After", "2")
+			http.Error(w, "Too many sign-in attempts at once. Try again in a moment.", http.StatusServiceUnavailable)
+			return
+		default:
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted", charset="UTF-8"`)
+			http.Error(w, "A user name and password are needed for this address.", http.StatusUnauthorized)
+			return
+		}
+	}
+	up := &upstream{target: rt.Target}
+	out := r.WithContext(context.WithValue(r.Context(), upstreamKey{}, up))
+	if rt.StripPrefix && rt.Path != "" {
+		up.prefix = rt.Path
+		u := *r.URL
+		u.Path = strings.TrimPrefix(u.Path, rt.Path)
+		if u.Path == "" {
+			u.Path = "/"
+		}
+		// The client's own encoding of the rest is kept when the prefix can
+		// be taken off it as it stands; otherwise the path is encoded anew.
+		if rest, ok := strings.CutPrefix(u.RawPath, rt.Path); ok && strings.HasPrefix(rest, "/") {
+			u.RawPath = rest
+		} else {
+			u.RawPath = ""
+		}
+		out.URL = &u
+	}
+	p.rp.ServeHTTP(w, out)
 }
 
 // hostPolicy lets certificates be requested only for routed hosts that asked
 // for TLS, so nobody can make the proxy request certificates for other names.
 func (p *Proxy) hostPolicy(_ context.Context, host string) error {
-	if rt, ok := p.Table().Lookup(host); ok && rt.TLS {
+	if _, tls, _ := p.Table().Host(host); tls {
 		return nil
 	}
 	return errors.New("proxy: no TLS route for host " + strconv.Quote(host))

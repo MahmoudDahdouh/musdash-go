@@ -38,6 +38,14 @@ func backend(t *testing.T, name string) (target string) {
 	return strings.TrimPrefix(srv.URL, "http://")
 }
 
+// backendFunc starts an upstream with a handler of the test's own.
+func backendFunc(t *testing.T, h http.HandlerFunc) (target string) {
+	t.Helper()
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return strings.TrimPrefix(srv.URL, "http://")
+}
+
 // request sends one request with the given Host header to a handler.
 func request(h http.Handler, method, host, path string, header http.Header) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, "http://"+host+path, nil)
@@ -251,7 +259,7 @@ func TestParseValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rt, ok := tab.Lookup("a.example.com:443"); !ok || !rt.TLS || tab.Email != "ops@example.com" {
+	if rt, ok := tab.Lookup("a.example.com:443", "/"); !ok || !rt.TLS || tab.Email != "ops@example.com" {
 		t.Fatalf("lookup failed: %+v %v", rt, ok)
 	}
 }

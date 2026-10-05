@@ -648,7 +648,7 @@ func TestBuildRoutesSkipsWhatTheProxyWouldRefuse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("one bad domain broke the whole file: %v", err)
 	}
-	if _, ok := tab.Lookup("good.example.com"); !ok || tab.Len() != 2 {
+	if _, ok := tab.Lookup("good.example.com", "/"); !ok || tab.Len() != 2 {
 		t.Fatalf("the good routes were not published: %d routes", tab.Len())
 	}
 }
