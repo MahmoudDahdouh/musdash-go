@@ -22,7 +22,7 @@ import (
 // gitForm is a valid New app form for a public repository.
 func gitForm(env db.Environment, name string) url.Values {
 	return url.Values{
-		"env": {env.ID}, "source": {"git"}, "name": {name}, "port": {"3000"},
+		"source": {"git"}, "name": {name}, "port": {"3000"},
 		"access": {"public"}, "repo": {"https://github.com/Acme/Shop"}, "branch": {"main"},
 		"build_pack": {"dockerfile"}, "auto_deploy": {"1"},
 	}
@@ -35,8 +35,8 @@ func (a *app) newGitApp(projectID string, env db.Environment, name string, extra
 	for k, v := range extra {
 		form[k] = v
 	}
-	page := "/projects/" + projectID + "/apps/new?env=" + env.ID + "&source=git"
-	res, body := a.post(page, "/projects/"+projectID+"/apps", form)
+	page := "/projects/" + projectID + "/e/" + env.ID + "/apps/new?source=git"
+	res, body := a.post(page, "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
 	if res.StatusCode != http.StatusSeeOther {
 		a.t.Fatalf("create git app: %d\n%s", res.StatusCode, body)
 	}
@@ -79,7 +79,7 @@ func TestCreateGitApp(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 
-	_, page := a.get("/projects/" + projectID + "/apps/new?env=" + env.ID + "&source=git")
+	_, page := a.get("/projects/" + projectID + "/e/" + env.ID + "/apps/new?source=git")
 	for _, want := range []string{"Git repository", `name="repo"`, `name="branch"`, "Nothing: the repository is public"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the Git form is missing %q", want)
@@ -131,13 +131,13 @@ func TestGitFormValidation(t *testing.T) {
 		{url.Values{"dockerfile_path": {"/etc/passwd"}}, "Enter a path inside the repository"},
 		{url.Values{"publish_dir": {"a;b"}}, "Enter a path inside the repository"},
 	}
-	page := "/projects/" + projectID + "/apps/new?env=" + env.ID + "&source=git"
+	page := "/projects/" + projectID + "/e/" + env.ID + "/apps/new?source=git"
 	for _, c := range cases {
 		form := gitForm(env, "web")
 		for k, v := range c.field {
 			form[k] = v
 		}
-		res, body := a.post(page, "/projects/"+projectID+"/apps", form)
+		res, body := a.post(page, "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
 		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(strings.ToLower(body), strings.ToLower(c.want)) {
 			t.Errorf("%v: status %d, want 422 with %q", c.field, res.StatusCode, c.want)
 		}
@@ -243,7 +243,10 @@ func TestBuildTimeVariables(t *testing.T) {
 		}
 	}
 	_, body = a.get(page)
-	if !strings.Contains(body, "NPM_TOKEN=s3cret") || !strings.Contains(body, "PORT=3000") {
+	if !strings.Contains(body, "Given to the build") || !strings.Contains(body, "NPM_TOKEN") || strings.Contains(body, "s3cret") {
+		t.Fatal("the tab should list both groups by name and no value")
+	}
+	if _, body = a.get(page + "/edit"); !strings.Contains(body, "NPM_TOKEN=s3cret") || !strings.Contains(body, "PORT=3000") {
 		t.Fatal("the editor does not show both blocks")
 	}
 }
@@ -340,14 +343,11 @@ func TestManualWebhookAndDeployToken(t *testing.T) {
 		t.Fatalf("webhook with no secret configured: %d", res.StatusCode)
 	}
 
-	res, _ := a.post(settings, "/apps/"+app.ID+"/webhook-secret", nil)
-	wantRedirect(t, res, settings+"#triggers")
-	_, page := a.get(settings)
-	m := regexp.MustCompile(`data-copy="([0-9a-f]{48})"`).FindStringSubmatch(page)
-	if m == nil || !strings.Contains(page, "/webhooks/git/"+app.ID) {
-		t.Fatal("the settings page does not show the webhook address and secret")
+	key := []byte(a.webhookSecret(app.ID))
+	// The app's own Settings no longer hold it: they point at the Keys page.
+	if _, page := a.get(settings); strings.Contains(page, string(key)) || !strings.Contains(page, `href="/keys#deploy-tokens"`) {
+		t.Fatal("the settings page shows the secret, or does not lead to the Keys page")
 	}
-	key := []byte(m[1])
 
 	if res, _ := a.hook(hookPath, key, "push", "m1", pushBody("acme/shop", "refs/heads/other")); res.StatusCode != http.StatusOK || a.deployJobs() != 0 {
 		t.Fatal("a push to another branch deployed")
@@ -361,11 +361,14 @@ func TestManualWebhookAndDeployToken(t *testing.T) {
 	}
 
 	// Deploy token: shown once, stored hashed.
-	res, page = a.post(settings, "/apps/"+app.ID+"/deploy-token", nil)
+	res, page := a.post("/keys", "/apps/"+app.ID+"/deploy-token", nil)
 	wantStatus(t, res, http.StatusOK)
 	tm := regexp.MustCompile(`mdt_[A-Za-z0-9_-]{40,}`).FindString(page)
 	if tm == "" {
 		t.Fatal("the new deploy token is not shown")
+	}
+	if _, page = a.get("/keys"); strings.Contains(page, tm) || !strings.Contains(page, "Has a token") {
+		t.Fatal("the token is shown again, or the Keys page does not know there is one")
 	}
 	stored, _ := a.db.AppByID(ctx, app.ID)
 	if stored.DeployTokenHash != secret.HashToken(tm) || strings.Contains(stored.DeployTokenHash, tm) {
@@ -407,8 +410,8 @@ func TestManualWebhookAndDeployToken(t *testing.T) {
 		t.Fatalf("deployment: %+v %v", dep, err)
 	}
 
-	res, _ = a.post(settings, "/apps/"+app.ID+"/deploy-token", url.Values{"revoke": {"1"}})
-	wantRedirect(t, res, settings+"#triggers")
+	res, _ = a.post("/keys", "/apps/"+app.ID+"/deploy-token", url.Values{"revoke": {"1"}})
+	wantRedirect(t, res, "/keys#deploy-tokens")
 	if res, _ := api(app.ID, tm); res.StatusCode != http.StatusUnauthorized {
 		t.Fatal("a revoked token still works")
 	}
@@ -419,10 +422,7 @@ func TestPushBurstQueuesOneDeployment(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 	app := a.newGitApp(projectID, env, "web", nil)
-	settings := "/apps/" + app.ID + "/settings"
-	a.post(settings, "/apps/"+app.ID+"/webhook-secret", nil)
-	_, page := a.get(settings)
-	key := []byte(regexp.MustCompile(`data-copy="([0-9a-f]{48})"`).FindStringSubmatch(page)[1])
+	key := []byte(a.webhookSecret(app.ID))
 
 	// Hold the queue so deployments stay queued.
 	a.db.Exec(`INSERT INTO jobs (id, kind, status, lock_key, run_after, created_at) VALUES ('blocker', 'none', 'running', ?, 0, 0)`, "build:"+app.ServerID)
@@ -440,10 +440,7 @@ func TestWebhookHardening(t *testing.T) {
 	ctx := context.Background()
 	projectID, env := a.project("Shop")
 	app := a.newGitApp(projectID, env, "web", nil)
-	settings := "/apps/" + app.ID + "/settings"
-	a.post(settings, "/apps/"+app.ID+"/webhook-secret", nil)
-	_, page := a.get(settings)
-	key := []byte(regexp.MustCompile(`data-copy="([0-9a-f]{48})"`).FindStringSubmatch(page)[1])
+	key := []byte(a.webhookSecret(app.ID))
 	hookPath := "/webhooks/git/" + app.ID
 	deliveries := func() (n int) {
 		a.db.QueryRow(`SELECT count(*) FROM webhook_deliveries`).Scan(&n)
@@ -504,7 +501,7 @@ func TestWebhookHardening(t *testing.T) {
 	// The deploy API hands back the waiting deployment rather than queueing
 	// another behind it.
 	a.db.Exec(`UPDATE deployments SET status = 'failed'`)
-	_, page = a.post(settings, "/apps/"+app.ID+"/deploy-token", nil)
+	_, page := a.post("/keys", "/apps/"+app.ID+"/deploy-token", nil)
 	token := regexp.MustCompile(`mdt_[A-Za-z0-9_-]{40,}`).FindString(page)
 	api := func() map[string]string {
 		req, _ := http.NewRequest(http.MethodPost, a.url+"/api/v1/deploy?uuid="+app.ID, nil)
@@ -669,11 +666,11 @@ func TestDeployKeys(t *testing.T) {
 	ctx := context.Background()
 	team := firstTeam(t, a)
 
-	res, body := a.post("/sources", "/sources/keys", url.Values{"key_name": {""}})
-	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "Enter a name") {
+	res, body := a.post("/keys", "/sources/keys", url.Values{"key_name": {""}})
+	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "Enter a name") || !strings.Contains(body, "data-autoopen") {
 		t.Fatalf("empty name: %d", res.StatusCode)
 	}
-	res, body = a.post("/sources", "/sources/keys", url.Values{"key_name": {"shop repository"}})
+	res, body = a.post("/keys", "/sources/keys", url.Values{"key_name": {"shop repository"}})
 	wantStatus(t, res, http.StatusOK)
 	if !strings.Contains(body, "ssh-ed25519 ") || !strings.Contains(body, "Key created") {
 		t.Fatal("the new public key is not shown")
@@ -691,8 +688,8 @@ func TestDeployKeys(t *testing.T) {
 
 	projectID, env := a.project("Shop")
 	a.newGitApp(projectID, env, "web", url.Values{"access": {"key:" + keys[0].ID}, "repo": {"git@github.com:acme/shop.git"}})
-	res, _ = a.post("/sources", "/sources/keys/"+keys[0].ID+"/delete", nil)
-	wantRedirect(t, res, "/sources")
+	res, _ = a.post("/keys", "/sources/keys/"+keys[0].ID+"/delete", nil)
+	wantRedirect(t, res, "/keys#ssh-keys")
 	if keys, _ := a.db.ListSSHKeys(ctx, team); len(keys) != 1 {
 		t.Fatal("a key in use was deleted")
 	}
@@ -709,9 +706,10 @@ func TestOtherTeamsSourcesAreNotReachable(t *testing.T) {
 	pending, _ := a.db.StartGitSource(ctx, "otherteam", "pending", "pending-state")
 	key, _ := a.db.CreateSSHKey(ctx, "otherteam", "theirs", "ssh-ed25519 AAAA", a.seal("k"))
 
-	_, page := a.get("/sources")
-	if strings.Contains(page, "theirs") {
-		t.Fatal("another team's source or key is listed")
+	for _, path := range []string{"/sources", "/keys"} {
+		if _, page := a.get(path); strings.Contains(page, "theirs") {
+			t.Fatalf("another team's source or key is listed on %s", path)
+		}
 	}
 	res, _ := a.get("/sources/github/" + src.ID + "/repos")
 	wantStatus(t, res, http.StatusNotFound)
@@ -886,7 +884,7 @@ func TestPullRequestsThroughAGitHubApp(t *testing.T) {
 			t.Errorf("the parent's settings lack %q", want)
 		}
 	}
-	if _, page = a.get("/projects/" + projectID + "?env=" + env.ID); strings.Contains(page, "web-pr-12") {
+	if _, page = a.get("/projects/" + projectID + "/e/" + env.ID); strings.Contains(page, "web-pr-12") {
 		t.Error("the project page lists the preview as an app")
 	}
 	_, page = a.get("/apps/" + child.ID)
@@ -903,7 +901,7 @@ func TestPullRequestsThroughAGitHubApp(t *testing.T) {
 		res, _ := a.post(token, "/apps/"+child.ID+post, url.Values{"vars": {"X=1"}, "host": {"x.example.com"}, "name": {"renamed"}})
 		wantRedirect(t, res, "/apps/"+child.ID)
 	}
-	for _, get := range []string{"/environment", "/storage", "/tasks"} {
+	for _, get := range []string{"/environment", "/environment/values", "/environment/edit", "/storage", "/tasks", "/webhook-secret"} {
 		if res, _ := a.get("/apps/" + child.ID + get); res.StatusCode != http.StatusSeeOther {
 			t.Errorf("GET %s on a preview: %d", get, res.StatusCode)
 		}
@@ -992,14 +990,7 @@ func TestPreviewSettingsAndManualWebhook(t *testing.T) {
 	}
 
 	// A webhook added by hand that also sends pull request events.
-	res, _ = a.post(settings, "/apps/"+app.ID+"/webhook-secret", nil)
-	wantRedirect(t, res, settings+"#triggers")
-	_, page := a.get(settings)
-	m := regexp.MustCompile(`data-copy="([0-9a-f]{48})"`).FindStringSubmatch(page)
-	if m == nil {
-		t.Fatal("no webhook secret on the page")
-	}
-	key, hookPath := []byte(m[1]), "/webhooks/git/"+app.ID
+	key, hookPath := []byte(a.webhookSecret(app.ID)), "/webhooks/git/"+app.ID
 
 	for name, body := range map[string]string{
 		"from a fork":     prBody("opened", "acme/shop", "mallory/shop", "main", 30),

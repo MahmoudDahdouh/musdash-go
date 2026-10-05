@@ -13,12 +13,6 @@ import (
 type AccountView struct {
 	TwoStep       bool
 	RecoveryCodes int // how many are left
-	// Tokens are the person's API tokens. NewToken is one that was just
-	// made, shown this once; Base is the dashboard's address, for the
-	// example that goes with it.
-	Tokens   []db.APIToken
-	NewToken string
-	Base     string
 }
 
 func abilityLabel(ability string) string {
@@ -78,7 +72,18 @@ var codeAttrs = templ.Attributes{"inputmode": "numeric", "maxlength": "7", "auto
 
 var anyCodeAttrs = templ.Attributes{"maxlength": "20", "autocapitalize": "off", "spellcheck": "false"}
 
-// twoStepCard is the Account page's part about the second step.
+// twoStepForm gives a dialog of the second step's card the form that came
+// back, when it is the one that was sent, and an empty one otherwise: two
+// of them ask for a code, and an error belongs to one.
+func twoStepForm(f ui.Form, which string) ui.Form {
+	if f.V("_form") == which {
+		return f
+	}
+	return ui.Form{}
+}
+
+// twoStepCard is the Account page's part about the second step, and the
+// dialogs its buttons open.
 templ twoStepCard(s ui.Shell, v AccountView, f ui.Form) {
 	<section class="card" id="two-step">
 		<div class="card-head">
@@ -95,51 +100,47 @@ templ twoStepCard(s ui.Shell, v AccountView, f ui.Form) {
 			</div>
 		</div>
 		if v.TwoStep {
-			<div class="card-body grid gap-6">
-				<form class="grid gap-4" method="post" action="/account/two-step/codes">
-					@ui.CSRF(s.CSRF)
-					<div>
-						<h3 class="font-semibold">Recovery codes</h3>
-						<p class="muted text-sm">
-							{ codesLeft(v.RecoveryCodes) }. Each signs you in once when you do not have your phone. Making new ones ends the old ones.
-						</p>
+			<div class="rows">
+				<div class="row">
+					<div class="min-w-0 flex-1">
+						<p class="font-semibold">Recovery codes</p>
+						<p class="muted text-sm">{ codesLeft(v.RecoveryCodes) }. Each signs you in once when you do not have your phone.</p>
 					</div>
-					@ui.TextField(f, "Code from your app", "", ui.InputProps{ID: "codes_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: codeAttrs})
-					<div>
-						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh"}) {
-							Make new recovery codes
-						}
-					</div>
-				</form>
-				<form class="grid gap-4 border-t border-line pt-6" method="post" action="/account/two-step/off">
-					@ui.CSRF(s.CSRF)
-					<div>
-						<h3 class="font-semibold">Turn off</h3>
-						<p class="muted text-sm">Signing in then needs your password only.</p>
-					</div>
-					@ui.TextField(f, "Current password", "", ui.InputProps{ID: "off_password", Type: "password", Autocomplete: "current-password", Required: true})
-					@ui.TextField(f, "Code from your app, or a recovery code", "", ui.InputProps{ID: "off_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: anyCodeAttrs})
-					<div>
-						@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Type: "submit"}) {
-							Turn off two-step sign-in
-						}
-					</div>
-				</form>
-			</div>
-		} else {
-			<form method="post" action="/account/two-step/start">
-				@ui.CSRF(s.CSRF)
-				<div class="card-body grid gap-4">
-					@ui.TextField(f, "Current password", "So that a session left open is not enough to set this up.", ui.InputProps{ID: "start_password", Type: "password", Autocomplete: "current-password", Required: true})
-				</div>
-				<div class="card-foot">
-					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
-						Set up two-step sign-in
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "refresh", Opens: "new-codes"}) {
+						Make new codes
 					}
 				</div>
-			</form>
+				<div class="row">
+					<div class="min-w-0 flex-1">
+						<p class="font-semibold">Turn off</p>
+						<p class="muted text-sm">Signing in then needs your password only.</p>
+					</div>
+					@ui.Button(ui.ButtonProps{Small: true, Variant: ui.DangerQuiet, Opens: "two-step-off"}) {
+						Turn off
+					}
+				</div>
+			</div>
+		} else {
+			<div class="card-body">
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "lock", Opens: "two-step-start"}) {
+					Set up two-step sign-in
+				}
+			</div>
 		}
 	</section>
+	if v.TwoStep {
+		@ui.FormDialog(ui.DialogProps{ID: "new-codes", Title: "Make new recovery codes", Description: "The codes you have now stop working. The new ones are shown once, right after they are made.", Action: "/account/two-step/codes", CSRF: s.CSRF, Submit: "Make new codes", Open: !twoStepForm(f, "codes").OK()}) {
+			@ui.TextField(twoStepForm(f, "codes"), "Code from your app", "", ui.InputProps{ID: "codes_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: codeAttrs})
+		}
+		@ui.FormDialog(ui.DialogProps{ID: "two-step-off", Title: "Turn off two-step sign-in", Description: "Your password alone signs you in from then on, and your recovery codes are deleted.", Action: "/account/two-step/off", CSRF: s.CSRF, Submit: "Turn off two-step sign-in", Danger: true, Open: !twoStepForm(f, "off").OK()}) {
+			@ui.TextField(twoStepForm(f, "off"), "Current password", "", ui.InputProps{ID: "off_password", Type: "password", Autocomplete: "current-password", Required: true})
+			@ui.TextField(twoStepForm(f, "off"), "Code from your app, or a recovery code", "", ui.InputProps{ID: "off_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: anyCodeAttrs})
+		}
+	} else {
+		@ui.FormDialog(ui.DialogProps{ID: "two-step-start", Title: "Set up two-step sign-in", Description: "Nothing changes yet: the next page shows a key for your authenticator app and asks for a code from it.", Action: "/account/two-step/start", CSRF: s.CSRF, Submit: "Continue", Open: !f.OK()}) {
+			@ui.TextField(f, "Current password", "So that a session left open is not enough to set this up.", ui.InputProps{ID: "start_password", Type: "password", Autocomplete: "current-password", Required: true})
+		}
+	}
 }
 
 // TwoStepSetup shows a new key once, and asks for a code to prove the app
@@ -259,69 +260,4 @@ templ LoginCode(f ui.Form, csrf string) {
 			<a href="/login">Sign in as somebody else</a>
 		</p>
 	}
-}
-
-// tokensCard is the Account page's part about API tokens.
-templ tokensCard(s ui.Shell, v AccountView, f ui.Form) {
-	<section class="card" id="tokens">
-		<div class="card-head">
-			<div>
-				<h2 class="card-title">API tokens</h2>
-				<p class="muted text-sm">For scripts and pipelines. A token acts as you: it sees what you see, and stops working when you leave the team, change your password, turn on two-step sign-in or are given a higher role.</p>
-			</div>
-		</div>
-		if v.NewToken != "" {
-			<div class="card-body border-b border-line">
-				@ui.Notice(ui.ToneOK) {
-					<p class="font-semibold">Token created. Copy it now: it is not shown again.</p>
-					<p class="code mt-2 block break-all" id="new-token">{ v.NewToken }</p>
-					<p class="mt-2">
-						<button type="button" class="btn btn-secondary btn-sm" data-copy={ v.NewToken }>
-							@ui.Icon("copy")
-							<span data-copy-label>Copy token</span>
-						</button>
-					</p>
-					<p class="mt-3">Try it:</p>
-					<p class="code mt-1 block break-all">curl -H "Authorization: Bearer $MUSDASH_TOKEN" { v.Base }/api/v1/me</p>
-				}
-			</div>
-		}
-		if len(v.Tokens) > 0 {
-			<div class="rows">
-				for _, t := range v.Tokens {
-					<div class="row">
-						@ui.Icon("key", "text-ink-mute")
-						<div class="min-w-0 flex-1">
-							<p class="truncate font-semibold">{ t.Name }</p>
-							<p class="muted text-sm">{ abilityLabel(t.Ability) } · { tokenUsed(t) } · { tokenExpiry(t) }</p>
-						</div>
-						<form method="post" action={ templ.SafeURL("/account/tokens/" + t.ID + "/delete") }>
-							@ui.CSRF(s.CSRF)
-							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
-								Revoke
-							}
-						</form>
-					</div>
-				}
-			</div>
-		}
-		<form class={ "card-body grid gap-4", templ.KV("border-t border-line", len(v.Tokens) > 0) } method="post" action="/account/tokens">
-			@ui.CSRF(s.CSRF)
-			@ui.TextField(f, "Name", "What it is for, such as the name of the pipeline that uses it.", ui.InputProps{ID: "token_name", Required: true, Autocomplete: "off", Attrs: templ.Attributes{"maxlength": "60"}})
-			<div class="grid gap-4 sm:grid-cols-2">
-				@ui.Field(ui.FieldProps{Label: "May", For: "token_ability", Error: f.E("token_ability")}) {
-					@ui.Select("token_ability", abilityOptions, orDefault(f.V("token_ability"), db.AbilityRead), nil)
-				}
-				@ui.Field(ui.FieldProps{Label: "Expires", For: "token_expires", Error: f.E("token_expires")}) {
-					@ui.Select("token_expires", expiryOptions, orDefault(f.V("token_expires"), "90"), nil)
-				}
-			</div>
-			@ui.TextField(f, "Current password", "A token is a way in that lasts: making one asks for your password.", ui.InputProps{ID: "token_password", Type: "password", Autocomplete: "current-password", Required: true})
-			<div>
-				@ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}) {
-					Create token
-				}
-			</div>
-		</form>
-	</section>
 }

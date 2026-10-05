@@ -15,7 +15,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 )
 
-var newTokenRE = regexp.MustCompile(`id="new-token">(msd_[A-Za-z0-9_-]+)<`)
+var newTokenRE = regexp.MustCompile(`id="new-token-value">(msd_[A-Za-z0-9_-]+)<`)
 
 // newToken makes an API token for the owner through the Account page.
 func (a *app) newToken(ability string) string {
@@ -25,6 +25,11 @@ func (a *app) newToken(ability string) string {
 	m := newTokenRE.FindStringSubmatch(body)
 	if m == nil {
 		a.t.Fatalf("no token on the page:\n%s", body)
+	}
+	// The page that shows the token still has one New token dialog, and
+	// nothing else of its id: the button would open that instead.
+	if strings.Count(body, `id="new-token"`) != 1 {
+		a.t.Fatalf("%d elements with the id of the New token dialog", strings.Count(body, `id="new-token"`))
 	}
 	return m[1]
 }
@@ -97,9 +102,9 @@ func TestAPITokensOnTheAccountPage(t *testing.T) {
 	if stored != secret.HashToken(token) || strings.Contains(stored, token) {
 		t.Fatal("the token must be stored as its hash")
 	}
-	_, page := a.get("/account")
+	_, page := a.get("/keys")
 	if strings.Contains(page, token) || !strings.Contains(page, "Read and deploy") {
-		t.Fatal("the Account page should list the token without showing it")
+		t.Fatal("the Keys page should list the token without showing it")
 	}
 	if strings.Contains(logs.String(), token) {
 		t.Fatal("the token was written to the log")
@@ -112,12 +117,12 @@ func TestAPITokensOnTheAccountPage(t *testing.T) {
 	mem := a.newPerson("Member", db.RoleMember)
 	res, _ := mem.post("/account/tokens/"+list[0].ID+"/delete", nil)
 	wantStatus(t, res, http.StatusNotFound)
-	if _, page := mem.get("/account"); strings.Contains(page, list[0].ID) {
-		t.Fatal("a Member's Account page shows the Owner's token")
+	if _, page := mem.get("/keys"); strings.Contains(page, list[0].ID) {
+		t.Fatal("a Member's Keys page shows the Owner's token")
 	}
 	// Revoked, it stops working at once.
 	res, _ = a.post("/account", "/account/tokens/"+list[0].ID+"/delete", nil)
-	wantRedirect(t, res, "/account#tokens")
+	wantRedirect(t, res, "/keys#tokens")
 	if res, _ := a.call(http.MethodGet, "/api/v1/me", token); res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("a revoked token still works: %d", res.StatusCode)
 	}

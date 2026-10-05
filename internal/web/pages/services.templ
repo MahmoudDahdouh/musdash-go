@@ -15,8 +15,10 @@ type ServiceView struct {
 	Project   db.Project
 	Env       db.Environment
 	Endpoints []db.Endpoint
-	// Tags are the service's tags, filled in for the Settings page.
-	Tags []string
+	// Tags are the service's tags and TeamTags all of the team's, filled in
+	// for the Settings page.
+	Tags     []string
+	TeamTags []string
 }
 
 func (v ServiceView) base() string { return "/services/" + v.Service.ID }
@@ -24,12 +26,12 @@ func (v ServiceView) base() string { return "/services/" + v.Service.ID }
 func serviceTabs(v ServiceView) []ui.Tab {
 	b := v.base()
 	return []ui.Tab{
-		{Key: "overview", Label: "Overview", Href: b},
-		{Key: "logs", Label: "Logs", Href: b + "/logs"},
-		{Key: "metrics", Label: "Metrics", Href: b + "/metrics"},
-		{Key: "terminal", Label: "Terminal", Href: b + "/terminal"},
-		{Key: "compose", Label: "Compose file", Href: b + "/compose"},
-		{Key: "settings", Label: "Settings", Href: b + "/settings"},
+		{Key: "overview", Label: "Overview", Href: b, Icon: "dashboard"},
+		{Key: "logs", Label: "Logs", Href: b + "/logs", Icon: "file"},
+		{Key: "metrics", Label: "Metrics", Href: b + "/metrics", Icon: "chart"},
+		{Key: "terminal", Label: "Terminal", Href: b + "/terminal", Icon: "terminal"},
+		{Key: "compose", Label: "Compose file", Href: b + "/compose", Icon: "code"},
+		{Key: "settings", Label: "Settings", Href: b + "/settings", Icon: "settings"},
 	}
 }
 
@@ -83,7 +85,7 @@ templ ServiceHeader(csrf string, s db.Service) {
 				if serviceDeployed(s) {
 					<form method="post" action={ templ.SafeURL("/services/" + s.ID + "/stop") }>
 						@ui.CSRF(csrf)
-						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop"}) {
+						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+s.Name+"?", "Every container of the service is stopped and its endpoints stop answering. Its volumes and settings are kept.", "Stop service", false)}) {
 							Stop
 						}
 					</form>
@@ -111,70 +113,6 @@ templ serviceFrame(s ui.Shell, v ServiceView, tab string) {
 	}
 }
 
-// ServiceRows lists an environment's services on the project page.
-templ ServiceRows(list []db.Service) {
-	<div class="card rows">
-		for _, s := range list {
-			<a class="row rail" data-state={ serviceState(s) } href={ templ.SafeURL("/services/" + s.ID) }>
-				@ui.Icon("layers", "text-ink-mute")
-				<div class="min-w-0 flex-1">
-					<p class="truncate font-semibold">{ s.Name }</p>
-					<p class="truncate text-ink-mute">{ templateName(s.Template) }</p>
-				</div>
-				@ui.StatusPill(serviceState(s))
-				@ui.Icon("chevron-right", "text-ink-mute")
-			</a>
-		}
-	</div>
-}
-
-func newServiceURL(p db.Project, env db.Environment, template string) string {
-	return "/projects/" + p.ID + "/services/new?env=" + env.ID + "&template=" + template
-}
-
-// ServiceCatalogue is the first step of creating a service: what to run.
-templ ServiceCatalogue(s ui.Shell, p db.Project, env db.Environment, templates []catalog.ServiceTemplate) {
-	@ui.Layout(s) {
-		@ui.PageHeader("New service", "Runs in "+env.Name+". A service is one or more containers described by a Docker Compose file.")
-		<div class="grid max-w-3xl gap-6">
-			<section class="grid gap-2">
-				<h2 class="section-title">Ready to install</h2>
-				<div class="grid gap-3 sm:grid-cols-2">
-					for _, t := range templates {
-						<a class="card row" href={ templ.SafeURL(newServiceURL(p, env, t.Key)) }>
-							@ui.Icon("layers", "text-ink-mute")
-							<div class="min-w-0 flex-1">
-								<p class="font-semibold">{ t.Name }</p>
-								<p class="muted text-sm">{ t.About }</p>
-							</div>
-							@ui.Icon("chevron-right", "text-ink-mute")
-						</a>
-					}
-				</div>
-			</section>
-			<section class="grid gap-2">
-				<h2 class="section-title">Something else</h2>
-				<a class="card row" href={ templ.SafeURL(newServiceURL(p, env, db.TemplateCustom)) }>
-					@ui.Icon("pencil", "text-ink-mute")
-					<div class="min-w-0 flex-1">
-						<p class="font-semibold">Your own Compose file</p>
-						<p class="muted text-sm">Paste a docker-compose.yml. Templates written for Coolify work as they are.</p>
-					</div>
-					@ui.Icon("chevron-right", "text-ink-mute")
-				</a>
-				<a class="card row" href={ templ.SafeURL(newServiceURL(p, env, db.TemplateGit)) }>
-					@ui.Icon("git-branch", "text-ink-mute")
-					<div class="min-w-0 flex-1">
-						<p class="font-semibold">A Compose file in a Git repository</p>
-						<p class="muted text-sm">The file is read from the repository at every deployment, and may build images from the repository's own Dockerfiles.</p>
-					</div>
-					@ui.Icon("chevron-right", "text-ink-mute")
-				</a>
-			</section>
-		</div>
-	}
-}
-
 const composePlaceholder = `services:
   app:
     image: ghcr.io/you/app:1.4
@@ -192,7 +130,6 @@ func varFieldID(name string) string { return "var_" + name }
 type ServiceGit struct {
 	Choices GitChoices
 	Source  ui.Form  // the Source form's state
-	Tr      Triggers // webhook and deploy token
 }
 
 // serviceRepo is a service's repository settings in the shape the shared
@@ -223,9 +160,8 @@ templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, 
 			@ui.PageHeader("New "+t.Name+" service", t.About)
 		}
 		<div class="max-w-2xl">
-			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/services") }>
+			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/e/" + env.ID + "/services") }>
 				@ui.CSRF(s.CSRF)
-				<input type="hidden" name="env" value={ env.ID }/>
 				<input type="hidden" name="template" value={ template }/>
 				<div class="card-body grid gap-4">
 					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: true, Value: t.Key, Attrs: templ.Attributes{"maxlength": "32"}})
@@ -266,7 +202,7 @@ templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, 
 					}
 				</div>
 				<div class="card-foot">
-					@ui.LinkButton("/projects/"+p.ID+"/services/new?env="+env.ID, ui.ButtonProps{}) {
+					@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{}) {
 						Back
 					}
 					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
@@ -451,15 +387,12 @@ func shortCommit(c string) string {
 	return c
 }
 
-templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables string, git *ServiceGit) {
+// ServiceCompose is a service's Compose tab. Its variables are part of the
+// form but not of the page: showVars says the person typed them and the
+// form came back, and varCount how many are stored otherwise.
+templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables string, showVars bool, varCount int, git *ServiceGit) {
 	@serviceFrame(s, v, "compose") {
 		<div class="grid max-w-3xl gap-6">
-			if git != nil && git.Tr.NewToken != "" {
-				@ui.Notice(ui.ToneOK) {
-					<p class="font-semibold">Deploy token created. Copy it now: it is not shown again.</p>
-					@ui.Copyable(git.Tr.NewToken)
-				}
-			}
 			<form class="card" method="post" action={ templ.SafeURL(v.base() + "/compose") }>
 				@ui.CSRF(s.CSRF)
 				<div class="card-head">
@@ -492,9 +425,7 @@ templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variable
 							@ui.Textarea(ui.InputProps{ID: "compose", Mono: true, Rows: 22, Required: true, Value: composeText, Invalid: f.E("compose") != "", Described: true, Attrs: templ.Attributes{"wrap": "off"}})
 						}
 					}
-					@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the ${NAME} references in the file, other than the generated ones. One NAME=value per line. Stored encrypted. A value can name a shared variable, such as {{project.NAME}}.", Error: f.E("variables")}) {
-						@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 5, Value: variables, Invalid: f.E("variables") != "", Described: true})
-					}
+					@ServiceVariablesField(v, f, variables, showVars, varCount)
 					<div>
 						@ui.Checkbox("connect_env", checked(f, "connect_env", v.Service.ConnectEnv), nil) {
 							Connect to the environment's network, so its containers and the apps and databases in { v.Env.Name } reach each other by name
@@ -514,7 +445,7 @@ templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variable
 				@ui.FormCard("Source", "The repository the Compose file is read from.", v.base()+"/source", s.CSRF, "Save source") {
 					@serviceGitFields(git.Source, git.Choices, v.Service, false)
 				}
-				@triggersCard(s.CSRF, v.base(), "service", true, git.Tr)
+				@keysLink("service")
 			}
 		</div>
 	}
@@ -535,24 +466,40 @@ templ ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) {
 				if len(v.Endpoints) == 0 {
 					<p class="card-body muted">This stack has no web address. To give a service one, add <span class="code">SERVICE_FQDN_NAME_PORT</span> to its environment in the Compose file.</p>
 				}
-				for _, e := range v.Endpoints {
-					<form class="card-body grid gap-3 border-t border-line" method="post" action={ templ.SafeURL(v.base() + "/endpoints/" + e.ID) }>
-						@ui.CSRF(s.CSRF)
-						@ui.Field(ui.FieldProps{Label: "Domain for " + endpointTarget(e), For: endpointFormID(e), Error: endpointError(e, failed, f)}) {
-							@ui.Input(ui.InputProps{ID: endpointFormID(e), Name: "host", Mono: true, Required: true, Value: endpointValue(e, failed, f), Invalid: endpointError(e, failed, f) != "", Placeholder: "app.example.com"})
+				if len(v.Endpoints) > 0 {
+					<div class="rows">
+						for _, e := range v.Endpoints {
+							<div class="row">
+								<div class="min-w-0 flex-1">
+									<p class="fact truncate">{ orDefault(e.Host, "No domain") }</p>
+									<p class="muted text-sm">{ endpointTarget(e) }</p>
+								</div>
+								if e.Host != "" {
+									if e.TLS {
+										@ui.Badge("HTTPS", ui.ToneOK)
+									} else {
+										@ui.Badge("HTTP", ui.ToneNeutral)
+									}
+								}
+								@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "endpoint-" + e.ID}) {
+									Change
+								}
+							</div>
 						}
-						@ui.Checkbox("tls-"+e.ID, e.TLS, templ.Attributes{"name": "tls"}) {
-							Serve over HTTPS with an automatic certificate
-						}
-						<div>
-							@ui.Button(ui.ButtonProps{Type: "submit"}) {
-								Save domain
-							}
-						</div>
-					</form>
+					</div>
 				}
 			</section>
-			@tagsCard(s.CSRF, v.base()+"/tags", v.Tags)
+			for _, e := range v.Endpoints {
+				@ui.FormDialog(ui.DialogProps{ID: "endpoint-" + e.ID, Title: "Domain for " + endpointTarget(e), Description: "Point the domain's DNS at this server first. The change takes effect on the next deployment.", Action: v.base() + "/endpoints/" + e.ID, CSRF: s.CSRF, Submit: "Save domain", Open: endpointError(e, failed, f) != ""}) {
+					@ui.Field(ui.FieldProps{Label: "Domain", For: endpointFormID(e), Error: endpointError(e, failed, f)}) {
+						@ui.Input(ui.InputProps{ID: endpointFormID(e), Name: "host", Mono: true, Required: true, Value: endpointValue(e, failed, f), Invalid: endpointError(e, failed, f) != "", Placeholder: "app.example.com"})
+					}
+					@ui.CheckboxNamed("tls-"+e.ID, "tls", e.TLS, nil) {
+						Serve over HTTPS with an automatic certificate
+					}
+				}
+			}
+			@tagsCard(s.CSRF, v.base()+"/tags", v.Tags, v.TeamTags)
 			<section class="card card-danger">
 				<div class="card-head">
 					<div>

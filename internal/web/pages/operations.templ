@@ -107,7 +107,34 @@ templ DatabaseBackups(s ui.Shell, v DatabaseView, b BackupsView, f ui.Form) {
 				}
 			} else {
 				<div class="grid gap-6 lg:grid-cols-2 lg:items-start">
-					@ui.FormCard("Schedule", "A backup is a dump made by the database's own tool, compressed and kept on this server. The newest ones are kept; older ones are removed.", v.base()+"/backups/schedule", s.CSRF, "Save schedule") {
+					<section class="card">
+						<div class="card-head">
+							<div>
+								<h2 class="card-title">Schedule</h2>
+								<p class="muted text-sm">A backup is a dump made by the database's own tool, compressed and kept on this server. The newest ones are kept; older ones are removed.</p>
+							</div>
+							@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-schedule"}) {
+								if b.HasCfg {
+									Change
+								} else {
+									Set up
+								}
+							}
+						</div>
+						<div class="card-body">
+							if b.HasCfg {
+								@ui.KeyValue([]ui.KVItem{
+									{Key: "Scheduled", Value: yesNo(b.Config.Enabled, "On", "Off")},
+									{Key: "Schedule", Value: b.Config.Schedule, Mono: true},
+									{Key: "Backups kept", Value: strconv.Itoa(b.Config.Keep)},
+									{Key: "Copied to", Value: optionLabel(storageOptions(b.Storages), b.Config.StorageID)},
+								})
+							} else {
+								<p class="muted">No schedule yet: this database is backed up only when you choose Back up now.</p>
+							}
+						</div>
+					</section>
+					@ui.FormDialog(ui.DialogProps{ID: "edit-schedule", Title: "Backup schedule", Action: v.base() + "/backups/schedule", CSRF: s.CSRF, Submit: "Save schedule", Open: !f.OK()}) {
 						@ui.Checkbox("enabled", checked(f, "enabled", !b.HasCfg || b.Config.Enabled), nil) {
 							Back up on a schedule
 						}
@@ -200,7 +227,7 @@ templ BackupList(csrf string, v DatabaseView, b BackupsView) {
 									}
 									<form method="post" action={ templ.SafeURL(v.base() + "/backups/" + m.ID + "/delete") }>
 										@ui.CSRF(csrf)
-										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Delete this backup?", "The backup made "+ui.Ago(m.StartedAt)+" is deleted from this server and from the bucket it was uploaded to. This cannot be undone.", "Delete backup", true)}) {
 											Delete
 										}
 									</form>
@@ -262,6 +289,9 @@ templ AppTasks(s ui.Shell, v AppView, rows []TaskRow, f ui.Form) {
 						<h2 class="card-title">Scheduled tasks</h2>
 						<p class="muted text-sm">Commands musdash runs inside the app's running container, on a schedule.</p>
 					</div>
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-task"}) {
+						Add task
+					}
 				</div>
 				if len(rows) == 0 {
 					<p class="card-body muted">No tasks yet. A task is the place for what a cron job would do: clearing a cache, sending a digest, running a framework's scheduler.</p>
@@ -296,7 +326,7 @@ templ AppTasks(s ui.Shell, v AppView, rows []TaskRow, f ui.Form) {
 					}
 				}
 			</section>
-			@ui.FormCard("Add a task", "", v.base()+"/tasks", s.CSRF, "Add task") {
+			@ui.FormDialog(ui.DialogProps{ID: "add-task", Title: "Add a task", Action: v.base() + "/tasks", CSRF: s.CSRF, Submit: "Add task", Open: !f.OK()}) {
 				@taskFields(f, db.Task{Enabled: true})
 			}
 		</div>
@@ -368,7 +398,23 @@ templ AppTask(s ui.Shell, v AppView, t db.Task, runs []db.TaskRun, shown string,
 					}
 				</section>
 			}
-			@ui.FormCard("Settings", "", v.base()+"/tasks/"+t.ID, s.CSRF, "Save task") {
+			<section class="card">
+				<div class="card-head">
+					<h2 class="card-title">Settings</h2>
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-task"}) {
+						Edit
+					}
+				</div>
+				<div class="card-body">
+					@ui.KeyValue([]ui.KVItem{
+						{Key: "Name", Value: t.Name},
+						{Key: "Command", Value: t.Command, Mono: true},
+						{Key: "Schedule", Value: t.Schedule, Mono: true},
+						{Key: "Scheduled", Value: yesNo(t.Enabled, "On", "Off")},
+					})
+				</div>
+			</section>
+			@ui.FormDialog(ui.DialogProps{ID: "edit-task", Title: "Task settings", Action: v.base() + "/tasks/" + t.ID, CSRF: s.CSRF, Submit: "Save task", Open: !f.OK()}) {
 				@taskFields(f, t)
 			}
 			<section class="card card-danger">
@@ -379,7 +425,7 @@ templ AppTask(s ui.Shell, v AppView, t db.Task, runs []db.TaskRun, shown string,
 					</div>
 					<form method="post" action={ templ.SafeURL(v.base() + "/tasks/" + t.ID + "/delete") }>
 						@ui.CSRF(s.CSRF)
-						@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Icon: "trash", Type: "submit"}) {
+						@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Icon: "trash", Type: "submit", Attrs: ui.Ask("Delete the task "+t.Name+"?", "The task no longer runs, and the history of its runs is deleted. This cannot be undone.", "Delete task", true)}) {
 							Delete task
 						}
 					</form>
@@ -433,9 +479,9 @@ templ TaskRuns(v AppView, t db.Task, runs []db.TaskRun, shown string) {
 
 func settingsTabs() []ui.Tab {
 	return []ui.Tab{
-		{Key: "dashboard", Label: "Dashboard", Href: "/settings"},
-		{Key: "storages", Label: "Backup storage", Href: "/settings/storages"},
-		{Key: "notifications", Label: "Notifications", Href: "/settings/notifications"},
+		{Key: "dashboard", Label: "Dashboard", Href: "/settings", Icon: "globe"},
+		{Key: "storages", Label: "Backup storage", Href: "/settings/storages", Icon: "archive"},
+		{Key: "notifications", Label: "Notifications", Href: "/settings/notifications", Icon: "bell"},
 	}
 }
 
@@ -465,6 +511,9 @@ templ Storages(s ui.Shell, list []db.S3Storage, f ui.Form) {
 						<h2 class="card-title">Backup storage</h2>
 						<p class="muted text-sm">S3-compatible buckets that database backups are copied to: Amazon S3, Cloudflare R2, Backblaze B2, MinIO and the like.</p>
 					</div>
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-bucket"}) {
+						Add bucket
+					}
 				</div>
 				if len(list) == 0 {
 					<p class="card-body muted">No bucket yet. Until one is added, backups are kept on the server only, and are lost with it.</p>
@@ -485,7 +534,7 @@ templ Storages(s ui.Shell, list []db.S3Storage, f ui.Form) {
 										</form>
 										<form method="post" action={ templ.SafeURL("/settings/storages/" + m.ID + "/delete") }>
 											@ui.CSRF(s.CSRF)
-											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the bucket "+m.Name+"?", "musdash forgets the bucket and its keys. Backups already uploaded stay in the bucket, where musdash no longer reaches them.", "Remove bucket", true)}) {
 												Remove
 											}
 										</form>
@@ -496,7 +545,7 @@ templ Storages(s ui.Shell, list []db.S3Storage, f ui.Form) {
 					}
 				}
 			</section>
-			@ui.FormCard("Add a bucket", "The keys are stored encrypted and are not shown again.", "/settings/storages", s.CSRF, "Add bucket") {
+			@ui.FormDialog(ui.DialogProps{ID: "add-bucket", Title: "Add a bucket", Description: "The keys are stored encrypted and are not shown again.", Action: "/settings/storages", CSRF: s.CSRF, Submit: "Add bucket", Wide: true, Open: !f.OK()}) {
 				@ui.TextField(f, "Name", "What you call it here, such as Offsite.", ui.InputProps{ID: "name", Required: true})
 				@ui.TextField(f, "Endpoint", "The address of the S3 service, such as https://s3.eu-central-1.amazonaws.com. Leave empty for Amazon S3 with the region below.", ui.InputProps{ID: "endpoint", Mono: true, Placeholder: "https://…"})
 				<div class="grid gap-4 sm:grid-cols-2">
@@ -577,7 +626,7 @@ templ Notifications(s ui.Shell, list []db.Channel, kind notify.KindInfo, f ui.Fo
 								</form>
 								<form method="post" action={ templ.SafeURL("/settings/notifications/" + c.ID + "/delete") }>
 									@ui.CSRF(s.CSRF)
-									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the channel "+c.Name+"?", "Nothing is sent to it any more.", "Remove channel", true)}) {
 										Remove
 									}
 								</form>
@@ -609,43 +658,46 @@ templ Notifications(s ui.Shell, list []db.Channel, kind notify.KindInfo, f ui.Fo
 				<div class="card-head">
 					<div>
 						<h2 class="card-title">Add a channel</h2>
-						<p class="muted text-sm">Addresses and tokens are stored encrypted and are not shown again.</p>
+						<p class="muted text-sm">Choose where the messages go.</p>
 					</div>
 				</div>
-				<nav class="card-body flex flex-wrap gap-2" aria-label="Kind of channel">
+				<div class="card-body flex flex-wrap gap-2">
 					for _, k := range notify.Kinds {
-						if k.Kind == kind.Kind {
-							@ui.LinkButton("/settings/notifications?kind="+k.Kind, ui.ButtonProps{Variant: ui.Primary, Small: true, Attrs: templ.Attributes{"aria-current": "true"}}) {
-								{ k.Label }
-							}
-						} else {
-							@ui.LinkButton("/settings/notifications?kind="+k.Kind, ui.ButtonProps{Small: true}) {
-								{ k.Label }
-							}
+						@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-channel-" + k.Kind}) {
+							{ k.Label }
 						}
 					}
-				</nav>
-				<form method="post" action="/settings/notifications" class="border-t border-line">
-					@ui.CSRF(s.CSRF)
-					<input type="hidden" name="kind" value={ kind.Kind }/>
-					<div class="card-body grid gap-4">
-						if f.E("_form") != "" {
-							@ui.Notice(ui.ToneDanger) {
-								<p>{ f.E("_form") }</p>
-							}
-						}
-						@ui.TextField(f, "Name", "What you call it here, such as Team chat.", ui.InputProps{ID: "name", Required: true})
-						for _, field := range kind.Fields {
-							@ui.TextField(f, fieldLabel(field), field.Hint, ui.InputProps{ID: "cfg_" + field.Key, Type: fieldType(field), Mono: true, Required: !field.Optional, Autocomplete: "off"})
-						}
-					</div>
-					<div class="card-foot">
-						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
-							Add { kind.Label } channel
-						}
-					</div>
-				</form>
+				</div>
 			</section>
+			for _, k := range notify.Kinds {
+				@channelDialog(s.CSRF, k, channelForm(f, k.Kind == kind.Kind))
+			}
 		</div>
+	}
+}
+
+// channelForm gives the dialog of the kind that was sent the form that came
+// back, and the others an empty one.
+func channelForm(f ui.Form, sent bool) ui.Form {
+	if sent {
+		return f
+	}
+	return ui.Form{}
+}
+
+// channelDialog is the form one kind of channel is added with. Every kind
+// has one on the page, so the ids of its fields carry the kind.
+templ channelDialog(csrf string, k notify.KindInfo, f ui.Form) {
+	@ui.FormDialog(ui.DialogProps{ID: "add-channel-" + k.Kind, Title: "Add a " + k.Label + " channel", Description: "Addresses and tokens are stored encrypted and are not shown again.", Action: "/settings/notifications", CSRF: csrf, Submit: "Add channel", Wide: len(k.Fields) > 4, Open: !f.OK()}) {
+		<input type="hidden" name="kind" value={ k.Kind }/>
+		if f.E("_form") != "" {
+			@ui.Notice(ui.ToneDanger) {
+				<p>{ f.E("_form") }</p>
+			}
+		}
+		@ui.TextField(f, "Name", "What you call it here, such as Team chat.", ui.InputProps{ID: k.Kind + "-name", Name: "name", Required: true})
+		for _, field := range k.Fields {
+			@ui.TextField(f, fieldLabel(field), field.Hint, ui.InputProps{ID: k.Kind + "-cfg_" + field.Key, Name: "cfg_" + field.Key, Type: fieldType(field), Mono: true, Required: !field.Optional, Autocomplete: "off"})
+		}
 	}
 }

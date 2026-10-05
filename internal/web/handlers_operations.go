@@ -610,11 +610,8 @@ func (s *Server) renderNotifications(w http.ResponseWriter, r *http.Request, sta
 }
 
 func (s *Server) notificationsPage(w http.ResponseWriter, r *http.Request) {
-	kind, ok := notify.Kind(r.URL.Query().Get("kind"))
-	if !ok {
-		kind = notify.Kinds[0]
-	}
-	s.renderNotifications(w, r, http.StatusOK, kind, ui.Form{})
+	// No kind's form came back: every Add dialog starts empty and closed.
+	s.renderNotifications(w, r, http.StatusOK, notify.KindInfo{}, ui.Form{})
 }
 
 func (s *Server) notificationCreate(w http.ResponseWriter, r *http.Request) {

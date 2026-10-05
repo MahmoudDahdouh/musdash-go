@@ -44,14 +44,9 @@ func validBase(raw string) (string, bool) {
 	return u.Scheme + "://" + u.Host, true
 }
 
-func (s *Server) renderSources(w http.ResponseWriter, r *http.Request, status int, appForm, keyForm ui.Form, newKey *db.SSHKey) {
+func (s *Server) renderSources(w http.ResponseWriter, r *http.Request, status int, appForm ui.Form) {
 	teamID := sessionFrom(r).TeamID
 	sources, err := s.DB.ListGitSources(r.Context(), teamID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	keys, err := s.DB.ListSSHKeys(r.Context(), teamID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -62,11 +57,11 @@ func (s *Server) renderSources(w http.ResponseWriter, r *http.Request, status in
 	if _, ok := appForm.Values["name"]; !ok {
 		appForm.Set("name", "musdash-"+secret.RandomID()[:6])
 	}
-	s.render(w, r, status, pages.Sources(s.shell(w, r, "Sources", "sources"), sources, keys, appForm, keyForm, newKey))
+	s.render(w, r, status, pages.Sources(s.shell(w, r, "Sources", "sources"), sources, appForm))
 }
 
 func (s *Server) sourcesPage(w http.ResponseWriter, r *http.Request) {
-	s.renderSources(w, r, http.StatusOK, ui.Form{}, ui.Form{}, nil)
+	s.renderSources(w, r, http.StatusOK, ui.Form{})
 }
 
 // githubManifest is the document GitHub creates an App from.
@@ -105,7 +100,7 @@ func (s *Server) githubStart(w http.ResponseWriter, r *http.Request) {
 		f.Fail("base", "Enter this dashboard's address, such as https://musdash.example.com.")
 	}
 	if !f.OK() {
-		s.renderSources(w, r, http.StatusUnprocessableEntity, f, ui.Form{}, nil)
+		s.renderSources(w, r, http.StatusUnprocessableEntity, f)
 		return
 	}
 
@@ -246,7 +241,7 @@ func (s *Server) sshKeyCreate(w http.ResponseWriter, r *http.Request) {
 	f.Set("key_name", name)
 	if name == "" || len(name) > 60 || !plainText(name) {
 		f.Fail("key_name", labelProblem(name, "Enter a name, up to 60 characters."))
-		s.renderSources(w, r, http.StatusUnprocessableEntity, ui.Form{}, f, nil)
+		s.renderKeys(w, r, http.StatusUnprocessableEntity, keysState{keyForm: f})
 		return
 	}
 	public, private, err := source.GenerateDeployKey("musdash")
@@ -265,7 +260,7 @@ func (s *Server) sshKeyCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Shown straight away, with the public half ready to copy.
-	s.renderSources(w, r, http.StatusOK, ui.Form{}, ui.Form{}, &key)
+	s.renderKeys(w, r, http.StatusOK, keysState{newKey: &key})
 }
 
 func (s *Server) sshKeyDelete(w http.ResponseWriter, r *http.Request) {
@@ -280,7 +275,7 @@ func (s *Server) sshKeyDelete(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	default:
-		setFlash(w, r, ui.ToneOK, "Deploy key deleted.")
+		setFlash(w, r, ui.ToneOK, "Key deleted.")
 	}
-	redirect(w, r, "/sources")
+	redirect(w, r, "/keys#ssh-keys")
 }

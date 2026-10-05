@@ -70,12 +70,12 @@ const ownCompose = `services:
 // the form and waits for its deployment when one was asked for.
 func (a *app) newService(projectID string, env db.Environment, name string, form url.Values) db.Service {
 	a.t.Helper()
-	full := url.Values{"env": {env.ID}, "template": {db.TemplateCustom}, "name": {name}, "compose": {ownCompose}, "variables": {"API_KEY=k-123"}}
+	full := url.Values{"template": {db.TemplateCustom}, "name": {name}, "compose": {ownCompose}, "variables": {"API_KEY=k-123"}}
 	for k, v := range form {
 		full[k] = v
 	}
-	page := "/projects/" + projectID + "/services/new?env=" + env.ID + "&template=" + full.Get("template")
-	res, body := a.post(page, "/projects/"+projectID+"/services", full)
+	page := "/projects/" + projectID + "/e/" + env.ID + "/services/new?template=" + full.Get("template")
+	res, body := a.post(page, "/projects/"+projectID+"/e/"+env.ID+"/services", full)
 	if res.StatusCode != http.StatusSeeOther {
 		a.t.Fatalf("create service: %d\n%s", res.StatusCode, body)
 	}
@@ -110,9 +110,13 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
 	projectID, env := a.project("Shop")
-	base := "/projects/" + projectID + "/services/new?env=" + env.ID
+	base := "/projects/" + projectID + "/e/" + env.ID + "/services/new"
 
-	res, page := a.get(base)
+	// The Add resource page is the catalogue; the address without a
+	// template leads to it.
+	res, _ := a.get(base)
+	wantRedirect(t, res, "/projects/"+projectID+"/e/"+env.ID+"/new")
+	res, page := a.get("/projects/" + projectID + "/e/" + env.ID + "/new")
 	wantStatus(t, res, http.StatusOK)
 	for _, tpl := range catalog.Services() {
 		if !strings.Contains(page, "template="+tpl.Key) || !strings.Contains(html.UnescapeString(page), tpl.Name) {
@@ -125,24 +129,24 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 
 	// A template that needs a value from the person asks for it, and one
 	// that must reach apps is connected to the environment by default.
-	_, form := a.get(base + "&template=cloudflared")
+	_, form := a.get(base + "?template=cloudflared")
 	if !strings.Contains(form, `name="var_TUNNEL_TOKEN"`) || !regexp.MustCompile(`name="connect_env"[^>]*checked`).MatchString(form) {
 		t.Fatal("the cloudflared form does not ask for the token or is not connected by default")
 	}
-	_, form = a.get(base + "&template=wordpress")
+	_, form = a.get(base + "?template=wordpress")
 	if strings.Contains(form, `name="var_`) || regexp.MustCompile(`name="connect_env"[^>]*checked`).MatchString(form) || strings.Contains(form, `name="compose"`) {
 		t.Fatal("the WordPress form asks for something it should not")
 	}
-	_, form = a.get(base + "&template=custom")
+	_, form = a.get(base + "?template=custom")
 	if !strings.Contains(form, `name="compose"`) || !strings.Contains(form, `name="variables"`) {
 		t.Fatal("the form for a person's own file has no place for the file")
 	}
-	res, _ = a.get(base + "&template=../databases")
+	res, _ = a.get(base + "?template=../databases")
 	wantStatus(t, res, http.StatusNotFound)
 
 	// The token is required.
-	res, body := a.post(base+"&template=cloudflared", "/projects/"+projectID+"/services",
-		url.Values{"env": {env.ID}, "template": {"cloudflared"}, "name": {"tunnel"}, "connect_env": {"1"}})
+	res, body := a.post(base+"?template=cloudflared", "/projects/"+projectID+"/e/"+env.ID+"/services",
+		url.Values{"template": {"cloudflared"}, "name": {"tunnel"}, "connect_env": {"1"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "Enter a value on one line") {
 		t.Fatalf("cloudflared without its token: %d", res.StatusCode)
 	}
@@ -155,9 +159,9 @@ func TestCreateServiceFromTheCatalogue(t *testing.T) {
 	projectID, env := a.project("Shop")
 	a.stackServer("wordpress", "80", nil)
 
-	page := "/projects/" + projectID + "/services/new?env=" + env.ID + "&template=wordpress"
-	res, body := a.post(page, "/projects/"+projectID+"/services",
-		url.Values{"env": {env.ID}, "template": {"wordpress"}, "name": {"blog"}, "deploy": {"1"}})
+	page := "/projects/" + projectID + "/e/" + env.ID + "/services/new?template=wordpress"
+	res, body := a.post(page, "/projects/"+projectID+"/e/"+env.ID+"/services",
+		url.Values{"template": {"wordpress"}, "name": {"blog"}, "deploy": {"1"}})
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("create: %d\n%s", res.StatusCode, body)
 	}
@@ -218,7 +222,7 @@ func TestCreateServiceFromTheCatalogue(t *testing.T) {
 		t.Fatal("a page holding passwords may be cached")
 	}
 	// Nowhere else.
-	for _, path := range []string{"/projects/" + projectID + "?env=" + env.ID, "/services/" + s.ID + "/settings", "/services/" + s.ID + "/logs", "/services/" + s.ID + "/compose", "/services/" + s.ID + "/status"} {
+	for _, path := range []string{"/projects/" + projectID + "/e/" + env.ID, "/services/" + s.ID + "/settings", "/services/" + s.ID + "/logs", "/services/" + s.ID + "/compose", "/services/" + s.ID + "/status"} {
 		res, body := a.get(path)
 		wantStatus(t, res, http.StatusOK)
 		for name, value := range vars {
@@ -227,8 +231,8 @@ func TestCreateServiceFromTheCatalogue(t *testing.T) {
 			}
 		}
 	}
-	_, list := a.get("/projects/" + projectID + "?env=" + env.ID)
-	if !strings.Contains(list, "/services/"+s.ID) || !strings.Contains(list, "blog") || !strings.Contains(list, "Services") {
+	_, list := a.get("/projects/" + projectID + "/e/" + env.ID)
+	if !strings.Contains(list, "/services/"+s.ID) || !strings.Contains(list, "blog") {
 		t.Fatal("the project page does not list the service")
 	}
 
@@ -257,9 +261,9 @@ func TestServiceFormValidation(t *testing.T) {
 	projectID, env := a.project("Shop")
 	a.newApp(projectID, env, "web", false, nil)
 	_, otherEnv := a.project("Other")
-	page := "/projects/" + projectID + "/services/new?env=" + env.ID + "&template=custom"
-	create := "/projects/" + projectID + "/services"
-	valid := url.Values{"env": {env.ID}, "template": {db.TemplateCustom}, "name": {"site"}, "compose": {ownCompose}}
+	page := "/projects/" + projectID + "/e/" + env.ID + "/services/new?template=custom"
+	create := "/projects/" + projectID + "/e/" + env.ID + "/services"
+	valid := url.Values{"template": {db.TemplateCustom}, "name": {"site"}, "compose": {ownCompose}}
 
 	for _, c := range []struct {
 		change url.Values
@@ -285,20 +289,17 @@ func TestServiceFormValidation(t *testing.T) {
 			t.Errorf("%.60v: status %d, want 422 with %q", c.change, res.StatusCode, c.want)
 		}
 	}
-	for name, change := range map[string]url.Values{
-		"unknown template":               {"template": {"nonsense"}},
-		"environment of another project": {"env": {otherEnv.ID}},
-	} {
-		form := url.Values{}
-		for k, v := range valid {
-			form[k] = v
-		}
-		for k, v := range change {
-			form[k] = v
-		}
-		if res, _ := a.post(page, create, form); res.StatusCode != http.StatusNotFound {
-			t.Errorf("%s: %d, want 404", name, res.StatusCode)
-		}
+	unknown := url.Values{}
+	for k, v := range valid {
+		unknown[k] = v
+	}
+	unknown.Set("template", "nonsense")
+	if res, _ := a.post(page, create, unknown); res.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown template: %d, want 404", res.StatusCode)
+	}
+	// An environment is only reached through its own project.
+	if res, _ := a.post(page, "/projects/"+projectID+"/e/"+otherEnv.ID+"/services", valid); res.StatusCode != http.StatusNotFound {
+		t.Errorf("environment of another project: %d, want 404", res.StatusCode)
 	}
 	var n int
 	a.db.QueryRow(`SELECT count(*) FROM services`).Scan(&n)
@@ -316,8 +317,8 @@ func TestServiceFormValidation(t *testing.T) {
 		t.Fatal("the overview does not name the variable that still needs a value")
 	}
 	// And an app cannot take its name.
-	res, body := a.post("/projects/"+projectID+"/apps/new?env="+env.ID, "/projects/"+projectID+"/apps",
-		url.Values{"env": {env.ID}, "name": {"site"}, "image": {"nginx"}, "port": {"80"}})
+	res, body := a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+env.ID+"/apps",
+		url.Values{"name": {"site"}, "image": {"nginx"}, "port": {"80"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "already has an app, database or service called site") {
 		t.Fatalf("an app took a service's name: %d", res.StatusCode)
 	}
@@ -336,17 +337,30 @@ func TestEditServiceComposeAndVariables(t *testing.T) {
 	before, _ := a.server.Deploy.ServiceVariables(s)
 	composePage := "/services/" + s.ID + "/compose"
 
-	// The page shows the file and the person's own variables, not the
-	// generated ones.
+	// The page shows the file. The person's own variables are sent when
+	// asked for, and the generated ones not at all.
 	_, page := a.get(composePage)
 	page = html.UnescapeString(page)
-	if !strings.Contains(page, "SERVICE_FQDN_FRONT_3000") || !strings.Contains(page, "API_KEY=k-123") || strings.Contains(page, before["SERVICE_PASSWORD_DB"]) {
-		t.Fatal("the Compose page does not show the file and the entered variables only")
+	if !strings.Contains(page, "SERVICE_FQDN_FRONT_3000") || strings.Contains(page, "k-123") || strings.Contains(page, before["SERVICE_PASSWORD_DB"]) {
+		t.Fatal("the Compose page should show the file and no variable's value")
+	}
+	if !strings.Contains(page, `name="variables_kept"`) || !strings.Contains(page, `hx-get="`+composePage+`/variables"`) {
+		t.Fatal("the Compose page has no way to ask for the variables")
+	}
+	_, field := a.get(composePage + "/variables")
+	if !strings.Contains(field, "API_KEY=k-123") || strings.Contains(field, "variables_kept") || strings.Contains(field, before["SERVICE_PASSWORD_DB"]) {
+		t.Fatalf("asking for the variables does not answer with the entered ones only:\n%s", field)
+	}
+	// A form sent from the page as it first was changes no variable.
+	res, _ := a.post(composePage, composePage, url.Values{"compose": {ownCompose}, "variables_kept": {"1"}})
+	wantRedirect(t, res, composePage)
+	if kept, _ := a.server.Deploy.ServiceVariables(s); kept["API_KEY"] != "k-123" || kept["SERVICE_PASSWORD_DB"] != before["SERVICE_PASSWORD_DB"] {
+		t.Fatalf("a form without the variables changed them: %v", kept)
 	}
 
 	// A change: one more generated value, a changed entered one, connected.
 	changed := strings.Replace(ownCompose, "- REGION=${REGION:-eu}", "- REGION=${REGION:-eu}\n      - SESSION=${SERVICE_BASE64_SESSION}", 1)
-	res, _ := a.post(composePage, composePage, url.Values{"compose": {strings.ReplaceAll(changed, "\n", "\r\n")}, "variables": {"API_KEY=k-456\nREGION=us"}, "connect_env": {"1"}})
+	res, _ = a.post(composePage, composePage, url.Values{"compose": {strings.ReplaceAll(changed, "\n", "\r\n")}, "variables": {"API_KEY=k-456\nREGION=us"}, "connect_env": {"1"}})
 	wantRedirect(t, res, composePage)
 	got, _ := a.db.ServiceByID(ctx, s.ID)
 	after, _ := a.server.Deploy.ServiceVariables(got)
@@ -408,6 +422,11 @@ func TestServiceEndpointDomain(t *testing.T) {
 	endpoints, _ := a.db.ListEndpoints(ctx, s.ID)
 	otherEndpoints, _ := a.db.ListEndpoints(ctx, other.ID)
 	settings := "/services/" + s.ID + "/settings"
+	// The form sends what the handler reads: the HTTPS box is "tls", and
+	// the box's own id is not a second name for it.
+	if _, page := a.get(settings); !strings.Contains(page, `id="tls-`+endpoints[0].ID+`" name="tls"`) || strings.Contains(page, `name="tls-`) {
+		t.Fatal("the HTTPS box of an endpoint is not sent as tls")
+	}
 	save := func(endpointID string, form url.Values) (*http.Response, string) {
 		res, body := a.post(settings, "/services/"+s.ID+"/endpoints/"+endpointID, form)
 		return res, html.UnescapeString(body)
@@ -547,7 +566,7 @@ func TestServiceFailureStopAndDelete(t *testing.T) {
 		t.Fatal("deleted without the name being typed")
 	}
 	res, _ = a.post(settings, "/services/"+s.ID+"/delete", url.Values{"confirm": {"site"}, "delete_data": {"1"}})
-	wantRedirect(t, res, "/projects/"+projectID+"?env="+env.ID)
+	wantRedirect(t, res, "/projects/"+projectID+"/e/"+env.ID)
 	down := a.fake.Calls()[lastIndexOfCall(a.fake.Calls(), " down ")]
 	if !strings.Contains(down, "--project-name "+deploy.ServiceProject(s.ID)) || !strings.HasSuffix(down, "--volumes") {
 		t.Fatalf("down: %s", down)
@@ -556,7 +575,7 @@ func TestServiceFailureStopAndDelete(t *testing.T) {
 	wantStatus(t, res, http.StatusNotFound)
 
 	res, _ = a.post(projectSettings, "/projects/"+projectID+"/delete", url.Values{"confirm": {"Shop"}})
-	wantRedirect(t, res, "/")
+	wantRedirect(t, res, "/projects")
 }
 
 func TestOtherTeamsServiceIsNotFound(t *testing.T) {
@@ -586,7 +605,7 @@ func TestOtherTeamsServiceIsNotFound(t *testing.T) {
 			t.Errorf("GET %s: %d", path, res.StatusCode)
 		}
 	}
-	token := a.csrf("/projects/new")
+	token := a.csrf("/projects")
 	for path, form := range map[string]url.Values{
 		"/deploy":                    {},
 		"/stop":                      {},
@@ -605,8 +624,8 @@ func TestOtherTeamsServiceIsNotFound(t *testing.T) {
 	res, _ := a.post("/services/"+mine.ID+"/settings", "/services/"+mine.ID+"/endpoints/"+theirs[0].ID, url.Values{"host": {"mine.example.com"}})
 	wantStatus(t, res, http.StatusNotFound)
 	// Nor can a service be created in their environment.
-	res, _ = a.post("/projects/"+projectID+"/services/new?env="+env.ID+"&template=custom", "/projects/"+projectID+"/services",
-		url.Values{"env": {envs[0].ID}, "template": {db.TemplateCustom}, "name": {"x"}, "compose": {ownCompose}})
+	res, _ = a.post("/projects/"+projectID+"/e/"+env.ID+"/services/new?template=custom", "/projects/"+projectID+"/e/"+envs[0].ID+"/services",
+		url.Values{"template": {db.TemplateCustom}, "name": {"x"}, "compose": {ownCompose}})
 	wantStatus(t, res, http.StatusNotFound)
 
 	got, _ := a.db.ServiceByID(ctx, other.ID)

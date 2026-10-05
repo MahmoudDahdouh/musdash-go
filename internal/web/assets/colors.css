@@ -1,0 +1,162 @@
+/*
+ * musdash colour system, in two layers.
+ *
+ * 1. Palette (--palette-*): raw hues and steps, the only place a hex value
+ *    is written. Tailwind has no utility namespace for it, so a page cannot
+ *    reach for a palette step: it can only use a role below.
+ * 2. Roles (--color-*): what a colour is for (text level, surface, border,
+ *    state, brand). Components and templates use these and nothing else.
+ *    To re-skin, or to fix a contrast problem, repoint a role at another
+ *    palette step; no component changes.
+ *
+ * Values follow GitHub Primer's light theme (MIT, https://primer.style),
+ * under names of our own. Steps marked "derived" are not Primer values: a
+ * step the role scale needed that Primer does not publish.
+ *
+ * Light mode only. State is always also written as text, never colour alone.
+ */
+@theme static {
+  /* Palette ------------------------------------------------------------ */
+  --palette-blue-50: #f0f9ff; /* derived: lighter than blue-100 */
+  --palette-blue-100: #ddf4ff;
+  --palette-blue-200: #b6e3ff;
+  --palette-blue-300: #80ccff;
+  --palette-blue-400: #54aeff;
+  --palette-blue-500: #218bff;
+  --palette-blue-600: #0969da;
+  --palette-blue-700: #0550ae;
+  --palette-blue-800: #033d8b;
+  --palette-blue-900: #0a3069;
+
+  --palette-green-100: #dafbe1;
+  --palette-green-300: #4ac26b;
+  --palette-green-500: #1f883d;
+  --palette-green-600: #1a7f37;
+
+  /* Not a Primer hue: its attention colour is a yellow that reads olive as
+     text. These are the amber steps of Tailwind's palette (MIT). */
+  --palette-amber-100: #fef3c7;
+  --palette-amber-400: #fbbf24;
+  --palette-amber-600: #d97706;
+  --palette-amber-700: #b45309;
+
+  --palette-orange-100: #fff1e5;
+  --palette-orange-300: #fb8f44;
+  --palette-orange-600: #bc4c00;
+
+  --palette-red-100: #ffebe9;
+  --palette-red-300: #ff8182;
+  --palette-red-500: #cf222e;
+  --palette-red-600: #d1242f;
+  --palette-red-800: #a40e26; /* derived: pressed state of red-600 */
+
+  --palette-purple-100: #fbefff;
+  --palette-purple-300: #c297ff;
+  --palette-purple-600: #8250df;
+
+  --palette-gray-50: #f6f8fa;
+  --palette-gray-100: #eff2f5;
+  --palette-gray-200: #e6eaef;
+  --palette-gray-300: #d1d9e0;
+  --palette-gray-500: #818b98;
+  --palette-gray-700: #59636e;
+  --palette-gray-800: #424a53; /* derived: between gray-700 and gray-950 */
+  --palette-gray-900: #25292e;
+  --palette-gray-950: #1f2328;
+
+  /* Roles: basics ------------------------------------------------------ */
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+
+  /* Roles: brand. 600 is the primary action, 700 its hover, 500 the focus
+     ring, 50 to 200 tints for selected and hovered rows. */
+  --color-brand-50: var(--palette-blue-50);
+  --color-brand-100: var(--palette-blue-100);
+  --color-brand-200: var(--palette-blue-200);
+  --color-brand-300: var(--palette-blue-300);
+  --color-brand-400: var(--palette-blue-400);
+  --color-brand-500: var(--palette-blue-500);
+  --color-brand-600: var(--palette-blue-600);
+  --color-brand-700: var(--palette-blue-700);
+  --color-brand-800: var(--palette-blue-800);
+  --color-brand-900: var(--palette-blue-900);
+
+  /* Roles: text. ink-mute is the quietest level that still reads as text;
+     ink-faint is for disabled and placeholder only. */
+  --color-ink: var(--palette-gray-950);
+  --color-ink-soft: var(--palette-gray-800);
+  --color-ink-mute: var(--palette-gray-700);
+  --color-ink-faint: var(--palette-gray-500);
+
+  /* Roles: surfaces. canvas is the page and paper a card or control on it:
+     both white, told apart by a border, not a tint. sunk is the quiet grey of
+     the frame around content (sidebar, card head and foot, a resting
+     button); sunk-strong and sunk-press are that grey hovered and pressed. */
+  --color-canvas: var(--color-white);
+  --color-paper: var(--color-white);
+  --color-sunk: var(--palette-gray-50);
+  --color-sunk-strong: var(--palette-gray-100);
+  --color-sunk-press: var(--palette-gray-200);
+
+  /* Roles: veils. A translucent grey for hover and selection on something
+     with no fill of its own (a nav item, a tab, a ghost button), so it reads
+     the same on canvas and on sunk. */
+  --color-veil: color-mix(in srgb, var(--palette-gray-500) 10%, transparent);
+  --color-veil-strong: color-mix(in srgb, var(--palette-gray-500) 15%, transparent);
+
+  /* Roles: borders. line divides and outlines cards, line-strong outlines
+     controls, line-veil darkens the edge of a filled control whatever its
+     colour. */
+  --color-line: color-mix(in srgb, var(--palette-gray-300) 70%, transparent);
+  --color-line-strong: var(--palette-gray-300);
+  --color-line-veil: color-mix(in srgb, var(--palette-gray-950) 15%, transparent);
+
+  /* Roles: state. Each has the colour itself (text, rail, dot), a soft tint
+     for a background behind it and a line for a border around that tint. */
+  --color-info: var(--palette-blue-600);
+  --color-info-soft: var(--palette-blue-100);
+  --color-info-line: color-mix(in srgb, var(--palette-blue-400) 40%, transparent);
+  --color-ok: var(--palette-green-600);
+  --color-ok-soft: var(--palette-green-100);
+  --color-ok-line: color-mix(in srgb, var(--palette-green-300) 40%, transparent);
+  /* Amber bright enough to look amber is too light to read as text, so warn
+     is the darker step text needs and warn-mark the brighter one for what is
+     only a mark: a rail, a dot, a meter. */
+  --color-warn: var(--palette-amber-700);
+  --color-warn-mark: var(--palette-amber-600);
+  --color-warn-soft: var(--palette-amber-100);
+  --color-warn-line: color-mix(in srgb, var(--palette-amber-400) 60%, transparent);
+  --color-danger: var(--palette-red-600);
+  --color-danger-strong: var(--palette-red-800);
+  --color-danger-soft: var(--palette-red-100);
+  --color-danger-line: color-mix(in srgb, var(--palette-red-300) 40%, transparent);
+  --color-idle: var(--palette-gray-700);
+  --color-idle-soft: var(--palette-gray-100);
+  --color-idle-line: var(--palette-gray-300);
+
+  /* Roles: log viewer, a dark surface of its own. */
+  --color-log-bg: var(--palette-gray-950);
+  --color-log-fg: var(--palette-gray-300);
+  --color-log-dim: var(--palette-gray-500);
+
+  /* ANSI colours for the log viewer, readable on log-bg. The neutrals come
+     from the palette; the hues are lighter than the state colours because
+     they sit on a dark ground. */
+  --color-term-0: var(--palette-gray-700);
+  --color-term-1: #f47067;
+  --color-term-2: #57c785;
+  --color-term-3: #e5c07b;
+  --color-term-4: #6ea8fe;
+  --color-term-5: #c792ea;
+  --color-term-6: #56c8d8;
+  --color-term-7: var(--palette-gray-300);
+  --color-term-8: var(--palette-gray-500);
+  --color-term-9: #ff8f88;
+  --color-term-10: #7ee2a8;
+  --color-term-11: #f5d99a;
+  --color-term-12: #93c0ff;
+  --color-term-13: #dbb2f7;
+  --color-term-14: #84e0ec;
+  --color-term-15: var(--color-white);
+}

@@ -1,39 +1,32 @@
 package pages
 
 import (
-	"strings"
+	"slices"
+	"strconv"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
 
-func tagCountLine(t db.TagCount) string {
-	var parts []string
-	if t.Apps > 0 {
-		parts = append(parts, plural(t.Apps, "app", "apps"))
-	}
-	if t.Services > 0 {
-		parts = append(parts, plural(t.Services, "service", "services"))
-	}
-	return strings.Join(parts, ", ")
-}
-
-// tagsCard is the part of an app's or a service's settings that holds
-// its tags.
-templ tagsCard(csrf, action string, tags []string) {
-	<form class="card" id="tags" method="post" action={ templ.SafeURL(action) }>
-		@ui.CSRF(csrf)
+// tagsCard is the part of an app's or a service's settings that holds its
+// tags: what it has, and a dialog to change that. The dialog offers every
+// tag of the team, so a tag made on the Tags page can be given here without
+// being typed again.
+templ tagsCard(csrf, action string, tags, teamTags []string) {
+	<section class="card" id="tags">
 		<div class="card-head">
 			<div>
 				<h2 class="card-title">Tags</h2>
 				<p class="muted text-sm">Everything with the same tag can be deployed together, from the Tags page or with one API call.</p>
 			</div>
-		</div>
-		<div class="card-body grid gap-4">
-			@ui.Field(ui.FieldProps{Label: "Tags", For: "tags", Hint: "Separated by commas or spaces. Lowercase letters, numbers, dots and hyphens."}) {
-				@ui.Input(ui.InputProps{ID: "tags", Mono: true, Value: strings.Join(tags, ", "), Described: true, Placeholder: "nightly, frontend", Autocomplete: "off"})
+			@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-tags"}) {
+				Edit
 			}
-			if len(tags) > 0 {
+		</div>
+		<div class="card-body">
+			if len(tags) == 0 {
+				<p class="muted">No tags.</p>
+			} else {
 				<p class="flex flex-wrap gap-2">
 					for _, t := range tags {
 						<a class="badge" href={ templ.SafeURL("/tags/" + t) }>{ t }</a>
@@ -41,64 +34,107 @@ templ tagsCard(csrf, action string, tags []string) {
 				</p>
 			}
 		</div>
-		<div class="card-foot">
-			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
-				Save tags
-			}
-		</div>
-	</form>
-}
-
-templ Tags(s ui.Shell, list []db.TagCount) {
-	@ui.Layout(s) {
-		@ui.PageHeader("Tags", "Groups of apps and services that are deployed together.")
-		if len(list) == 0 {
-			@ui.EmptyState("tag", "No tags yet", "Give an app or a service a tag on its Settings page. Everything with that tag can then be deployed in one go.")
-		} else {
-			<div class="card rows max-w-3xl">
-				for _, t := range list {
-					<a class="row" href={ templ.SafeURL("/tags/" + t.Tag) }>
-						@ui.Icon("tag", "text-ink-mute")
-						<div class="min-w-0 flex-1">
-							<p class="fact truncate font-semibold">{ t.Tag }</p>
-							<p class="muted text-sm">{ tagCountLine(t) }</p>
-						</div>
-						@ui.Icon("chevron-right", "text-ink-mute")
-					</a>
-				}
-			</div>
+	</section>
+	@ui.FormDialog(ui.DialogProps{ID: "edit-tags", Title: "Tags", Action: action, CSRF: csrf, Submit: "Save tags"}) {
+		if len(teamTags) > 0 {
+			<fieldset class="grid gap-2">
+				<legend class="field-label">The team's tags</legend>
+				<div class="grid gap-2 sm:grid-cols-2">
+					for i, t := range teamTags {
+						<label class="check" for={ "tag-" + strconv.Itoa(i) }>
+							<input type="checkbox" id={ "tag-" + strconv.Itoa(i) } name="tag" value={ t } checked?={ slices.Contains(tags, t) }/>
+							<span class="fact">{ t }</span>
+						</label>
+					}
+				</div>
+			</fieldset>
+		}
+		@ui.Field(ui.FieldProps{Label: "New tags", For: "new-tags", Hint: "Separated by commas or spaces. Lowercase letters, numbers, dots and hyphens."}) {
+			@ui.Input(ui.InputProps{ID: "new-tags", Name: "tags", Mono: true, Described: true, Placeholder: "nightly, frontend", Autocomplete: "off"})
 		}
 	}
 }
 
-templ Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, base string) {
+templ newTagDialog(csrf string, f ui.Form) {
+	@ui.FormDialog(ui.DialogProps{ID: "new-tag", Title: "New tag", Description: "A tag groups apps and services that are deployed together. Give it to them afterwards, from their Settings.", Action: "/tags", CSRF: csrf, Submit: "Create tag", Open: !f.OK()}) {
+		@ui.TextField(f, "Name", "Lowercase letters, numbers, dots and hyphens.", ui.InputProps{ID: "tag-name", Name: "name", Mono: true, Required: true, Autofocus: true, Placeholder: "weekly", Autocomplete: "off", Attrs: templ.Attributes{"maxlength": "32"}})
+	}
+}
+
+templ Tags(s ui.Shell, list []db.TagCount, f ui.Form) {
 	@ui.Layout(s) {
-		@ui.PageHeader(tag, plural(len(apps)+len(services), "resource has", "resources have")+" this tag.") {
-			<form method="post" action={ templ.SafeURL("/tags/" + tag + "/deploy") }>
+		@ui.PageHeader("Tags", "Groups of apps and services that are deployed together.") {
+			if len(list) > 0 {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-tag"}) {
+					New tag
+				}
+			}
+		}
+		if len(list) == 0 {
+			@ui.EmptyState("tag", "No tags yet", "Make a tag, then give it to apps and services. Everything with that tag can be deployed in one go.") {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-tag"}) {
+					New tag
+				}
+			}
+		} else {
+			@ui.Tiles("Tags", false) {
+				for _, t := range list {
+					@ui.Tile(ui.TileProps{Href: "/tags/" + t.Tag, Icon: "tag", Title: t.Tag}) {
+						if t.Apps+t.Services == 0 {
+							@ui.Meta("", "Nothing has it yet", "")
+						} else {
+							@ui.Meta(KindIcon(db.KindApp), strconv.Itoa(t.Apps), noun(t.Apps, "app", "apps"))
+							@ui.Meta(KindIcon(db.KindService), strconv.Itoa(t.Services), noun(t.Services, "service", "services"))
+						}
+					}
+				}
+			}
+		}
+		@newTagDialog(s.CSRF, f)
+	}
+}
+
+func tagSummary(n int) string {
+	if n == 0 {
+		return "Nothing has this tag yet."
+	}
+	return plural(n, "resource has", "resources have") + " this tag."
+}
+
+// Tag is one tag: what has it, and what can be done with the tag itself.
+// f is the rename form.
+templ Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, base string, f ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader(tag, tagSummary(len(apps)+len(services))) {
+			@ui.Button(ui.ButtonProps{Icon: "pencil", Opens: "rename-tag"}) {
+				Rename
+			}
+			<form method="post" action={ templ.SafeURL("/tags/" + tag + "/delete") }>
 				@ui.CSRF(s.CSRF)
-				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy"}) {
-					Deploy all
+				@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.DangerQuiet, Icon: "trash", Attrs: ui.Ask("Delete the tag "+tag+"?", "It is taken off everything that has it. The apps and services themselves are not touched.", "Delete tag", true)}) {
+					Delete
 				}
 			</form>
+			if len(apps)+len(services) > 0 {
+				<form method="post" action={ templ.SafeURL("/tags/" + tag + "/deploy") }>
+					@ui.CSRF(s.CSRF)
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy", Attrs: ui.Ask("Deploy everything tagged "+tag+"?", plural(len(apps)+len(services), "resource is", "resources are")+" deployed again, each as a push would.", "Deploy all", false)}) {
+						Deploy all
+					}
+				</form>
+			}
 		}
-		<div class="grid max-w-3xl gap-6">
-			if len(apps) > 0 {
-				<section class="grid gap-2">
-					<h2 class="font-semibold">Apps</h2>
-					@AppRows(apps)
-				</section>
+		<div class="grid gap-6">
+			if len(apps)+len(services) == 0 {
+				@ui.EmptyState("tag", "Nothing has this tag yet", "Give it to an app or a service: open its Settings and edit its tags.")
+			} else {
+				@ResourceTiles(Resources{Apps: apps, Services: services})
 			}
-			if len(services) > 0 {
-				<section class="grid gap-2">
-					<h2 class="font-semibold">Services</h2>
-					@ServiceRows(services)
-				</section>
-			}
-			<section class="card">
+			<section class="card max-w-3xl">
 				<div class="card-head">
 					<div>
 						<h2 class="card-title">From a pipeline</h2>
-						<p class="muted text-sm">The same as the button, with an API token that may deploy. Tokens are made under Account.</p>
+						<p class="muted text-sm">The same as the button, with an API token that may deploy.</p>
 					</div>
 				</div>
 				<div class="card-body">
@@ -106,5 +142,8 @@ templ Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, base str
 				</div>
 			</section>
 		</div>
+		@ui.FormDialog(ui.DialogProps{ID: "rename-tag", Title: "Rename tag", Description: "What has the tag keeps it under the new name. A pipeline that deploys by the old name has to be changed.", Action: "/tags/" + tag, CSRF: s.CSRF, Submit: "Rename tag", Open: !f.OK()}) {
+			@ui.TextField(f, "Name", "Lowercase letters, numbers, dots and hyphens.", ui.InputProps{ID: "tag-name", Name: "name", Mono: true, Required: true, Value: tag, Autocomplete: "off", Attrs: templ.Attributes{"maxlength": "32"}})
+		}
 	}
 }

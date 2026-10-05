@@ -112,39 +112,18 @@ func parseGitForm(r *http.Request, f *ui.Form, c pages.GitChoices, app *db.App) 
 	f.Set("spa_fallback", map[bool]string{true: "1", false: "0"}[app.SPAFallback])
 }
 
-// triggers gathers what the Settings page shows about starting deployments
-// from outside.
-func (s *Server) triggers(r *http.Request, app db.App, newToken string) (pages.Triggers, error) {
-	base := s.publicBase(r)
-	tr := pages.Triggers{
-		WebhookURL:   base + "/webhooks/git/" + app.ID,
-		DeployURL:    base + "/api/v1/deploy?uuid=" + app.ID,
-		HasToken:     app.DeployTokenHash != "",
-		NewToken:     newToken,
-		ViaGitHubApp: app.GitSourceID != "",
-	}
-	if app.WebhookSecret != "" {
-		plain, err := s.Box.OpenString(app.WebhookSecret)
-		if err != nil {
-			return tr, errors.New("the webhook secret cannot be decrypted")
-		}
-		tr.WebhookSecret = plain
-	}
-	return tr, nil
-}
-
 // renderAppSettings draws the Settings page with the given form states.
-func (s *Server) renderAppSettings(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, general, domain, src ui.Form, newToken string) {
-	s.renderAppSettingsForms(w, r, status, v, general, domain, src, ui.Form{}, newToken)
+func (s *Server) renderAppSettings(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, general, domain, src ui.Form) {
+	s.renderAppSettingsForms(w, r, status, v, general, domain, src, ui.Form{})
 }
 
 // renderAppSettingsWith draws the Settings page with the previews form in
 // the given state.
 func (s *Server) renderAppSettingsWith(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, previews ui.Form) {
-	s.renderAppSettingsForms(w, r, status, v, ui.Form{}, ui.Form{}, ui.Form{}, previews, "")
+	s.renderAppSettingsForms(w, r, status, v, ui.Form{}, ui.Form{}, ui.Form{}, previews)
 }
 
-func (s *Server) renderAppSettingsForms(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, general, domain, src, previews ui.Form, newToken string) {
+func (s *Server) renderAppSettingsForms(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, general, domain, src, previews ui.Form) {
 	if v.App.IsPreview() {
 		// Nothing of its own to set: where it comes from, and how to
 		// remove it.
@@ -160,20 +139,15 @@ func (s *Server) renderAppSettingsForms(w http.ResponseWriter, r *http.Request, 
 		s.fail(w, r, err)
 		return
 	}
-	tr, err := s.triggers(r, v.App, newToken)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	if v.Servers, err = s.DB.ListServers(r.Context(), sessionFrom(r).TeamID); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if v.Tags, err = s.DB.TagsOf(r.Context(), sessionFrom(r).TeamID, db.KindApp, v.App.ID); err != nil {
+	if v.Tags, v.TeamTags, err = s.tagChoices(r, db.KindApp, v.App.ID); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, status, pages.AppSettings(s.appShell(w, r, v), v, general, domain, src, previews, choices, tr))
+	s.render(w, r, status, pages.AppSettings(s.appShell(w, r, v), v, general, domain, src, previews, choices))
 }
 
 func (s *Server) appSourceSave(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +181,7 @@ func (s *Server) appSourceSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, ui.Form{}, f, "")
+		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, ui.Form{}, f)
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Source saved. Redeploy to build from it.")
@@ -231,7 +205,7 @@ func (s *Server) appWebhookSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Webhook secret saved. Enter it in the repository's webhook settings.")
-	redirect(w, r, "/apps/"+v.App.ID+"/settings#triggers")
+	redirect(w, r, "/keys#webhooks")
 }
 
 // appBuildServer chooses the server a Git app's image is built on.
@@ -272,7 +246,7 @@ func (s *Server) appDeployToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		setFlash(w, r, ui.ToneOK, "Deploy token revoked.")
-		redirect(w, r, "/apps/"+v.App.ID+"/settings#triggers")
+		redirect(w, r, "/keys#deploy-tokens")
 		return
 	}
 	token := "mdt_" + secret.RandomToken(32)
@@ -281,8 +255,8 @@ func (s *Server) appDeployToken(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	v.App.DeployTokenHash = hash
 	// Rendered directly rather than after a redirect, so the token is never
 	// placed in a cookie or a URL.
-	s.renderAppSettings(w, r, http.StatusOK, v, ui.Form{}, ui.Form{}, ui.Form{}, token)
+	s.renderKeys(w, r, http.StatusOK, keysState{newDeploy: &pages.NewDeployToken{
+		Owner: v.App.Name, Token: token, URL: s.publicBase(r) + "/api/v1/deploy?uuid=" + v.App.ID}})
 }

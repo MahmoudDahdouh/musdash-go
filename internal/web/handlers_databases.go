@@ -54,46 +54,28 @@ func (s *Server) loadDatabase(w http.ResponseWriter, r *http.Request) (pages.Dat
 
 func (s *Server) databaseShell(w http.ResponseWriter, r *http.Request, v pages.DatabaseView) ui.Shell {
 	return s.shell(w, r, v.DB.Name, "projects",
-		ui.Crumb{Label: "Projects", Href: "/"},
-		ui.Crumb{Label: v.Project.Name, Href: "/projects/" + v.Project.ID + "?env=" + v.Env.ID},
-		ui.Crumb{Label: v.DB.Name},
+		envCrumbs(v.Project, v.Env, resourceCrumb(v.Env, db.KindDatabase, v.DB.ID, v.DB.Name))...,
 	)
 }
 
-// newDatabaseTarget loads the project and environment a new database goes
-// into. The environment id comes from the query or the form.
-func (s *Server) newDatabaseTarget(w http.ResponseWriter, r *http.Request, envID string) (db.Project, db.Environment, bool) {
-	p, ok := s.loadProject(w, r)
-	if !ok {
-		return p, db.Environment{}, false
-	}
-	env, err := s.DB.Environment(r.Context(), sessionFrom(r).TeamID, envID)
-	if errors.Is(err, db.ErrNotFound) || (err == nil && env.ProjectID != p.ID) {
-		s.notFound(w, r)
-		return p, env, false
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return p, env, false
-	}
-	return p, env, true
-}
-
-func newDatabaseCrumbs(p db.Project, env db.Environment) []ui.Crumb {
-	return []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New database"}}
+// newResourceCrumbs is the trail of a form that adds a resource of one
+// kind: back through the page that offers every kind.
+func newResourceCrumbs(p db.Project, env db.Environment, kind string) []ui.Crumb {
+	return envCrumbs(p, env, ui.Crumb{Label: "Add resource", Href: envPath(p.ID, env.ID) + "/new"}, ui.Crumb{Label: kind})
 }
 
 func (s *Server) databaseNew(w http.ResponseWriter, r *http.Request) {
-	p, env, ok := s.newDatabaseTarget(w, r, r.URL.Query().Get("env"))
+	p, env, ok := s.loadProjectEnv(w, r)
 	if !ok {
 		return
 	}
-	shell := s.shell(w, r, "New database", "projects", newDatabaseCrumbs(p, env)...)
 	engine := r.URL.Query().Get("engine")
 	if engine == "" {
-		s.render(w, r, http.StatusOK, pages.DatabaseEngines(shell, p, env, catalog.Databases()))
+		// The engines are on the page every kind of resource is added from.
+		redirect(w, r, envPath(p.ID, env.ID)+"/new")
 		return
 	}
+	shell := s.shell(w, r, "New database", "projects", newResourceCrumbs(p, env, "Database")...)
 	tpl, known := catalog.Database(engine)
 	if !known {
 		s.notFound(w, r)
@@ -108,7 +90,7 @@ func (s *Server) databaseNew(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) databaseCreate(w http.ResponseWriter, r *http.Request) {
-	p, env, ok := s.newDatabaseTarget(w, r, r.PostFormValue("env"))
+	p, env, ok := s.loadProjectEnv(w, r)
 	if !ok {
 		return
 	}
@@ -163,7 +145,7 @@ func (s *Server) databaseCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		shell := s.shell(w, r, "New database", "projects", newDatabaseCrumbs(p, env)...)
+		shell := s.shell(w, r, "New database", "projects", newResourceCrumbs(p, env, "Database")...)
 		s.render(w, r, http.StatusUnprocessableEntity, pages.DatabaseNew(shell, p, env, tpl, f, serverList))
 		return
 	}
@@ -414,5 +396,5 @@ func (s *Server) databaseDelete(w http.ResponseWriter, r *http.Request) {
 	} else {
 		setFlash(w, r, ui.ToneOK, "Database deleted. Its data is still in the volume "+deploy.DatabaseVolume(v.DB.ID)+".")
 	}
-	redirect(w, r, "/projects/"+v.Project.ID+"?env="+v.Env.ID)
+	redirect(w, r, envPath(v.Project.ID, v.Env.ID))
 }

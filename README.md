@@ -58,7 +58,7 @@ The installer creates a `musdash` user, installs `/usr/local/bin/musdash` and tw
 
 1. Open `http://<server address>:8000` and create the owner account.
 2. Check **Servers**: Docker and the proxy should both show as running, and the public IP address should be the server's.
-3. Create a project, then **New app** with an image such as `nginx:alpine`. The generated `sslip.io` address works at once over HTTP.
+3. Create a project, then **Add resource** and **Docker image**, with an image such as `nginx:alpine`. The generated `sslip.io` address works at once over HTTP.
 4. For HTTPS, point a domain's DNS at the server and add it under the app's **Settings → Domains**. The certificate is issued on the first request.
 5. To put the dashboard itself on a domain with HTTPS, set it under **Settings**.
 
@@ -143,7 +143,7 @@ Four build packs:
 - **Static site**: a directory served by nginx, with an optional single-page-app fallback.
 - **Nixpacks** and **Railpack**: for a repository without a Dockerfile. The builder reads the code, works out how to build it, and the app listens on the port you gave it, which it is told as `PORT`. Their own settings go in as build-time variables (`NIXPACKS_START_CMD`, `RAILPACK_BUILD_CMD`, …) or in the repository's `nixpacks.toml` / `railpack.json`.
 
-Variables marked build-time on the Environment tab are passed as build arguments (with Railpack, as build secrets).
+Variables marked build-time on the Environment tab are passed as build arguments (with Railpack, as build secrets). The tab lists variables by name: their values are sent to the page only when you choose **Show values**, and are changed in the tab's editor. Shared variables and a service's variables are kept the same way.
 
 **Builds cannot reach the network.** If a build fails where it downloads something ("Temporary failure in name resolution", "Could not resolve host", `EAI_AGAIN`) while containers on the same server reach the network, the steps of a build have no DNS on that server: seen with Docker 29 on Ubuntu 24.04. Give Docker's builds a resolver in `/etc/docker/daemon.json`, for example `{"dns": ["1.1.1.1", "8.8.8.8"]}`, and restart Docker. musdash adds this to the error of a build that failed after such a line.
 
@@ -152,7 +152,7 @@ Neither builder is installed on a server. The first build that needs one makes a
 A push deploys the app when auto-deploy is on:
 
 - Through a GitHub App, pushes arrive on their own; nothing to add.
-- Otherwise add a webhook to the repository. The app's Settings page shows the address and the secret, and says where each host wants them.
+- Otherwise add a webhook to the repository. The **Keys & tokens** page shows the address and the secret of every app and service, and says where each host wants them.
 
 | Host | The secret goes in | Events to send |
 |---|---|---|
@@ -162,7 +162,7 @@ A push deploys the app when auto-deploy is on:
 
 Private repositories on these hosts are read with a deploy key (Bitbucket calls it an access key). Bitbucket Data Center is not supported.
 
-A CI pipeline can start a deployment with the app's deploy token, created on the same page:
+A CI pipeline can start a deployment with the app's deploy token, made on the same page:
 
 ```bash
 curl -X POST -H "Authorization: Bearer $MUSDASH_DEPLOY_TOKEN" "https://musdash.example.com/api/v1/deploy?uuid=APP_ID"
@@ -183,7 +183,7 @@ Switch it on under the app's Settings. Each pull request into the app's branch t
 
 ## Databases
 
-**New database** on a project page offers eight engines. musdash generates a user and a 32-character password, creates a Docker volume for the data and starts the engine on the environment's network.
+**Add resource** on a project page offers eight database engines. musdash generates a user and a 32-character password, creates a Docker volume for the data and starts the engine on the environment's network.
 
 - Apps in the same environment connect by the database's name, for example `postgres://postgres:…@maindb:5432/postgres`. The Overview page has the connection string ready to copy into an app's variables.
 - Nothing outside the environment can reach a database until you switch on its **public port** in Settings. It is then open on the server to anyone with the password. Docker publishes the port past ufw and firewalld, so only a firewall in front of the server, such as your provider's, can narrow who reaches it.
@@ -194,7 +194,7 @@ Switch it on under the app's Settings. Each pull request into the app's branch t
 
 ## Services
 
-A service is a stack of containers described by a Docker Compose file. **New service** on a project page offers a small catalogue and "Your own Compose file".
+A service is a stack of containers described by a Docker Compose file. **Add resource** on a project page offers a small catalogue of services and "Your own Compose file".
 
 - Give a service of the stack a web address by adding `SERVICE_FQDN_<NAME>_<PORT>` to its environment: `NAME` is the Compose service, `PORT` the port it listens on. musdash gives it a domain (a generated one at first; change it under Settings) and routes it.
 - `SERVICE_URL_<NAME>` is the same address with its scheme, `SERVICE_HTTPS_<NAME>` is `true` or `false`.
@@ -211,12 +211,12 @@ To publish a port that is not HTTP (a mail server, a game server), use an ordina
 
 ### Stacks from a Git repository
 
-"New service" also takes a Compose file that lives in a repository, read through the same GitHub Apps and deploy keys as apps. At every deployment musdash clones the branch, reads the file in the sandbox with only the checkout in view, and applies the same checks as to a pasted file. Differences from a pasted stack:
+A service also takes a Compose file that lives in a repository ("Compose file in a Git repository"), read through the same GitHub Apps and deploy keys as apps. At every deployment musdash clones the branch, reads the file in the sandbox with only the checkout in view, and applies the same checks as to a pasted file. Differences from a pasted stack:
 
 - `build:` is allowed for contexts inside the repository. Images are built with `docker compose build`, one build at a time per server, and named by musdash.
 - Files of the repository can be mounted into containers (`./nginx.conf:/etc/nginx/nginx.conf`). They are mounted read-only, and a path that is a symbolic link in the repository is refused. Data that a container writes belongs in a named volume.
 - `include`, `extends` and `env_file` may name files of the repository.
-- A push to the branch redeploys it, through the GitHub App or through a webhook you add to the repository; a deploy token does the same for a CI pipeline. Both are on the service's Compose tab.
+- A push to the branch redeploys it, through the GitHub App or through a webhook you add to the repository; a deploy token does the same for a CI pipeline. Both are on the Keys & tokens page.
 - Only the Compose file itself is scanned for `SERVICE_…` variables, not files it includes.
 
 ## More servers
@@ -228,7 +228,7 @@ Servers, "Add a server" takes another machine that has Docker and is reached ove
 3. Choose **Check**. The first check records the server's host key and shows its fingerprint with the kind of key it is, to compare with the server's own: for `ED25519 SHA256:…`, what `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` prints there. musdash asks for the Ed25519 key first, then ECDSA, then RSA, as `ssh` does, and the page names the file. From then on musdash talks only to a machine that presents this key; if the server is reinstalled, "Forget host key" and check again. The check also reports Docker, the Compose plugin, git, memory, whether sshd forwards connections, and whether the proxy can be installed.
 4. Choose **Install proxy** to serve domains from that server. It copies the musdash binary into the server's data directory and starts it as the systemd service `musdash-proxy`, which needs root or `sudo` without a password. For a server of another architecture than the dashboard's, put that architecture's binary at `<data>/dist/musdash-linux-<arch>` first (`make build-linux` produces both).
 
-With more than one server, New app, New database and New service ask which one. Point an app's domain at the server it runs on.
+With more than one server, the form a resource is added with asks which one. Point an app's domain at the server it runs on.
 
 - A remote server keeps musdash's files (env files, Compose stacks, backups, routes, certificates) in its own data directory: `/var/lib/musdash` for root, `~/.musdash` otherwise, or what you entered. It has to be a directory for musdash alone, which makes directories in it and clears out what its own builds left: a system directory or a home directory is refused, and so is a directory that already holds other things when the server is first checked. A check leaves the file `.owned-by-musdash` in it, which is how musdash knows the directory later.
 - A command's secrets never appear in the server's process list: they travel in a private file that the command's shell reads and removes.
@@ -309,11 +309,11 @@ MAIL_URL=smtp://{{team.SMTP_HOST}}:587
 
 ## Tags
 
-An app's and a service's Settings page takes tags: short names such as `nightly` or `frontend`. The Tags page lists them, and a tag's page has **Deploy all**, which queues a deployment of everything that has the tag. Something that already has a deployment waiting is not queued twice. The same can be done with one API call (below).
+A tag is a short name such as `nightly` or `frontend`. The Tags page makes, renames and deletes them, and a tag can exist before anything has it; an app's and a service's Settings page chooses among them or adds a new one. A tag's page has **Deploy all**, which queues a deployment of everything that has the tag. Something that already has a deployment waiting is not queued twice. The same can be done with one API call (below).
 
 ## The API
 
-For scripts and pipelines. Under Account, make a token: it asks for your password, is shown once, and is stored as a hash. A token may read, or read and deploy; it can have an end date; it acts as the person who made it. It stops working when they leave the team, change or reset their password, turn on two-step sign-in, or are given a higher role.
+For scripts and pipelines. Under Keys & tokens, make a token: it asks for your password, is shown once, and is stored as a hash. A token may read, or read and deploy; it can have an end date; it acts as the person who made it. It stops working when they leave the team, change or reset their password, turn on two-step sign-in, or are given a higher role.
 
 ```bash
 curl -H "Authorization: Bearer $MUSDASH_TOKEN" https://musdash.example.com/api/v1/apps
@@ -439,14 +439,21 @@ make test
 
 ### Front end
 
-Pages are rendered on the server with [templ](https://templ.guide) and updated with [htmx](https://htmx.org). There is no Node toolchain and no front-end framework: interactive behaviour is a 4 KB script driven by `data-` attributes, which lets the Content-Security-Policy forbid inline script and style.
+Pages are rendered on the server with [templ](https://templ.guide) and updated with [htmx](https://htmx.org). There is no Node toolchain and no front-end framework: interactive behaviour is one script of about 5 KB compressed, driven by `data-` attributes, which lets the Content-Security-Policy forbid inline script and style.
+
+How the pages are laid out:
+
+- The bar at the top is where you are: the project, its environment and the resource, each a switcher to the others beside it. An environment is part of the address (`/projects/<id>/e/<environment>`); a project's own address leads to its first one.
+- Projects, and what is in an environment, are tiles. Apps, databases and services are all resources and are added from one page, **Add resource**.
+- A form of up to five fields is a dialog, opened from a button beside what it changes. Anything that stops, removes or replaces something asks first; deleting a project, an app, a database or a service asks for its name.
+- Keys, tokens and webhook secrets of the whole team are on one page, **Keys & tokens**. A project's domains are on its **Domains** tab.
 
 The design system lives in two places:
 
 - Tokens and component styles: `internal/web/assets/input.css`
 - Components: `internal/web/ui`
 
-Icons follow the [Lucide](https://lucide.dev) set (ISC licence).
+Icons are from the free [Hugeicons](https://hugeicons.com) set, Stroke Rounded (MIT licence, `internal/web/ui/icons.LICENSE`).
 
 ## Layout
 

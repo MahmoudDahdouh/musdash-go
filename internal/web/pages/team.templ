@@ -73,7 +73,16 @@ templ oneTimeLink(v TeamView) {
 
 templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 	@ui.Layout(s) {
-		@ui.PageHeader("Team", "Who can sign in to this musdash, and what each of them may do.")
+		@ui.PageHeader(v.Team.Name, "Who can sign in to this musdash, and what each of them may do.") {
+			if s.Admin {
+				@ui.Button(ui.ButtonProps{Icon: "pencil", Opens: "rename-team"}) {
+					Rename
+				}
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "invite"}) {
+					Invite
+				}
+			}
+		}
 		@ui.Tabs(TeamTabs(), "members")
 		<div class="grid max-w-4xl gap-6">
 			@oneTimeLink(v)
@@ -101,12 +110,8 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 									<form class="flex items-center gap-2" method="post" action={ templ.SafeURL("/team/members/" + m.UserID + "/role") }>
 										@ui.CSRF(s.CSRF)
 										<label class="sr-only" for={ "role-" + m.UserID }>Role of { m.Name }</label>
-										<select id={ "role-" + m.UserID } name="role" class="input">
-											for _, o := range roleOptions {
-												<option value={ o.Value } selected?={ o.Value == m.Role }>{ o.Label }</option>
-											}
-										</select>
-										@ui.Button(ui.ButtonProps{Small: true, Type: "submit"}) {
+										@ui.SelectNamed("role-"+m.UserID, "role", roleOptions, m.Role, nil)
+										@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Attrs: ui.Ask("Change the role of "+m.Name+"?", "A higher role signs them out everywhere and ends their reset links and API tokens. A lower one withdraws the invitations they made.", "Change role", false)}) {
 											Save
 										}
 									</form>
@@ -121,14 +126,14 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 									<div class="flex flex-wrap justify-end gap-2">
 										<form method="post" action={ templ.SafeURL("/team/members/" + m.UserID + "/reset") }>
 											@ui.CSRF(s.CSRF)
-											@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "key"}) {
+											@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "key", Attrs: ui.Ask("Make a reset link for "+m.Name+"?", "Whoever opens the link chooses a new password for this account. It is shown once, right after it is made.", "Make reset link", false)}) {
 												Reset link
 											}
 										</form>
 										if m.TwoStep {
 											<form method="post" action={ templ.SafeURL("/team/members/" + m.UserID + "/two-step-off") }>
 												@ui.CSRF(s.CSRF)
-												@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "lock"}) {
+												@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "lock", Attrs: ui.Ask("Turn off the second step of "+m.Name+"?", "Their password alone signs them in from now on, and their recovery codes are deleted. They can set it up again from their Account page.", "Turn off second step", true)}) {
 													Turn off second step
 												}
 											</form>
@@ -171,7 +176,7 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 								if s.Admin {
 									<form method="post" action={ templ.SafeURL("/team/invitations/" + inv.ID + "/delete") }>
 										@ui.CSRF(s.CSRF)
-										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Cancel the invitation of "+inv.Email+"?", "The link stops working at once.", "Cancel invitation", true)}) {
 											Cancel
 										}
 									</form>
@@ -179,34 +184,24 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 							</div>
 						}
 					</div>
-				} else if !s.Admin {
+				} else {
 					<p class="card-body muted">Nobody is invited at the moment.</p>
 				}
-				if s.Admin {
-					<form class={ "card-body grid gap-4", templ.KV("border-t border-line", len(v.Invitations) > 0) } method="post" action="/team/invitations">
-						@ui.CSRF(s.CSRF)
-						<div class="grid gap-4 sm:grid-cols-[1fr_12rem]">
-							@ui.TextField(invite, "Email", "The address they will sign in with.", ui.InputProps{ID: "email", Type: "email", Required: true, Autocomplete: "off"})
-							if s.Owner {
-								@ui.Field(ui.FieldProps{Label: "Role", For: "role", Error: invite.E("role")}) {
-									@ui.Select("role", roleOptions[:2], orDefault(invite.V("role"), db.RoleMember), nil)
-								}
-							}
-						</div>
-						<div>
-							@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "plus"}) {
-								Create invitation link
-							}
-						</div>
-					</form>
-				}
 			</section>
-			if s.Admin {
-				@ui.FormCard("Team name", "", "/team", s.CSRF, "Save name") {
-					@ui.TextField(rename, "Name", "", ui.InputProps{ID: "name", Value: v.Team.Name, Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
+		</div>
+		if s.Admin {
+			@ui.FormDialog(ui.DialogProps{ID: "invite", Title: "Invite someone", Description: "You get a link to send them. It works once, within seven days, and is shown once.", Action: "/team/invitations", CSRF: s.CSRF, Submit: "Create invitation link", Open: !invite.OK()}) {
+				@ui.TextField(invite, "Email", "The address they will sign in with.", ui.InputProps{ID: "email", Type: "email", Required: true, Autocomplete: "off"})
+				if s.Owner {
+					@ui.Field(ui.FieldProps{Label: "Role", For: "role", Error: invite.E("role")}) {
+						@ui.Select("role", roleOptions[:2], orDefault(invite.V("role"), db.RoleMember), nil)
+					}
 				}
 			}
-		</div>
+			@ui.FormDialog(ui.DialogProps{ID: "rename-team", Title: "Rename team", Action: "/team", CSRF: s.CSRF, Submit: "Save name", Open: !rename.OK()}) {
+				@ui.TextField(rename, "Name", "", ui.InputProps{ID: "team-name", Name: "name", Value: v.Team.Name, Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
+			}
+		}
 	}
 }
 

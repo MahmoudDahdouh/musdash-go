@@ -47,29 +47,25 @@ func (s *Server) loadProject(w http.ResponseWriter, r *http.Request) (db.Project
 	return p, true
 }
 
-func projectCrumbs(p db.Project) []ui.Crumb {
-	return []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name}}
-}
-
-func (s *Server) projectList(w http.ResponseWriter, r *http.Request) {
+// renderProjects draws the Projects page; f is the New project form, with
+// what was refused when it comes back.
+func (s *Server) renderProjects(w http.ResponseWriter, r *http.Request, status int, f ui.Form) {
 	projects, err := s.DB.ListProjects(r.Context(), sessionFrom(r).TeamID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.ProjectList(s.shell(w, r, "Projects", "projects"), projects))
+	s.render(w, r, status, pages.ProjectList(s.shell(w, r, "Projects", "projects"), projects, f))
 }
 
-func (s *Server) projectNew(w http.ResponseWriter, r *http.Request) {
-	crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: "New project"}}
-	s.render(w, r, http.StatusOK, pages.ProjectNew(s.shell(w, r, "New project", "projects", crumbs...), ui.Form{}))
+func (s *Server) projectList(w http.ResponseWriter, r *http.Request) {
+	s.renderProjects(w, r, http.StatusOK, ui.Form{})
 }
 
 func (s *Server) projectCreate(w http.ResponseWriter, r *http.Request) {
 	name, description, f := projectForm(r)
 	if !f.OK() {
-		crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: "New project"}}
-		s.render(w, r, http.StatusUnprocessableEntity, pages.ProjectNew(s.shell(w, r, "New project", "projects", crumbs...), f))
+		s.renderProjects(w, r, http.StatusUnprocessableEntity, f)
 		return
 	}
 	p, err := s.DB.CreateProject(r.Context(), sessionFrom(r).TeamID, name, description)
@@ -81,6 +77,8 @@ func (s *Server) projectCreate(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, "/projects/"+p.ID)
 }
 
+// projectShow is a project's first environment, which is production unless
+// that one was deleted: where a link to the project itself leads.
 func (s *Server) projectShow(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.loadProject(w, r)
 	if !ok {
@@ -95,36 +93,23 @@ func (s *Server) projectShow(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, errors.New("project "+p.ID+" has no environment"))
 		return
 	}
-	current := envs[0]
-	if want := r.URL.Query().Get("env"); want != "" {
-		found := false
-		for _, e := range envs {
-			if e.ID == want {
-				current, found = e, true
-				break
-			}
-		}
-		if !found {
-			s.notFound(w, r)
-			return
-		}
+	s.renderEnvironment(w, r, p, envs[0])
+}
+
+// environmentShow is one environment of a project, named in the path.
+func (s *Server) environmentShow(w http.ResponseWriter, r *http.Request) {
+	if p, env, ok := s.loadProjectEnv(w, r); ok {
+		s.renderEnvironment(w, r, p, env)
 	}
-	apps, err := s.DB.ListApps(r.Context(), current.ID)
+}
+
+func (s *Server) renderEnvironment(w http.ResponseWriter, r *http.Request, p db.Project, env db.Environment) {
+	res, err := s.envResources(r, env.ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	databases, err := s.DB.ListDatabases(r.Context(), current.ID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	services, err := s.DB.ListServices(r.Context(), current.ID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	s.render(w, r, http.StatusOK, pages.ProjectShow(s.shell(w, r, p.Name, "projects", projectCrumbs(p)...), p, envs, current, apps, databases, services))
+	s.render(w, r, http.StatusOK, pages.ProjectShow(s.shell(w, r, p.Name, "projects", envCrumbs(p, env)...), p, env, res))
 }
 
 // renderSettings draws the project settings page with the given form states.
@@ -134,7 +119,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, status i
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, status, pages.ProjectSettings(s.shell(w, r, p.Name, "projects", projectCrumbs(p)...), p, envs, details, envForm))
+	s.render(w, r, status, pages.ProjectSettings(s.shell(w, r, p.Name, "projects", projectCrumbs(p, ui.Crumb{Label: "Settings"})...), p, envs, details, envForm))
 }
 
 func (s *Server) projectSettings(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +169,7 @@ func (s *Server) projectDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Project deleted.")
-	redirect(w, r, "/")
+	redirect(w, r, "/projects")
 }
 
 func (s *Server) environmentCreate(w http.ResponseWriter, r *http.Request) {
@@ -195,20 +180,26 @@ func (s *Server) environmentCreate(w http.ResponseWriter, r *http.Request) {
 	var f ui.Form
 	name := strings.ToLower(strings.TrimSpace(r.PostFormValue("name")))
 	f.Set("name", name)
+	var env db.Environment
 	if !envNameRE.MatchString(name) {
 		f.Fail("name", envNameRule)
-	} else if _, err := s.DB.CreateEnvironment(r.Context(), p.TeamID, p.ID, name); db.IsUnique(err) {
-		f.Fail("name", "This project already has an environment called "+name+".")
-	} else if err != nil {
-		s.fail(w, r, err)
-		return
+	} else {
+		var err error
+		env, err = s.DB.CreateEnvironment(r.Context(), p.TeamID, p.ID, name)
+		if db.IsUnique(err) {
+			f.Fail("name", "This project already has an environment called "+name+".")
+		} else if err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	if !f.OK() {
 		s.renderSettings(w, r, http.StatusUnprocessableEntity, p, ui.Form{}, f)
 		return
 	}
-	setFlash(w, r, ui.ToneOK, "Environment added.")
-	redirect(w, r, "/projects/"+p.ID+"/settings")
+	// Into the new environment: adding to it is what comes next.
+	setFlash(w, r, ui.ToneOK, "Environment created.")
+	redirect(w, r, envPath(p.ID, env.ID))
 }
 
 func (s *Server) environmentDelete(w http.ResponseWriter, r *http.Request) {
@@ -241,4 +232,98 @@ func (s *Server) environmentDelete(w http.ResponseWriter, r *http.Request) {
 		setFlash(w, r, ui.ToneOK, "Environment deleted.")
 	}
 	redirect(w, r, back)
+}
+
+// renderProjectDomains draws a project's Domains tab; f is the Add domain
+// form.
+func (s *Server) renderProjectDomains(w http.ResponseWriter, r *http.Request, status int, p db.Project, f ui.Form) {
+	ctx := r.Context()
+	list, err := s.DB.ProjectDomains(ctx, p.TeamID, p.ID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	apps, err := s.projectApps(r, p)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	shell := s.shell(w, r, p.Name, "projects", projectCrumbs(p, ui.Crumb{Label: "Domains"})...)
+	s.render(w, r, status, pages.ProjectDomains(shell, p, list, apps, f))
+}
+
+// projectApps is the apps a domain can be added to from the project's
+// Domains tab: the project's own, in every environment. A preview's
+// address is given to it, not chosen.
+func (s *Server) projectApps(r *http.Request, p db.Project) ([]pages.AppChoice, error) {
+	places, err := s.DB.Places(r.Context(), p.TeamID)
+	if err != nil {
+		return nil, err
+	}
+	apps, err := s.DB.TeamApps(r.Context(), p.TeamID)
+	if err != nil {
+		return nil, err
+	}
+	var out []pages.AppChoice
+	for _, a := range apps {
+		if pl := places[a.EnvironmentID]; pl.ProjectID == p.ID {
+			out = append(out, pages.AppChoice{ID: a.ID, Name: a.Name, Env: pl.Env})
+		}
+	}
+	return out, nil
+}
+
+func (s *Server) projectDomains(w http.ResponseWriter, r *http.Request) {
+	if p, ok := s.loadProject(w, r); ok {
+		s.renderProjectDomains(w, r, http.StatusOK, p, ui.Form{})
+	}
+}
+
+// projectDomainAdd gives a domain to one of the project's apps, with the
+// checks the app's own Add domain form runs.
+func (s *Server) projectDomainAdd(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.loadProject(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	var f ui.Form
+	appID := r.PostFormValue("app")
+	f.Set("app", appID)
+	// The app is the team's, in this project, and not a preview: the same
+	// line the app's own route draws (ownSettings), which this route does
+	// not pass through.
+	app, err := s.DB.App(ctx, p.TeamID, appID)
+	if err == nil {
+		var env db.Environment
+		if env, err = s.DB.Environment(ctx, p.TeamID, app.EnvironmentID); err == nil && (env.ProjectID != p.ID || app.IsPreview()) {
+			err = db.ErrNotFound
+		}
+	}
+	switch {
+	case errors.Is(err, db.ErrNotFound):
+		f.Fail("app", "Choose an app of this project.")
+		// What was typed and ticked comes back as it was.
+		for _, field := range []string{"host", "path", "auth_user"} {
+			f.Set(field, strings.TrimSpace(r.PostFormValue(field)))
+		}
+		for _, box := range []string{"tls", "redirect_www", "strip_prefix"} {
+			f.Set(box, map[bool]string{true: "1", false: "0"}[r.PostFormValue(box) == "1"])
+		}
+	case err != nil:
+		s.fail(w, r, err)
+		return
+	default:
+		if err := s.addAppDomain(r, app, &f); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	if !f.OK() {
+		s.renderProjectDomains(w, r, http.StatusUnprocessableEntity, p, f)
+		return
+	}
+	s.syncRoutes(r, app.ServerID)
+	setFlash(w, r, ui.ToneOK, "Domain added.")
+	redirect(w, r, "/projects/"+p.ID+"/domains")
 }

@@ -49,14 +49,8 @@ func (s *Server) loadService(w http.ResponseWriter, r *http.Request) (pages.Serv
 
 func (s *Server) serviceShell(w http.ResponseWriter, r *http.Request, v pages.ServiceView) ui.Shell {
 	return s.shell(w, r, v.Service.Name, "projects",
-		ui.Crumb{Label: "Projects", Href: "/"},
-		ui.Crumb{Label: v.Project.Name, Href: "/projects/" + v.Project.ID + "?env=" + v.Env.ID},
-		ui.Crumb{Label: v.Service.Name},
+		envCrumbs(v.Project, v.Env, resourceCrumb(v.Env, db.KindService, v.Service.ID, v.Service.Name))...,
 	)
-}
-
-func newServiceCrumbs(p db.Project, env db.Environment) []ui.Crumb {
-	return []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New service"}}
 }
 
 // serviceTemplate resolves the template of a new service: a catalogue entry
@@ -84,16 +78,17 @@ func requiredVars(composeText string) []catalog.VarRef {
 }
 
 func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) {
-	p, env, ok := s.newDatabaseTarget(w, r, r.URL.Query().Get("env"))
+	p, env, ok := s.loadProjectEnv(w, r)
 	if !ok {
 		return
 	}
-	shell := s.shell(w, r, "New service", "projects", newServiceCrumbs(p, env)...)
 	key := r.URL.Query().Get("template")
 	if key == "" {
-		s.render(w, r, http.StatusOK, pages.ServiceCatalogue(shell, p, env, catalog.Services()))
+		// The templates are on the page every kind of resource is added from.
+		redirect(w, r, envPath(p.ID, env.ID)+"/new")
 		return
 	}
+	shell := s.shell(w, r, "New service", "projects", newResourceCrumbs(p, env, "Service")...)
 	tpl, known := serviceTemplate(key)
 	if !known {
 		s.notFound(w, r)
@@ -163,7 +158,7 @@ func checkCompose(f *ui.Form, text string) {
 }
 
 func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
-	p, env, ok := s.newDatabaseTarget(w, r, r.PostFormValue("env"))
+	p, env, ok := s.loadProjectEnv(w, r)
 	if !ok {
 		return
 	}
@@ -227,7 +222,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	rerender := func() {
-		shell := s.shell(w, r, "New service", "projects", newServiceCrumbs(p, env)...)
+		shell := s.shell(w, r, "New service", "projects", newResourceCrumbs(p, env, "Service")...)
 		s.render(w, r, http.StatusUnprocessableEntity, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), f, choices, serverList))
 	}
 	if !f.OK() {
@@ -441,18 +436,31 @@ func (s *Server) serviceLogsStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderServiceCompose(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, f ui.Form) {
-	composeText, variables := v.Service.Compose, ""
+	composeText := v.Service.Compose
 	if _, submitted := f.Values["compose"]; submitted {
-		composeText, variables = f.V("compose"), f.V("variables")
-	} else if _, entered, _, err := s.serviceValues(v.Service); err == nil {
-		variables = deploy.FormatEnv(entered)
+		composeText = f.V("compose")
 	}
-	s.renderServiceComposeGit(w, r, status, v, f, composeText, variables, ui.Form{}, "")
+	s.renderServiceComposeGit(w, r, status, v, f, composeText, ui.Form{})
+}
+
+// serviceComposeVariables answers "Show and edit" on the Compose tab: the
+// variables text box with what the person entered before.
+func (s *Server) serviceComposeVariables(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
+	_, entered, _, err := s.serviceValues(v.Service)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, pages.ServiceVariablesField(v, ui.Form{}, deploy.FormatEnv(entered), true, len(entered)))
 }
 
 // renderServiceComposeGit is renderServiceCompose with the state of the
 // forms only a service from Git has.
-func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, f ui.Form, composeText, variables string, src ui.Form, newToken string) {
+func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, f ui.Form, composeText string, src ui.Form) {
 	var git *pages.ServiceGit
 	if v.Service.FromGit() {
 		choices, err := s.gitChoices(r)
@@ -460,24 +468,18 @@ func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request,
 			s.fail(w, r, err)
 			return
 		}
-		base := s.publicBase(r)
-		git = &pages.ServiceGit{Choices: choices, Source: src, Tr: pages.Triggers{
-			WebhookURL:   base + "/webhooks/git/" + v.Service.ID,
-			DeployURL:    base + "/api/v1/deploy?uuid=" + v.Service.ID,
-			HasToken:     v.Service.DeployTokenHash != "",
-			NewToken:     newToken,
-			ViaGitHubApp: v.Service.GitSourceID != "",
-		}}
-		if v.Service.WebhookSecret != "" {
-			plain, err := s.Box.OpenString(v.Service.WebhookSecret)
-			if err != nil {
-				s.fail(w, r, errors.New("the webhook secret cannot be decrypted"))
-				return
-			}
-			git.Tr.WebhookSecret = plain
+		git = &pages.ServiceGit{Choices: choices, Source: src}
+	}
+	// The variables are in the page only when the person typed them into
+	// the form that is coming back. Otherwise it gets their number.
+	variables, typed := f.Values["variables"]
+	count := 0
+	if !typed {
+		if _, entered, _, err := s.serviceValues(v.Service); err == nil {
+			count = len(entered)
 		}
 	}
-	s.render(w, r, status, pages.ServiceCompose(s.serviceShell(w, r, v), v, f, composeText, variables, git))
+	s.render(w, r, status, pages.ServiceCompose(s.serviceShell(w, r, v), v, f, composeText, variables, typed, count, git))
 }
 
 // serviceSourceSave stores where a Git service's Compose file comes from.
@@ -509,8 +511,7 @@ func (s *Server) serviceSourceSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		_, entered, _, _ := s.serviceValues(v.Service)
-		s.renderServiceComposeGit(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, v.Service.Compose, deploy.FormatEnv(entered), f, "")
+		s.renderServiceComposeGit(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, v.Service.Compose, f)
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Source saved. Deploy to read the file from there.")
@@ -535,7 +536,7 @@ func (s *Server) serviceWebhookSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Webhook secret saved. Enter it in the repository's webhook settings.")
-	redirect(w, r, "/services/"+v.Service.ID+"/compose#triggers")
+	redirect(w, r, "/keys#webhooks")
 }
 
 // serviceDeployToken creates, replaces or revokes the service's deploy
@@ -556,7 +557,7 @@ func (s *Server) serviceDeployToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		setFlash(w, r, ui.ToneOK, "Deploy token revoked.")
-		redirect(w, r, "/services/"+v.Service.ID+"/compose#triggers")
+		redirect(w, r, "/keys#deploy-tokens")
 		return
 	}
 	token := "mdt_" + secret.RandomToken(32)
@@ -565,11 +566,10 @@ func (s *Server) serviceDeployToken(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	v.Service.DeployTokenHash = hash
-	_, entered, _, _ := s.serviceValues(v.Service)
 	// Rendered directly rather than after a redirect, so the token is never
 	// placed in a cookie or a URL.
-	s.renderServiceComposeGit(w, r, http.StatusOK, v, ui.Form{}, v.Service.Compose, deploy.FormatEnv(entered), ui.Form{}, token)
+	s.renderKeys(w, r, http.StatusOK, keysState{newDeploy: &pages.NewDeployToken{
+		Owner: v.Service.Name, Token: token, URL: s.publicBase(r) + "/api/v1/deploy?uuid=" + v.Service.ID}})
 }
 
 func (s *Server) serviceCompose(w http.ResponseWriter, r *http.Request) {
@@ -594,9 +594,21 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 		checkCompose(&f, svc.Compose)
 	}
 	f.Set("compose", svc.Compose)
-	f.Set("variables", r.PostFormValue("variables"))
 	f.Set("connect_env", r.PostFormValue("connect_env"))
-	entered := parseServiceVariables(&f, r.PostFormValue("variables"))
+	// The page did not hold the variables unless the person asked for
+	// them: a form sent without them leaves what is stored as it is.
+	variables := r.PostFormValue("variables")
+	if r.PostFormValue("variables_kept") == "1" {
+		_, kept, _, err := s.serviceValues(v.Service)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		variables = deploy.FormatEnv(kept)
+	} else {
+		f.Set("variables", variables)
+	}
+	entered := parseServiceVariables(&f, variables)
 	if !f.OK() {
 		s.renderServiceCompose(w, r, http.StatusUnprocessableEntity, v, f)
 		return
@@ -667,7 +679,7 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 // endpoint whose form was refused.
 func (s *Server) renderServiceSettings(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, failed string, f ui.Form) {
 	var err error
-	if v.Tags, err = s.DB.TagsOf(r.Context(), sessionFrom(r).TeamID, db.KindService, v.Service.ID); err != nil {
+	if v.Tags, v.TeamTags, err = s.tagChoices(r, db.KindService, v.Service.ID); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -769,5 +781,5 @@ func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) {
 	} else {
 		setFlash(w, r, ui.ToneOK, "Service deleted. Its volumes are still on the server.")
 	}
-	redirect(w, r, "/projects/"+v.Project.ID+"?env="+v.Env.ID)
+	redirect(w, r, envPath(v.Project.ID, v.Env.ID))
 }

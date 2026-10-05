@@ -34,14 +34,66 @@ type NavItem struct {
 	Admin bool
 }
 
-// Nav is the sidebar's content. Later phases append their sections here.
-var Nav = []NavItem{
-	{Key: "projects", Label: "Projects", Href: "/", Icon: "folder"},
-	{Key: "tags", Label: "Tags", Href: "/tags", Icon: "tag"},
-	{Key: "sources", Label: "Sources", Href: "/sources", Icon: "git-branch"},
-	{Key: "servers", Label: "Servers", Href: "/servers", Icon: "server"},
-	{Key: "team", Label: "Team", Href: "/team", Icon: "users"},
-	{Key: "settings", Label: "Settings", Href: "/settings", Icon: "settings", Admin: true},
+// NavGroup is the sidebar entries that serve one purpose, under a heading.
+// The first group has none: it is what the product is for.
+type NavGroup struct {
+	Title string
+	Items []NavItem
+	// Dev groups are drawn only in development mode.
+	Dev bool
+}
+
+// Nav is the sidebar's content, grouped by what a person comes to do: run
+// things, say where they run and where their code comes from, and manage
+// the install itself. A new entry goes in the group whose purpose it shares.
+var Nav = []NavGroup{
+	{Items: []NavItem{
+		{Key: "home", Label: "Home", Href: "/", Icon: "home"},
+		{Key: "projects", Label: "Projects", Href: "/projects", Icon: "folder"},
+		{Key: "tags", Label: "Tags", Href: "/tags", Icon: "tag"},
+	}},
+	{Title: "Infrastructure", Items: []NavItem{
+		{Key: "servers", Label: "Servers", Href: "/servers", Icon: "server"},
+		{Key: "sources", Label: "Sources", Href: "/sources", Icon: "git-branch"},
+	}},
+	{Title: "Administration", Items: []NavItem{
+		{Key: "team", Label: "Team", Href: "/team", Icon: "users"},
+		{Key: "keys", Label: "Keys & tokens", Href: "/keys", Icon: "key"},
+		{Key: "settings", Label: "Settings", Href: "/settings", Icon: "settings", Admin: true},
+	}},
+	{Title: "Development", Dev: true, Items: []NavItem{
+		{Key: "ui", Label: "Components", Href: "/_ui", Icon: "layers"},
+	}},
+}
+
+// navGroups is the part of Nav this person sees: without the entries their
+// role cannot use, and without a group that is left with none.
+func navGroups(s Shell) []NavGroup {
+	var out []NavGroup
+	for _, g := range Nav {
+		if g.Dev && !s.Dev {
+			continue
+		}
+		shown := NavGroup{Title: g.Title}
+		for _, item := range g.Items {
+			if !item.Admin || s.Admin {
+				shown.Items = append(shown.Items, item)
+			}
+		}
+		if len(shown.Items) > 0 {
+			out = append(out, shown)
+		}
+	}
+	return out
+}
+
+// trail is what the bar at the top shows: the page's crumbs or, for a page
+// that has none, its own title, so the bar always says where you are.
+func trail(s Shell) []Crumb {
+	if len(s.Crumbs) > 0 || s.Title == "" {
+		return s.Crumbs
+	}
+	return []Crumb{{Label: s.Title}}
 }
 
 func csrfHeader(token string) string {
@@ -82,35 +134,34 @@ templ sidebar(s Shell) {
 			@Mark("size-6")
 			<span class="text-lg font-semibold tracking-tight">musdash</span>
 		</a>
-		<nav class="grid gap-0.5 px-2 py-2">
-			for _, item := range Nav {
-				if !item.Admin || s.Admin {
-					<a
-						class="nav-item"
-						href={ templ.SafeURL(item.Href) }
-						if item.Key == s.Active {
-							aria-current="page"
-						}
-					>
-						@Icon(item.Icon)
-						{ item.Label }
-					</a>
-				}
-			}
-			if s.Dev {
-				<a
-					class="nav-item"
-					href="/_ui"
-					if s.Active == "ui" {
-						aria-current="page"
+		<nav class="nav px-4 py-2">
+			for i, g := range navGroups(s) {
+				<div
+					class="nav-group"
+					if g.Title != "" {
+						role="group"
+						aria-labelledby={ "nav-group-" + strconv.Itoa(i) }
 					}
 				>
-					@Icon("layers")
-					Components
-				</a>
+					if g.Title != "" {
+						<h2 class="nav-heading" id={ "nav-group-" + strconv.Itoa(i) }>{ g.Title }</h2>
+					}
+					for _, item := range g.Items {
+						<a
+							class="nav-item"
+							href={ templ.SafeURL(item.Href) }
+							if item.Key == s.Active {
+								aria-current="page"
+							}
+						>
+							@Icon(item.Icon)
+							{ item.Label }
+						</a>
+					}
+				</div>
 			}
 		</nav>
-		<div class="mt-auto grid gap-0.5 border-t border-line px-2 py-2">
+		<div class="mt-auto grid gap-0.5 border-t border-line px-4 py-2">
 			<a
 				class="nav-item"
 				href="/account"
@@ -123,12 +174,12 @@ templ sidebar(s Shell) {
 			</a>
 			<form method="post" action="/logout">
 				@CSRF(s.CSRF)
-				<button type="submit" class="nav-item w-full cursor-pointer">
+				<button type="submit" class="nav-item w-full cursor-pointer" data-confirm="You will need your password to come back in." data-confirm-title="Sign out of musdash?" data-confirm-submit="Sign out">
 					@Icon("log-out")
 					Sign out
 				</button>
 			</form>
-			<p class="flex items-center justify-between px-2.5 pt-2 pb-1 text-xs text-ink-mute" title="Memory musdash itself is using right now">
+			<p class="flex items-center justify-between px-2 pt-2 pb-1 text-xs text-ink-mute" title="Memory musdash itself is using right now">
 				<span>musdash is using</span>
 				@MemReadout(s.MemMB)
 			</p>
@@ -147,21 +198,43 @@ templ Layout(s Shell) {
 				@sidebar(s)
 				<div class="main">
 					<div class="topbar">
-						<button type="button" class="btn btn-ghost btn-icon" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Menu">
-							@Icon("menu")
-						</button>
-						@Mark("size-5")
-						<span class="font-semibold">musdash</span>
+						<div class="topbar-inner">
+							<button type="button" class="btn btn-ghost btn-icon topbar-menu" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Menu">
+								@Icon("menu")
+							</button>
+							@Trail(trail(s))
+						</div>
 					</div>
 					<main class="page" id="content">
-						@Crumbs(s.Crumbs)
 						{ children... }
 					</main>
 				</div>
 			</div>
+			@confirmDialog()
 			@Toasts(s.Flash)
 		</body>
 	</html>
+}
+
+// confirmDialog is the one dialog that asks before a critical action. A
+// submit button carrying data-confirm fills it in and opens it instead of
+// submitting (static/app.js); Cancel has the focus, so Enter does not act.
+templ confirmDialog() {
+	<dialog class="modal" id="confirm" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+		<div class="card-head">
+			<h2 class="card-title" id="confirm-title">Are you sure?</h2>
+			@Button(ButtonProps{Variant: Ghost, Small: true, IconOnly: true, Icon: "x", Label: "Close", Attrs: templ.Attributes{"data-close": true}})
+		</div>
+		<div class="card-body">
+			<p class="text-ink-soft" id="confirm-text"></p>
+		</div>
+		<div class="card-foot">
+			@Button(ButtonProps{Attrs: templ.Attributes{"data-close": true, "autofocus": true}}) {
+				Cancel
+			}
+			<button type="button" class="btn btn-primary" id="confirm-ok">Confirm</button>
+		</div>
+	</dialog>
 }
 
 // AuthLayout frames the signed-out pages: setup, sign in, reset password.

@@ -54,10 +54,20 @@ func TestSharedVariablePages(t *testing.T) {
 		if got := a.sharedValue(team, where[0], where[1], "TOKEN"); got != "s3cret value" {
 			t.Errorf("%s: stored %q", page, got)
 		}
-		// The page gives the values back for editing.
+		// The page lists the names. The values come when asked for, and
+		// the editor gives them back for editing.
 		_, body = a.get(page)
-		if !strings.Contains(body, "SMTP_HOST=mail.example.com") || !strings.Contains(body, "TOKEN=s3cret value") {
-			t.Errorf("%s does not show what was saved", page)
+		if !strings.Contains(body, "SMTP_HOST") || strings.Contains(body, "mail.example.com") || strings.Contains(body, "s3cret value") {
+			t.Errorf("%s should list the names and no value", page)
+		}
+		if _, body = a.get(page + "/values"); !strings.Contains(body, "mail.example.com") || !strings.Contains(body, "s3cret value") {
+			t.Errorf("%s/values does not show what was saved", page)
+		}
+		if _, body = a.get(page + "/values?hide=1"); strings.Contains(body, "s3cret value") {
+			t.Errorf("%s/values?hide=1 sends a value", page)
+		}
+		if _, body = a.get(page + "/edit"); !strings.Contains(body, "SMTP_HOST=mail.example.com") || !strings.Contains(body, "TOKEN=s3cret value") {
+			t.Errorf("%s/edit does not show what was saved", page)
 		}
 	}
 
@@ -125,10 +135,20 @@ func TestSharedVariablesByRole(t *testing.T) {
 		if !strings.Contains(body, refused) {
 			t.Errorf("%s: not refused for the role", page)
 		}
+		// Nor can a Member ask for the values or open the editor.
+		for _, held := range []string{"/values", "/edit"} {
+			res, body = mem.get(page + held)
+			if res.StatusCode != http.StatusForbidden || strings.Contains(body, "owner-set-secret") {
+				t.Errorf("%s%s: a Member got %d", page, held, res.StatusCode)
+			}
+		}
 		// An Admin sees and saves, and is told who else can use them.
-		_, body = ad.get(page)
-		if !strings.Contains(body, "owner-set-secret") {
+		if _, body = ad.get(page + "/values"); !strings.Contains(body, "owner-set-secret") {
 			t.Errorf("%s does not show an Admin the value", page)
+		}
+		_, body = ad.get(page)
+		if strings.Contains(body, "owner-set-secret") {
+			t.Errorf("%s holds the value before it is asked for", page)
 		}
 		if !strings.Contains(body, "Every member can use these") {
 			t.Errorf("%s does not say that members can use these", page)
@@ -200,7 +220,7 @@ func TestSavingAnAppsVariablesWarnsAboutMissingSharedOnes(t *testing.T) {
 		t.Fatalf("no warning about the missing name:\n%s", body)
 	}
 	// The variables were saved as they were typed.
-	_, body = a.get(page)
+	_, body = a.get(page + "/edit")
 	if !strings.Contains(body, "A={{project.DB_HOST}}") {
 		t.Fatalf("the page does not show the name as typed:\n%s", body)
 	}

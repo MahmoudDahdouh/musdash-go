@@ -225,8 +225,13 @@ func TestFreshInstallGoesToSetupThenCloses(t *testing.T) {
 	a.setup()
 	res, body := a.get("/")
 	wantStatus(t, res, http.StatusOK)
+	if !strings.Contains(body, "Getting started") {
+		t.Fatal("Home did not show a new install where to start")
+	}
+	res, body = a.get("/projects")
+	wantStatus(t, res, http.StatusOK)
 	if !strings.Contains(body, "No projects yet") {
-		t.Fatal("dashboard did not render the empty state")
+		t.Fatal("the Projects page did not render the empty state")
 	}
 
 	// A second browser cannot run setup again.
@@ -415,7 +420,7 @@ func TestCSRF(t *testing.T) {
 	wantStatus(t, res, http.StatusForbidden)
 
 	// htmx sends the token as a header.
-	token := a.csrf("/projects/new")
+	token := a.csrf("/projects")
 	res, _ = a.postRaw(a.client, "/projects", url.Values{"name": {"Header token"}}, http.Header{"X-Csrf-Token": {token}})
 	wantStatus(t, res, http.StatusSeeOther)
 
@@ -441,7 +446,7 @@ func firstTeam(t *testing.T, a *app) string {
 func TestSignedOutRequestsRedirect(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
-	token := a.csrf("/projects/new")
+	token := a.csrf("/projects")
 
 	// Another tab signs out.
 	res, _ := a.postRaw(a.client, "/logout", url.Values{"_csrf": {token}}, nil)
@@ -467,13 +472,13 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
 
-	res, body := a.post("/projects/new", "/projects", url.Values{"name": {"  "}})
+	res, body := a.post("/projects", "/projects", url.Values{"name": {"  "}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
 	if !strings.Contains(body, "Enter a name") {
 		t.Fatal("no error for an empty name")
 	}
 
-	res, _ = a.post("/projects/new", "/projects", url.Values{"name": {"Shop <script>"}, "description": {"Storefront"}})
+	res, _ = a.post("/projects", "/projects", url.Values{"name": {"Shop <script>"}, "description": {"Storefront"}})
 	wantStatus(t, res, http.StatusSeeOther)
 	path := res.Header.Get("Location")
 
@@ -482,7 +487,7 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	if !strings.Contains(body, "Shop &lt;script&gt;") || strings.Contains(body, "Shop <script>") {
 		t.Fatal("project name is not escaped")
 	}
-	if !strings.Contains(body, "Nothing is deployed in production") || !strings.Contains(body, "Project created.") {
+	if !strings.Contains(body, "Nothing is in production yet") || !strings.Contains(body, "Project created.") {
 		t.Fatal("project page is missing the empty state or the confirmation")
 	}
 
@@ -496,8 +501,11 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	if !strings.Contains(body, envNameRule) {
 		t.Fatal("no error for a bad environment name")
 	}
+	// A new environment is where the browser goes next.
 	res, _ = a.post(settings, path+"/environments", url.Values{"name": {"Staging"}})
-	wantRedirect(t, res, settings)
+	if to := res.Header.Get("Location"); res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(to, path+"/e/") {
+		t.Fatalf("got %d → %q, want 303 into the new environment", res.StatusCode, to)
+	}
 	res, body = a.post(settings, path+"/environments", url.Values{"name": {"staging"}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
 	if !strings.Contains(body, "already has an environment called staging") {
@@ -516,9 +524,9 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	}
 	staging := envs[1]
 
-	res, _ = a.get(path + "?env=" + staging.ID)
+	res, _ = a.get(path + "/e/" + staging.ID)
 	wantStatus(t, res, http.StatusOK)
-	res, _ = a.get(path + "?env=nope")
+	res, _ = a.get(path + "/e/nope")
 	wantStatus(t, res, http.StatusNotFound)
 
 	// Deleting needs the typed name.
@@ -542,9 +550,105 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	res, _ = a.post(settings, path+"/delete", url.Values{"confirm": {"wrong"}})
 	wantRedirect(t, res, settings)
 	res, _ = a.post(settings, path+"/delete", url.Values{"confirm": {"Shop"}})
-	wantRedirect(t, res, "/")
+	wantRedirect(t, res, "/projects")
 	res, _ = a.get(path)
 	wantStatus(t, res, http.StatusNotFound)
+}
+
+// A project's page is one environment of it, named in the path; the
+// switchers in the bar list what is beside it, and only that.
+func TestEnvironmentInThePathAndSwitchers(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+	projectID, production := a.project("Shop")
+	staging, err := a.db.CreateEnvironment(ctx, firstTeam(t, a), projectID, "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.newApp(projectID, production, "web", false, nil)
+	a.newApp(projectID, staging, "web-next", false, nil)
+	otherID, otherEnv := a.project("Blog")
+
+	// Without an environment in the path it is the first one.
+	_, first := a.get("/projects/" + projectID)
+	_, named := a.get("/projects/" + projectID + "/e/" + production.ID)
+	for _, page := range []string{first, named} {
+		if !strings.Contains(page, ">web<") || strings.Contains(page, "web-next") {
+			t.Fatal("the page does not show production's resources, or shows another environment's")
+		}
+		if !strings.Contains(page, "/projects/"+projectID+"/e/"+production.ID+"/new") {
+			t.Fatal("no Add resource link for this environment")
+		}
+	}
+	if _, page := a.get("/projects/" + projectID + "/e/" + staging.ID); !strings.Contains(page, "web-next") || strings.Contains(page, ">web<") {
+		t.Fatal("staging's page does not show its own resources only")
+	}
+	// An environment is reached through its own project only.
+	res, _ := a.get("/projects/" + otherID + "/e/" + production.ID)
+	wantStatus(t, res, http.StatusNotFound)
+	res, _ = a.get("/projects/" + otherID + "/e/" + production.ID + "/new")
+	wantStatus(t, res, http.StatusNotFound)
+	// The old address of the New project page is gone: it is a dialog.
+	res, _ = a.get("/projects/new")
+	wantStatus(t, res, http.StatusNotFound)
+
+	// The environment switcher lists this project's environments.
+	res, menu := a.get("/projects/" + projectID + "/switch/environments?at=" + staging.ID)
+	wantStatus(t, res, http.StatusOK)
+	if !strings.Contains(menu, "/e/"+production.ID) || !strings.Contains(menu, "/e/"+staging.ID) || strings.Contains(menu, otherEnv.ID) {
+		t.Fatalf("environment switcher:\n%s", menu)
+	}
+	if !regexp.MustCompile(`href="[^"]*/e/` + staging.ID + `"[^>]*aria-selected="true"`).MatchString(menu) {
+		t.Fatal("the switcher does not mark the current environment")
+	}
+	// The resource switcher lists what is in the environment.
+	res, menu = a.get("/environments/" + production.ID + "/switch/resources")
+	wantStatus(t, res, http.StatusOK)
+	if !strings.Contains(menu, ">web<") || strings.Contains(menu, "web-next") || !strings.Contains(menu, "/e/"+production.ID+"/new") {
+		t.Fatalf("resource switcher:\n%s", menu)
+	}
+
+	// Another team's project and environment answer a note, not their names.
+	if _, err := a.db.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('otherteam', 'Other', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	theirs, _ := a.db.CreateProject(ctx, "otherteam", "Secret", "")
+	theirEnvs, _ := a.db.ListEnvironments(ctx, theirs.ID)
+	for _, path := range []string{"/projects/" + theirs.ID + "/switch/environments", "/environments/" + theirEnvs[0].ID + "/switch/resources"} {
+		res, menu := a.get(path)
+		wantStatus(t, res, http.StatusOK)
+		if strings.Contains(menu, theirEnvs[0].ID) || strings.Contains(menu, "production") || !strings.Contains(menu, "is gone") {
+			t.Errorf("%s answers for another team:\n%s", path, menu)
+		}
+	}
+}
+
+// The Projects page counts what is in each project and makes one from a
+// dialog; a refused name comes back with the dialog open.
+func TestProjectTilesAndDialog(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	projectID, env := a.project("Shop")
+	a.newApp(projectID, env, "web", false, nil)
+	a.newApp(projectID, env, "api", false, nil)
+
+	projects, err := a.db.ListProjects(context.Background(), firstTeam(t, a))
+	if err != nil || len(projects) != 1 {
+		t.Fatalf("projects: %v, %v", projects, err)
+	}
+	if p := projects[0]; p.Apps != 2 || p.Databases != 0 || p.Services != 0 || p.EnvCount != 1 {
+		t.Fatalf("counts: %+v", p)
+	}
+	_, page := a.get("/projects")
+	if !strings.Contains(page, `class="tile"`) || !strings.Contains(page, `id="new-project"`) || strings.Contains(page, "data-autoopen") {
+		t.Fatal("the Projects page has no tiles or no closed dialog")
+	}
+	res, page := a.post("/projects", "/projects", url.Values{"name": {""}})
+	wantStatus(t, res, http.StatusUnprocessableEntity)
+	if !strings.Contains(page, "data-autoopen") || !strings.Contains(page, "Enter a name") {
+		t.Fatal("a refused project does not come back with the dialog open")
+	}
 }
 
 func TestOtherTeamsProjectIsNotFound(t *testing.T) {
@@ -559,7 +663,7 @@ func TestOtherTeamsProjectIsNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	envs, _ := a.db.ListEnvironments(ctx, p.ID)
-	token := a.csrf("/projects/new")
+	token := a.csrf("/projects")
 
 	for _, path := range []string{"/projects/" + p.ID, "/projects/" + p.ID + "/settings"} {
 		res, body := a.get(path)
@@ -643,6 +747,58 @@ func TestAccount(t *testing.T) {
 	_, body = a.get("/account")
 	if !strings.Contains(body, `value="New Name"`) || !strings.Contains(body, `value="new@example.com"`) {
 		t.Fatal("profile was not saved")
+	}
+}
+
+// The policy forbids inline script and style on every page, not only the
+// first one: the pages a signed-in person works in, with their dialogs,
+// switchers and tiles, and the component gallery, must have none either.
+var elementID = regexp.MustCompile(`\sid="([^"]*)"`)
+
+func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
+	a := newApp(t, true)
+	a.setup()
+	projectID, env := a.project("Shop")
+	appID := a.newApp(projectID, env, "web", false, nil)
+	git := a.newGitApp(projectID, env, "api", nil)
+	a.stackServer("front", "3000", nil)
+	svc := a.newService(projectID, env, "site", nil)
+	mdb := a.newDatabase(projectID, env, "postgres", "maindb", nil)
+	base := "/projects/" + projectID
+	for _, page := range []string{
+		"/databases/" + mdb.ID, "/databases/" + mdb.ID + "/backups", "/databases/" + mdb.ID + "/settings",
+		"/apps/" + git.ID + "/settings", "/apps/" + git.ID + "/tasks", "/apps/" + git.ID + "/environment",
+		"/services/" + svc.ID, "/services/" + svc.ID + "/compose", "/services/" + svc.ID + "/settings",
+		"/", "/projects", base, base + "/e/" + env.ID, base + "/e/" + env.ID + "/new", base + "/domains", base + "/settings",
+		"/apps/" + appID, "/apps/" + appID + "/environment", "/apps/" + appID + "/environment/edit", "/apps/" + appID + "/storage", "/apps/" + appID + "/settings",
+		"/tags", "/keys", "/servers", "/sources", "/team", "/team/variables", "/account",
+		"/settings", "/settings/storages", "/settings/notifications", "/_ui",
+	} {
+		res, body := a.get(page)
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("%s: status %d", page, res.StatusCode)
+			continue
+		}
+		if csp := res.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "unsafe") {
+			t.Errorf("%s: CSP = %q", page, csp)
+		}
+		for _, inline := range []string{"<script>", " style=", "onclick=", "javascript:"} {
+			if strings.Contains(body, inline) {
+				t.Errorf("%s contains %q, which the CSP blocks", page, inline)
+			}
+		}
+		// An id that two elements have breaks whatever names it: a label's
+		// for, a button's data-open, a link's #fragment. Pages with several
+		// dialogs are where that happens.
+		ids := map[string]int{}
+		for _, m := range elementID.FindAllStringSubmatch(body, -1) {
+			ids[m[1]]++
+		}
+		for id, n := range ids {
+			if n > 1 {
+				t.Errorf("%s has %d elements with id %q", page, n, id)
+			}
+		}
 	}
 }
 

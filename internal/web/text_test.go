@@ -92,14 +92,14 @@ func TestNamesWithWhatCannotBeShownAreRefused(t *testing.T) {
 		what, page, path, field string
 		rest                    url.Values
 	}{
-		{"a project", "/projects/new", "/projects", "name", nil},
-		{"a project's description", "/projects/new", "/projects", "description", url.Values{"name": {"Fine"}}},
+		{"a project", "/projects", "/projects", "name", nil},
+		{"a project's description", "/projects", "/projects", "description", url.Values{"name": {"Fine"}}},
 		{"a project being renamed", "/projects/" + projectID + "/settings", "/projects/" + projectID, "name", nil},
 		{"a person", "/account", "/account/profile", "name", url.Values{"email": {"owner@example.com"}}},
 		{"the team", "/team", "/team", "name", nil},
 		{"a server", "/servers", "/servers", "name", url.Values{"host": {"203.0.113.9"}, "ssh_user": {"root"}}},
-		{"a deploy key", "/sources", "/sources/keys", "key_name", nil},
-		{"an API token", "/account", "/account/tokens", "token_name", url.Values{"token_ability": {"read"}, "token_expires": {"30"}}},
+		{"a deploy key", "/keys", "/sources/keys", "key_name", nil},
+		{"an API token", "/keys", "/account/tokens", "token_name", url.Values{"token_ability": {"read"}, "token_expires": {"30"}}},
 		{"a scheduled task", "/apps/" + appID + "/tasks", "/apps/" + appID + "/tasks", "name", url.Values{"command": {"true"}, "schedule": {"@daily"}}},
 		{"a backup storage", "/settings/storages", "/settings/storages", "name", url.Values{"bucket": {"backups"}, "access_key": {"k"}, "secret_key": {"s"}}},
 		{"a notification channel", "/settings/notifications", "/settings/notifications", "name", url.Values{"kind": {"webhook"}}},
@@ -134,6 +134,6 @@ func TestNamesWithWhatCannotBeShownAreRefused(t *testing.T) {
 	}
 	// A name with a break only at its ends is the name without it, as
 	// before: browsers send what was pasted.
-	res, _ = a.post("/projects/new", "/projects", url.Values{"name": {"  Trimmed\n"}})
+	res, _ = a.post("/projects", "/projects", url.Values{"name": {"  Trimmed\n"}})
 	wantStatus(t, res, http.StatusSeeOther)
 }

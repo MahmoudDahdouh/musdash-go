@@ -76,17 +76,17 @@ func TestDeployWithDocker(t *testing.T) {
 	}
 
 	post("/setup", "/setup", url.Values{"name": {"E2E"}, "email": {"e2e@example.com"}, "password": {"an end to end test"}})
-	res := post("/projects/new", "/projects", url.Values{"name": {"E2E"}})
+	res := post("/projects", "/projects", url.Values{"name": {"E2E"}})
 	projectPath := res.Request.URL.Path // followed the redirect to /projects/<id>
 	newAppPage := fetch(t, ui, base+projectPath)
-	envID := regexp.MustCompile(`apps/new\?env=([a-z2-7]+)`).FindStringSubmatch(newAppPage)
+	envID := regexp.MustCompile(`/e/([a-z2-7]+)/new"`).FindStringSubmatch(newAppPage)
 	if envID == nil {
 		t.Fatalf("no New app link on %s", projectPath)
 	}
 
 	const host = "e2e.127.0.0.1.sslip.io"
-	res = post(projectPath+"/apps/new?env="+envID[1], projectPath+"/apps", url.Values{
-		"env": {envID[1]}, "name": {"web"}, "image": {"nginx:alpine"}, "port": {"80"}, "domain": {host}, "deploy": {"1"},
+	res = post(projectPath+"/e/"+envID[1]+"/apps/new", projectPath+"/e/"+envID[1]+"/apps", url.Values{
+		"name": {"web"}, "image": {"nginx:alpine"}, "port": {"80"}, "domain": {host}, "deploy": {"1"},
 	})
 	deployPath := res.Request.URL.Path // /apps/<id>/deployments/<dep>
 	appPath := strings.Split(deployPath, "/deployments/")[0]
@@ -153,8 +153,8 @@ func TestDeployWithDocker(t *testing.T) {
 	// An app whose port setting is wrong must fail its deploy. Docker's own
 	// port proxy accepts connections even when nothing listens inside the
 	// container, so a check that only connects would wrongly pass.
-	res = post(projectPath+"/apps/new?env="+envID[1], projectPath+"/apps", url.Values{
-		"env": {envID[1]}, "name": {"wrongport"}, "image": {"nginx:alpine"}, "port": {"8080"},
+	res = post(projectPath+"/e/"+envID[1]+"/apps/new", projectPath+"/e/"+envID[1]+"/apps", url.Values{
+		"name": {"wrongport"}, "image": {"nginx:alpine"}, "port": {"8080"},
 	})
 	wrongPath := res.Request.URL.Path
 	wrong := "label=musdash.resource=" + strings.TrimPrefix(wrongPath, "/apps/")

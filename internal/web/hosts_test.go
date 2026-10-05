@@ -42,16 +42,26 @@ func bitbucketPRBody(state, source, commit string, number string) string {
 		"destination":{"branch":{"name":"main"},"repository":{"full_name":"acme/shop"}}},"repository":{"full_name":"acme/shop"}}`
 }
 
-// webhookSecret creates the app's webhook secret and reads it off the page.
+// webhookSecret creates the app's webhook secret and reads it as a person
+// would: the Keys page lists it hidden, and Show asks for it.
 func (a *app) webhookSecret(appID string) string {
 	a.t.Helper()
-	settings := "/apps/" + appID + "/settings"
-	res, _ := a.post(settings, "/apps/"+appID+"/webhook-secret", nil)
-	wantRedirect(a.t, res, settings+"#triggers")
-	_, page := a.get(settings)
-	m := regexp.MustCompile(`data-copy="([0-9a-f]{48})"`).FindStringSubmatch(page)
+	res, _ := a.post("/keys", "/apps/"+appID+"/webhook-secret", nil)
+	wantRedirect(a.t, res, "/keys#webhooks")
+	_, page := a.get("/keys")
+	if !strings.Contains(page, "/webhooks/git/"+appID) || !strings.Contains(page, `hx-get="/apps/`+appID+`/webhook-secret"`) {
+		a.t.Fatal("the Keys page does not list the webhook address with a way to show its secret")
+	}
+	if regexp.MustCompile(`[0-9a-f]{48}`).MatchString(page) {
+		a.t.Fatal("the Keys page holds a webhook secret that was not asked for")
+	}
+	_, cell := a.get("/apps/" + appID + "/webhook-secret")
+	m := regexp.MustCompile(`data-copy="([0-9a-f]{48})"`).FindStringSubmatch(cell)
 	if m == nil {
-		a.t.Fatal("no webhook secret on the page")
+		a.t.Fatal("Show does not answer with the webhook secret")
+	}
+	if _, hidden := a.get("/apps/" + appID + "/webhook-secret?hide=1"); strings.Contains(hidden, m[1]) {
+		a.t.Fatal("Hide answers with the secret")
 	}
 	return m[1]
 }
@@ -66,10 +76,10 @@ func TestWebhooksOfOtherGitHosts(t *testing.T) {
 	secret, otherSecret := a.webhookSecret(app.ID), a.webhookSecret(other.ID)
 
 	// The pages say where each host wants the address and the secret.
-	_, page := a.get("/apps/" + app.ID + "/settings")
+	_, page := a.get("/keys")
 	for _, want := range []string{"GitLab", "Secret token", "Bitbucket", "Gitea"} {
 		if !strings.Contains(page, want) {
-			t.Errorf("the settings page does not mention %q", want)
+			t.Errorf("the Keys page does not mention %q", want)
 		}
 	}
 

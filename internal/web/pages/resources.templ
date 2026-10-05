@@ -1,0 +1,188 @@
+package pages
+
+import (
+	"strings"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// KindIcon is the icon of a kind of resource, the same wherever one is
+// drawn: a tile, a switcher, a count.
+func KindIcon(kind string) string {
+	switch kind {
+	case db.KindDatabase:
+		return "database"
+	case db.KindService:
+		return "layers"
+	}
+	return "app-window"
+}
+
+// Resources is what one environment holds.
+type Resources struct {
+	Apps      []db.App
+	Databases []db.Database
+	Services  []db.Service
+}
+
+func (r Resources) Count() int { return len(r.Apps) + len(r.Databases) + len(r.Services) }
+
+func appSourceKind(a db.App) string {
+	if a.Source == db.SourceGit {
+		return "App from Git"
+	}
+	return "App from an image"
+}
+
+// ResourceTiles draws apps, databases and services as one grid: they are
+// all things that run in the environment, told apart by their icon.
+templ ResourceTiles(res Resources) {
+	@ui.Tiles("Resources", false) {
+		for _, a := range res.Apps {
+			@ui.Tile(ui.TileProps{Href: "/apps/" + a.ID, Icon: KindIcon(db.KindApp), Title: a.Name, Text: appSourceLine(a), Mono: true, State: a.Status}) {
+				@ui.Meta("", appSourceKind(a), "")
+			}
+		}
+		for _, m := range res.Databases {
+			@ui.Tile(ui.TileProps{Href: "/databases/" + m.ID, Icon: KindIcon(db.KindDatabase), Title: m.Name, Text: m.Image, Mono: true, State: databaseState(m)}) {
+				@ui.Meta("", engineLabel(m.Engine)+" database", "")
+				if m.PublicPort > 0 {
+					@ui.Badge("Public", ui.ToneWarn)
+				}
+			}
+		}
+		for _, s := range res.Services {
+			@ui.Tile(ui.TileProps{Href: "/services/" + s.ID, Icon: KindIcon(db.KindService), Title: s.Name, Text: templateName(s.Template), State: serviceState(s)}) {
+				@ui.Meta("", "Service", "")
+			}
+		}
+	}
+}
+
+// EnvironmentOptions is what the environment switcher lists.
+templ EnvironmentOptions(p db.Project, envs []db.Environment, at string) {
+	for _, e := range envs {
+		@ui.SwitchOption("/projects/"+p.ID+"/e/"+e.ID, "", e.Name, e.ID == at)
+	}
+	@ui.MenuSep()
+	@ui.MenuAction("/projects/"+p.ID+"/settings#environments", "settings", "Manage environments")
+}
+
+// ResourceOptions is what the resource switcher lists. at is the current
+// one, as "kind:id".
+templ ResourceOptions(env db.Environment, res Resources, at string) {
+	for _, a := range res.Apps {
+		@ui.SwitchOption("/apps/"+a.ID, KindIcon(db.KindApp), a.Name, at == db.KindApp+":"+a.ID) {
+			@ui.StatusPill(a.Status)
+		}
+	}
+	for _, m := range res.Databases {
+		@ui.SwitchOption("/databases/"+m.ID, KindIcon(db.KindDatabase), m.Name, at == db.KindDatabase+":"+m.ID) {
+			@ui.StatusPill(databaseState(m))
+		}
+	}
+	for _, s := range res.Services {
+		@ui.SwitchOption("/services/"+s.ID, KindIcon(db.KindService), s.Name, at == db.KindService+":"+s.ID) {
+			@ui.StatusPill(serviceState(s))
+		}
+	}
+	if res.Count() > 0 {
+		@ui.MenuSep()
+	}
+	@ui.MenuAction("/projects/"+env.ProjectID+"/e/"+env.ID+"/new", "plus", "Add resource")
+}
+
+// NewResource is what the Add resource page offers.
+type NewResource struct {
+	Project   db.Project
+	Env       db.Environment
+	Engines   []catalog.DBTemplate
+	Templates []catalog.ServiceTemplate
+	// HasApp and HasKey say whether the team has a GitHub App and a deploy
+	// key: the two ways into a private repository.
+	HasApp bool
+	HasKey bool
+}
+
+func (v NewResource) base() string { return "/projects/" + v.Project.ID + "/e/" + v.Env.ID }
+
+// privateRepo is where a private-repository tile leads: to the Git form
+// with that access chosen or, while the team has none of the kind, to where
+// one is added.
+func (v NewResource) privateRepo(access string, has bool) string {
+	if has {
+		return v.base() + "/apps/new?source=git&access=" + access
+	}
+	if access == "key" {
+		return "/keys#ssh-keys"
+	}
+	return "/sources"
+}
+
+func gitHubAppText(has bool) string {
+	if has {
+		return "Choose a repository through your GitHub App. A push deploys it, with nothing to set up in the repository."
+	}
+	return "Connect a GitHub App under Sources first. It reads private repositories and deploys on every push."
+}
+
+func deployKeyText(has bool) string {
+	if has {
+		return "Any Git host over SSH: GitLab, Bitbucket, Gitea or GitHub. The repository gets a read-only deploy key."
+	}
+	return "Add an SSH key under Keys & tokens first. It reads a private repository on any Git host over SSH."
+}
+
+func searchText(parts ...string) string { return strings.ToLower(strings.Join(parts, " ")) }
+
+templ kindGroup(title, about string) {
+	<section class="grid gap-3" data-filter-group>
+		<div>
+			<h2 class="section-title">{ title }</h2>
+			<p class="muted text-sm">{ about }</p>
+		</div>
+		{ children... }
+	</section>
+}
+
+// ResourceNew is the one page a resource of any kind is added from.
+templ ResourceNew(s ui.Shell, v NewResource) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Add resource", "It goes into "+v.Env.Name+" of "+v.Project.Name+". Choose what to run.")
+		<div class="grid gap-8">
+			<div class="max-w-md">
+				<label class="sr-only" for="kind-filter">Find a kind of resource</label>
+				@ui.Input(ui.InputProps{ID: "kind-filter", Name: "q", Type: "search", Placeholder: "Find: postgres, wordpress, git…", Autofocus: true, Autocomplete: "off", Attrs: templ.Attributes{"data-filter": "kinds"}})
+			</div>
+			<div class="grid gap-8" id="kinds">
+				@kindGroup("Apps", "Your own code or image. musdash builds it, runs it and gives it a domain.") {
+					@ui.Tiles("Kinds of app", true) {
+						@ui.Tile(ui.TileProps{Href: v.base() + "/apps/new?source=git", Icon: "git-branch", Title: "Public repository", Text: "Build from a public Git repository on any host.", Compact: true, Search: "public repository git github gitlab bitbucket gitea dockerfile nixpacks railpack static"})
+						@ui.Tile(ui.TileProps{Href: v.privateRepo("app", v.HasApp), Icon: "github", Title: "Private repository, with a GitHub App", Text: gitHubAppText(v.HasApp), Compact: true, Search: "private repository github app git"})
+						@ui.Tile(ui.TileProps{Href: v.privateRepo("key", v.HasKey), Icon: "key", Title: "Private repository, with a deploy key", Text: deployKeyText(v.HasKey), Compact: true, Search: "private repository deploy key ssh git gitlab bitbucket gitea"})
+						@ui.Tile(ui.TileProps{Href: v.base() + "/apps/new", Icon: "box", Title: "Docker image", Text: "Run an image from a registry, such as nginx:alpine or ghcr.io/you/app:1.4.", Compact: true, Search: "docker image registry container"})
+					}
+				}
+				@kindGroup("Databases", "One container with a volume, a user and a generated password. Backups can be scheduled.") {
+					@ui.Tiles("Database engines", true) {
+						for _, t := range v.Engines {
+							@ui.Tile(ui.TileProps{Href: v.base() + "/databases/new?engine=" + t.Engine, Icon: "database", Title: t.Label, Text: t.About, Compact: true, Search: searchText("database", t.Engine, t.Label, t.About)})
+						}
+					}
+				}
+				@kindGroup("Services", "One or more containers described by a Docker Compose file: your own, or a ready-made one.") {
+					@ui.Tiles("Kinds of service", true) {
+						@ui.Tile(ui.TileProps{Href: v.base() + "/services/new?template=" + db.TemplateCustom, Icon: "code", Title: "Your own Compose file", Text: "Paste a docker-compose.yml. Templates written for Coolify work as they are.", Compact: true, Search: "service compose docker-compose yaml custom own coolify"})
+						@ui.Tile(ui.TileProps{Href: v.base() + "/services/new?template=" + db.TemplateGit, Icon: "git-branch", Title: "Compose file in a Git repository", Text: "Read from the repository at every deployment. It may build the repository's own Dockerfiles.", Compact: true, Search: "service compose git repository"})
+						for _, t := range v.Templates {
+							@ui.Tile(ui.TileProps{Href: v.base() + "/services/new?template=" + t.Key, Icon: "layers", Title: t.Name, Text: t.About, Compact: true, Search: searchText("service", t.Key, t.Name, t.About)})
+						}
+					}
+				}
+			</div>
+			<p class="muted" data-filter-empty="kinds" hidden>Nothing matches. A service that is not listed can be run from its own Compose file.</p>
+		</div>
+	}
+}

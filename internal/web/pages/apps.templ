@@ -20,8 +20,10 @@ type AppView struct {
 	Parent *db.App
 	// Previews are the app's previews, filled in for the Settings page.
 	Previews []PreviewRow
-	// Tags are the app's tags, filled in for the Settings page.
-	Tags []string
+	// Tags are the app's tags and TeamTags all of the team's, filled in for
+	// the Settings page.
+	Tags     []string
+	TeamTags []string
 }
 
 // PreviewRow is one preview in its parent's list.
@@ -53,28 +55,22 @@ func domainURL(d db.Domain) string {
 
 func appTabs(v AppView) []ui.Tab {
 	b := v.base()
-	if v.App.IsPreview() {
-		// A preview has no variables, storage or tasks of its own.
-		return []ui.Tab{
-			{Key: "overview", Label: "Overview", Href: b},
-			{Key: "deployments", Label: "Deployments", Href: b + "/deployments"},
-			{Key: "logs", Label: "Logs", Href: b + "/logs"},
-			{Key: "metrics", Label: "Metrics", Href: b + "/metrics"},
-			{Key: "terminal", Label: "Terminal", Href: b + "/terminal"},
-			{Key: "settings", Label: "Settings", Href: b + "/settings"},
-		}
+	tabs := []ui.Tab{
+		{Key: "overview", Label: "Overview", Href: b, Icon: "dashboard"},
+		{Key: "deployments", Label: "Deployments", Href: b + "/deployments", Icon: "rocket"},
+		{Key: "logs", Label: "Logs", Href: b + "/logs", Icon: "file"},
+		{Key: "metrics", Label: "Metrics", Href: b + "/metrics", Icon: "chart"},
+		{Key: "terminal", Label: "Terminal", Href: b + "/terminal", Icon: "terminal"},
 	}
-	return []ui.Tab{
-		{Key: "overview", Label: "Overview", Href: b},
-		{Key: "deployments", Label: "Deployments", Href: b + "/deployments"},
-		{Key: "logs", Label: "Logs", Href: b + "/logs"},
-		{Key: "metrics", Label: "Metrics", Href: b + "/metrics"},
-			{Key: "terminal", Label: "Terminal", Href: b + "/terminal"},
-		{Key: "environment", Label: "Environment", Href: b + "/environment"},
-		{Key: "storage", Label: "Storage", Href: b + "/storage"},
-		{Key: "tasks", Label: "Tasks", Href: b + "/tasks"},
-		{Key: "settings", Label: "Settings", Href: b + "/settings"},
+	// A preview has no variables, storage or tasks of its own.
+	if !v.App.IsPreview() {
+		tabs = append(tabs,
+			ui.Tab{Key: "environment", Label: "Environment", Href: b + "/environment", Icon: "variable"},
+			ui.Tab{Key: "storage", Label: "Storage", Href: b + "/storage", Icon: "drive"},
+			ui.Tab{Key: "tasks", Label: "Tasks", Href: b + "/tasks", Icon: "clock"},
+		)
 	}
+	return append(tabs, ui.Tab{Key: "settings", Label: "Settings", Href: b + "/settings", Icon: "settings"})
 }
 
 // appSourceLine says in one line where an app's image comes from.
@@ -116,7 +112,7 @@ templ AppHeader(csrf string, app db.App) {
 			if app.Container != "" {
 				<form method="post" action={ templ.SafeURL("/apps/" + app.ID + "/stop") }>
 					@ui.CSRF(csrf)
-					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop"}) {
+					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+app.Name+"?", "The app stops answering until it is deployed again. Its settings, variables and storage are kept.", "Stop app", false)}) {
 						Stop
 					}
 				</form>
@@ -151,23 +147,6 @@ templ appFrame(s ui.Shell, v AppView, tab string) {
 	}
 }
 
-// AppRows lists an environment's apps on the project page.
-templ AppRows(apps []db.App) {
-	<div class="card rows">
-		for _, a := range apps {
-			<a class="row rail" data-state={ a.Status } href={ templ.SafeURL("/apps/" + a.ID) }>
-				@ui.Icon("box", "text-ink-mute")
-				<div class="min-w-0 flex-1">
-					<p class="truncate font-semibold">{ a.Name }</p>
-					<p class="fact truncate text-ink-mute">{ appSourceLine(a) }</p>
-				</div>
-				@ui.StatusPill(a.Status)
-				@ui.Icon("chevron-right", "text-ink-mute")
-			</a>
-		}
-	</div>
-}
-
 // AccessOption is one way to reach a repository in the Git forms.
 type AccessOption struct {
 	Value string // "public", "source:<id>" or "key:<id>"
@@ -195,14 +174,6 @@ var buildPackOptions = []ui.Option{
 	{Value: "railpack", Label: "Railpack (no Dockerfile needed)"},
 }
 
-func newAppTabs(p db.Project, env db.Environment) []ui.Tab {
-	base := "/projects/" + p.ID + "/apps/new?env=" + env.ID
-	return []ui.Tab{
-		{Key: "image", Label: "Docker image", Href: base},
-		{Key: "git", Label: "Git repository", Href: base + "&source=git"},
-	}
-}
-
 // gitSourceFields are the fields describing a repository and how to build
 // it. The New app form and the app's Source settings share them.
 templ gitSourceFields(f ui.Form, c GitChoices, app db.App) {
@@ -216,21 +187,15 @@ templ gitSourceFields(f ui.Form, c GitChoices, app db.App) {
 // gitRepoFields say which repository and branch to read, and how. Apps
 // and services deployed from Git share them; app carries the stored values.
 templ gitRepoFields(f ui.Form, c GitChoices, app db.App) {
-	@ui.Field(ui.FieldProps{Label: "Read the repository through", For: "access", Hint: "Private repositories need a GitHub App or, on any host (GitLab, Bitbucket, Gitea), a deploy key. Add them under Sources.", Error: f.E("access")}) {
+	@ui.Field(ui.FieldProps{Label: "Read the repository through", For: "access", Hint: "Private repositories need a GitHub App or, on any host (GitLab, Bitbucket, Gitea), a deploy key. A GitHub App is added under Sources, a key under Keys & tokens.", Error: f.E("access")}) {
 		@ui.Select("access", accessOptions(c), orDefault(f.V("access"), appAccess(app)), templ.Attributes{"aria-describedby": "access-hint"})
 	}
 	@ui.TextField(f, "Repository", "For example https://github.com/acme/shop, or with a deploy key git@github.com:acme/shop.git or git@gitlab.com:group/shop.git.", ui.InputProps{ID: "repo", Mono: true, Required: true, Value: app.RepoURL, Placeholder: "https://github.com/acme/shop"})
 	if len(c.Sources) > 0 {
-		<div class="grid gap-2">
-			<div class="flex flex-wrap gap-2">
-				for _, g := range c.Sources {
-					<button type="button" class="btn btn-secondary btn-sm" hx-get={ "/sources/github/" + g.ID + "/repos" } hx-target="#repo-list" hx-swap="outerHTML">
-						@ui.Icon("git-branch")
-						Browse { g.Name }
-					</button>
-				}
-			</div>
-			<div id="repo-list"></div>
+		<div class="flex flex-wrap gap-2">
+			for _, g := range c.Sources {
+				@ui.Picker(ui.PickerProps{ID: "repos-" + g.ID, Label: "Choose from " + g.Name, Icon: "git-branch", Filter: "Find a repository", Src: "/sources/github/" + g.ID + "/repos"})
+			}
 		</div>
 	}
 	@ui.TextField(f, "Branch", "", ui.InputProps{ID: "branch", Mono: true, Required: true, Value: orDefault(app.Branch, "main")})
@@ -272,12 +237,14 @@ func appAccess(app db.App) string {
 
 templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedDomain, source string, choices GitChoices, serverList []db.Server) {
 	@ui.Layout(s) {
-		@ui.PageHeader("New app", "Runs in "+env.Name+".")
-		@ui.Tabs(newAppTabs(p, env), source)
+		if source == db.SourceGit {
+			@ui.PageHeader("New app from a Git repository", "Runs in "+env.Name+".")
+		} else {
+			@ui.PageHeader("New app from a Docker image", "Runs in "+env.Name+".")
+		}
 		<div class="max-w-xl">
-			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/apps") }>
+			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/e/" + env.ID + "/apps") }>
 				@ui.CSRF(s.CSRF)
-				<input type="hidden" name="env" value={ env.ID }/>
 				<input type="hidden" name="source" value={ source }/>
 				<div class="card-body grid gap-4">
 					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens. Other containers in this environment reach the app by this name.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: true, Placeholder: "web", Attrs: templ.Attributes{"maxlength": "32"}})
@@ -294,8 +261,8 @@ templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedD
 					}
 				</div>
 				<div class="card-foot">
-					@ui.LinkButton("/projects/"+p.ID+"?env="+env.ID, ui.ButtonProps{}) {
-						Cancel
+					@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{}) {
+						Back
 					}
 					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
 						Create app
@@ -505,7 +472,7 @@ templ AppDeployment(s ui.Shell, v AppView, d db.Deployment) {
 						</div>
 						<form method="post" action={ templ.SafeURL(v.base() + "/deployments/" + d.ID + "/rollback") }>
 							@ui.CSRF(s.CSRF)
-							@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Secondary, Icon: "refresh"}) {
+							@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Secondary, Icon: "refresh", Attrs: ui.Ask("Roll back "+v.App.Name+"?", "The image of this deployment runs again in place of the one serving now. Nothing is built or pulled, and settings and variables stay as they are today.", "Roll back", false)}) {
 								Roll back
 							}
 						</form>
@@ -542,29 +509,6 @@ templ AppLogs(s ui.Shell, v AppView) {
 	}
 }
 
-templ AppEnvironment(s ui.Shell, v AppView, f ui.Form) {
-	@appFrame(s, v, "environment") {
-		<div class="max-w-3xl">
-			@ui.FormCard("Environment variables", "Stored encrypted. Changes apply on the next deploy.", v.base()+"/environment", s.CSRF, "Save variables") {
-				@ui.Field(ui.FieldProps{Label: "Variables", For: "vars", Hint: "Given to the running app. One NAME=value per line. Lines starting with # are ignored.", Error: f.E("vars")}) {
-					@ui.Textarea(ui.InputProps{ID: "vars", Mono: true, Rows: 12, Value: f.V("vars"), Invalid: f.E("vars") != "", Described: true, Placeholder: "DATABASE_URL=postgres://…\nNODE_ENV=production"})
-				}
-				if v.App.Source == db.SourceGit {
-					@ui.Field(ui.FieldProps{Label: "Build-time variables", For: "build_vars", Hint: "Given to the image build as build arguments, where the Dockerfile reads them with ARG. They are not given to the running app. Nixpacks and Railpack take their settings here: NIXPACKS_START_CMD, NIXPACKS_BUILD_CMD, RAILPACK_START_CMD, RAILPACK_BUILD_CMD and the like.", Error: f.E("build_vars")}) {
-						@ui.Textarea(ui.InputProps{ID: "build_vars", Mono: true, Rows: 5, Value: f.V("build_vars"), Invalid: f.E("build_vars") != "", Described: true, Placeholder: "NPM_TOKEN=…"})
-					}
-				}
-				<p class="text-sm text-ink-soft">
-					A value can come from a shared variable: write
-					<span class="code">{ "{{team.NAME}}" }</span>, <span class="code">{ "{{project.NAME}}" }</span>, <span class="code">{ "{{environment.NAME}}" }</span> or <span class="code">{ "{{server.NAME}}" }</span>
-					as the value or inside it. Shared variables are kept under
-					<a href="/team/variables">Team</a>, the <a href={ templ.SafeURL("/projects/" + v.Project.ID + "/settings#variables") }>project's settings</a> and <a href="/servers">Servers</a>.
-				</p>
-			}
-		</div>
-	}
-}
-
 func storageKindLabel(kind string) string {
 	switch kind {
 	case db.StorageVolume:
@@ -593,6 +537,9 @@ templ AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) {
 						<h2 class="card-title">Storage</h2>
 						<p class="muted text-sm">Data that survives a redeploy. Changes apply on the next deploy.</p>
 					</div>
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-storage"}) {
+						Add storage
+					}
 				</div>
 				if len(list) == 0 {
 					<p class="card-body muted">Nothing is mounted. Without storage, files the app writes are lost when it is redeployed.</p>
@@ -608,7 +555,7 @@ templ AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) {
 								<td class="text-right">
 									<form method="post" action={ templ.SafeURL(v.base() + "/storage/" + st.ID + "/delete") }>
 										@ui.CSRF(s.CSRF)
-										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove this storage?", st.Target+" is no longer mounted from the next deploy on. A volume and a server folder keep their data; a file's content is deleted.", "Remove storage", true)}) {
 											Remove
 										}
 									</form>
@@ -618,14 +565,14 @@ templ AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) {
 					}
 				}
 			</section>
-			@ui.FormCard("Add storage", "", v.base()+"/storage", s.CSRF, "Add storage") {
+			@ui.FormDialog(ui.DialogProps{ID: "add-storage", Title: "Add storage", Description: "It is mounted from the next deploy on.", Action: v.base() + "/storage", CSRF: s.CSRF, Submit: "Add storage", Wide: true, Open: !f.OK()}) {
 				@ui.Field(ui.FieldProps{Label: "Type", For: "kind", Hint: "A volume is managed by Docker. A server folder is a directory you choose on the server. A file is one file whose content you enter here.", Error: f.E("kind")}) {
 					@ui.Select("kind", []ui.Option{{Value: db.StorageVolume, Label: "Volume"}, {Value: db.StorageBind, Label: "Server folder"}, {Value: db.StorageFile, Label: "File"}}, orDefault(f.V("kind"), db.StorageVolume), templ.Attributes{"aria-describedby": "kind-hint"})
 				}
 				@ui.TextField(f, "Volume name or server folder", "A name such as data for a volume, or a path such as /srv/uploads for a server folder. Leave empty for a file.", ui.InputProps{ID: "source", Mono: true})
 				@ui.TextField(f, "Path in the container", "Where the app sees it, for example /var/lib/app/data.", ui.InputProps{ID: "target", Mono: true, Required: true})
-				@ui.Field(ui.FieldProps{Label: "File content", For: "content", Hint: "Only for the File type. Stored encrypted.", Error: f.E("content")}) {
-					@ui.Textarea(ui.InputProps{ID: "content", Mono: true, Rows: 6, Value: f.V("content"), Invalid: f.E("content") != "", Described: true})
+				@ui.Field(ui.FieldProps{Label: "File content", For: "file-content", Hint: "Only for the File type. Stored encrypted.", Error: f.E("content")}) {
+					@ui.Textarea(ui.InputProps{ID: "file-content", Name: "content", Mono: true, Rows: 6, Value: f.V("content"), Invalid: f.E("content") != "", Described: true})
 				}
 			}
 		</div>
@@ -653,82 +600,12 @@ func cpusValue(c float64) string {
 	return strconv.FormatFloat(c, 'f', -1, 64)
 }
 
-// Triggers is what the Settings page shows about starting deployments from
-// outside.
-type Triggers struct {
-	WebhookURL    string
-	WebhookSecret string // "" until generated
-	DeployURL     string
-	HasToken      bool
-	NewToken      string // shown once, right after it was generated
-	ViaGitHubApp  bool
-}
-
 // webhookHosts says where each Git host wants the address and the secret,
 // and what it calls the events.
 var webhookHosts = []ui.KVItem{
 	{Key: "GitHub, Gitea, Forgejo", Value: "Settings → Webhooks. Content type application/json, the secret as Secret, the push event (and pull requests)."},
 	{Key: "GitLab", Value: "Settings → Webhooks. The secret as Secret token, with Push events (and Merge request events). A signing token is GitLab's own and cannot be used here."},
 	{Key: "Bitbucket", Value: "Repository settings → Webhooks. The secret as Secret, with Repository push (and Pull request created, updated, merged and declined)."},
-}
-
-// triggersCard is the "Deploy from outside" card: the push webhook of a
-// resource deployed from Git, and its deploy token. An app's settings and a
-// Git service's share it; base is the resource's own address.
-templ triggersCard(csrf, base, what string, git bool, tr Triggers) {
-	<section class="card" id="triggers">
-		<div class="card-head">
-			<div>
-				<h2 class="card-title">Deploy from outside</h2>
-				<p class="muted text-sm">Ways for other systems to start a deployment of this { what }.</p>
-			</div>
-		</div>
-		if git {
-			<div class="card-body grid gap-3 border-b border-line">
-				<h3 class="font-semibold">Push webhook</h3>
-				if tr.ViaGitHubApp {
-					<p class="muted text-sm">This { what } deploys through a GitHub App, which already tells musdash about pushes. Nothing to set up.</p>
-				} else {
-					<p class="muted text-sm">Add a webhook to the repository with this address and the secret below, sending push events. To get previews, send pull request events as well.</p>
-					@ui.Copyable(tr.WebhookURL)
-					if tr.WebhookSecret != "" {
-						@ui.Copyable(tr.WebhookSecret)
-					}
-					@ui.KeyValue(webhookHosts)
-					<form method="post" action={ templ.SafeURL(base + "/webhook-secret") }>
-						@ui.CSRF(csrf)
-						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh"}) {
-							if tr.WebhookSecret == "" {
-								Create webhook secret
-							} else {
-								Replace webhook secret
-							}
-						}
-					</form>
-				}
-			</div>
-		}
-		<div class="card-body grid gap-3">
-			<h3 class="font-semibold">Deploy token</h3>
-			<p class="muted text-sm">For a CI pipeline: send a POST request with the token to start a deployment.</p>
-			<p class="code block break-all">curl -X POST -H "Authorization: Bearer TOKEN" "{ tr.DeployURL }"</p>
-			<form class="flex flex-wrap items-center gap-2" method="post" action={ templ.SafeURL(base + "/deploy-token") }>
-				@ui.CSRF(csrf)
-				@ui.Button(ui.ButtonProps{Type: "submit", Icon: "key"}) {
-					if tr.HasToken {
-						Replace deploy token
-					} else {
-						Create deploy token
-					}
-				}
-				if tr.HasToken {
-					@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Type: "submit", Attrs: templ.Attributes{"name": "revoke", "value": "1"}}) {
-						Revoke
-					}
-				}
-			</form>
-		</div>
-	</section>
 }
 
 // PreviewSettings is the Settings page of a preview: it has nothing of its
@@ -755,7 +632,7 @@ templ PreviewSettings(s ui.Shell, v AppView) {
 					@ui.CSRF(s.CSRF)
 					<input type="hidden" name="confirm" value={ v.App.Name }/>
 					<div>
-						@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.DangerQuiet, Icon: "trash"}) {
+						@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.DangerQuiet, Icon: "trash", Attrs: ui.Ask("Remove this preview?", "The preview is stopped and removed with its address. A new push to the pull request makes it again.", "Remove preview", true)}) {
 							Remove preview
 						}
 					</div>
@@ -773,6 +650,12 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 				<h2 class="card-title">Pull request previews</h2>
 				<p class="muted text-sm">Each pull request into { v.App.Branch } gets a deployment and an address of its own, updated on every push and removed when the pull request is closed.</p>
 			</div>
+			@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-previews"}) {
+				Change
+			}
+		</div>
+		<div class={ "card-body", templ.KV("border-b border-line", len(v.Previews) > 0) }>
+			@ui.KeyValue([]ui.KVItem{{Key: "Previews", Value: onOff(v.App.Previews)}, {Key: "Domain", Value: orDefault(v.App.PreviewDomain, "Generated addresses over plain HTTP"), Mono: v.App.PreviewDomain != ""}})
 		</div>
 		if len(v.Previews) > 0 {
 			<div class="rows">
@@ -792,7 +675,7 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 						@ui.StatusPill(p.App.Status)
 						<form method="post" action={ templ.SafeURL(v.base() + "/previews/" + strconv.Itoa(p.App.PRNumber) + "/delete") }>
 							@ui.CSRF(csrf)
-							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the preview of #"+strconv.Itoa(p.App.PRNumber)+"?", "The preview is stopped and removed with its address. A new push to the pull request makes it again.", "Remove preview", true)}) {
 								Remove
 							}
 						</form>
@@ -800,33 +683,43 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 				}
 			</div>
 		}
-		<form class="card-body grid gap-4 border-t border-line" method="post" action={ templ.SafeURL(v.base() + "/previews") }>
-			@ui.CSRF(csrf)
-			@ui.Checkbox("previews", v.App.Previews, nil) {
-				Give every pull request a preview
-			}
-			@ui.TextField(f, "Domain for previews", "Optional. With preview.example.com, pull request 12 is served at pr-12-" + v.App.Name + ".preview.example.com: point *.preview.example.com at this server. Empty uses generated addresses over plain HTTP.", ui.InputProps{ID: "preview_domain", Mono: true, Value: v.App.PreviewDomain, Placeholder: "preview.example.com"})
-			<p class="muted text-sm">A preview runs the pull request's code with this app's variables, so anyone who can push a branch to the repository can read them. Pull requests from forks get no preview. Up to ten previews exist at once. A webhook added by hand must also send pull request events.</p>
-			<div>
-				@ui.Button(ui.ButtonProps{Type: "submit"}) {
-					Save
-				}
-			</div>
-		</form>
 	</section>
+	@ui.FormDialog(ui.DialogProps{ID: "edit-previews", Title: "Pull request previews", Description: "A preview runs the pull request's code with this app's variables, so anyone who can push a branch to the repository can read them. Pull requests from forks get no preview. Up to ten previews exist at once. A webhook added by hand must also send pull request events.", Action: v.base() + "/previews", CSRF: csrf, Submit: "Save", Open: !f.OK()}) {
+		@ui.CheckboxNamed("previews-on", "previews", checked(f, "previews", v.App.Previews), nil) {
+			Give every pull request a preview
+		}
+		@ui.TextField(f, "Domain for previews", "Optional. With preview.example.com, pull request 12 is served at pr-12-" + v.App.Name + ".preview.example.com: point *.preview.example.com at this server. Empty uses generated addresses over plain HTTP.", ui.InputProps{ID: "preview_domain", Mono: true, Value: v.App.PreviewDomain, Placeholder: "preview.example.com"})
+	}
 }
 
-templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, choices GitChoices, tr Triggers) {
+func yesNo(b bool, yes, no string) string {
+	if b {
+		return yes
+	}
+	return no
+}
+
+func onOff(on bool) string {
+	if on {
+		return "On: every pull request gets one"
+	}
+	return "Off"
+}
+
+// optionLabel is the label of the option that has the value, for a page
+// that shows a choice it does not let the reader change in place.
+func optionLabel(opts []ui.Option, value string) string {
+	for _, o := range opts {
+		if o.Value == value {
+			return o.Label
+		}
+	}
+	return value
+}
+
+templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, choices GitChoices) {
 	@appFrame(s, v, "settings") {
 		<div class="grid max-w-3xl gap-6">
-			if tr.NewToken != "" {
-				@ui.Notice(ui.ToneOK) {
-					<p class="font-semibold">Deploy token created. Copy it now: it is not shown again.</p>
-					<p class="mt-2">
-						@ui.Copyable(tr.NewToken)
-					</p>
-				}
-			}
 			@ui.FormCard("General", "Changes apply on the next deploy.", v.base()+"/settings", s.CSRF, "Save changes") {
 				@ui.TextField(general, "Name", "", ui.InputProps{ID: "name", Mono: true, Value: v.App.Name, Required: true, Attrs: templ.Attributes{"maxlength": "32"}})
 				if v.App.Source != db.SourceGit {
@@ -850,23 +743,40 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form,
 				}
 			}
 			if v.App.Source == db.SourceGit && len(v.Servers) > 1 {
-				@ui.FormCard("Build server", "A build can need a gigabyte of memory or more. On a small server, build the image on another one: it is moved over when it is ready.", v.base()+"/build-server", s.CSRF, "Save") {
+				<section class="card" id="build-server">
+					<div class="card-head">
+						<div>
+							<h2 class="card-title">Build server</h2>
+							<p class="muted text-sm">A build can need a gigabyte of memory or more. On a small server, build the image on another one: it is moved over when it is ready.</p>
+						</div>
+						@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-build-server"}) {
+							Change
+						}
+					</div>
+					<div class="card-body">
+						@ui.KeyValue([]ui.KVItem{{Key: "Builds on", Value: optionLabel(buildServerOptions(v), v.App.BuildServerID)}})
+					</div>
+				</section>
+				@ui.FormDialog(ui.DialogProps{ID: "edit-build-server", Title: "Build server", Action: v.base() + "/build-server", CSRF: s.CSRF, Submit: "Save"}) {
 					@ui.Field(ui.FieldProps{Label: "Build on", For: "build_server", Hint: "Applies from the next deployment."}) {
 						@ui.Select("build_server", buildServerOptions(v), v.App.BuildServerID, templ.Attributes{"aria-describedby": "build_server-hint"})
 					}
 				}
 			}
-			@triggersCard(s.CSRF, v.base(), "app", v.App.Source == db.SourceGit, tr)
+			@keysLink("app")
 			if v.App.Source == db.SourceGit {
 				@previewsCard(s.CSRF, v, previews)
 			}
-			@tagsCard(s.CSRF, v.base()+"/tags", v.Tags)
+			@tagsCard(s.CSRF, v.base()+"/tags", v.Tags, v.TeamTags)
 			<section class="card" id="domains">
 				<div class="card-head">
 					<div>
 						<h2 class="card-title">Domains</h2>
 						<p class="muted text-sm">Point each domain's DNS at this server first, so its certificate can be issued.</p>
 					</div>
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-domain"}) {
+						Add domain
+					}
 				</div>
 				if len(v.Domains) > 0 {
 					<div class="rows">
@@ -889,18 +799,20 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form,
 								}
 								<form method="post" action={ templ.SafeURL(v.base() + "/domains/" + d.ID + "/delete") }>
 									@ui.CSRF(s.CSRF)
-									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove "+d.Host+d.Path+"?", v.App.Name+" stops answering at this address at once.", "Remove domain", true)}) {
 										Remove
 									}
 								</form>
 							</div>
 						}
 					</div>
+				} else {
+					<p class="card-body muted">No domain yet. The app answers at its generated address only.</p>
 				}
-				<form class="card-body grid gap-4 border-t border-line" method="post" action={ templ.SafeURL(v.base() + "/domains") }>
-					@ui.CSRF(s.CSRF)
+			</section>
+			@ui.FormDialog(ui.DialogProps{ID: "add-domain", Title: "Add domain", Description: "Point the domain's DNS at this server first, so its certificate can be issued.", Action: v.base() + "/domains", CSRF: s.CSRF, Submit: "Add domain", Wide: true, Open: !domain.OK()}) {
 					<div class="grid gap-4 sm:grid-cols-2">
-						@ui.TextField(domain, "Add a domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com"})
+						@ui.TextField(domain, "Domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com"})
 						@ui.TextField(domain, "Only under this path", "Optional. With /api, this app answers app.example.com/api and what is below it; another app can take the rest of the domain.", ui.InputProps{ID: "path", Mono: true, Placeholder: "/api"})
 					</div>
 					@ui.Checkbox("tls", domain.V("tls") != "0", nil) {
@@ -920,13 +832,7 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form,
 							@ui.TextField(domain, "Password", "8 to 72 characters. It is stored as a hash and cannot be shown again.", ui.InputProps{ID: "auth_password", Type: "password", Autocomplete: "new-password"})
 						</div>
 					</fieldset>
-					<div>
-						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}) {
-							Add domain
-						}
-					</div>
-				</form>
-			</section>
+			}
 			<section class="card card-danger">
 				<div class="card-head">
 					<div>
@@ -956,7 +862,21 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form,
 templ InstanceSettings(s ui.Shell, f ui.Form, domain, email string) {
 	@settingsFrame(s, "dashboard") {
 		<div class="max-w-2xl">
-			@ui.FormCard("Dashboard address", "Reach this dashboard on its own domain, over HTTPS, through the musdash proxy.", "/settings", s.CSRF, "Save settings") {
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Dashboard address</h2>
+						<p class="muted text-sm">Reach this dashboard on its own domain, over HTTPS, through the musdash proxy.</p>
+					</div>
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-address"}) {
+						Change
+					}
+				</div>
+				<div class="card-body">
+					@ui.KeyValue([]ui.KVItem{{Key: "Dashboard domain", Value: orDefault(domain, "None: the server's address and port"), Mono: domain != ""}, {Key: "Email for certificates", Value: orDefault(email, "None")}})
+				</div>
+			</section>
+			@ui.FormDialog(ui.DialogProps{ID: "edit-address", Title: "Dashboard address", Description: "The domain is where the dashboard is reached and what its links and webhook addresses are built with. After a change, repositories that send webhooks here need the new address.", Action: "/settings", CSRF: s.CSRF, Submit: "Save settings", Open: !f.OK()}) {
 				@ui.TextField(f, "Dashboard domain", "Point the domain's DNS at this server first. Leave empty to keep using the server's address and port.", ui.InputProps{ID: "instance_domain", Mono: true, Value: domain, Placeholder: "musdash.example.com"})
 				@ui.TextField(f, "Email for certificates", "Let's Encrypt sends expiry warnings here. Optional.", ui.InputProps{ID: "acme_email", Type: "email", Value: email, Placeholder: "you@example.com"})
 			}

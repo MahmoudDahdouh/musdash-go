@@ -20,7 +20,9 @@ type ButtonProps struct {
 	IconOnly bool   // square button; Label becomes the accessible name
 	Label    string // required when IconOnly
 	Disabled bool
-	Attrs    templ.Attributes
+	// Opens is the id of the dialog the button opens.
+	Opens string
+	Attrs templ.Attributes
 }
 
 func buttonClass(p ButtonProps) string {
@@ -50,6 +52,9 @@ templ Button(p ButtonProps) {
 		if p.IconOnly {
 			aria-label={ p.Label }
 			title={ p.Label }
+		}
+		if p.Opens != "" {
+			data-open={ p.Opens }
 		}
 		{ p.Attrs... }
 	>
@@ -177,18 +182,209 @@ type Option struct {
 	Label string
 }
 
-templ Select(id string, options []Option, selected string, attrs templ.Attributes) {
-	<select id={ id } name={ id } class="input" { attrs... }>
-		for _, o := range options {
-			<option value={ o.Value } selected?={ o.Value == selected }>{ o.Label }</option>
+// chosen is the option a Select shows: the selected one or, when selected
+// names none of them, the first, which is what a browser's own select sends.
+func chosen(options []Option, selected string) Option {
+	for _, o := range options {
+		if o.Value == selected {
+			return o
 		}
-	</select>
+	}
+	if len(options) > 0 {
+		return options[0]
+	}
+	return Option{}
+}
+
+// filterAbove is the number of options past which a Select gets a filter
+// field without being asked: a list that long is searched, not read.
+const filterAbove = 8
+
+// selectProps is what Select, SelectNamed and Combobox are drawn from.
+type selectProps struct {
+	ID       string
+	Name     string
+	Options  []Option
+	Selected string
+	Filter   bool
+	Attrs    templ.Attributes
+}
+
+// Select is a choice of one option, sent under the name id. It is not the
+// browser's own select: a button names the chosen option and opens a menu of
+// them all, and a hidden input carries the value (static/app.js keeps the
+// three in step). The id is the button's, so a label's for reaches it; attrs
+// go to the button too. A long list gets a filter field, as a Combobox has.
+templ Select(id string, options []Option, selected string, attrs templ.Attributes) {
+	@selectBox(selectProps{ID: id, Name: id, Options: options, Selected: selected, Filter: len(options) > filterAbove, Attrs: attrs})
+}
+
+// SelectNamed is a Select whose field name is not its id, for a page that
+// shows the same field once per row.
+templ SelectNamed(id, name string, options []Option, selected string, attrs templ.Attributes) {
+	@selectBox(selectProps{ID: id, Name: name, Options: options, Selected: selected, Filter: len(options) > filterAbove, Attrs: attrs})
+}
+
+// Combobox is a Select with a field at the top of its menu: typing in it
+// narrows the options to those containing the text.
+templ Combobox(id string, options []Option, selected string, attrs templ.Attributes) {
+	@selectBox(selectProps{ID: id, Name: id, Options: options, Selected: selected, Filter: true, Attrs: attrs})
+}
+
+templ selectBox(p selectProps) {
+	<div class="select" data-select>
+		<input type="hidden" name={ p.Name } value={ chosen(p.Options, p.Selected).Value }/>
+		<button
+			type="button"
+			id={ p.ID }
+			class="btn btn-secondary select-button"
+			role="combobox"
+			aria-haspopup="listbox"
+			aria-expanded="false"
+			aria-controls={ p.ID + "-list" }
+			popovertarget={ p.ID + "-menu" }
+			{ p.Attrs... }
+		>
+			<span class="truncate" data-select-label>{ chosen(p.Options, p.Selected).Label }</span>
+			@Icon("chevron-down")
+		</button>
+		<div class="menu" id={ p.ID + "-menu" } popover>
+			if p.Filter {
+				@menuFilter(p.ID+"-list", "Filter")
+			}
+			<div class="menu-options" id={ p.ID + "-list" } role="listbox" aria-labelledby={ p.ID }>
+				for _, o := range p.Options {
+					<button
+						type="button"
+						class="menu-item"
+						role="option"
+						aria-selected={ strconv.FormatBool(o.Value == chosen(p.Options, p.Selected).Value) }
+						data-value={ o.Value }
+						tabindex="-1"
+					>
+						@Icon("check", "menu-tick")
+						<span class="min-w-0 flex-1">{ o.Label }</span>
+					</button>
+				}
+			</div>
+			if p.Filter {
+				@menuNoMatch()
+			}
+		</div>
+	</div>
+}
+
+// menuFilter is the field at the top of a menu that narrows its options. It
+// has no name, so it is not part of the form around it. Focus stays in it
+// while the arrow keys move through the options, which is why it, not the
+// list, says which option is the current one.
+templ menuFilter(listID, label string) {
+	<div class="menu-filter">
+		<input
+			type="text"
+			class="input"
+			role="combobox"
+			aria-label={ label }
+			aria-controls={ listID }
+			aria-expanded="true"
+			aria-autocomplete="list"
+			placeholder={ label }
+			autocomplete="off"
+			spellcheck="false"
+			data-select-filter
+		/>
+	</div>
+}
+
+templ menuNoMatch() {
+	<p class="menu-note" data-select-empty hidden>Nothing matches.</p>
+}
+
+// PickerProps configures a Picker.
+type PickerProps struct {
+	ID     string
+	Label  string // on the button: what there is to choose from
+	Icon   string
+	Filter string // the filter field's label, such as "Find a repository"
+	Src    string // answers with the options: PickerOption and MenuNote
+}
+
+// Picker is a menu that fills another field instead of holding a value, with
+// options that come from the server the first time it is opened: a list
+// that is slow to fetch or long, such as an account's repositories. It
+// always has a filter field.
+templ Picker(p PickerProps) {
+	<div class="select" data-select>
+		<button
+			type="button"
+			id={ p.ID }
+			class="btn btn-secondary btn-sm select-button"
+			aria-haspopup="listbox"
+			aria-expanded="false"
+			aria-controls={ p.ID + "-list" }
+			popovertarget={ p.ID + "-menu" }
+		>
+			if p.Icon != "" {
+				@Icon(p.Icon)
+			}
+			<span class="truncate">{ p.Label }</span>
+			@Icon("chevron-down")
+		</button>
+		<div class="menu" id={ p.ID + "-menu" } popover hx-get={ p.Src } hx-trigger="select-load" hx-target="find [role=listbox]" hx-swap="innerHTML">
+			@menuFilter(p.ID+"-list", p.Filter)
+			<div class="menu-options" id={ p.ID + "-list" } role="listbox" aria-label={ p.Label }>
+				@MenuNote("Loading…", false)
+			</div>
+			@menuNoMatch()
+		</div>
+	</div>
+}
+
+// PickerOption is one option a Picker's Src answers with. Choosing it puts
+// value into the field whose id is fill. search is the text the filter
+// looks in; the children are what is shown.
+templ PickerOption(fill, value, search string) {
+	<button type="button" class="menu-item" role="option" tabindex="-1" data-fill={ fill } data-value={ value } data-search={ search }>
+		{ children... }
+	</button>
+}
+
+// MenuNote is a line of text in a menu where options would be: that there
+// are none, or why they could not be fetched.
+templ MenuNote(text string, problem bool) {
+	<p
+		class={ "menu-note", templ.KV("text-danger", problem) }
+		if problem {
+			role="alert"
+		}
+	>{ text }</p>
 }
 
 // Checkbox renders a labelled checkbox. Its children are the label.
 templ Checkbox(id string, checked bool, attrs templ.Attributes) {
+	@CheckboxNamed(id, id, checked, attrs) {
+		{ children... }
+	}
+}
+
+// CheckboxNamed is a Checkbox whose form field is not its id: for a page
+// that has the same field in several forms, or an element of that id
+// already. The name cannot be given in attrs: an element with two name
+// attributes keeps the first.
+templ CheckboxNamed(id, name string, checked bool, attrs templ.Attributes) {
 	<label class="check" for={ id }>
-		<input type="checkbox" id={ id } name={ id } value="1" checked?={ checked } { attrs... }/>
+		<input type="checkbox" id={ id } name={ name } value="1" checked?={ checked } { attrs... }/>
+		<span>
+			{ children... }
+		</span>
+	</label>
+}
+
+// Radio renders one labelled choice of a group. Every radio of a group has
+// the same name and its own id and value. Its children are the label.
+templ Radio(name, id, value string, checked bool, attrs templ.Attributes) {
+	<label class="check" for={ id }>
+		<input type="radio" id={ id } name={ name } value={ value } checked?={ checked } { attrs... }/>
 		<span>
 			{ children... }
 		</span>
@@ -201,20 +397,22 @@ templ CSRF(token string) {
 }
 
 // TextField is a labelled input bound to a Form: it shows the submitted value
-// and the field's error. p.ID names the field.
+// and the field's error. The field is p.Name, or p.ID when it has no name of
+// its own: a page with the same field in two forms gives each its own id.
 templ TextField(f Form, label, hint string, p InputProps) {
-	@Field(FieldProps{Label: label, For: p.ID, Hint: hint, Error: f.E(p.ID)}) {
+	@Field(FieldProps{Label: label, For: p.ID, Hint: hint, Error: f.E(orDefault(p.Name, p.ID))}) {
 		@Input(boundInput(f, hint, p))
 	}
 }
 
 func boundInput(f Form, hint string, p InputProps) InputProps {
+	key := orDefault(p.Name, p.ID)
 	// A submitted value wins over the stored one, so a rejected form shows
 	// what was typed. Passwords are never echoed back into the page.
-	if v, ok := f.Values[p.ID]; ok && p.Type != "password" {
+	if v, ok := f.Values[key]; ok && p.Type != "password" {
 		p.Value = v
 	}
-	p.Invalid = f.E(p.ID) != ""
+	p.Invalid = f.E(key) != ""
 	p.Described = hint != ""
 	return p
 }

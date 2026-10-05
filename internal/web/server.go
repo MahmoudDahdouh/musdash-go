@@ -146,22 +146,33 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /account/tokens/{id}/delete", member, s.tokenDelete)
 	handle("GET /sys/mem", member, s.memReadout)
 
-	handle("GET /{$}", member, s.projectList)
-	handle("GET /projects/new", member, s.projectNew)
+	handle("GET /{$}", member, s.home)
+	handle("GET /home/live", member, s.homeLive)
+	handle("GET /projects", member, s.projectList)
 	handle("POST /projects", member, s.projectCreate)
 	handle("GET /projects/{id}", member, s.projectShow)
+	handle("GET /projects/{id}/e/{env}", member, s.environmentShow)
+	handle("GET /projects/{id}/e/{env}/new", member, s.resourceNew)
+	handle("GET /projects/{id}/switch/environments", member, s.switchEnvironments)
+	handle("GET /environments/{id}/switch/resources", member, s.switchResources)
 	handle("POST /projects/{id}", member, s.projectUpdate)
 	handle("GET /projects/{id}/settings", member, s.projectSettings)
+	handle("GET /projects/{id}/domains", member, s.projectDomains)
+	handle("POST /projects/{id}/domains", member, s.projectDomainAdd)
 	handle("POST /projects/{id}/delete", member, s.projectDelete)
 	handle("POST /projects/{id}/environments", member, s.environmentCreate)
 	handle("POST /environments/{id}/delete", member, s.environmentDelete)
 	handle("GET /projects/{id}/variables", member, s.sharedShow(s.sharedProject))
+	handle("GET /projects/{id}/variables/values", member, s.sharedValues(s.sharedProject))
+	handle("GET /projects/{id}/variables/edit", member, s.sharedEdit(s.sharedProject))
 	handle("POST /projects/{id}/variables", member, s.sharedSave(s.sharedProject))
 	handle("GET /environments/{id}/variables", member, s.sharedShow(s.sharedEnvironment))
+	handle("GET /environments/{id}/variables/values", member, s.sharedValues(s.sharedEnvironment))
+	handle("GET /environments/{id}/variables/edit", member, s.sharedEdit(s.sharedEnvironment))
 	handle("POST /environments/{id}/variables", member, s.sharedSave(s.sharedEnvironment))
 
-	handle("GET /projects/{id}/apps/new", member, s.appNew)
-	handle("POST /projects/{id}/apps", member, s.appCreate)
+	handle("GET /projects/{id}/e/{env}/apps/new", member, s.appNew)
+	handle("POST /projects/{id}/e/{env}/apps", member, s.appCreate)
 	handle("GET /apps/{id}", member, s.appOverview)
 	handle("GET /apps/{id}/status", member, s.appStatus)
 	handle("POST /apps/{id}/deploy", member, s.appDeploy)
@@ -174,6 +185,8 @@ func (s *Server) Handler() http.Handler {
 	handle("GET /apps/{id}/logs", member, s.appLogs)
 	handle("GET /apps/{id}/logs/stream", member, s.appLogsStream)
 	handle("GET /apps/{id}/environment", member, s.ownSettings(s.appEnvironment))
+	handle("GET /apps/{id}/environment/values", member, s.ownSettings(s.appEnvironmentValues))
+	handle("GET /apps/{id}/environment/edit", member, s.ownSettings(s.appEnvironmentEdit))
 	handle("POST /apps/{id}/environment", member, s.ownSettings(s.appEnvironmentSave))
 	handle("GET /apps/{id}/storage", member, s.ownSettings(s.appStorage))
 	handle("POST /apps/{id}/storage", member, s.ownSettings(s.appStorageAdd))
@@ -191,6 +204,7 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /apps/{id}/tasks/{tid}/run", member, s.ownSettings(s.appTaskRun))
 	handle("POST /apps/{id}/tasks/{tid}/delete", member, s.ownSettings(s.appTaskDelete))
 	handle("POST /apps/{id}/source", member, s.ownSettings(s.appSourceSave))
+	handle("GET /apps/{id}/webhook-secret", member, s.ownSettings(s.appWebhookShow))
 	handle("POST /apps/{id}/webhook-secret", member, s.ownSettings(s.appWebhookSecret))
 	handle("POST /apps/{id}/deploy-token", member, s.ownSettings(s.appDeployToken))
 	handle("POST /apps/{id}/build-server", member, s.ownSettings(s.appBuildServer))
@@ -198,8 +212,8 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /apps/{id}/previews", member, s.appPreviewsSave)
 	handle("POST /apps/{id}/previews/{number}/delete", member, s.appPreviewDelete)
 
-	handle("GET /projects/{id}/databases/new", member, s.databaseNew)
-	handle("POST /projects/{id}/databases", member, s.databaseCreate)
+	handle("GET /projects/{id}/e/{env}/databases/new", member, s.databaseNew)
+	handle("POST /projects/{id}/e/{env}/databases", member, s.databaseCreate)
 	handle("GET /databases/{id}", member, s.databaseOverview)
 	handle("GET /databases/{id}/status", member, s.databaseStatus)
 	handle("POST /databases/{id}/start", member, s.databaseStart)
@@ -217,8 +231,8 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /databases/{id}/backups/{bid}/restore", member, s.databaseBackupRestore)
 	handle("POST /databases/{id}/backups/{bid}/delete", member, s.databaseBackupDelete)
 
-	handle("GET /projects/{id}/services/new", member, s.serviceNew)
-	handle("POST /projects/{id}/services", member, s.serviceCreate)
+	handle("GET /projects/{id}/e/{env}/services/new", member, s.serviceNew)
+	handle("POST /projects/{id}/e/{env}/services", member, s.serviceCreate)
 	handle("GET /services/{id}", member, s.serviceOverview)
 	handle("GET /services/{id}/status", member, s.serviceStatus)
 	handle("POST /services/{id}/deploy", member, s.serviceDeploy)
@@ -227,9 +241,11 @@ func (s *Server) Handler() http.Handler {
 	handle("GET /services/{id}/logs", member, s.serviceLogs)
 	handle("GET /services/{id}/logs/stream", member, s.serviceLogsStream)
 	handle("GET /services/{id}/compose", member, s.serviceCompose)
+	handle("GET /services/{id}/compose/variables", member, s.serviceComposeVariables)
 	handle("POST /services/{id}/compose", member, s.serviceComposeSave)
 	handle("GET /services/{id}/settings", member, s.serviceSettings)
 	handle("POST /services/{id}/source", member, s.serviceSourceSave)
+	handle("GET /services/{id}/webhook-secret", member, s.serviceWebhookShow)
 	handle("POST /services/{id}/webhook-secret", member, s.serviceWebhookSecret)
 	handle("POST /services/{id}/deploy-token", member, s.serviceDeployToken)
 	handle("POST /services/{id}/endpoints/{eid}", member, s.serviceEndpointSave)
@@ -237,9 +253,13 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /services/{id}/delete", member, s.serviceDelete)
 
 	handle("GET /tags", member, s.tagList)
+	handle("POST /tags", member, s.tagCreate)
 	handle("GET /tags/{tag}", member, s.tagShow)
+	handle("POST /tags/{tag}", member, s.tagRename)
+	handle("POST /tags/{tag}/delete", member, s.tagDelete)
 	handle("POST /tags/{tag}/deploy", member, s.tagDeploy)
 
+	handle("GET /keys", member, s.keysPage)
 	handle("GET /sources", member, s.sourcesPage)
 	handle("POST /sources/github", admin, s.githubStart)
 	handle("GET /sources/github/callback", admin, s.githubCallback)
@@ -257,10 +277,14 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /servers/{id}/forget-host-key", admin, s.serverForgetHostKey)
 	handle("POST /servers/{id}/delete", admin, s.serverDelete)
 	handle("GET /servers/{id}/variables", member, s.sharedShow(s.sharedServer))
+	handle("GET /servers/{id}/variables/values", admin, s.sharedValues(s.sharedServer))
+	handle("GET /servers/{id}/variables/edit", admin, s.sharedEdit(s.sharedServer))
 	handle("POST /servers/{id}/variables", admin, s.sharedSave(s.sharedServer))
 	handle("GET /team", member, s.teamPage)
 	handle("POST /team", admin, s.teamRename)
 	handle("GET /team/variables", member, s.sharedShow(s.sharedTeam))
+	handle("GET /team/variables/values", admin, s.sharedValues(s.sharedTeam))
+	handle("GET /team/variables/edit", admin, s.sharedEdit(s.sharedTeam))
 	handle("POST /team/variables", admin, s.sharedSave(s.sharedTeam))
 	handle("POST /team/invitations", admin, s.invitationCreate)
 	handle("POST /team/invitations/{id}/delete", admin, s.invitationDelete)
@@ -285,6 +309,8 @@ func (s *Server) Handler() http.Handler {
 
 	if s.Cfg.Dev {
 		handle("GET /_ui", member, s.gallery)
+		handle("POST /_ui", member, s.gallery)
+		handle("GET /_ui/switch", member, s.gallerySwitch)
 	}
 	if s.Pprof {
 		mux.Handle("/debug/pprof/", loopbackOnly(http.HandlerFunc(pprof.Index)))
@@ -338,6 +364,10 @@ func (s *Server) memReadout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) gallery(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, pages.Gallery(s.shell(w, r, "Components", "ui")))
+}
+
+func (s *Server) gallerySwitch(w http.ResponseWriter, r *http.Request) {
+	s.render(w, r, http.StatusOK, pages.GallerySwitch())
 }
 
 // notFound answers unknown paths: inside the app frame for a signed-in

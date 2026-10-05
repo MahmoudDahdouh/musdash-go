@@ -98,14 +98,8 @@ func (s *Server) passwordAgain(r *http.Request, f *ui.Form, field string) bool {
 // renderAccount draws the Account page with its profile, password and
 // second-step forms in the given states.
 func (s *Server) renderAccount(w http.ResponseWriter, r *http.Request, status int, profile, password, twoStep ui.Form) {
-	s.renderAccountWith(w, r, status, profile, password, twoStep, ui.Form{}, "")
-}
-
-// renderAccountWith also takes the state of the API token form, and a
-// token that was just made: it is shown in this response and no other.
-func (s *Server) renderAccountWith(w http.ResponseWriter, r *http.Request, status int, profile, password, twoStep, token ui.Form, newToken string) {
 	sess := sessionFrom(r)
-	v := pages.AccountView{TwoStep: sess.User.TwoStep(), NewToken: newToken, Base: s.publicBase(r)}
+	v := pages.AccountView{TwoStep: sess.User.TwoStep()}
 	var err error
 	if v.TwoStep {
 		if v.RecoveryCodes, err = s.DB.CountRecoveryCodes(r.Context(), sess.UserID); err != nil {
@@ -113,11 +107,7 @@ func (s *Server) renderAccountWith(w http.ResponseWriter, r *http.Request, statu
 			return
 		}
 	}
-	if v.Tokens, err = s.DB.ListAPITokens(r.Context(), sess.UserID, sess.TeamID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	s.render(w, r, status, pages.Account(s.shell(w, r, "Account", "account"), profile, password, twoStep, token, v))
+	s.render(w, r, status, pages.Account(s.shell(w, r, "Account", "account"), profile, password, twoStep, v))
 }
 
 // newRecoveryCodes makes a set of recovery codes and their hashes.
@@ -214,8 +204,9 @@ func (s *Server) twoStepCodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var f ui.Form
+	f.Set("_form", "codes")
 	if ok, wait := s.codeAllowed(sess.UserID); !ok {
-		f.Fail("codes_code", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
+		f.Fail("code", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		s.renderAccount(w, r, http.StatusTooManyRequests, ui.Form{}, ui.Form{}, f)
 		return
 	}
@@ -229,7 +220,7 @@ func (s *Server) twoStepCodes(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !ok {
-		f.Fail("codes_code", wrongCode)
+		f.Fail("code", wrongCode)
 		s.renderAccount(w, r, http.StatusUnprocessableEntity, ui.Form{}, ui.Form{}, f)
 		return
 	}
@@ -250,8 +241,9 @@ func (s *Server) twoStepOff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var f ui.Form
+	f.Set("_form", "off")
 	if ok, wait := s.codeAllowed(sess.UserID); !ok {
-		f.Fail("off_code", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
+		f.Fail("code", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		s.renderAccount(w, r, http.StatusTooManyRequests, ui.Form{}, ui.Form{}, f)
 		return
 	}
@@ -262,7 +254,7 @@ func (s *Server) twoStepOff(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !ok {
-			f.Fail("off_code", wrongCode)
+			f.Fail("code", wrongCode)
 		}
 	}
 	if !f.OK() {

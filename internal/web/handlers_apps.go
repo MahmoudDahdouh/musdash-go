@@ -67,15 +67,16 @@ func (s *Server) loadApp(w http.ResponseWriter, r *http.Request) (pages.AppView,
 	return v, true
 }
 
+// appCrumbs is an app's trail. An app is a switcher to what else is in its
+// environment; a preview is listed nowhere but with its parent, so its
+// trail goes through the parent instead.
 func appCrumbs(v pages.AppView) []ui.Crumb {
-	crumbs := []ui.Crumb{
-		{Label: "Projects", Href: "/"},
-		{Label: v.Project.Name, Href: "/projects/" + v.Project.ID + "?env=" + v.Env.ID},
-	}
 	if v.Parent != nil {
-		crumbs = append(crumbs, ui.Crumb{Label: v.Parent.Name, Href: "/apps/" + v.Parent.ID})
+		return envCrumbs(v.Project, v.Env,
+			ui.Crumb{Label: v.Parent.Name, Href: "/apps/" + v.Parent.ID, Icon: pages.KindIcon(db.KindApp)},
+			ui.Crumb{Label: v.App.Name})
 	}
-	return append(crumbs, ui.Crumb{Label: v.App.Name})
+	return envCrumbs(v.Project, v.Env, resourceCrumb(v.Env, db.KindApp, v.App.ID, v.App.Name))
 }
 
 func (s *Server) appShell(w http.ResponseWriter, r *http.Request, v pages.AppView) ui.Shell {
@@ -233,21 +234,18 @@ func domainAuth(f *ui.Form, user, password string) (string, string) {
 	return user, string(hash)
 }
 
+// newAppShell frames the New app form.
+func (s *Server) newAppShell(w http.ResponseWriter, r *http.Request, p db.Project, env db.Environment) ui.Shell {
+	return s.shell(w, r, "New app", "projects", envCrumbs(p, env,
+		ui.Crumb{Label: "Add resource", Href: envPath(p.ID, env.ID) + "/new"}, ui.Crumb{Label: "App"})...)
+}
+
 func (s *Server) appNew(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.loadProject(w, r)
+	p, env, ok := s.loadProjectEnv(w, r)
 	if !ok {
 		return
 	}
 	teamID := sessionFrom(r).TeamID
-	env, err := s.DB.Environment(r.Context(), teamID, r.URL.Query().Get("env"))
-	if errors.Is(err, db.ErrNotFound) || (err == nil && env.ProjectID != p.ID) {
-		s.notFound(w, r)
-		return
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	serverList, err := s.serverChoices(r.Context(), teamID)
 	if err != nil {
 		s.fail(w, r, err)
@@ -263,26 +261,21 @@ func (s *Server) appNew(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
-	s.render(w, r, http.StatusOK, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, ui.Form{}, generatedDomain(server), src, choices, serverList))
+	// The Add resource page may have asked for a way into the repository.
+	var f ui.Form
+	if access := preferredAccess(r, choices); access != "" {
+		f.Set("access", access)
+	}
+	s.render(w, r, http.StatusOK, pages.AppNew(s.newAppShell(w, r, p, env), p, env, f, generatedDomain(server), src, choices, serverList))
 }
 
 func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.loadProject(w, r)
+	p, env, ok := s.loadProjectEnv(w, r)
 	if !ok {
 		return
 	}
 	ctx := r.Context()
 	teamID := sessionFrom(r).TeamID
-	env, err := s.DB.Environment(ctx, teamID, r.PostFormValue("env"))
-	if errors.Is(err, db.ErrNotFound) || (err == nil && env.ProjectID != p.ID) {
-		s.notFound(w, r)
-		return
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	serverList, err := s.serverChoices(ctx, teamID)
 	if err != nil {
 		s.fail(w, r, err)
@@ -336,8 +329,7 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rerender := func(status int) {
-		crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
-		s.render(w, r, status, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, f, rawDomain, src, choices, serverList))
+		s.render(w, r, status, pages.AppNew(s.newAppShell(w, r, p, env), p, env, f, rawDomain, src, choices, serverList))
 	}
 	if !f.OK() {
 		rerender(http.StatusUnprocessableEntity)
@@ -621,22 +613,20 @@ func (s *Server) appLogsStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) appEnvironment(w http.ResponseWriter, r *http.Request) {
-	v, ok := s.loadApp(w, r)
-	if !ok {
-		return
-	}
+// appVars lists an app's variables in their two groups. Their values are
+// opened only when asked for: without that, what is returned holds names
+// and nothing a page could leak.
+func (s *Server) appVars(r *http.Request, v pages.AppView, shown bool) (runtime, build []db.EnvVar, err error) {
 	sealed, err := s.DB.ListEnvVars(r.Context(), db.KindApp, v.App.ID)
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return nil, nil, err
 	}
-	var runtime, build []db.EnvVar
 	for _, ev := range sealed {
-		plain, err := s.Box.OpenString(ev.Value)
-		if err != nil {
-			s.fail(w, r, errors.New("environment variable "+ev.Key+" cannot be decrypted"))
-			return
+		plain := ""
+		if shown {
+			if plain, err = s.Box.OpenString(ev.Value); err != nil {
+				return nil, nil, errors.New("environment variable " + ev.Key + " cannot be decrypted")
+			}
 		}
 		if ev.BuildTime {
 			build = append(build, db.EnvVar{Key: ev.Key, Value: plain})
@@ -644,10 +634,65 @@ func (s *Server) appEnvironment(w http.ResponseWriter, r *http.Request) {
 			runtime = append(runtime, db.EnvVar{Key: ev.Key, Value: plain})
 		}
 	}
+	return runtime, build, nil
+}
+
+// appVarsCard is the list on the Environment tab, with values or without.
+func (s *Server) appVarsCard(r *http.Request, v pages.AppView, shown bool) (pages.VarsCard, error) {
+	runtime, build, err := s.appVars(r, v, shown)
+	c := pages.VarsCard{ID: "app-vars", Title: "Environment variables", Shown: shown,
+		Values: "/apps/" + v.App.ID + "/environment/values", Edit: "/apps/" + v.App.ID + "/environment/edit",
+		Groups: []pages.VarGroup{{Vars: runtime}}}
+	if v.App.Source == db.SourceGit {
+		c.Groups = []pages.VarGroup{{Title: "Given to the running app", Vars: runtime}, {Title: "Given to the build", Vars: build}}
+	}
+	return c, err
+}
+
+// appEnvironment is the Environment tab: names, and no value.
+func (s *Server) appEnvironment(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadApp(w, r)
+	if !ok {
+		return
+	}
+	c, err := s.appVarsCard(r, v, false)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, pages.AppEnvironment(s.appShell(w, r, v), v, c))
+}
+
+// appEnvironmentValues answers Show values and Hide values: the list again,
+// with the values when they were asked for.
+func (s *Server) appEnvironmentValues(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadApp(w, r)
+	if !ok {
+		return
+	}
+	c, err := s.appVarsCard(r, v, r.URL.Query().Get("hide") == "")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, pages.Variables(c))
+}
+
+// appEnvironmentEdit is the editor, which holds the values.
+func (s *Server) appEnvironmentEdit(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadApp(w, r)
+	if !ok {
+		return
+	}
+	runtime, build, err := s.appVars(r, v, true)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var f ui.Form
 	f.Set("vars", deploy.FormatEnv(runtime))
 	f.Set("build_vars", deploy.FormatEnv(build))
-	s.render(w, r, http.StatusOK, pages.AppEnvironment(s.appShell(w, r, v), v, f))
+	s.render(w, r, http.StatusOK, pages.AppEnvironmentEdit(s.appShell(w, r, v), v, f))
 }
 
 func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
@@ -679,7 +724,7 @@ func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironment(s.appShell(w, r, v), v, f))
+		s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironmentEdit(s.appShell(w, r, v), v, f))
 		return
 	}
 	// One name cannot be both: the table holds each name once per app.
@@ -690,7 +735,7 @@ func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
 	for i := range buildVars {
 		if runtimeKeys[buildVars[i].Key] {
 			f.Fail("build_vars", buildVars[i].Key+" is already a runtime variable. Use a different name for the build-time one.")
-			s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironment(s.appShell(w, r, v), v, f))
+			s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironmentEdit(s.appShell(w, r, v), v, f))
 			return
 		}
 		buildVars[i].BuildTime = true
@@ -809,7 +854,7 @@ func (s *Server) appStorageDelete(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) appSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadApp(w, r); ok {
-		s.renderAppSettings(w, r, http.StatusOK, v, ui.Form{}, ui.Form{}, ui.Form{}, "")
+		s.renderAppSettings(w, r, http.StatusOK, v, ui.Form{}, ui.Form{}, ui.Form{})
 	}
 }
 
@@ -872,7 +917,7 @@ func (s *Server) appSettingsSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, f, ui.Form{}, ui.Form{}, "")
+		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, f, ui.Form{}, ui.Form{})
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Settings saved. Redeploy to apply them.")
@@ -895,12 +940,10 @@ func (s *Server) syncRoutes(r *http.Request, serverID string) {
 	}
 }
 
-func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
-	v, ok := s.loadApp(w, r)
-	if !ok {
-		return
-	}
-	var f ui.Form
+// addAppDomain reads the Add domain form and gives the app the domain. What
+// is wrong with the form is recorded in f; an error is one of the server's.
+// app is one a loader returned for the team.
+func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) error {
 	raw := strings.TrimSpace(r.PostFormValue("host"))
 	tls := r.PostFormValue("tls") == "1"
 	www := r.PostFormValue("redirect_www") == "1"
@@ -914,39 +957,52 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 	// The password is not put back in the form: it is typed again.
 	f.Set("auth_user", strings.TrimSpace(r.PostFormValue("auth_user")))
 
-	host := s.checkHost(r.Context(), &f, "host", raw)
-	path := domainPath(&f, "path", r.PostFormValue("path"))
-	authUser, authHash := domainAuth(&f, r.PostFormValue("auth_user"), r.PostFormValue("auth_password"))
+	host := s.checkHost(r.Context(), f, "host", raw)
+	path := domainPath(f, "path", r.PostFormValue("path"))
+	authUser, authHash := domainAuth(f, r.PostFormValue("auth_user"), r.PostFormValue("auth_password"))
 	// "www." is added in front for the redirect; the result must still fit
 	// in a host name.
 	if f.OK() && www && !strings.HasPrefix(host, "www.") && !proxy.ValidHost("www."+host) {
 		f.Fail("host", "This name is too long to also carry a www form. Untick the redirect or use a shorter name.")
 	}
-	if n, err := s.DB.CountDomains(r.Context(), db.KindApp, v.App.ID); err == nil && n >= maxDomains {
+	if n, err := s.DB.CountDomains(r.Context(), db.KindApp, app.ID); err == nil && n >= maxDomains {
 		f.Fail("host", "An app can have up to 20 domains.")
 	}
-	if f.OK() {
-		if isGeneratedDomain(host) {
-			tls = false
-		}
-		_, err := s.DB.AddDomain(r.Context(), sessionFrom(r).TeamID, v.App.ServerID, db.Domain{
-			ResourceKind: db.KindApp, ResourceID: v.App.ID, Host: host, Path: path, StripPrefix: strip && path != "",
-			TLS: tls, RedirectWWW: www, AuthUser: authUser, AuthHash: authHash,
-		})
-		switch {
-		case db.IsUnique(err) && path != "":
-			f.Fail("path", "This path of the domain is already routed to something.")
-		case db.IsUnique(err), errors.Is(err, db.ErrHostTaken):
-			f.Fail("host", domainTaken)
-		case errors.Is(err, db.ErrHostElsewhere):
-			f.Fail("host", "This domain is routed on another server. A domain's paths are all served by the server its DNS points at.")
-		case err != nil:
-			s.fail(w, r, err)
-			return
-		}
+	if !f.OK() {
+		return nil
+	}
+	if isGeneratedDomain(host) {
+		tls = false
+	}
+	_, err := s.DB.AddDomain(r.Context(), sessionFrom(r).TeamID, app.ServerID, db.Domain{
+		ResourceKind: db.KindApp, ResourceID: app.ID, Host: host, Path: path, StripPrefix: strip && path != "",
+		TLS: tls, RedirectWWW: www, AuthUser: authUser, AuthHash: authHash,
+	})
+	switch {
+	case db.IsUnique(err) && path != "":
+		f.Fail("path", "This path of the domain is already routed to something.")
+	case db.IsUnique(err), errors.Is(err, db.ErrHostTaken):
+		f.Fail("host", domainTaken)
+	case errors.Is(err, db.ErrHostElsewhere):
+		f.Fail("host", "This domain is routed on another server. A domain's paths are all served by the server its DNS points at.")
+	case err != nil:
+		return err
+	}
+	return nil
+}
+
+func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadApp(w, r)
+	if !ok {
+		return
+	}
+	var f ui.Form
+	if err := s.addAppDomain(r, v.App, &f); err != nil {
+		s.fail(w, r, err)
+		return
 	}
 	if !f.OK() {
-		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, f, ui.Form{}, "")
+		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, f, ui.Form{})
 		return
 	}
 	s.syncRoutes(r, v.App.ServerID)
@@ -970,6 +1026,13 @@ func (s *Server) appDomainDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	s.syncRoutes(r, v.App.ServerID)
 	setFlash(w, r, ui.ToneOK, "Domain removed.")
+	// Back to where it was removed from: the project's Domains tab posts
+	// here too, and says so. The address is built here, never taken from
+	// the form.
+	if r.PostFormValue("from") == "project" {
+		redirect(w, r, "/projects/"+v.Project.ID+"/domains")
+		return
+	}
 	redirect(w, r, "/apps/"+v.App.ID+"/settings#domains")
 }
 
@@ -1002,5 +1065,5 @@ func (s *Server) appDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "App deleted.")
-	redirect(w, r, "/projects/"+v.Project.ID+"?env="+v.Env.ID)
+	redirect(w, r, envPath(v.Project.ID, v.Env.ID))
 }
