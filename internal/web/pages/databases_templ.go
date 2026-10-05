@@ -626,7 +626,7 @@ func DatabaseEngines(s ui.Shell, p db.Project, env db.Environment, engines []cat
 }
 
 // DatabaseNew is the second step: a name, and the choices with a default.
-func DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTemplate, f ui.Form) templ.Component {
+func DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTemplate, f ui.Form, serverList []db.Server) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -722,6 +722,10 @@ func DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTempl
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+			templ_7745c5c3_Err = ServerChoice(f, serverList).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<p class=\"muted text-sm\">A user, a 32-character password and a data volume are created for you. The connection string is on the database's page.</p><div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -756,7 +760,7 @@ func DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTempl
 				var templ_7745c5c3_Var32 string
 				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(f.E("public"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 169, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 170, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 				if templ_7745c5c3_Err != nil {
@@ -928,7 +932,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 					var templ_7745c5c3_Var38 string
 					templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(v.DB.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 224, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 225, Col: 45}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 					if templ_7745c5c3_Err != nil {
@@ -988,7 +992,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 				var templ_7745c5c3_Var40 string
 				templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(v.Env.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 239, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 240, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 				if templ_7745c5c3_Err != nil {
@@ -1009,7 +1013,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 				var templ_7745c5c3_Var41 string
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(c.Host)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 246, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 247, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 				if templ_7745c5c3_Err != nil {
@@ -1022,7 +1026,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 				var templ_7745c5c3_Var42 string
 				templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(c.Port))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 248, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 249, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 				if templ_7745c5c3_Err != nil {
@@ -1035,7 +1039,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 				var templ_7745c5c3_Var43 string
 				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(c.User)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 250, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 251, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 				if templ_7745c5c3_Err != nil {
@@ -1053,7 +1057,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 					var templ_7745c5c3_Var44 string
 					templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(c.DBName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 253, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 254, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 					if templ_7745c5c3_Err != nil {
@@ -1119,7 +1123,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 					var templ_7745c5c3_Var46 string
 					templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(v.DB.PublicPort))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 275, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 276, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 					if templ_7745c5c3_Err != nil {
@@ -1373,7 +1377,7 @@ func DatabaseSettings(s ui.Shell, v DatabaseView, f ui.Form, volume string) temp
 				var templ_7745c5c3_Var54 string
 				templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(v.DB.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 359, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 360, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 				if templ_7745c5c3_Err != nil {
@@ -1386,7 +1390,7 @@ func DatabaseSettings(s ui.Shell, v DatabaseView, f ui.Form, volume string) temp
 				var templ_7745c5c3_Var55 string
 				templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(volume)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 360, Col: 87}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 361, Col: 87}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 				if templ_7745c5c3_Err != nil {

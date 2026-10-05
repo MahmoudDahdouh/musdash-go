@@ -94,15 +94,15 @@ func (c Config) On(s db.Server) Config // the same layout under the server's dat
 - [x] Tests: the whole deploy suite still passes on the local path; a deploy through an `SSHRunner` to this machine with a different data directory writes nothing into the control plane's.
 
 ### Task 3 — Servers in the dashboard
-- [ ] Add a server (name, address, port, user, key: an existing one or a new one whose public key is shown to be installed); check it (reachable, host key recorded, Docker and its version, Compose plugin, git, architecture, memory, disk, data directory created); status on the list.
-- [ ] Forget host key; delete a server that has nothing on it.
-- [ ] Server choice in the New app, database and service forms.
-- [ ] Tests: validation, team scoping, a server of another team never offered or reachable.
+- [x] Add a server (name, address, port, user, key: an existing one or a new one whose public key is shown to be installed); check it (reachable, host key recorded, Docker and its version, Compose plugin, git, architecture, memory, disk, data directory created); status on the list.
+- [x] Forget host key; delete a server that has nothing on it.
+- [x] Server choice in the New app, database and service forms.
+- [x] Tests: validation, team scoping, a server of another team never offered or reachable.
 
 ### Task 4 — Proxy on a remote server
-- [ ] Copy the binary, write the unit, start it, write the first routes file; report a missing binary for another architecture clearly.
-- [ ] Routes and certificates per server already follow from `SyncRoutes(server)`.
-- [ ] Tests with the scripted Runner: the commands, `sudo -n` only when not root, nothing done twice.
+- [x] Copy the binary, write the unit, start it, write the first routes file; report a missing binary for another architecture clearly.
+- [x] Routes and certificates per server already follow from `SyncRoutes(server)`.
+- [x] Tests with the scripted Runner: the commands, `sudo -n` only when not root, nothing done twice.
 
 ### Task 5 — Build server
 - [ ] `apps.build_server_id`; build there under that server's build lock, `docker save` → `docker load` on the target, remove the image from the build server afterwards.

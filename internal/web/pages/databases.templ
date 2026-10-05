@@ -149,7 +149,7 @@ templ DatabaseEngines(s ui.Shell, p db.Project, env db.Environment, engines []ca
 }
 
 // DatabaseNew is the second step: a name, and the choices with a default.
-templ DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTemplate, f ui.Form) {
+templ DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTemplate, f ui.Form, serverList []db.Server) {
 	@ui.Layout(s) {
 		@ui.PageHeader("New "+t.Label+" database", "Runs in "+env.Name+".")
 		<div class="max-w-xl">
@@ -160,6 +160,7 @@ templ DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTemp
 				<div class="card-body grid gap-4">
 					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens. Apps in this environment connect to the database by this name.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: true, Value: t.Engine, Attrs: templ.Attributes{"maxlength": "32"}})
 					@ui.TextField(f, "Docker image", "Change the tag to choose another version.", ui.InputProps{ID: "image", Mono: true, Required: true, Value: t.Image})
+					@ServerChoice(f, serverList)
 					<p class="muted text-sm">A user, a 32-character password and a data volume are created for you. The connection string is on the database's page.</p>
 					<div>
 						@ui.Checkbox("public", f.V("public") == "1", nil) {

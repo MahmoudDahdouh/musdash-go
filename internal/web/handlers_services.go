@@ -104,7 +104,12 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), ui.Form{}, choices))
+	serverList, err := s.serverChoices(r.Context(), sessionFrom(r).TeamID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), ui.Form{}, choices, serverList))
 }
 
 // parseServiceSource reads the repository fields of a service from Git.
@@ -170,7 +175,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	server, err := s.DB.EnsureLocalServer(ctx, teamID, "")
+	serverList, err := s.serverChoices(ctx, teamID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -178,6 +183,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 
 	var f ui.Form
 	f.Set("_submitted", "1")
+	server := targetServer(r, &f, serverList)
 	svc := db.Service{
 		EnvironmentID: env.ID, ServerID: server.ID, Template: key,
 		Name:       strings.ToLower(strings.TrimSpace(r.PostFormValue("name"))),
@@ -222,7 +228,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	rerender := func() {
 		shell := s.shell(w, r, "New service", "projects", newServiceCrumbs(p, env)...)
-		s.render(w, r, http.StatusUnprocessableEntity, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), f, choices))
+		s.render(w, r, http.StatusUnprocessableEntity, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), f, choices, serverList))
 	}
 	if !f.OK() {
 		rerender()

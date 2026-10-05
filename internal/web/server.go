@@ -187,6 +187,11 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("GET /servers", s.authed(s.serverList))
 	mux.Handle("POST /servers/{id}", s.authed(s.serverUpdate))
+	mux.Handle("POST /servers", s.authed(s.serverCreate))
+	mux.Handle("POST /servers/{id}/check", s.authed(s.serverCheck))
+	mux.Handle("POST /servers/{id}/proxy", s.authed(s.serverProxy))
+	mux.Handle("POST /servers/{id}/forget-host-key", s.authed(s.serverForgetHostKey))
+	mux.Handle("POST /servers/{id}/delete", s.authed(s.serverDelete))
 	mux.Handle("GET /settings", s.authed(s.settingsPage))
 	mux.Handle("POST /settings", s.authed(s.settingsSave))
 	mux.Handle("GET /settings/storages", s.authed(s.storagesPage))

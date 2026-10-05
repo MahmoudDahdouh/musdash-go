@@ -162,11 +162,12 @@ func (s *Server) appNew(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	server, err := s.DB.EnsureLocalServer(r.Context(), teamID, "")
+	serverList, err := s.serverChoices(r.Context(), teamID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	server := serverList[0]
 	src := db.SourceImage
 	if r.URL.Query().Get("source") == db.SourceGit {
 		src = db.SourceGit
@@ -177,7 +178,7 @@ func (s *Server) appNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
-	s.render(w, r, http.StatusOK, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, ui.Form{}, generatedDomain(server), src, choices))
+	s.render(w, r, http.StatusOK, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, ui.Form{}, generatedDomain(server), src, choices, serverList))
 }
 
 func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +197,7 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	server, err := s.DB.EnsureLocalServer(ctx, teamID, "")
+	serverList, err := s.serverChoices(ctx, teamID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -213,9 +214,15 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var f ui.Form
+	server := targetServer(r, &f, serverList)
 	newApp := db.App{EnvironmentID: env.ID, ServerID: server.ID, Source: src}
 	newApp.Name = strings.ToLower(strings.TrimSpace(r.PostFormValue("name")))
 	rawDomain := strings.TrimSpace(r.PostFormValue("domain"))
+	// The address suggested in the form was built for this machine. On
+	// another server it would name the wrong one.
+	if server.ID != serverList[0].ID && isGeneratedDomain(rawDomain) {
+		rawDomain = generatedDomain(server)
+	}
 	f.Set("name", newApp.Name)
 	f.Set("port", r.PostFormValue("port"))
 	f.Set("domain", rawDomain)
@@ -244,7 +251,7 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 
 	rerender := func(status int) {
 		crumbs := []ui.Crumb{{Label: "Projects", Href: "/"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
-		s.render(w, r, status, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, f, rawDomain, src, choices))
+		s.render(w, r, status, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, f, rawDomain, src, choices, serverList))
 	}
 	if !f.OK() {
 		rerender(http.StatusUnprocessableEntity)

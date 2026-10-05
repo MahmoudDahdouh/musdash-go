@@ -1,0 +1,282 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// ServerInfo is what the Servers page shows about one server.
+type ServerInfo struct {
+	Server        db.Server
+	DockerVersion string // "" when Docker did not answer
+	DockerError   string
+	ProxyRunning  bool
+	Apps          int // everything that runs there
+	// For a server reached over SSH.
+	PublicKey string          // the key to install on the server
+	Report    *servers.Report // the check just made, if one was
+}
+
+// serverState is the state a remote server's pill shows.
+func serverState(s db.Server) string {
+	switch s.Status {
+	case db.ServerOK:
+		return "running"
+	case db.ServerProblem:
+		return "degraded"
+	case db.ServerUnreachable:
+		return "failed"
+	}
+	return ""
+}
+
+func serverStateLabel(s db.Server) string {
+	switch s.Status {
+	case db.ServerOK:
+		return "Ready"
+	case db.ServerProblem:
+		return "Needs attention"
+	case db.ServerUnreachable:
+		return "Not reachable"
+	}
+	return "Not checked yet"
+}
+
+func serverStateClass(s db.Server) string {
+	switch s.Status {
+	case db.ServerOK:
+		return "pill pill-ok"
+	case db.ServerProblem:
+		return "pill pill-warn"
+	case db.ServerUnreachable:
+		return "pill pill-danger"
+	}
+	return "pill"
+}
+
+func keyOptions(keys []db.SSHKey) []ui.Option {
+	opts := []ui.Option{{Value: "new", Label: "A new key, made for this server"}}
+	for _, k := range keys {
+		opts = append(opts, ui.Option{Value: k.ID, Label: "Existing key: " + k.Name})
+	}
+	return opts
+}
+
+templ Servers(s ui.Shell, list []ServerInfo, keys []db.SSHKey, f ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Servers", "The machines your apps run on.")
+		<div class="grid max-w-3xl gap-6">
+			for _, info := range list {
+				if info.Server.Kind == db.ServerLocal {
+					@localServerCard(s, info, f)
+				} else {
+					@remoteServerCard(s, info)
+				}
+			}
+			@ui.FormCard("Add a server", "Another machine with Docker, reached over SSH. Nothing of musdash is installed on it except, if you choose so, the proxy that serves its domains.", "/servers", s.CSRF, "Add server") {
+				@ui.TextField(f, "Name", "What you call it here, such as Frankfurt.", ui.InputProps{ID: "name", Required: true})
+				<div class="grid gap-4 sm:grid-cols-[1fr_8rem]">
+					@ui.TextField(f, "Address", "An IP address or a host name.", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "203.0.113.20"})
+					@ui.TextField(f, "SSH port", "", ui.InputProps{ID: "port", Mono: true, Value: "22", Attrs: templ.Attributes{"inputmode": "numeric"}})
+				</div>
+				@ui.TextField(f, "Account", "The account musdash signs in as. It must be able to run docker: root, or a member of the docker group.", ui.InputProps{ID: "ssh_user", Mono: true, Required: true, Value: "root"})
+				@ui.Field(ui.FieldProps{Label: "Sign in with", For: "key", Hint: "After adding the server you are shown the public key to put in the account's ~/.ssh/authorized_keys.", Error: f.E("key")}) {
+					@ui.Select("key", keyOptions(keys), orDefault(f.V("key"), "new"), templ.Attributes{"aria-describedby": "key-hint"})
+				}
+				@ui.TextField(f, "Data directory", "Where musdash keeps its files on the server. Empty uses /var/lib/musdash for root and ~/.musdash otherwise.", ui.InputProps{ID: "data_dir", Mono: true})
+			}
+		</div>
+	}
+}
+
+templ localServerCard(s ui.Shell, info ServerInfo, f ui.Form) {
+	<section class="card">
+		<div class="card-head">
+			<div class="flex items-center gap-2.5">
+				@ui.Icon("server", "text-ink-mute")
+				<h2 class="card-title">{ info.Server.Name }</h2>
+				@ui.Badge("This machine", ui.ToneBrand)
+			</div>
+		</div>
+		<div class="card-body grid gap-4">
+			<dl class="kv">
+				<dt>Docker</dt>
+				<dd>
+					if info.DockerVersion != "" {
+						<span class="pill pill-ok">Running</span>
+						<span class="fact ml-2">{ info.DockerVersion }</span>
+					} else {
+						<span class="pill pill-danger">Not reachable</span>
+						<span class="ml-2 text-sm text-danger">{ info.DockerError }</span>
+					}
+				</dd>
+				<dt>Proxy</dt>
+				<dd>
+					if info.ProxyRunning {
+						<span class="pill pill-ok">Running</span>
+					} else {
+						<span class="pill pill-warn">Not running</span>
+						<span class="muted ml-2 text-sm">Domains are not served until it starts: <span class="code">musdash proxy</span></span>
+					}
+				</dd>
+				<dt>Runs</dt>
+				<dd class="fact">{ strconv.Itoa(info.Apps) }</dd>
+			</dl>
+			<form class="grid gap-3 border-t border-line pt-4" method="post" action={ templ.SafeURL("/servers/" + info.Server.ID) }>
+				@ui.CSRF(s.CSRF)
+				@ui.TextField(f, "Public IP address", "Used to build the generated address of new apps, such as abc123.203.0.113.7.sslip.io.", ui.InputProps{ID: "ip", Mono: true, Value: info.Server.IP, Placeholder: "203.0.113.7"})
+				<div>
+					@ui.Button(ui.ButtonProps{Type: "submit"}) {
+						Save address
+					}
+				</div>
+			</form>
+		</div>
+	</section>
+}
+
+templ remoteServerCard(s ui.Shell, info ServerInfo) {
+	<section class="card" id={ "server-" + info.Server.ID }>
+		<div class="card-head">
+			<div class="flex flex-wrap items-center gap-2.5">
+				@ui.Icon("server", "text-ink-mute")
+				<h2 class="card-title">{ info.Server.Name }</h2>
+				<span class={ serverStateClass(info.Server) }>{ serverStateLabel(info.Server) }</span>
+			</div>
+			<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/check") }>
+				@ui.CSRF(s.CSRF)
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "refresh"}) {
+					Check
+				}
+			</form>
+		</div>
+		<div class="card-body grid gap-4">
+			if info.Report != nil {
+				<div class="grid gap-2" role="status">
+					<h3 class="font-semibold">What the check found</h3>
+					<ul class="grid gap-1.5">
+						for _, it := range info.Report.Items {
+							<li class="flex items-start gap-2">
+								if it.OK {
+									@ui.Badge("OK", ui.ToneOK)
+								} else if it.Needed {
+									@ui.Badge("Missing", ui.ToneDanger)
+								} else {
+									@ui.Badge("Note", ui.ToneWarn)
+								}
+								<span class="min-w-0 break-words"><span class="font-semibold">{ it.Name }:</span> { it.Detail }</span>
+							</li>
+						}
+					</ul>
+					if info.Report.NewHostKey {
+						@ui.Notice(ui.ToneBrand) {
+							<p class="font-semibold">This server's host key was recorded</p>
+							<p>Compare it with what the server itself prints for <span class="code">ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</span>. From now on musdash talks only to a server that presents this key.</p>
+							<p class="fact break-all">{ info.Report.Fingerprint }</p>
+						}
+					}
+				</div>
+			} else if info.Server.Status != db.ServerOK && info.Server.StatusDetail != "" {
+				@ui.Notice(ui.ToneWarn) {
+					<p class="break-words">{ info.Server.StatusDetail }</p>
+				}
+			}
+			<dl class="kv">
+				<dt>Address</dt>
+				<dd class="fact">{ info.Server.SSHUser }{ "@" }{ info.Server.Host }:{ strconv.Itoa(info.Server.Port) }</dd>
+				if info.Server.CheckedAt > 0 {
+					<dt>Checked</dt>
+					<dd>{ ui.Ago(info.Server.CheckedAt) }</dd>
+				}
+				if info.Server.DockerVersion != "" {
+					<dt>Docker</dt>
+					<dd class="fact">{ info.Server.DockerVersion } on linux/{ info.Server.Arch }</dd>
+				}
+				<dt>Proxy</dt>
+				<dd>
+					if info.Server.Proxy == db.ProxyInstalled {
+						<span class="pill pill-ok">Installed</span>
+					} else {
+						<span class="pill pill-warn">Not installed</span>
+						<span class="muted ml-2 text-sm">Domains of apps on this server are not served until it is.</span>
+					}
+				</dd>
+				<dt>Data directory</dt>
+				<dd class="fact break-all">{ info.Server.DataDir }</dd>
+				if info.Server.HostKey != "" {
+					<dt>Host key</dt>
+					<dd class="fact break-all">{ servers.Fingerprint(info.Server.HostKey) }</dd>
+				}
+				<dt>Runs</dt>
+				<dd class="fact">{ strconv.Itoa(info.Apps) }</dd>
+			</dl>
+			if info.PublicKey != "" && info.Server.Status != db.ServerOK {
+				<div class="grid gap-2">
+					<p class="text-sm">Put this public key into <span class="code">~/.ssh/authorized_keys</span> of <span class="fact">{ info.Server.SSHUser }</span> on the server, on a line of its own, then choose Check.</p>
+					@ui.Copyable(info.PublicKey)
+				</div>
+			}
+			<div class="flex flex-wrap gap-2 border-t border-line pt-4">
+				if info.Server.Status == db.ServerOK {
+					<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/proxy") }>
+						@ui.CSRF(s.CSRF)
+						@ui.Button(ui.ButtonProps{Type: "submit"}) {
+							if info.Server.Proxy == db.ProxyInstalled {
+								Reinstall proxy
+							} else {
+								Install proxy
+							}
+						}
+					</form>
+				}
+				if info.Server.HostKey != "" {
+					<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/forget-host-key") }>
+						@ui.CSRF(s.CSRF)
+						@ui.Button(ui.ButtonProps{Type: "submit"}) {
+							Forget host key
+						}
+					</form>
+				}
+				if info.Apps == 0 {
+					<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/delete") }>
+						@ui.CSRF(s.CSRF)
+						@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Icon: "trash", Type: "submit"}) {
+							Remove server
+						}
+					</form>
+				}
+			</div>
+			if info.Apps > 0 {
+				<p class="muted text-sm">A server can be removed once nothing runs on it.</p>
+			}
+		</div>
+	</section>
+}
+
+// ServerChoice is the field that asks which server a new resource runs on.
+// With one server there is nothing to ask; it is still shown when a
+// request named a server that could not be used, so that the reason is.
+templ ServerChoice(f ui.Form, list []db.Server) {
+	if len(list) > 1 || f.E("server") != "" {
+		@ui.Field(ui.FieldProps{Label: "Server", For: "server", Hint: "The machine it runs on. This cannot be changed afterwards.", Error: f.E("server")}) {
+			@ui.Select("server", serverOptions(list), orDefault(f.V("server"), list[0].ID), templ.Attributes{"aria-describedby": "server-hint"})
+		}
+	}
+}
+
+func serverOptions(list []db.Server) []ui.Option {
+	opts := make([]ui.Option, 0, len(list))
+	for _, s := range list {
+		label := s.Name
+		if s.Kind == db.ServerLocal {
+			label += " (this machine)"
+		} else if s.Status != db.ServerOK {
+			label += " (" + serverStateLabel(s) + ")"
+		}
+		opts = append(opts, ui.Option{Value: s.ID, Label: label})
+	}
+	return opts
+}

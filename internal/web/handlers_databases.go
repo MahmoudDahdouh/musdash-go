@@ -99,7 +99,12 @@ func (s *Server) databaseNew(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.DatabaseNew(shell, p, env, tpl, ui.Form{}))
+	serverList, err := s.serverChoices(r.Context(), sessionFrom(r).TeamID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, pages.DatabaseNew(shell, p, env, tpl, ui.Form{}, serverList))
 }
 
 func (s *Server) databaseCreate(w http.ResponseWriter, r *http.Request) {
@@ -114,13 +119,14 @@ func (s *Server) databaseCreate(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	server, err := s.DB.EnsureLocalServer(ctx, teamID, "")
+	serverList, err := s.serverChoices(ctx, teamID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 
 	var f ui.Form
+	server := targetServer(r, &f, serverList)
 	m := db.Database{
 		EnvironmentID: env.ID, ServerID: server.ID, Engine: tpl.Engine,
 		Name:     strings.ToLower(strings.TrimSpace(r.PostFormValue("name"))),
@@ -158,7 +164,7 @@ func (s *Server) databaseCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	if !f.OK() {
 		shell := s.shell(w, r, "New database", "projects", newDatabaseCrumbs(p, env)...)
-		s.render(w, r, http.StatusUnprocessableEntity, pages.DatabaseNew(shell, p, env, tpl, f))
+		s.render(w, r, http.StatusUnprocessableEntity, pages.DatabaseNew(shell, p, env, tpl, f, serverList))
 		return
 	}
 	if err := s.Deploy.EnqueueDatabase(ctx, m, false); err != nil {

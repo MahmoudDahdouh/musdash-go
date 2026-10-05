@@ -90,6 +90,7 @@ func newAppWithLog(t *testing.T, dev bool, logTo io.Writer) *app {
 		return "", nil
 	}}
 	pool := servers.NewWith(fake)
+	pool.DB, pool.Box = d, box
 	queue := jobs.New(d.DB, log, 2)
 	deployer := deploy.New(d, box, queue, pool, cfg, log, "127.0.0.1:8000")
 	deployer.Probe = okProbe{}

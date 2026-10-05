@@ -700,7 +700,7 @@ func serviceGitFields(f ui.Form, c GitChoices, m db.Service, autoDeployDefault b
 	})
 }
 
-func ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, t catalog.ServiceTemplate, required []catalog.VarRef, f ui.Form, git GitChoices) templ.Component {
+func ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, t catalog.ServiceTemplate, required []catalog.VarRef, f ui.Form, git GitChoices, serverList []db.Server) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -911,6 +911,10 @@ func ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, t
 					return templ_7745c5c3_Err
 				}
 			}
+			templ_7745c5c3_Err = ServerChoice(f, serverList).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -934,7 +938,7 @@ func ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, t
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(env.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 253, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 254, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 				if templ_7745c5c3_Err != nil {
@@ -958,7 +962,7 @@ func ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, t
 				var templ_7745c5c3_Var37 string
 				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(f.E("connect_env"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 256, Col: 68}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 257, Col: 68}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 				if templ_7745c5c3_Err != nil {
@@ -1138,7 +1142,7 @@ func ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing [
 					var templ_7745c5c3_Var44 string
 					templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(v.Service.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 303, Col: 70}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 304, Col: 70}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 					if templ_7745c5c3_Err != nil {
@@ -1182,7 +1186,7 @@ func ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing [
 					var templ_7745c5c3_Var46 string
 					templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(v.Service.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 310, Col: 70}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 311, Col: 70}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 					if templ_7745c5c3_Err != nil {
@@ -1227,7 +1231,7 @@ func ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing [
 					var templ_7745c5c3_Var48 string
 					templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(missing, ", "))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 317, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 318, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 					if templ_7745c5c3_Err != nil {
@@ -1240,7 +1244,7 @@ func ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing [
 					var templ_7745c5c3_Var49 templ.SafeURL
 					templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/compose"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 317, Col: 163}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 318, Col: 163}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 					if templ_7745c5c3_Err != nil {
@@ -1318,7 +1322,7 @@ func ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing [
 						var templ_7745c5c3_Var51 string
 						templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(endpointTarget(e))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 336, Col: 63}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 337, Col: 63}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 						if templ_7745c5c3_Err != nil {
@@ -1336,7 +1340,7 @@ func ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing [
 						var templ_7745c5c3_Var52 templ.SafeURL
 						templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(endpointURL(e)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 339, Col: 59}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 340, Col: 59}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 						if templ_7745c5c3_Err != nil {
@@ -1357,7 +1361,7 @@ func ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing [
 						var templ_7745c5c3_Var53 string
 						templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(e.Host)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 342, Col: 43}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 343, Col: 43}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 						if templ_7745c5c3_Err != nil {
@@ -1370,7 +1374,7 @@ func ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing [
 						var templ_7745c5c3_Var54 string
 						templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(endpointTarget(e))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 343, Col: 57}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 344, Col: 57}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 						if templ_7745c5c3_Err != nil {
@@ -1454,7 +1458,7 @@ func ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing [
 					var templ_7745c5c3_Var55 string
 					templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(g.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 385, Col: 33}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 386, Col: 33}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 					if templ_7745c5c3_Err != nil {
@@ -1675,7 +1679,7 @@ func ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables
 			var templ_7745c5c3_Var61 templ.SafeURL
 			templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/compose"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 458, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 459, Col: 81}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 			if templ_7745c5c3_Err != nil {
@@ -1722,7 +1726,7 @@ func ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables
 					var templ_7745c5c3_Var62 string
 					templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(v.Service.ComposePath)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 477, Col: 51}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 478, Col: 51}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 					if templ_7745c5c3_Err != nil {
@@ -1740,7 +1744,7 @@ func ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables
 						var templ_7745c5c3_Var63 string
 						templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(shortCommit(v.Service.Commit))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 479, Col: 93}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 480, Col: 93}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 						if templ_7745c5c3_Err != nil {
@@ -1758,7 +1762,7 @@ func ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables
 					var templ_7745c5c3_Var64 string
 					templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(v.Service.Compose)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 482, Col: 108}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 483, Col: 108}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 					if templ_7745c5c3_Err != nil {
@@ -1838,7 +1842,7 @@ func ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables
 				var templ_7745c5c3_Var68 string
 				templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(v.Env.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 495, Col: 105}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 496, Col: 105}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 				if templ_7745c5c3_Err != nil {
@@ -2001,7 +2005,7 @@ func ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) templ.
 				var templ_7745c5c3_Var74 templ.SafeURL
 				templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/endpoints/" + e.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 534, Col: 130}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 535, Col: 130}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var74))
 				if templ_7745c5c3_Err != nil {
@@ -2113,7 +2117,7 @@ func ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) templ.
 				var templ_7745c5c3_Var79 string
 				templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(v.Service.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 566, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/services.templ`, Line: 567, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 				if templ_7745c5c3_Err != nil {
