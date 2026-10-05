@@ -28,6 +28,8 @@ type AppView struct {
 	Parent *db.App
 	// Previews are the app's previews, filled in for the Settings page.
 	Previews []PreviewRow
+	// Tags are the app's tags, filled in for the Settings page.
+	Tags []string
 }
 
 // PreviewRow is one preview in its parent's list.
@@ -131,7 +133,7 @@ func AppHeader(csrf string, app db.App) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue("/apps/" + app.ID + "/status")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 102, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 104, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -144,7 +146,7 @@ func AppHeader(csrf string, app db.App) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(headerPoll(app))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 103, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 105, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
@@ -157,7 +159,7 @@ func AppHeader(csrf string, app db.App) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(app.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 108, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 110, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
@@ -178,7 +180,7 @@ func AppHeader(csrf string, app db.App) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(appSourceLine(app))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 111, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 113, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
@@ -196,7 +198,7 @@ func AppHeader(csrf string, app db.App) templ.Component {
 			var templ_7745c5c3_Var6 templ.SafeURL
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/apps/" + app.ID + "/stop"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 115, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 117, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -244,7 +246,7 @@ func AppHeader(csrf string, app db.App) templ.Component {
 		var templ_7745c5c3_Var8 templ.SafeURL
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/apps/" + app.ID + "/deploy"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 122, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 124, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -341,7 +343,7 @@ func appFrame(s ui.Shell, v AppView, tab string) templ.Component {
 				var templ_7745c5c3_Var12 string
 				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(v.App.PRNumber))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 142, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 144, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 				if templ_7745c5c3_Err != nil {
@@ -354,7 +356,7 @@ func appFrame(s ui.Shell, v AppView, tab string) templ.Component {
 				var templ_7745c5c3_Var13 templ.SafeURL
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/apps/" + v.Parent.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 143, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 145, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {
@@ -367,7 +369,7 @@ func appFrame(s ui.Shell, v AppView, tab string) templ.Component {
 				var templ_7745c5c3_Var14 string
 				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(v.Parent.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 143, Col: 82}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 145, Col: 82}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 				if templ_7745c5c3_Err != nil {
@@ -434,7 +436,7 @@ func AppRows(apps []db.App) templ.Component {
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(a.Status)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 156, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 158, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {
@@ -447,7 +449,7 @@ func AppRows(apps []db.App) templ.Component {
 			var templ_7745c5c3_Var17 templ.SafeURL
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/apps/" + a.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 156, Col: 84}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 158, Col: 84}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -468,7 +470,7 @@ func AppRows(apps []db.App) templ.Component {
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(a.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 159, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 161, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 			if templ_7745c5c3_Err != nil {
@@ -481,7 +483,7 @@ func AppRows(apps []db.App) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(appSourceLine(a))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 160, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 162, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -666,7 +668,7 @@ func gitRepoFields(f ui.Form, c GitChoices, app db.App) templ.Component {
 				var templ_7745c5c3_Var24 string
 				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue("/sources/github/" + g.ID + "/repos")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 225, Col: 105}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 227, Col: 105}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 				if templ_7745c5c3_Err != nil {
@@ -687,7 +689,7 @@ func gitRepoFields(f ui.Form, c GitChoices, app db.App) templ.Component {
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(g.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 227, Col: 21}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 229, Col: 21}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
@@ -868,7 +870,7 @@ func AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedDo
 			var templ_7745c5c3_Var31 templ.SafeURL
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/projects/" + p.ID + "/apps"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 276, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 278, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 			if templ_7745c5c3_Err != nil {
@@ -889,7 +891,7 @@ func AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedDo
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(env.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 278, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 280, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 			if templ_7745c5c3_Err != nil {
@@ -902,7 +904,7 @@ func AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedDo
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(source)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 279, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 281, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 			if templ_7745c5c3_Err != nil {
@@ -1133,7 +1135,7 @@ func AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) t
 					var templ_7745c5c3_Var40 templ.SafeURL
 					templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(domainURL(d)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 351, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 353, Col: 56}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 					if templ_7745c5c3_Err != nil {
@@ -1154,7 +1156,7 @@ func AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) t
 					var templ_7745c5c3_Var41 string
 					templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(d.Host + d.Path)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 353, Col: 68}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 355, Col: 68}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 					if templ_7745c5c3_Err != nil {
@@ -1253,7 +1255,7 @@ func AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) t
 				var templ_7745c5c3_Var43 string
 				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(last.Status)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 393, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 395, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 				if templ_7745c5c3_Err != nil {
@@ -1266,7 +1268,7 @@ func AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) t
 				var templ_7745c5c3_Var44 templ.SafeURL
 				templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/deployments/" + last.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 393, Col: 110}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 395, Col: 110}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 				if templ_7745c5c3_Err != nil {
@@ -1279,7 +1281,7 @@ func AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) t
 				var templ_7745c5c3_Var45 string
 				templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(orDefault(last.Image, "building"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 395, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 397, Col: 67}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 				if templ_7745c5c3_Err != nil {
@@ -1292,7 +1294,7 @@ func AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) t
 				var templ_7745c5c3_Var46 string
 				templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(ui.Ago(last.CreatedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 396, Col: 56}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 398, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 				if templ_7745c5c3_Err != nil {
@@ -1310,7 +1312,7 @@ func AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) t
 					var templ_7745c5c3_Var47 string
 					templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(last.Error)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 398, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 400, Col: 56}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 					if templ_7745c5c3_Err != nil {
@@ -1415,7 +1417,7 @@ func AppDeployments(s ui.Shell, v AppView, list []db.Deployment) templ.Component
 						var templ_7745c5c3_Var51 string
 						templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(ui.Ago(d.CreatedAt))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 419, Col: 58}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 421, Col: 58}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 						if templ_7745c5c3_Err != nil {
@@ -1428,7 +1430,7 @@ func AppDeployments(s ui.Shell, v AppView, list []db.Deployment) templ.Component
 						var templ_7745c5c3_Var52 string
 						templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(orDefault(d.Image, "building"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 420, Col: 56}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 422, Col: 56}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 						if templ_7745c5c3_Err != nil {
@@ -1441,7 +1443,7 @@ func AppDeployments(s ui.Shell, v AppView, list []db.Deployment) templ.Component
 						var templ_7745c5c3_Var53 string
 						templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(ui.StateLabel(d.Trigger))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 421, Col: 37}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 423, Col: 37}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 						if templ_7745c5c3_Err != nil {
@@ -1468,7 +1470,7 @@ func AppDeployments(s ui.Shell, v AppView, list []db.Deployment) templ.Component
 						var templ_7745c5c3_Var54 string
 						templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(ui.Took(d.StartedAt, d.FinishedAt))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 430, Col: 60}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 432, Col: 60}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 						if templ_7745c5c3_Err != nil {
@@ -1577,7 +1579,7 @@ func DeploymentStatus(appID string, d db.Deployment) templ.Component {
 			var templ_7745c5c3_Var57 string
 			templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.ResolveAttributeValue("/apps/" + appID + "/deployments/" + d.ID + "/status")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 467, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 469, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
 			if templ_7745c5c3_Err != nil {
@@ -1603,7 +1605,7 @@ func DeploymentStatus(appID string, d db.Deployment) templ.Component {
 		var templ_7745c5c3_Var58 string
 		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(orDefault(d.Image, "building from "+ui.StateLabel(d.Trigger)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 473, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 475, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 		if templ_7745c5c3_Err != nil {
@@ -1616,7 +1618,7 @@ func DeploymentStatus(appID string, d db.Deployment) templ.Component {
 		var templ_7745c5c3_Var59 string
 		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(ui.Ago(d.CreatedAt))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 474, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 476, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 		if templ_7745c5c3_Err != nil {
@@ -1634,7 +1636,7 @@ func DeploymentStatus(appID string, d db.Deployment) templ.Component {
 			var templ_7745c5c3_Var60 string
 			templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.JoinStringErrs(took)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 476, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 478, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var60))
 			if templ_7745c5c3_Err != nil {
@@ -1710,7 +1712,7 @@ func AppDeployment(s ui.Shell, v AppView, d db.Deployment) templ.Component {
 					var templ_7745c5c3_Var64 string
 					templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(d.Error)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 487, Col: 14}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 489, Col: 14}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 					if templ_7745c5c3_Err != nil {
@@ -1731,7 +1733,7 @@ func AppDeployment(s ui.Shell, v AppView, d db.Deployment) templ.Component {
 				var templ_7745c5c3_Var65 templ.SafeURL
 				templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/deployments/" + d.RollbackOf))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 493, Col: 84}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 495, Col: 84}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 				if templ_7745c5c3_Err != nil {
@@ -1750,7 +1752,7 @@ func AppDeployment(s ui.Shell, v AppView, d db.Deployment) templ.Component {
 				var templ_7745c5c3_Var66 templ.SafeURL
 				templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/deployments/" + d.ID + "/rollback"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 504, Col: 97}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 506, Col: 97}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
 				if templ_7745c5c3_Err != nil {
@@ -1978,13 +1980,82 @@ func AppEnvironment(s ui.Shell, v AppView, f ui.Form) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, " <p class=\"text-sm text-ink-soft\">A value can come from a shared variable: write <span class=\"code\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var75 string
+				templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs("{{team.NAME}}")
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 559, Col: 41}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, "</span>, <span class=\"code\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var76 string
+				templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs("{{project.NAME}}")
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 559, Col: 91}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, "</span>, <span class=\"code\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var77 string
+				templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs("{{environment.NAME}}")
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 559, Col: 145}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 110, "</span> or <span class=\"code\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var78 string
+				templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs("{{server.NAME}}")
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 559, Col: 196}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 111, "</span> as the value or inside it. Shared variables are kept under <a href=\"/team/variables\">Team</a>, the <a href=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var79 templ.SafeURL
+				templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/projects/" + v.Project.ID + "/settings#variables"))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 561, Col: 121}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 112, "\">project's settings</a> and <a href=\"/servers\">Servers</a>.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 				return nil
 			})
 			templ_7745c5c3_Err = ui.FormCard("Environment variables", "Stored encrypted. Changes apply on the next deploy.", v.base()+"/environment", s.CSRF, "Save variables").Render(templ.WithChildren(ctx, templ_7745c5c3_Var72), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 107, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 113, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2033,12 +2104,12 @@ func AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) templ.Compo
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var75 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var75 == nil {
-			templ_7745c5c3_Var75 = templ.NopComponent
+		templ_7745c5c3_Var80 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var80 == nil {
+			templ_7745c5c3_Var80 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var76 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var81 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -2050,17 +2121,17 @@ func AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) templ.Compo
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, "<div class=\"grid max-w-3xl gap-6\"><section class=\"card\"><div class=\"card-head\"><div><h2 class=\"card-title\">Storage</h2><p class=\"muted text-sm\">Data that survives a redeploy. Changes apply on the next deploy.</p></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 114, "<div class=\"grid max-w-3xl gap-6\"><section class=\"card\"><div class=\"card-head\"><div><h2 class=\"card-title\">Storage</h2><p class=\"muted text-sm\">Data that survives a redeploy. Changes apply on the next deploy.</p></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(list) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, "<p class=\"card-body muted\">Nothing is mounted. Without storage, files the app writes are lost when it is redeployed.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 115, "<p class=\"card-body muted\">Nothing is mounted. Without storage, files the app writes are lost when it is redeployed.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Var77 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var82 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -2073,7 +2144,7 @@ func AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) templ.Compo
 					}
 					ctx = templ.InitializeContext(ctx)
 					for _, st := range list {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 110, "<tr><td>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 116, "<tr><td>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -2081,46 +2152,46 @@ func AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) templ.Compo
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 111, "</td><td class=\"fact\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 117, "</td><td class=\"fact\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var78 string
-						templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs(storageSource(st))
+						var templ_7745c5c3_Var83 string
+						templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(storageSource(st))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 598, Col: 44}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 606, Col: 44}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 112, "</td><td class=\"fact\">")
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var79 string
-						templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(st.Target)
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 599, Col: 36}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 118, "</td><td class=\"fact\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 113, "</td><td class=\"text-right\"><form method=\"post\" action=\"")
+						var templ_7745c5c3_Var84 string
+						templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs(st.Target)
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 607, Col: 36}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var84))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var80 templ.SafeURL
-						templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/storage/" + st.ID + "/delete"))
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 601, Col: 95}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 119, "</td><td class=\"text-right\"><form method=\"post\" action=\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 114, "\">")
+						var templ_7745c5c3_Var85 templ.SafeURL
+						templ_7745c5c3_Var85, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/storage/" + st.ID + "/delete"))
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 609, Col: 95}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var85))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 120, "\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -2128,7 +2199,7 @@ func AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) templ.Compo
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Var81 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var86 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -2140,33 +2211,33 @@ func AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) templ.Compo
 								}()
 							}
 							ctx = templ.InitializeContext(ctx)
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 115, "Remove")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 121, "Remove")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var81), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var86), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 116, "</form></td></tr>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 122, "</form></td></tr>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Table("Type", "Source", "Path in the container", "").Render(templ.WithChildren(ctx, templ_7745c5c3_Var77), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Table("Type", "Source", "Path in the container", "").Render(templ.WithChildren(ctx, templ_7745c5c3_Var82), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 117, "</section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 123, "</section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var82 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var87 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -2178,7 +2249,7 @@ func AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) templ.Compo
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Var83 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var88 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -2196,7 +2267,7 @@ func AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) templ.Compo
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Field(ui.FieldProps{Label: "Type", For: "kind", Hint: "A volume is managed by Docker. A server folder is a directory you choose on the server. A file is one file whose content you enter here.", Error: f.E("kind")}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var83), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Field(ui.FieldProps{Label: "Type", For: "kind", Hint: "A volume is managed by Docker. A server folder is a directory you choose on the server. A file is one file whose content you enter here.", Error: f.E("kind")}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var88), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2208,7 +2279,7 @@ func AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) templ.Compo
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var84 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var89 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -2226,23 +2297,23 @@ func AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) templ.Compo
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Field(ui.FieldProps{Label: "File content", For: "content", Hint: "Only for the File type. Stored encrypted.", Error: f.E("content")}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var84), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Field(ui.FieldProps{Label: "File content", For: "content", Hint: "Only for the File type. Stored encrypted.", Error: f.E("content")}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var89), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.FormCard("Add storage", "", v.base()+"/storage", s.CSRF, "Add storage").Render(templ.WithChildren(ctx, templ_7745c5c3_Var82), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.FormCard("Add storage", "", v.base()+"/storage", s.CSRF, "Add storage").Render(templ.WithChildren(ctx, templ_7745c5c3_Var87), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 118, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 124, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = appFrame(s, v, "storage").Render(templ.WithChildren(ctx, templ_7745c5c3_Var76), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = appFrame(s, v, "storage").Render(templ.WithChildren(ctx, templ_7745c5c3_Var81), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2309,53 +2380,53 @@ func triggersCard(csrf, base, what string, git bool, tr Triggers) templ.Componen
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var85 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var85 == nil {
-			templ_7745c5c3_Var85 = templ.NopComponent
+		templ_7745c5c3_Var90 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var90 == nil {
+			templ_7745c5c3_Var90 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 119, "<section class=\"card\" id=\"triggers\"><div class=\"card-head\"><div><h2 class=\"card-title\">Deploy from outside</h2><p class=\"muted text-sm\">Ways for other systems to start a deployment of this ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, "<section class=\"card\" id=\"triggers\"><div class=\"card-head\"><div><h2 class=\"card-title\">Deploy from outside</h2><p class=\"muted text-sm\">Ways for other systems to start a deployment of this ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var86 string
-		templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.JoinStringErrs(what)
+		var templ_7745c5c3_Var91 string
+		templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.JoinStringErrs(what)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 675, Col: 88}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 683, Col: 88}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var86))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var91))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 120, ".</p></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, ".</p></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if git {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 121, "<div class=\"card-body grid gap-3 border-b border-line\"><h3 class=\"font-semibold\">Push webhook</h3>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, "<div class=\"card-body grid gap-3 border-b border-line\"><h3 class=\"font-semibold\">Push webhook</h3>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if tr.ViaGitHubApp {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 122, "<p class=\"muted text-sm\">This ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, "<p class=\"muted text-sm\">This ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var87 string
-				templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(what)
+				var templ_7745c5c3_Var92 string
+				templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.JoinStringErrs(what)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 682, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 690, Col: 41}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var92))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 123, " deploys through a GitHub App, which already tells musdash about pushes. Nothing to set up.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, " deploys through a GitHub App, which already tells musdash about pushes. Nothing to set up.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 124, "<p class=\"muted text-sm\">Add a webhook to the repository with this address and the secret below, sending push events. To get previews, send pull request events as well.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, "<p class=\"muted text-sm\">Add a webhook to the repository with this address and the secret below, sending push events. To get previews, send pull request events as well.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2369,7 +2440,7 @@ func triggersCard(csrf, base, what string, git bool, tr Triggers) templ.Componen
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 125, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2377,20 +2448,20 @@ func triggersCard(csrf, base, what string, git bool, tr Triggers) templ.Componen
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, "<form method=\"post\" action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 132, "<form method=\"post\" action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var88 templ.SafeURL
-				templ_7745c5c3_Var88, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(base + "/webhook-secret"))
+				var templ_7745c5c3_Var93 templ.SafeURL
+				templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(base + "/webhook-secret"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 690, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 698, Col: 73}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var88))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 127, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2398,7 +2469,7 @@ func triggersCard(csrf, base, what string, git bool, tr Triggers) templ.Componen
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var89 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var94 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -2411,59 +2482,59 @@ func triggersCard(csrf, base, what string, git bool, tr Triggers) templ.Componen
 					}
 					ctx = templ.InitializeContext(ctx)
 					if tr.WebhookSecret == "" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, "Create webhook secret")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 134, "Create webhook secret")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					} else {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, "Replace webhook secret")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, "Replace webhook secret")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var89), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var94), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, "</form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, "</form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 131, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 132, "<div class=\"card-body grid gap-3\"><h3 class=\"font-semibold\">Deploy token</h3><p class=\"muted text-sm\">For a CI pipeline: send a POST request with the token to start a deployment.</p><p class=\"code block break-all\">curl -X POST -H \"Authorization: Bearer TOKEN\" \"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, "<div class=\"card-body grid gap-3\"><h3 class=\"font-semibold\">Deploy token</h3><p class=\"muted text-sm\">For a CI pipeline: send a POST request with the token to start a deployment.</p><p class=\"code block break-all\">curl -X POST -H \"Authorization: Bearer TOKEN\" \"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var90 string
-		templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.JoinStringErrs(tr.DeployURL)
+		var templ_7745c5c3_Var95 string
+		templ_7745c5c3_Var95, templ_7745c5c3_Err = templ.JoinStringErrs(tr.DeployURL)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 706, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 714, Col: 96}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var90))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, "\"</p><form class=\"flex flex-wrap items-center gap-2\" method=\"post\" action=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var95))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var91 templ.SafeURL
-		templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(base + "/deploy-token"))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 707, Col: 111}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var91))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 139, "\"</p><form class=\"flex flex-wrap items-center gap-2\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 134, "\">")
+		var templ_7745c5c3_Var96 templ.SafeURL
+		templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(base + "/deploy-token"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 715, Col: 111}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var96))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 140, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2471,7 +2542,7 @@ func triggersCard(csrf, base, what string, git bool, tr Triggers) templ.Componen
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var92 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var97 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -2484,24 +2555,24 @@ func triggersCard(csrf, base, what string, git bool, tr Triggers) templ.Componen
 			}
 			ctx = templ.InitializeContext(ctx)
 			if tr.HasToken {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, "Replace deploy token")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "Replace deploy token")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, "Create deploy token")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "Create deploy token")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "key"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var92), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "key"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var97), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if tr.HasToken {
-			templ_7745c5c3_Var93 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var98 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -2513,18 +2584,18 @@ func triggersCard(csrf, base, what string, git bool, tr Triggers) templ.Componen
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, "Revoke")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, "Revoke")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Type: "submit", Attrs: templ.Attributes{"name": "revoke", "value": "1"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var93), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Type: "submit", Attrs: templ.Attributes{"name": "revoke", "value": "1"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var98), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, "</form></div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 144, "</form></div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2550,12 +2621,12 @@ func PreviewSettings(s ui.Shell, v AppView) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var94 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var94 == nil {
-			templ_7745c5c3_Var94 = templ.NopComponent
+		templ_7745c5c3_Var99 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var99 == nil {
+			templ_7745c5c3_Var99 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var95 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var100 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -2567,20 +2638,20 @@ func PreviewSettings(s ui.Shell, v AppView) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 139, "<div class=\"grid max-w-3xl gap-6\"><section class=\"card\"><div class=\"card-head\"><div><h2 class=\"card-title\">Settings</h2><p class=\"muted text-sm\">A preview is built and run with the settings, variables and files of the app it previews. Change them there; they apply to the preview when it is next deployed.</p></div></div></section><section class=\"card card-danger\"><div class=\"card-head\"><div><h2 class=\"card-title\">Remove preview</h2><p class=\"muted text-sm\">Stops the preview and removes it. A new push to the pull request makes it again.</p></div></div><form class=\"card-body grid gap-4\" method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, "<div class=\"grid max-w-3xl gap-6\"><section class=\"card\"><div class=\"card-head\"><div><h2 class=\"card-title\">Settings</h2><p class=\"muted text-sm\">A preview is built and run with the settings, variables and files of the app it previews. Change them there; they apply to the preview when it is next deployed.</p></div></div></section><section class=\"card card-danger\"><div class=\"card-head\"><div><h2 class=\"card-title\">Remove preview</h2><p class=\"muted text-sm\">Stops the preview and removes it. A new push to the pull request makes it again.</p></div></div><form class=\"card-body grid gap-4\" method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var96 templ.SafeURL
-			templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/delete"))
+			var templ_7745c5c3_Var101 templ.SafeURL
+			templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/delete"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 746, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 754, Col: 97}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var96))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var101))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 140, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2588,24 +2659,24 @@ func PreviewSettings(s ui.Shell, v AppView) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "<input type=\"hidden\" name=\"confirm\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, "<input type=\"hidden\" name=\"confirm\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var97 string
-			templ_7745c5c3_Var97, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.App.Name)
+			var templ_7745c5c3_Var102 string
+			templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.App.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 748, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 756, Col: 59}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var97)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, "\"><div>")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var102)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var98 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "\"><div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Var103 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -2617,23 +2688,23 @@ func PreviewSettings(s ui.Shell, v AppView) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, "Remove preview")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "Remove preview")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.DangerQuiet, Icon: "trash"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var98), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.DangerQuiet, Icon: "trash"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var103), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 144, "</div></form></section></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, "</div></form></section></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = appFrame(s, v, "settings").Render(templ.WithChildren(ctx, templ_7745c5c3_Var95), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = appFrame(s, v, "settings").Render(templ.WithChildren(ctx, templ_7745c5c3_Var100), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2658,115 +2729,115 @@ func previewsCard(csrf string, v AppView, f ui.Form) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var99 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var99 == nil {
-			templ_7745c5c3_Var99 = templ.NopComponent
+		templ_7745c5c3_Var104 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var104 == nil {
+			templ_7745c5c3_Var104 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 145, "<section class=\"card\" id=\"previews\"><div class=\"card-head\"><div><h2 class=\"card-title\">Pull request previews</h2><p class=\"muted text-sm\">Each pull request into ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "<section class=\"card\" id=\"previews\"><div class=\"card-head\"><div><h2 class=\"card-title\">Pull request previews</h2><p class=\"muted text-sm\">Each pull request into ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var100 string
-		templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.JoinStringErrs(v.App.Branch)
+		var templ_7745c5c3_Var105 string
+		templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.JoinStringErrs(v.App.Branch)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 766, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 774, Col: 66}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var100))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var105))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 146, " gets a deployment and an address of its own, updated on every push and removed when the pull request is closed.</p></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 152, " gets a deployment and an address of its own, updated on every push and removed when the pull request is closed.</p></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(v.Previews) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, "<div class=\"rows\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 153, "<div class=\"rows\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, p := range v.Previews {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "<div class=\"row\"><div class=\"min-w-0 flex-1\"><p class=\"truncate\"><a class=\"link font-semibold\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 154, "<div class=\"row\"><div class=\"min-w-0 flex-1\"><p class=\"truncate\"><a class=\"link font-semibold\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var101 templ.SafeURL
-				templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/apps/" + p.App.ID))
+				var templ_7745c5c3_Var106 templ.SafeURL
+				templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/apps/" + p.App.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 775, Col: 79}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 783, Col: 79}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var101))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "\">#")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var102 string
-				templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(p.App.PRNumber))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 775, Col: 113}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var102))
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 155, "\">#")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, "</a> <span class=\"fact ml-2\">")
+				var templ_7745c5c3_Var107 string
+				templ_7745c5c3_Var107, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(p.App.PRNumber))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 783, Col: 113}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var107))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var103 string
-				templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.JoinStringErrs(p.App.Branch)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 776, Col: 46}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var103))
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 156, "</a> <span class=\"fact ml-2\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "</span></p>")
+				var templ_7745c5c3_Var108 string
+				templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.JoinStringErrs(p.App.Branch)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 784, Col: 46}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var108))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 157, "</span></p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if p.URL != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 152, "<a class=\"link fact block truncate text-sm\" href=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 158, "<a class=\"link fact block truncate text-sm\" href=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var104 templ.SafeURL
-					templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.URL))
+					var templ_7745c5c3_Var109 templ.SafeURL
+					templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(p.URL))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 779, Col: 79}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 787, Col: 79}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var104))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 153, "\" target=\"_blank\" rel=\"noopener\">")
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var109))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var105 string
-					templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.JoinStringErrs(p.URL)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 779, Col: 120}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var105))
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 159, "\" target=\"_blank\" rel=\"noopener\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 154, "</a>")
+					var templ_7745c5c3_Var110 string
+					templ_7745c5c3_Var110, templ_7745c5c3_Err = templ.JoinStringErrs(p.URL)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 787, Col: 120}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var110))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 160, "</a>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 155, "<p class=\"muted text-sm\">No address: the one it would have is taken.</p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 161, "<p class=\"muted text-sm\">No address: the one it would have is taken.</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 156, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 162, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2774,20 +2845,20 @@ func previewsCard(csrf string, v AppView, f ui.Form) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 157, "<form method=\"post\" action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 163, "<form method=\"post\" action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var106 templ.SafeURL
-				templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/previews/" + strconv.Itoa(p.App.PRNumber) + "/delete"))
+				var templ_7745c5c3_Var111 templ.SafeURL
+				templ_7745c5c3_Var111, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/previews/" + strconv.Itoa(p.App.PRNumber) + "/delete"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 785, Col: 116}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 793, Col: 116}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var111))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 158, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 164, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2795,7 +2866,7 @@ func previewsCard(csrf string, v AppView, f ui.Form) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var107 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var112 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -2807,40 +2878,40 @@ func previewsCard(csrf string, v AppView, f ui.Form) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 159, "Remove")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 165, "Remove")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var107), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var112), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 160, "</form></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "</form></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 161, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 167, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 162, "<form class=\"card-body grid gap-4 border-t border-line\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 168, "<form class=\"card-body grid gap-4 border-t border-line\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var108 templ.SafeURL
-		templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/previews"))
+		var templ_7745c5c3_Var113 templ.SafeURL
+		templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/previews"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 795, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 803, Col: 118}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var108))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var113))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 163, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 169, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2848,7 +2919,7 @@ func previewsCard(csrf string, v AppView, f ui.Form) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var109 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var114 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -2860,13 +2931,13 @@ func previewsCard(csrf string, v AppView, f ui.Form) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 164, "Give every pull request a preview")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 170, "Give every pull request a preview")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Checkbox("previews", v.App.Previews, nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var109), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Checkbox("previews", v.App.Previews, nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var114), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2874,11 +2945,11 @@ func previewsCard(csrf string, v AppView, f ui.Form) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 165, "<p class=\"muted text-sm\">A preview runs the pull request's code with this app's variables, so anyone who can push a branch to the repository can read them. Pull requests from forks get no preview. Up to ten previews exist at once. A webhook added by hand must also send pull request events.</p><div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 171, "<p class=\"muted text-sm\">A preview runs the pull request's code with this app's variables, so anyone who can push a branch to the repository can read them. Pull requests from forks get no preview. Up to ten previews exist at once. A webhook added by hand must also send pull request events.</p><div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var110 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var115 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -2890,17 +2961,17 @@ func previewsCard(csrf string, v AppView, f ui.Form) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "Save")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 172, "Save")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var110), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var115), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 167, "</div></form></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 173, "</div></form></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2924,12 +2995,12 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var111 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var111 == nil {
-			templ_7745c5c3_Var111 = templ.NopComponent
+		templ_7745c5c3_Var116 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var116 == nil {
+			templ_7745c5c3_Var116 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var112 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var117 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -2941,12 +3012,12 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 168, "<div class=\"grid max-w-3xl gap-6\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 174, "<div class=\"grid max-w-3xl gap-6\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if tr.NewToken != "" {
-				templ_7745c5c3_Var113 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var118 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -2958,7 +3029,7 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 169, "<p class=\"font-semibold\">Deploy token created. Copy it now: it is not shown again.</p><p class=\"mt-2\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 175, "<p class=\"font-semibold\">Deploy token created. Copy it now: it is not shown again.</p><p class=\"mt-2\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -2966,18 +3037,18 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 170, "</p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Notice(ui.ToneOK).Render(templ.WithChildren(ctx, templ_7745c5c3_Var113), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Notice(ui.ToneOK).Render(templ.WithChildren(ctx, templ_7745c5c3_Var118), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Var114 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var119 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -2999,7 +3070,7 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 171, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3007,7 +3078,7 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 172, "<div class=\"grid gap-4 sm:grid-cols-2\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "<div class=\"grid gap-4 sm:grid-cols-2\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3019,7 +3090,7 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 173, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 179, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3045,12 +3116,12 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.FormCard("General", "Changes apply on the next deploy.", v.base()+"/settings", s.CSRF, "Save changes").Render(templ.WithChildren(ctx, templ_7745c5c3_Var114), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.FormCard("General", "Changes apply on the next deploy.", v.base()+"/settings", s.CSRF, "Save changes").Render(templ.WithChildren(ctx, templ_7745c5c3_Var119), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if v.App.Source == db.SourceGit {
-				templ_7745c5c3_Var115 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var120 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -3062,7 +3133,7 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 174, "<input type=\"hidden\" name=\"_submitted\" value=\"1\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 180, "<input type=\"hidden\" name=\"_submitted\" value=\"1\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -3072,13 +3143,13 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.FormCard("Source", "Where the code comes from and how it is built.", v.base()+"/source", s.CSRF, "Save source").Render(templ.WithChildren(ctx, templ_7745c5c3_Var115), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.FormCard("Source", "Where the code comes from and how it is built.", v.base()+"/source", s.CSRF, "Save source").Render(templ.WithChildren(ctx, templ_7745c5c3_Var120), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			if v.App.Source == db.SourceGit && len(v.Servers) > 1 {
-				templ_7745c5c3_Var116 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var121 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -3090,7 +3161,7 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Var117 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var122 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -3108,13 +3179,13 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = ui.Field(ui.FieldProps{Label: "Build on", For: "build_server", Hint: "Applies from the next deployment."}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var117), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.Field(ui.FieldProps{Label: "Build on", For: "build_server", Hint: "Applies from the next deployment."}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var122), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.FormCard("Build server", "A build can need a gigabyte of memory or more. On a small server, build the image on another one: it is moved over when it is ready.", v.base()+"/build-server", s.CSRF, "Save").Render(templ.WithChildren(ctx, templ_7745c5c3_Var116), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.FormCard("Build server", "A build can need a gigabyte of memory or more. On a small server, build the image on another one: it is moved over when it is ready.", v.base()+"/build-server", s.CSRF, "Save").Render(templ.WithChildren(ctx, templ_7745c5c3_Var121), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3129,30 +3200,34 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 175, "<section class=\"card\" id=\"domains\"><div class=\"card-head\"><div><h2 class=\"card-title\">Domains</h2><p class=\"muted text-sm\">Point each domain's DNS at this server first, so its certificate can be issued.</p></div></div>")
+			templ_7745c5c3_Err = tagsCard(s.CSRF, v.base()+"/tags", v.Tags).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 181, "<section class=\"card\" id=\"domains\"><div class=\"card-head\"><div><h2 class=\"card-title\">Domains</h2><p class=\"muted text-sm\">Point each domain's DNS at this server first, so its certificate can be issued.</p></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(v.Domains) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "<div class=\"rows\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 182, "<div class=\"rows\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, d := range v.Domains {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, "<div class=\"row\"><span class=\"fact min-w-0 flex-1 truncate\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 183, "<div class=\"row\"><span class=\"fact min-w-0 flex-1 truncate\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var118 string
-					templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.JoinStringErrs(d.Host + d.Path)
+					var templ_7745c5c3_Var123 string
+					templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.JoinStringErrs(d.Host + d.Path)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 866, Col: 68}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 875, Col: 68}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var118))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var123))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "</span> ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 184, "</span> ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -3185,20 +3260,20 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 179, "<form method=\"post\" action=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 185, "<form method=\"post\" action=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var119 templ.SafeURL
-					templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/domains/" + d.ID + "/delete"))
+					var templ_7745c5c3_Var124 templ.SafeURL
+					templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/domains/" + d.ID + "/delete"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 881, Col: 93}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 890, Col: 93}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var119))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var124))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 180, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 186, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -3206,7 +3281,7 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Var120 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var125 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -3218,40 +3293,40 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 181, "Remove")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 187, "Remove")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var120), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var125), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 182, "</form></div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 188, "</form></div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 183, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 189, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 184, "<form class=\"card-body grid gap-4 border-t border-line\" method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 190, "<form class=\"card-body grid gap-4 border-t border-line\" method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var121 templ.SafeURL
-			templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/domains"))
+			var templ_7745c5c3_Var126 templ.SafeURL
+			templ_7745c5c3_Var126, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/domains"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 891, Col: 119}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 900, Col: 119}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var121))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var126))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 185, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 191, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -3259,7 +3334,7 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 186, "<div class=\"grid gap-4 sm:grid-cols-2\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 192, "<div class=\"grid gap-4 sm:grid-cols-2\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -3271,11 +3346,11 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 187, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 193, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var122 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var127 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -3287,17 +3362,17 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 188, "Serve over HTTPS with an automatic certificate")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 194, "Serve over HTTPS with an automatic certificate")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Checkbox("tls", domain.V("tls") != "0", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var122), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Checkbox("tls", domain.V("tls") != "0", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var127), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var123 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var128 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -3309,17 +3384,17 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 189, "Also redirect the www form of the name to it (or the bare name, if this one starts with www)")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 195, "Also redirect the www form of the name to it (or the bare name, if this one starts with www)")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Checkbox("redirect_www", domain.V("redirect_www") == "1", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var123), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Checkbox("redirect_www", domain.V("redirect_www") == "1", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var128), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var124 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var129 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -3331,17 +3406,17 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 190, "Remove the path before passing a request on: the app sees /users for /api/users")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "Remove the path before passing a request on: the app sees /users for /api/users")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Checkbox("strip_prefix", domain.V("strip_prefix") == "1", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var124), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Checkbox("strip_prefix", domain.V("strip_prefix") == "1", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var129), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 191, "<fieldset class=\"grid gap-4\"><legend class=\"field-label\">Ask for a password</legend><p class=\"muted text-sm\">Optional. The browser asks for this user name and password before anything reaches the app. Over plain HTTP they travel unencrypted.</p><div class=\"grid gap-4 sm:grid-cols-2\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 197, "<fieldset class=\"grid gap-4\"><legend class=\"field-label\">Ask for a password</legend><p class=\"muted text-sm\">Optional. The browser asks for this user name and password before anything reaches the app. Over plain HTTP they travel unencrypted.</p><div class=\"grid gap-4 sm:grid-cols-2\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -3353,11 +3428,11 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 192, "</div></fieldset><div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "</div></fieldset><div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var125 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var130 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -3369,21 +3444,21 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 193, "Add domain")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 199, "Add domain")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var125), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var130), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 194, "</div></form></section><section class=\"card card-danger\"><div class=\"card-head\"><div><h2 class=\"card-title\">Delete app</h2><p class=\"muted text-sm\">Stops the app and removes its settings, domains and variables. Volumes are kept.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 200, "</div></form></section><section class=\"card card-danger\"><div class=\"card-head\"><div><h2 class=\"card-title\">Delete app</h2><p class=\"muted text-sm\">Stops the app and removes its settings, domains and variables. Volumes are kept.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var126 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var131 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -3395,20 +3470,20 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 195, "<p><strong>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 201, "<p><strong>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var127 string
-				templ_7745c5c3_Var127, templ_7745c5c3_Err = templ.JoinStringErrs(v.App.Name)
+				var templ_7745c5c3_Var132 string
+				templ_7745c5c3_Var132, templ_7745c5c3_Err = templ.JoinStringErrs(v.App.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 936, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 945, Col: 29}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var127))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var132))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "</strong> is stopped and removed. Its deployment history goes with it. This cannot be undone.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 202, "</strong> is stopped and removed. Its deployment history goes with it. This cannot be undone.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3422,17 +3497,17 @@ func AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, 
 				Match:   v.App.Name,
 				Submit:  "Delete app",
 				Trigger: "Delete app",
-			}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var126), templ_7745c5c3_Buffer)
+			}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var131), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 197, "</div></section></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 203, "</div></section></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = appFrame(s, v, "settings").Render(templ.WithChildren(ctx, templ_7745c5c3_Var112), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = appFrame(s, v, "settings").Render(templ.WithChildren(ctx, templ_7745c5c3_Var117), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -3457,12 +3532,12 @@ func InstanceSettings(s ui.Shell, f ui.Form, domain, email string) templ.Compone
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var128 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var128 == nil {
-			templ_7745c5c3_Var128 = templ.NopComponent
+		templ_7745c5c3_Var133 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var133 == nil {
+			templ_7745c5c3_Var133 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var129 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var134 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -3474,11 +3549,11 @@ func InstanceSettings(s ui.Shell, f ui.Form, domain, email string) templ.Compone
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "<div class=\"max-w-2xl\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 204, "<div class=\"max-w-2xl\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var130 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var135 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -3500,17 +3575,17 @@ func InstanceSettings(s ui.Shell, f ui.Form, domain, email string) templ.Compone
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.FormCard("Dashboard address", "Reach this dashboard on its own domain, over HTTPS, through the musdash proxy.", "/settings", s.CSRF, "Save settings").Render(templ.WithChildren(ctx, templ_7745c5c3_Var130), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.FormCard("Dashboard address", "Reach this dashboard on its own domain, over HTTPS, through the musdash proxy.", "/settings", s.CSRF, "Save settings").Render(templ.WithChildren(ctx, templ_7745c5c3_Var135), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 199, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 205, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = settingsFrame(s, "dashboard").Render(templ.WithChildren(ctx, templ_7745c5c3_Var129), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = settingsFrame(s, "dashboard").Render(templ.WithChildren(ctx, templ_7745c5c3_Var134), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

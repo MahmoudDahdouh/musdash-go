@@ -44,3 +44,21 @@ func count(n int, unit string) string {
 	}
 	return strconv.Itoa(n) + " " + unit + "s"
 }
+
+// Until writes a coming moment relative to now: "in 5 hours", "in 3
+// days", and a date for one that is further off. A moment that has passed
+// is "now".
+func Until(unix int64) string {
+	d := time.Until(time.Unix(unix, 0))
+	switch {
+	case d <= 0:
+		return "now"
+	case d < time.Hour:
+		return "in " + count(int(d.Minutes())+1, "minute")
+	case d < 24*time.Hour:
+		return "in " + count(int(d.Hours())+1, "hour")
+	case d < 30*24*time.Hour:
+		return "in " + count(int(d.Hours()/24)+1, "day")
+	}
+	return "on " + time.Unix(unix, 0).Format("2 January 2006")
+}

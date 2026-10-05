@@ -395,7 +395,14 @@ func (s *Server) gitWebhook(w http.ResponseWriter, r *http.Request) {
 // pushed an image, start a deployment:
 //
 //	curl -X POST -H "Authorization: Bearer <token>" "https://<dashboard>/api/v1/deploy?uuid=<app id>"
+//
+// With a person's API token in place of an app's deploy token, it deploys
+// whatever of the team the call names by id or by tag (apiDeployMany).
 func (s *Server) apiDeploy(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(bearer(r), apiTokenPrefix) {
+		s.api(db.AbilityDeploy, s.apiDeployMany)(w, r)
+		return
+	}
 	if !s.hookAllowed(w, r) {
 		return
 	}

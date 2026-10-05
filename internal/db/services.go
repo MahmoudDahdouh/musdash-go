@@ -154,6 +154,11 @@ func (d *DB) ListServices(ctx context.Context, environmentID string) ([]Service,
 	return d.queryServices(ctx, `SELECT `+serviceColumns+` FROM services s WHERE s.environment_id = ? ORDER BY s.name`, environmentID)
 }
 
+// TeamServices returns every service of the team, by name.
+func (d *DB) TeamServices(ctx context.Context, teamID string) ([]Service, error) {
+	return d.queryServices(ctx, `SELECT `+serviceColumns+` FROM services s`+serviceTeamJoin+`WHERE p.team_id = ? ORDER BY s.name, s.id`, teamID)
+}
+
 // ServicesOnServer returns every service placed on a server.
 func (d *DB) ServicesOnServer(ctx context.Context, serverID string) ([]Service, error) {
 	return d.queryServices(ctx, `SELECT `+serviceColumns+` FROM services s WHERE s.server_id = ? ORDER BY s.created_at, s.rowid`, serverID)
@@ -338,6 +343,9 @@ func (d *DB) NamesOnEnvNetwork(ctx context.Context, environmentID, exceptService
 func (d *DB) DeleteService(ctx context.Context, id string) error {
 	return d.Tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM domains WHERE resource_kind = ? AND resource_id IN (SELECT id FROM service_endpoints WHERE service_id = ?)`, KindService, id); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM resource_tags WHERE resource_kind = ? AND resource_id = ?`, KindService, id); err != nil {
 			return err
 		}
 		return affected(tx.ExecContext(ctx, `DELETE FROM services WHERE id = ?`, id))

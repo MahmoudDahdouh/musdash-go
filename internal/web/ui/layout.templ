@@ -13,6 +13,10 @@ type Shell struct {
 	Active string // key of the current navigation item
 	Name   string // signed-in person's name
 	Email  string
+	// Admin and Owner say what the person's role lets them do, so a page
+	// can leave out what they could not use.
+	Admin  bool
+	Owner  bool
 	CSRF   string
 	MemMB  int // musdash's own memory use, shown in the sidebar
 	Crumbs []Crumb
@@ -26,14 +30,18 @@ type NavItem struct {
 	Label string
 	Href  string
 	Icon  string
+	// Admin items are left out for a Member, whose requests they refuse.
+	Admin bool
 }
 
 // Nav is the sidebar's content. Later phases append their sections here.
 var Nav = []NavItem{
 	{Key: "projects", Label: "Projects", Href: "/", Icon: "folder"},
+	{Key: "tags", Label: "Tags", Href: "/tags", Icon: "tag"},
 	{Key: "sources", Label: "Sources", Href: "/sources", Icon: "git-branch"},
 	{Key: "servers", Label: "Servers", Href: "/servers", Icon: "server"},
-	{Key: "settings", Label: "Settings", Href: "/settings", Icon: "settings"},
+	{Key: "team", Label: "Team", Href: "/team", Icon: "users"},
+	{Key: "settings", Label: "Settings", Href: "/settings", Icon: "settings", Admin: true},
 }
 
 func csrfHeader(token string) string {
@@ -76,16 +84,18 @@ templ sidebar(s Shell) {
 		</a>
 		<nav class="grid gap-0.5 px-2 py-2">
 			for _, item := range Nav {
-				<a
-					class="nav-item"
-					href={ templ.SafeURL(item.Href) }
-					if item.Key == s.Active {
-						aria-current="page"
-					}
-				>
-					@Icon(item.Icon)
-					{ item.Label }
-				</a>
+				if !item.Admin || s.Admin {
+					<a
+						class="nav-item"
+						href={ templ.SafeURL(item.Href) }
+						if item.Key == s.Active {
+							aria-current="page"
+						}
+					>
+						@Icon(item.Icon)
+						{ item.Label }
+					</a>
+				}
 			}
 			if s.Dev {
 				<a

@@ -20,6 +20,8 @@ type AppView struct {
 	Parent *db.App
 	// Previews are the app's previews, filled in for the Settings page.
 	Previews []PreviewRow
+	// Tags are the app's tags, filled in for the Settings page.
+	Tags []string
 }
 
 // PreviewRow is one preview in its parent's list.
@@ -552,6 +554,12 @@ templ AppEnvironment(s ui.Shell, v AppView, f ui.Form) {
 						@ui.Textarea(ui.InputProps{ID: "build_vars", Mono: true, Rows: 5, Value: f.V("build_vars"), Invalid: f.E("build_vars") != "", Described: true, Placeholder: "NPM_TOKEN=…"})
 					}
 				}
+				<p class="text-sm text-ink-soft">
+					A value can come from a shared variable: write
+					<span class="code">{ "{{team.NAME}}" }</span>, <span class="code">{ "{{project.NAME}}" }</span>, <span class="code">{ "{{environment.NAME}}" }</span> or <span class="code">{ "{{server.NAME}}" }</span>
+					as the value or inside it. Shared variables are kept under
+					<a href="/team/variables">Team</a>, the <a href={ templ.SafeURL("/projects/" + v.Project.ID + "/settings#variables") }>project's settings</a> and <a href="/servers">Servers</a>.
+				</p>
 			}
 		</div>
 	}
@@ -852,6 +860,7 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form,
 			if v.App.Source == db.SourceGit {
 				@previewsCard(s.CSRF, v, previews)
 			}
+			@tagsCard(s.CSRF, v.base()+"/tags", v.Tags)
 			<section class="card" id="domains">
 				<div class="card-head">
 					<div>

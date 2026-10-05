@@ -56,7 +56,7 @@
 
 ## Data model (migration `0014_extras.sql`)
 
-- `servers.metrics` (0/1): whether the server is sampled. The file is `0013_extras.sql` on the branch, where migration numbers must be consecutive, and becomes `0014` when phase 8's `0013` is merged.
+- `servers.metrics` (0/1): whether the server is sampled. The file was `0013_extras.sql` on the branch, where migration numbers must be consecutive, and became `0014` when phase 8's `0013` was merged.
 - `metric_samples (server_id, resource_id, at, cpu, mem, mem_total, load, disk_used, disk_total)`, primary key `(server_id, resource_id, at)`, `WITHOUT ROWID`. `resource_id` is `''` for the server itself. `cpu` is in hundredths of a percent of one core for a resource and of the whole machine for a server; the rest are bytes, `load` hundredths.
 - No change to `apps`: `build_pack` takes two more values.
 

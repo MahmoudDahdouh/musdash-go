@@ -49,7 +49,7 @@
 | What the API covers | What the pages show (servers, projects, apps, deployments, databases, services, tags) and what their buttons do (deploy, stop, start, deploy by tag). Not their forms: creating and configuring stay in the dashboard | The spec says "the same handlers with JSON responses". The pages' handlers are form handlers whose answer is a page; the API shares what is underneath them (loaders, queries, the deployer) and has small handlers of its own |
 | What the API never returns | A sealed value, a hash, or a variable's value | Its structs are written out field by field; a row is never marshalled as it is |
 | The deploy endpoint from phase 2 | Stays. `POST /api/v1/deploy?uuid=…` also takes an API token, several ids, and `tag=` | Existing pipelines keep working |
-| Rate limits | By address before anything is looked up (as for webhooks), and 120 calls a minute per token after | A stolen token cannot be used to keep the server busy, and guesses cost nothing to refuse |
+| Rate limits | By address before anything is looked up (600 calls a minute), and 120 calls a minute per token after | A stolen token cannot be used to keep the server busy, and guesses cost nothing to refuse. The address's allowance is the larger one: pipelines share addresses, and with equal numbers a token's own limit could never be reached |
 
 ## Who may do what
 
@@ -128,40 +128,82 @@ func (s *Server) handle(mux *http.ServeMux, pattern string, who access, h http.H
 ## Tasks
 
 ### Task 1 — Roles, members, invitations
-- [ ] Migration `0013` (the whole phase's tables).
-- [ ] The route table: every route registered with who may call it. `admin` and `owner` answer 403 before the handler runs.
-- [ ] `Shell.Role`; Servers, Sources and Settings drawn for a Member without what they cannot use; Settings left out of their navigation.
-- [ ] Team page: members with roles, change a role, remove, reset link, invitations (make, cancel), rename.
-- [ ] `/invite/{token}`: the form, the account, the session.
-- [ ] Tests: a Member is refused at every admin route in the table (the done-when: deleting a server), and reaches every member route; role changes and removal by each role; the last Owner; an invitation used twice, expired, for a member's email, cancelled; a removed member's session and tokens are gone; the invitation token never in a log.
+- [x] Migration `0013` (the whole phase's tables).
+- [x] The route table: every route registered with who may call it. `admin` and `owner` answer 403 before the handler runs.
+- [x] `Shell.Role`; Servers, Sources and Settings drawn for a Member without what they cannot use; Settings left out of their navigation.
+- [x] Team page: members with roles, change a role, remove, reset link, invitations (make, cancel), rename.
+- [x] `/invite/{token}`: the form, the account, the session.
+- [x] Tests: a Member is refused at every admin route in the table (the done-when: deleting a server), and reaches every member route; every route under Servers, Sources, Settings and Team that changes something asks for an Admin; role changes and removal by each role; the last Owner; an invitation used twice, expired, for a member's email, cancelled; a removed member's session and tokens are gone; the invitation token never in a log.
 
 ### Task 2 — Second step
-- [ ] `auth` TOTP with the RFC 6238 test vectors; a code is not accepted twice; a code outside the window.
-- [ ] Account page: turn on (password → key → code → recovery codes), turn off, new recovery codes.
-- [ ] Sign-in: password → code or recovery code → session. The sealed cookie between the two.
-- [ ] Team page: turn another member's off. `musdash disable-2fa`.
-- [ ] Tests: no session before the code; the limit on guesses; a recovery code once; the cookie expired, tampered with, or another account's; turning on needs the password; other sessions end when it is turned on.
+- [x] `auth` TOTP with the RFC 6238 test vectors; a code is not accepted twice; a code outside the window.
+- [x] Account page: turn on (password → key → code → recovery codes), turn off, new recovery codes.
+- [x] Sign-in: password → code or recovery code → session. The sealed cookie between the two.
+- [x] Team page: turn another member's off. `musdash disable-2fa`.
+- [x] Tests: no session before the code; the limit on guesses; a recovery code once; the cookie expired, tampered with, or another account's; turning on needs the password; other sessions end when it is turned on.
 
 ### Task 3 — Shared variables
-- [ ] `SharedRefs` / `ExpandShared`, table-tested first: the exact form, several in one value, an unknown scope left alone, a missing name reported.
-- [ ] The four pages (team, project, environment, server), one template; names only for a reader who may not change them.
-- [ ] Expansion where an app's env file and build arguments are written, and where a service's variables are; a missing name fails the deployment with its name.
-- [ ] Saving an app's variables warns about names that do not exist yet.
-- [ ] Tests: each scope resolves for an app and for a service; a preview resolves as its parent; another team's variable cannot be named; rows go with their project, environment and server.
+- [x] `SharedRefs` / `ExpandShared`, table-tested first: the exact form, several in one value, an unknown scope left alone, a missing name reported.
+- [x] The four pages (team, project, environment, server), one template; names only for a reader who may not change them.
+- [x] Expansion where an app's env file and build arguments are written, and where a service's variables are; a missing name fails the deployment with its name.
+- [x] Saving an app's or a service's variables warns about names that do not exist yet. A shared variable's own value may not name another: refused when it is saved.
+- [x] Tests: each scope resolves for an app and for a service; a preview resolves as its parent; another team's variable cannot be named; rows go with their project, environment and server.
 
 ### Task 4 — Tags
-- [ ] Tags on an app's and a service's settings page; the Tags page; a tag's page with "Deploy all".
-- [ ] `DeployTag`.
-- [ ] Tests: the name rule; a tag's page lists only the team's; deploy all queues one deployment each and none behind a waiting one; tags go with the resource; a preview cannot be tagged.
+- [x] Tags on an app's and a service's settings page; the Tags page; a tag's page with "Deploy all".
+- [x] `DeployTag`.
+- [x] Tests: the name rule; a tag's page lists only the team's; deploy all queues one deployment each and none behind a waiting one; tags go with the resource; a preview cannot be tagged.
 
 ### Task 5 — API tokens and the API
-- [ ] Account page: tokens (make, shown once, revoke).
-- [ ] `/api/v1`: the token check, both limits, the handlers, JSON errors.
-- [ ] `POST /api/v1/deploy` with an API token, several ids, a tag.
-- [ ] Tests: no token, a wrong one, an expired one, a removed person's → 401, indistinguishable; a `read` token cannot deploy; a session cookie is not accepted by the API and a token is not accepted by a page; another team's id → 404; no response carries a sealed value or a hash; the per-token limit; the done-when: a deploy through the API.
+- [x] Account page: tokens (make, shown once, revoke).
+- [x] `/api/v1`: the token check, both limits, the handlers, JSON errors.
+- [x] `POST /api/v1/deploy` with an API token, several ids, a tag.
+- [x] Tests: no token, a wrong one, an expired one, a removed person's → 401, indistinguishable; a `read` token cannot deploy; a session cookie is not accepted by the API and a token is not accepted by a page; another team's id → 404; no response carries a sealed value or a hash; the per-token limit; the done-when: a deploy through the API.
 
 ### Task 6 — End
-- [ ] Independent review; README and CLAUDE.md; RSS on Linux.
+- [x] Independent review; README and CLAUDE.md; RSS on Linux.
+
+## Outcome
+
+- **Done when:** a Member cannot delete a server (`TestMemberCannotDeleteAServer`: refused with a 403 for the role, the server still there, and an Admin can), and the API can trigger a deploy (`TestAPIReadsAndOperates`: a token that may deploy starts a deployment, which is followed to `success` through the API; a token that may only read is refused at every route that starts or stops something).
+- Every route is in one table with who may call it. `TestRouteTableRefusesByRole` walks it as a Member and as an Admin and checks each is refused exactly where the table says; `TestTeamOwnedRoutesNeedAnAdmin` pins what the table says for Servers, Sources, Settings and Team, so a route added there is not left to Members by default.
+- Idle memory on Linux, five runs: server 21 to 23 MB, proxy 15 to 16 MB. Unchanged from phase 7: the phase adds two limiter tables (bounded) and no goroutine.
+- No new module: TOTP is `crypto/hmac` and `crypto/sha1`, checked against the vectors of RFC 6238.
+- Found while building it:
+  - With one team, an invitation is always for somebody without an account, so accepting one is creating one. The case of "an existing account joins" does not exist, and with it went the question of whose email an invitation is bound to.
+  - An account in no team could not sign in and could not be invited again. Removing a member deletes the account.
+  - The first design let an Admin invite an Admin while not letting one make an Admin by changing a role. Invitations follow the same line now.
+  - A table that says who may call each route proves only that the table is enforced, not that it is right: loosening an entry loosened the test's expectation with it. Hence the second test, which states the rule for the team's own addresses independently.
+  - The same number for the API's limit by address and by token meant a token's own limit could never be reached from one address. The address's allowance is five times a token's.
+  - A text line in a template that starts with `for` or `if` is read by templ as a statement.
+- Not verifiable here, to check on a server:
+  - An authenticator app taking the key and its codes being accepted (the codes are the RFC's; the key is 160 bits in base32, the `otpauth://` link is as apps document it).
+  - Two people working at once in real browsers: a role changed or a member removed while they have pages open.
+- Narrower than the spec, on purpose (reasons in the decisions table):
+  - One team per install.
+  - The API reads and operates; it does not create or configure.
+  - No QR code for the second step's key.
+  - No outgoing mail: invitation and reset links are shown to whoever made them, to pass on.
+  - Databases are not tagged.
+- Built at the same time as phase 9, in the same repository. This phase is on `main`; phase 9 is on a branch of its own and will meet three things here when it is merged: migration `0013_access.sql` (its own planned migration needs the next number), the route table in `internal/web/server.go` (new routes are registered with `handle` and a role), and `ui.Shell`'s `Admin` and `Owner`.
+
+## Independent review
+
+A second reader went through the phase against the threat list below. It found no route a role could reach that the table says it cannot, no session before the second step, no way to forge or move the cookie between password and code, no code or recovery code accepted twice, no token that worked after removal, expiry or revocation, no cookie accepted by the API or token by a page, no row of another team reachable through the API or a tag, and no secret in a log, a redirect or a flash. What it did find had one root, authority that was checked once and then held on to. All fixed, each with the reviewer's own proof turned into a test:
+
+| Finding | Fix |
+|---|---|
+| A reset link an Admin made for a Member still worked after that Member was made an Owner: the Admin chose the new Owner's password and signed in as one. A session the Admin already held on that account was promoted with it | Giving somebody a higher role ends their sessions, reset links and API tokens (`db.SetRole`). They sign in again |
+| The limit on wrong codes lived in the limiter that also counts by address. That table is emptied when it is full, so requests from about four thousand addresses bought five more guesses, again and again | Attempts at an account's password and second step are counted in a limiter of their own, whose keys are accounts that exist: nobody outside can fill it |
+| An invitation outlived the person who made it. An Owner about to be removed could keep an Admin invitation as a way back; a demoted Owner could undo the demotion | An invitation records who made it. Removing that member, or giving them a lower role, withdraws their invitations; and when the account is made, the maker must still be somebody who may give that role |
+| Who may remove a member, reset their password or turn off their second step was checked when the page was loaded, not where it was written: a promotion committing in between would let an Admin remove an Owner | `RemoveMemberBy`, `CreatePasswordResetBy` and `DisableTOTPBy` ask again inside the transaction that acts |
+| API tokens survived everything that "signs you out everywhere": a password reset, a password change, turning the second step on. And a token needed only a session to make | All three end the person's tokens; making a token asks for the password |
+| An app with a variable such as `TITLE={{ environment.name }}`, meant for its own template engine, would fail its next deployment with no way to say "this is my text" | A backslash keeps the text: `\{{environment.name}}` reaches the app as `{{environment.name}}`, and the deployment's error says so |
+| `EndSessions` had no caller; the test that reads every API answer for secrets skipped a deployment and never saw a failed one's error text | The function is gone; the test now reads a failed deployment's answer too |
+
+An automated check of the shared-variable pages pointed at what the decisions table already says, that a Member can read a team or server variable by naming it in an app they deploy. The behaviour stays, since that is what those variables are for; the page where an Admin keeps them now says that every member can use them.
+
+Not examined by the review: whether Docker's or Compose's own error text can repeat a variable's value into a deployment log or a notification (true of ordinary variables since phase 4, and shared ones are no different there); a Member's app on a sibling subdomain of the dashboard setting cookies for it.
 
 ## Review focus
 

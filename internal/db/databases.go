@@ -214,6 +214,11 @@ func (d *DB) ListDatabases(ctx context.Context, environmentID string) ([]Databas
 	return d.queryDatabases(ctx, `SELECT `+databaseColumns+` FROM databases d WHERE d.environment_id = ? ORDER BY d.name`, environmentID)
 }
 
+// TeamDatabases returns every database of the team, by name.
+func (d *DB) TeamDatabases(ctx context.Context, teamID string) ([]Database, error) {
+	return d.queryDatabases(ctx, `SELECT `+databaseColumns+` FROM databases d`+databaseTeamJoin+`WHERE p.team_id = ? ORDER BY d.name, d.id`, teamID)
+}
+
 // DatabasesOnServer returns every database placed on a server.
 func (d *DB) DatabasesOnServer(ctx context.Context, serverID string) ([]Database, error) {
 	return d.queryDatabases(ctx, `SELECT `+databaseColumns+` FROM databases d WHERE d.server_id = ? ORDER BY d.created_at, d.rowid`, serverID)

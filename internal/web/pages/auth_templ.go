@@ -330,7 +330,7 @@ func Login(f ui.Form, csrf string, flash *ui.Flash) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<p class=\"muted text-sm\">Forgot your password? On the server, run <span class=\"code\">musdash reset-password you@example.com</span> and open the link it prints.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<p class=\"muted text-sm\">Forgot your password? Ask an Owner or an Admin of your team for a reset link. With a shell on the server, run <span class=\"code\">musdash reset-password you@example.com</span> and open the link it prints.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -456,7 +456,7 @@ func ResetInvalid() templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<p class=\"font-semibold\">This reset link has expired or was already used.</p><p class=\"muted mt-1\">Run <span class=\"code\">musdash reset-password you@example.com</span> on the server for a new one.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<p class=\"font-semibold\">This reset link has expired or was already used.</p><p class=\"muted mt-1\">Ask an Owner or an Admin of your team for a new one, or run <span class=\"code\">musdash reset-password you@example.com</span> on the server.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

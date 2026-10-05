@@ -175,6 +175,26 @@ templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, 
 					}
 				</form>
 			</section>
+			<section class="card" id="variables">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Shared variables</h2>
+						<p class="muted text-sm">Values that apps and services take by name, such as <span class="code">{ "{{project.NAME}}" }</span>, so they are written once.</p>
+					</div>
+				</div>
+				<div class="rows">
+					<a class="row" href={ templ.SafeURL("/projects/" + p.ID + "/variables") }>
+						<span class="min-w-0 flex-1">The whole project</span>
+						@ui.Icon("chevron-right", "text-ink-mute")
+					</a>
+					for _, e := range envs {
+						<a class="row" href={ templ.SafeURL("/environments/" + e.ID + "/variables") }>
+							<span class="min-w-0 flex-1">Only <span class="fact">{ e.Name }</span></span>
+							@ui.Icon("chevron-right", "text-ink-mute")
+						</a>
+					}
+				</div>
+			</section>
 			<section class="card card-danger">
 				<div class="card-head">
 					<div>
@@ -198,7 +218,7 @@ templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, 
 	}
 }
 
-templ Account(s ui.Shell, profile, password ui.Form) {
+templ Account(s ui.Shell, profile, password, twoStep, token ui.Form, v AccountView) {
 	@ui.Layout(s) {
 		@ui.PageHeader("Account", "")
 		<div class="grid max-w-2xl gap-6">
@@ -206,10 +226,12 @@ templ Account(s ui.Shell, profile, password ui.Form) {
 				@ui.TextField(profile, "Name", "", ui.InputProps{ID: "name", Value: s.Name, Autocomplete: "name", Required: true})
 				@ui.TextField(profile, "Email", "You sign in with this address.", ui.InputProps{ID: "email", Type: "email", Value: s.Email, Autocomplete: "email", Required: true})
 			}
-			@ui.FormCard("Password", "Changing it signs you out everywhere else.", "/account/password", s.CSRF, "Change password") {
+			@ui.FormCard("Password", "Changing it signs you out everywhere else and revokes your API tokens.", "/account/password", s.CSRF, "Change password") {
 				@ui.TextField(password, "Current password", "", ui.InputProps{ID: "current", Type: "password", Autocomplete: "current-password", Required: true})
 				@ui.TextField(password, "New password", "10 to 72 characters.", ui.InputProps{ID: "password", Type: "password", Autocomplete: "new-password", Required: true})
 			}
+			@twoStepCard(s, v, twoStep)
+			@tokensCard(s, v, token)
 		</div>
 	}
 }

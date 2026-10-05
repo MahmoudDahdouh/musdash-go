@@ -10,25 +10,27 @@ type extras struct {
 	terminals chan struct{}
 }
 
-// extraRoutes registers the routes of metrics and terminals.
-func (s *Server) extraRoutes(mux *http.ServeMux) {
+// extraRoutes registers the routes of metrics and terminals. What a
+// Member works with (apps, databases, services) a Member may look at and
+// open a terminal in; whether a server is sampled is the team's to decide.
+func (s *Server) extraRoutes(handle func(pattern string, who access, h http.HandlerFunc)) {
 	s.readings = make(chan struct{}, maxReadings)
 	s.terminals = make(chan struct{}, maxTerminals)
 
-	mux.Handle("GET /apps/{id}/metrics", s.authed(s.appMetrics))
-	mux.Handle("GET /apps/{id}/metrics/now", s.authed(s.appMetricsNow))
-	mux.Handle("GET /databases/{id}/metrics", s.authed(s.databaseMetrics))
-	mux.Handle("GET /databases/{id}/metrics/now", s.authed(s.databaseMetricsNow))
-	mux.Handle("GET /services/{id}/metrics", s.authed(s.serviceMetrics))
-	mux.Handle("GET /services/{id}/metrics/now", s.authed(s.serviceMetricsNow))
-	mux.Handle("GET /servers/{id}/metrics", s.authed(s.serverMetrics))
-	mux.Handle("GET /servers/{id}/metrics/now", s.authed(s.serverMetricsNow))
-	mux.Handle("POST /servers/{id}/metrics", s.authed(s.serverMetricsSave))
+	handle("GET /apps/{id}/metrics", member, s.appMetrics)
+	handle("GET /apps/{id}/metrics/now", member, s.appMetricsNow)
+	handle("GET /databases/{id}/metrics", member, s.databaseMetrics)
+	handle("GET /databases/{id}/metrics/now", member, s.databaseMetricsNow)
+	handle("GET /services/{id}/metrics", member, s.serviceMetrics)
+	handle("GET /services/{id}/metrics/now", member, s.serviceMetricsNow)
+	handle("GET /servers/{id}/metrics", member, s.serverMetrics)
+	handle("GET /servers/{id}/metrics/now", member, s.serverMetricsNow)
+	handle("POST /servers/{id}/metrics", admin, s.serverMetricsSave)
 
-	mux.Handle("GET /apps/{id}/terminal", s.authed(s.appTerminal))
-	mux.Handle("GET /apps/{id}/terminal/ws", s.authed(s.appTerminalWS))
-	mux.Handle("GET /databases/{id}/terminal", s.authed(s.databaseTerminal))
-	mux.Handle("GET /databases/{id}/terminal/ws", s.authed(s.databaseTerminalWS))
-	mux.Handle("GET /services/{id}/terminal", s.authed(s.serviceTerminal))
-	mux.Handle("GET /services/{id}/terminal/ws", s.authed(s.serviceTerminalWS))
+	handle("GET /apps/{id}/terminal", member, s.appTerminal)
+	handle("GET /apps/{id}/terminal/ws", member, s.appTerminalWS)
+	handle("GET /databases/{id}/terminal", member, s.databaseTerminal)
+	handle("GET /databases/{id}/terminal/ws", member, s.databaseTerminalWS)
+	handle("GET /services/{id}/terminal", member, s.serviceTerminal)
+	handle("GET /services/{id}/terminal/ws", member, s.serviceTerminalWS)
 }

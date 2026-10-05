@@ -379,7 +379,7 @@ func (d *Deployer) buildArgs(ctx context.Context, app db.App) (map[string]string
 	if err != nil {
 		return nil, err
 	}
-	args := make(map[string]string)
+	var vars []db.EnvVar
 	for _, v := range sealed {
 		if !v.BuildTime {
 			continue
@@ -388,7 +388,14 @@ func (d *Deployer) buildArgs(ctx context.Context, app db.App) (map[string]string
 		if err != nil {
 			return nil, fmt.Errorf("build variable %s cannot be decrypted: was the master key changed?", v.Key)
 		}
-		args[v.Key] = plain
+		vars = append(vars, db.EnvVar{Key: v.Key, Value: plain})
+	}
+	if err := d.expandShared(ctx, app.EnvironmentID, app.ServerID, vars); err != nil {
+		return nil, err
+	}
+	args := make(map[string]string, len(vars))
+	for _, v := range vars {
+		args[v.Key] = v.Value
 	}
 	return args, nil
 }

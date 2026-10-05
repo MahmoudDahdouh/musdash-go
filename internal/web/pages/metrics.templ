@@ -206,7 +206,8 @@ templ ServerMetrics(s ui.Shell, server db.Server, h History) {
 							}
 						</p>
 					</div>
-					<form method="post" action={ templ.SafeURL("/servers/" + server.ID + "/metrics") }>
+					if s.Admin {
+						<form method="post" action={ templ.SafeURL("/servers/" + server.ID + "/metrics") }>
 						@ui.CSRF(s.CSRF)
 						if h.Sampled {
 							<input type="hidden" name="sample" value="0"/>
@@ -219,11 +220,16 @@ templ ServerMetrics(s ui.Shell, server db.Server, h History) {
 								Switch sampling on
 							}
 						}
-					</form>
+						</form>
+					}
 				</div>
-				if h.Sampled {
+				if h.Sampled && s.Admin {
 					<div class="card-body">
 						<p class="muted text-sm">Switching it off also removes the samples that were kept.</p>
+					</div>
+				} else if !s.Admin {
+					<div class="card-body">
+						<p class="muted text-sm">An Admin or an Owner switches sampling on and off.</p>
 					</div>
 				}
 			</section>
