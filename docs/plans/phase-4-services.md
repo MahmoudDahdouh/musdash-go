@@ -20,7 +20,8 @@
 | Files a pasted stack may name | None: `env_file`, `include` and `extends` from a file fail in the sandbox | A pasted stack is one file plus its variables. Feeding it on standard input also avoids Docker Desktop's slow file sharing, which showed a rewritten file stale for a moment |
 | What is started | The normalised document the sandbox printed, after validation, written to `compose.resolved.json`; `docker compose -f compose.resolved.json up` | What runs is what was checked, plus only what musdash itself adds (labels, loopback ports, the restart policy). The original file is never loaded on the server |
 | Validation | An allow-list over the normalised JSON: known-safe service keys only; anything else is refused by name | Compose keeps gaining keys (`provider` runs a program on the server); a deny-list would fall behind |
-| Refused outright | `privileged`, host `network_mode` / `pid` / `ipc` / `uts` / `userns_mode` / `cgroup`, `devices`, `cap_add` beyond the phase 2 safe list, `security_opt` other than `no-new-privileges`, non-`net.` `sysctls`, `volumes_from`, `container_name`, `provider`, `build` (except for a Git service, inside its checkout), external volumes and networks, volume or network names outside the project, bind mounts outside the service's directory unless they pass `docker.CheckBindSource`, `musdash.` labels | Each one reaches the host, another team's data, or musdash's own bookkeeping |
+| Bind mounts of the stack's own directory | Refused, as are `secrets` and `configs` read from a file there | That directory holds `compose.resolved.json`, the file musdash starts the stack from. A container that could write to it could swap in a document that was never checked, or leave a symlink for the next deployment to mount. A pasted stack has no files of its own anyway: named volumes and `configs.content` cover it |
+| Refused outright | `privileged`, host `network_mode` / `pid` / `ipc` / `uts` / `userns_mode` / `cgroup`, `devices`, `cap_add` beyond the phase 2 safe list, `security_opt` other than `no-new-privileges`, non-`net.` `sysctls`, `volumes_from`, `container_name`, `provider`, `build` (except for a Git service, inside its checkout), external volumes and networks, volume or network names outside the project, `ipam` settings and fixed container addresses, bind mounts outside the service's directory unless they pass `docker.CheckBindSource`, `musdash.` labels | Each one reaches the host, another team's data, or musdash's own bookkeeping |
 | Published ports | A `ports:` entry is allowed when its host port is 1024–65535 and outside 20000–29999 | The same rule as a database's public port: publishing is a choice, not an escape |
 | Web ports | Named by a magic variable `SERVICE_FQDN_<NAME>_<PORT>` (or `SERVICE_URL_…`); musdash publishes that container port on a loopback port it picks and routes the domain to it | Templates stay free of host ports, so two copies of one template never collide |
 | `SERVICE_FQDN_*` and `SERVICE_URL_*` | `FQDN` is the bare host name, `URL` is `https://host` (or `http://` for a generated sslip.io address). A `_<PORT>` suffix names the container port and is not part of the value | Current Coolify semantics, so its templates can be pasted |
@@ -115,6 +116,27 @@ func (d *Deployer) DestroyService(ctx, id string, deleteData bool) error
 
 ### Task 6 — End to end
 - [x] With `MUSDASH_DOCKER_TEST=1`: Uptime Kuma (one container) and WordPress (two containers, generated database password) are installed from the catalogue, answer on their loopback ports, survive a redeploy with their data, and are deleted with their volumes.
+
+## Outcome
+
+- `TestServiceWithDocker`: a two-container stack is deployed, reached on its loopback port, redeployed with its data, refused when its file asks for a privileged container (and left running), stopped and deleted with its volume.
+- `TestCatalogueWithDocker`: WordPress, Uptime Kuma, Ghost, n8n and MinIO install, answer, redeploy and delete. Cloudflare Tunnel loads and validates but cannot be started without a real tunnel token.
+- `TestSandboxCannotReadTheServer`: `include`, `env_file` and `extends` naming files of the server fail without their content appearing anywhere.
+- MinIO stopped publishing its own image; the template uses Chainguard's build of MinIO's source (`cgr.dev/chainguard/minio`), which takes the same command and variables.
+- Idle memory on Linux after this phase: server 23.6 MB, proxy 17.6 MB (phase 3: 23.5 and 17.2).
+- Task 5 (stacks built from a Git repository) is not done. When it is: the checkout must not be the stack's directory, and a file of the checkout that a container can write to must not be trusted on the next deployment (clone afresh, check for symlinks as the app build does).
+
+### Found by the independent review, and fixed
+
+1. **The stack's own directory could be mounted.** A container given `.:/s` could overwrite `compose.resolved.json` between the check and `docker compose up`, or leave a symlink that a later bind mount followed to anywhere on the server. Bind mounts, secrets and configs inside that directory are now refused.
+2. **Bind mounts reached directories the server acts on as root** (`/var/spool/cron`, `/var/lib/cloud`, `/var/backups`, `/var/log`). The deny-list now covers `/var/lib`, `/var/spool`, `/var/backups` and `/var/log`. It remains a deny-list, as decided in phase 1: mounting a directory of the server is for people trusted with the server. `/home` and `/opt` are still allowed. Phase 8 (roles) should reserve bind mounts for administrators.
+3. **A variable named without a value was filled in from musdash's own environment** when the stack was started on the server. Such variables are dropped after the sandbox has had its chance to give them a value.
+4. **A network could choose its own subnet**, which becomes a route of the server and could capture its traffic to public addresses. `ipam` and fixed addresses are refused.
+5. **A failed or running redeployment took a healthy stack's domains away.** A service is now routed unless it was never started or was stopped; after a failed deployment its status is what its containers make it, with the failure shown as a warning.
+6. **The retry after a taken port loaded the file again without checking it.** Each attempt now starts from a copy of the checked document.
+7. **A container that ran once and ended well** (a migration, an init step) made the stack "degraded" for good. It is no longer counted.
+8. **Stop could be undone by a deployment queued before it.** The job now gives way to a stop, and a deployment queued behind another one shows as deploying while it runs.
+9. **The sandbox had no limits.** It now has 256 MB, 128 processes and three minutes.
 
 ## Review focus
 

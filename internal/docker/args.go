@@ -88,7 +88,7 @@ func ValidMountPath(p string) bool {
 // the host: the Docker socket is root, and the system directories hold
 // credentials and devices.
 var deniedBinds = []string{
-	"/var/run", "/run", "/var/lib/docker", "/var/lib/containerd",
+	"/var/run", "/run", "/var/lib", "/var/spool", "/var/backups", "/var/log",
 	"/etc", "/root", "/proc", "/sys", "/dev", "/boot", "/usr", "/bin", "/sbin", "/lib", "/lib64",
 }
 

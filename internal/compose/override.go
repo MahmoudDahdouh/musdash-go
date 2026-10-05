@@ -154,6 +154,17 @@ func (p Project) Apply(o Override) {
 		labels[docker.LabelKind] = "service"
 		labels[docker.LabelResource] = o.ServiceID
 
+		// A variable named without a value means "take it from where
+		// Compose runs". The sandbox has already filled in the ones the
+		// stack defines; any still empty would be read from musdash's own
+		// environment when the stack is started.
+		if env := asMap(svc["environment"]); env != nil {
+			for key, value := range env {
+				if value == nil {
+					delete(env, key)
+				}
+			}
+		}
 		// A stack comes back after a reboot unless its file says otherwise.
 		if svc["restart"] == nil {
 			svc["restart"] = "unless-stopped"

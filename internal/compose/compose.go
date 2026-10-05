@@ -22,6 +22,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
 )
@@ -215,6 +216,10 @@ func ConfigCmd(o ConfigOptions) (runner.Cmd, error) {
 		"--read-only",
 		"--cap-drop", "ALL",
 		"--security-opt", "no-new-privileges",
+		// A file written to make Compose work hard gets little to do it
+		// with.
+		"--memory", "256m",
+		"--pids-limit", "128",
 		"--user", o.User,
 		"--tmpfs", "/tmp",
 		"--workdir", "/tmp",
@@ -252,6 +257,8 @@ func ConfigCmd(o ConfigOptions) (runner.Cmd, error) {
 	return cmd, nil
 }
 
+const configTimeout = 3 * time.Minute
+
 // Config loads a Compose file inside the sandbox and returns the normalised
 // document. An error from Compose is returned as Compose worded it: it is
 // what tells a person which line of their file is wrong.
@@ -260,8 +267,14 @@ func Config(ctx context.Context, r runner.Runner, o ConfigOptions) (Project, err
 	if err != nil {
 		return Project{}, err
 	}
+	// Long enough for the sandbox image to be fetched the first time.
+	ctx, cancel := context.WithTimeout(ctx, configTimeout)
+	defer cancel()
 	out, err := r.Output(ctx, cmd)
 	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return Project{}, fmt.Errorf("reading the Compose file took longer than %s", configTimeout)
+		}
 		var ee *runner.ExitError
 		if errors.As(err, &ee) && strings.TrimSpace(ee.Stderr) != "" {
 			return Project{}, errors.New(cleanError(ee.Stderr))

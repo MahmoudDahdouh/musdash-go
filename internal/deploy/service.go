@@ -78,6 +78,19 @@ func (d *Deployer) runServiceJob(ctx context.Context, raw []byte) error {
 	if err != nil {
 		return jobs.Permanent(fmt.Errorf("service %s: %w", p.ID, err))
 	}
+	switch s.Status {
+	case db.AppStopped:
+		// Stopped while this deployment waited its turn. The person's last
+		// word was "stop".
+		return nil
+	case db.AppDeploying:
+	default:
+		// A deployment queued behind another one: the first has finished
+		// and set a status of its own.
+		if err := d.DB.SetServiceState(ctx, s.ID, db.AppDeploying, ""); err != nil {
+			return err
+		}
+	}
 	log, err := OpenLog(d.Cfg.ServiceLogPath(s.ID))
 	if err != nil {
 		d.DB.SetServiceState(ctx, s.ID, db.AppFailed, err.Error())
@@ -97,10 +110,33 @@ func (d *Deployer) runServiceJob(ctx context.Context, raw []byte) error {
 		return err
 	}
 	log.Step("Failed: %v", err)
-	if serr := d.DB.SetServiceState(rec, s.ID, db.AppFailed, err.Error()); serr != nil {
+	if serr := d.DB.SetServiceState(rec, s.ID, d.serviceStatusAfterFailure(rec, s), err.Error()); serr != nil {
 		d.Log.Error("record service failure", "service", s.ID, "err", serr)
 	}
 	return jobs.Permanent(err)
+}
+
+// serviceStatusAfterFailure is the status of a service whose deployment
+// failed. A redeployment that fails before anything is started leaves the
+// containers from before running; the service is then still what they
+// make it, with the failure kept as its last error.
+func (d *Deployer) serviceStatusAfterFailure(ctx context.Context, s db.Service) string {
+	server, err := d.DB.ServerByID(ctx, s.ServerID)
+	if err != nil {
+		return db.AppFailed
+	}
+	r, err := d.Runners.Runner(ctx, server)
+	if err != nil {
+		return db.AppFailed
+	}
+	listed, err := docker.Client{R: r}.List(ctx)
+	if err != nil {
+		return db.AppFailed
+	}
+	if status := serviceStatus(listed, s.ID); status == db.AppRunning || status == db.AppDegraded {
+		return status
+	}
+	return db.AppFailed
 }
 
 // ServiceVariables opens a service's stored variables: the values musdash
@@ -361,17 +397,20 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		return nil
 	}
 
+	// Each attempt applies its ports to a fresh copy of the document that
+	// was checked, never to one loaded again.
+	checked, err := resolved.Marshal()
+	if err != nil {
+		return err
+	}
 	const tries = 3
 	for attempt := 1; ; attempt++ {
 		if err := assign(attempt > 1); err != nil {
 			return err
 		}
-		// Applied to a fresh copy on a further attempt: the ports differ.
-		doc := resolved
-		if attempt > 1 {
-			if doc, err = compose.Config(ctx, r, opt); err != nil {
-				return err
-			}
+		doc, err := compose.Parse(checked)
+		if err != nil {
+			return err
 		}
 		doc.Apply(override)
 		out, err := doc.Marshal()
@@ -556,6 +595,12 @@ func serviceStatus(listed []docker.Listed, id string) string {
 	total, up := 0, 0
 	for _, c := range listed {
 		if c.Kind != db.KindService || c.Resource != id {
+			continue
+		}
+		// A container that ended well and was not restarted did a job and
+		// is done: a migration, an init step. It says nothing about whether
+		// the stack is up.
+		if c.State == "exited" && strings.HasPrefix(c.Status, "Exited (0)") {
 			continue
 		}
 		total++

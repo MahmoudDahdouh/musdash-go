@@ -19,11 +19,13 @@ import (
 
 // ValidateOptions says what a stack may refer to.
 type ValidateOptions struct {
-	// Dir is the stack's own directory. Bind mounts and files inside it are
-	// its own business.
+	// Dir is the stack's own directory on the server. It holds what musdash
+	// itself starts the stack from, so nothing in it may be mounted: a
+	// container that could write there could replace the checked file with
+	// one that was never checked.
 	Dir string
-	// BuildDir, when set, is a checkout that services may be built from.
-	// Empty refuses "build".
+	// BuildDir, when set, is a checkout that services may be built from
+	// and may mount files of. Empty refuses "build".
 	BuildDir string
 	// Protected are directories no container may mount: musdash's data.
 	Protected []string
@@ -41,8 +43,9 @@ var serviceKeys = map[string]func(c *checker, v any){
 	"dns": nil, "dns_search": nil, "dns_opt": nil, "mem_limit": nil, "mem_reservation": nil,
 	"cpus": nil, "pids_limit": nil, "cap_drop": nil, "profiles": nil, "platform": nil,
 	"tty": nil, "stdin_open": nil, "attach": nil, "secrets": nil, "configs": nil,
-	"annotations": nil, "networks": nil,
+	"annotations": nil,
 
+	"networks":     (*checker).serviceNetworks,
 	"labels":       (*checker).labels,
 	"volumes":      (*checker).mounts,
 	"ports":        (*checker).ports,
@@ -213,6 +216,20 @@ func (c *checker) networks(networks map[string]any) {
 		if driver, _ := n["driver"].(string); driver != "" && driver != "bridge" {
 			c.fail("%s: only the bridge driver is allowed, not %q", what, driver)
 		}
+		// A chosen subnet becomes a route of the server. One that covers
+		// addresses outside Docker would send the server's own traffic to
+		// them into the stack.
+		if ipam := asMap(n["ipam"]); len(ipam) > 0 {
+			c.fail("%s: addresses are assigned by Docker; \"ipam\" is not allowed", what)
+		}
+	}
+}
+
+// serviceNetworks checks how a service joins the stack's networks.
+func (c *checker) serviceNetworks(v any) {
+	networks := asMap(v)
+	for _, key := range sortedKeys(networks) {
+		c.onlyKeys("network "+key, asMap(networks[key]), "aliases", "priority")
 	}
 }
 
@@ -234,22 +251,23 @@ func (c *checker) topVolumes(volumes map[string]any) {
 }
 
 // files checks top-level secrets and configs: what they contain must come
-// from the file itself or from the stack's own directory.
+// from the file itself or from the checkout the stack is built from.
 func (c *checker) files(kind string, entries map[string]any) {
 	for _, key := range sortedKeys(entries) {
 		e := asMap(entries[key])
 		what := strings.TrimSuffix(kind, "s") + " " + key
 		c.onlyKeys(what, e, "name", "file", "content")
 		if file, ok := e["file"].(string); ok && !c.own(file) {
-			c.fail("%s: the file %s is outside the stack's own directory", what, file)
+			c.fail("%s: it may not be read from a file on the server; write it under \"content\" instead", what)
 		}
 	}
 }
 
-// own reports whether a path belongs to the stack: its directory, or the
-// checkout it is built from.
+// own reports whether a path belongs to the stack: it lies in the checkout
+// the stack is built from. The stack's directory on the server does not
+// count; see ValidateOptions.Dir.
 func (c *checker) own(p string) bool {
-	return inside(p, c.opt.Dir) || inside(p, c.opt.BuildDir)
+	return inside(p, c.opt.BuildDir)
 }
 
 func (c *checker) mustBeFalse(v any) {
@@ -289,6 +307,10 @@ func (c *checker) mounts(v any) {
 				c.fail("the mount at %s may not use %q propagation", target, prop)
 			}
 			if c.own(source) {
+				continue
+			}
+			if inside(source, c.opt.Dir) {
+				c.fail("the mount at %s is a directory next to the Compose file, which a pasted stack does not have; use a named volume, or the full path of a directory on the server", target)
 				continue
 			}
 			if err := docker.CheckBindSource(source, c.opt.Protected...); err != nil {

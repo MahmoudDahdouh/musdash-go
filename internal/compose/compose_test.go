@@ -34,7 +34,7 @@ const allowed = `{
     "cache": {"name": "musdash-svc1_cache", "driver": "local", "labels": {"a": "b"}}
   },
   "configs": {"site": {"name": "musdash-svc1_site", "content": "server {}"}},
-  "secrets": {"key": {"name": "musdash-svc1_key", "file": "/var/lib/musdash/apps/svc1/key.txt"}},
+  "secrets": {"key": {"name": "musdash-svc1_key", "content": "s3cret"}},
   "services": {
     "web": {
       "image": "nginx:alpine",
@@ -74,7 +74,7 @@ const allowed = `{
         {"type": "volume", "source": "data", "target": "/data", "volume": {}},
         {"type": "volume", "target": "/anonymous", "volume": {}},
         {"type": "tmpfs", "target": "/run"},
-        {"type": "bind", "source": "/var/lib/musdash/apps/svc1/conf", "target": "/conf", "bind": {"create_host_path": true}},
+        {"type": "bind", "source": "/srv/site/conf", "target": "/conf", "bind": {"create_host_path": true}},
         {"type": "bind", "source": "/srv/shared", "target": "/shared", "read_only": true, "bind": {}}
       ]
     },
@@ -168,9 +168,12 @@ func TestValidateRefuses(t *testing.T) {
 		{"/networks", `{"default":{"name":"musdash-env1","external":true}}`, `network default`},
 		{"/networks", `{"default":{"name":"musdash-svc1_default","driver":"host"}}`, `only the bridge driver`},
 		{"/networks", `{"default":{"name":"musdash-svc1_default","driver":"macvlan","driver_opts":{"parent":"eth0"}}}`, `network default`},
-		{"/secrets", `{"key":{"name":"musdash-svc1_key","file":"/var/lib/musdash/master.key"}}`, `outside the stack's own directory`},
+		{"/secrets", `{"key":{"name":"musdash-svc1_key","file":"/var/lib/musdash/master.key"}}`, `may not be read from a file on the server`},
+		// Also not from the stack's own directory: a container that could
+		// write there could make the name a link to any file.
+		{"/secrets", `{"key":{"name":"musdash-svc1_key","file":"/var/lib/musdash/apps/svc1/key.txt"}}`, `may not be read from a file on the server`},
 		{"/secrets", `{"key":{"name":"musdash-svc1_key","environment":"HOME"}}`, `"environment" is not supported`},
-		{"/configs", `{"site":{"name":"musdash-svc1_site","file":"/etc/shadow"}}`, `outside the stack's own directory`},
+		{"/configs", `{"site":{"name":"musdash-svc1_site","file":"/etc/shadow"}}`, `may not be read from a file on the server`},
 		{"/configs", `{"site":{"name":"x","external":true}}`, `"external" is not supported`},
 		{"env_file", `[{"path":"/var/lib/musdash/apps/other/env"}]`, `"env_file" is not allowed`},
 		// The limits musdash and the server set.
@@ -187,6 +190,17 @@ func TestValidateRefuses(t *testing.T) {
 		{"ports", `[{"mode":"ingress","target":80,"published":"20001","protocol":"tcp"}]`, `port 20001 of the server`},
 		{"ports", `[{"mode":"ingress","target":80,"protocol":"tcp"}]`, `published without a fixed port`},
 		{"ports", `[{"mode":"host","target":80,"published":"8000-8010","protocol":"tcp"}]`, `port 8000-8010`},
+		// The stack's directory holds the file musdash starts it from. A
+		// container that could write there could swap in one never checked.
+		{"volumes", `[{"type":"bind","source":"/var/lib/musdash/apps/svc1","target":"/s","bind":{}}]`, `next to the Compose file`},
+		{"volumes", `[{"type":"bind","source":"/var/lib/musdash/apps/svc1/conf","target":"/s","bind":{}}]`, `next to the Compose file`},
+		// Directories whose content the server acts on as root.
+		{"volumes", `[{"type":"bind","source":"/var/spool/cron","target":"/c","bind":{}}]`, `/var/spool`},
+		{"volumes", `[{"type":"bind","source":"/var/lib/cloud","target":"/c","bind":{}}]`, `/var/lib`},
+		// A subnet of the stack's choosing becomes a route of the server.
+		{"/networks", `{"default":{"name":"musdash-svc1_default","ipam":{"config":[{"subnet":"8.8.8.0/24"}]}}}`, `"ipam" is not allowed`},
+		{"networks", `{"default":{"ipv4_address":"8.8.8.8"}}`, `the option "ipv4_address" is not supported`},
+		{"networks", `{"default":{"driver_opts":{"a":"b"}}}`, `the option "driver_opts" is not supported`},
 		// Building needs a repository.
 		{"build", `{"context":"/var/lib/musdash/apps/svc1","dockerfile":"Dockerfile"}`, `"build" is not allowed`},
 		{"pull_policy", `"build"`, `needs a stack that comes from a Git repository`},
@@ -231,6 +245,20 @@ func TestValidateBuild(t *testing.T) {
 	ok := `{"context":"/var/lib/musdash/apps/svc1/src/api","dockerfile":"docker/Dockerfile","args":{"A":"1"},"target":"prod"}`
 	if err := with(t, "build", ok).Validate(opt); err != nil {
 		t.Fatalf("a build inside the repository was refused: %v", err)
+	}
+	// A stack from a repository may mount files of its checkout, but still
+	// not the directory musdash keeps its own files in.
+	mount := func(source string) string {
+		return `[{"type":"bind","source":"` + source + `","target":"/m","bind":{}}]`
+	}
+	if err := with(t, "volumes", mount(testDir+"/src/nginx.conf")).Validate(opt); err != nil {
+		t.Errorf("a file of the checkout was refused: %v", err)
+	}
+	if err := with(t, "volumes", mount(testDir)).Validate(opt); err == nil {
+		t.Error("the stack's directory could be mounted by a stack from a repository")
+	}
+	if err := with(t, "volumes", mount(testDir+"/compose.resolved.json")).Validate(opt); err == nil {
+		t.Error("the resolved file could be mounted by a stack from a repository")
 	}
 	for value, want := range map[string]string{
 		`{"context":"/var/lib/musdash/apps/svc1"}`: `outside the repository`,
@@ -297,13 +325,18 @@ func TestApply(t *testing.T) {
 		"volumes":{"data":{"name":"musdash-svc1_data"},"more":{"name":"musdash-svc1_more"}},
 		"services":{
 		"web":{"image":"nginx","labels":{"a":"b"},"networks":{"default":null},"ports":[{"target":25,"published":"2525"}]},
-		"db":{"image":"postgres","restart":"no","networks":{"default":null}},
+		"db":{"image":"postgres","restart":"no","networks":{"default":null},"environment":{"POSTGRES_DB":"app","AWS_SECRET_ACCESS_KEY":null,"EMPTY":""}},
 		"side":{"image":"x","network_mode":"service:web"},
 		"built":{"image":"postgres:17-alpine","build":{"context":"/src"},"networks":{"default":null}}}}`)
 	p.Apply(Override{ServiceID: "svc1", EnvNetwork: "musdash-env1", Publish: []Published{{Service: "web", Port: 80, HostPort: 20007}}})
 	raw, err := p.Marshal()
 	if err != nil {
 		t.Fatal(err)
+	}
+	// A variable left without a value would be filled in from musdash's own
+	// environment when Compose starts the stack. An empty one is a value.
+	if s := string(raw); strings.Contains(s, "AWS_SECRET_ACCESS_KEY") || !strings.Contains(s, `"POSTGRES_DB"`) || !strings.Contains(s, `"EMPTY"`) {
+		t.Errorf("variables after Apply: %s", s)
 	}
 	var doc struct {
 		Networks map[string]map[string]any
@@ -389,7 +422,7 @@ func TestConfigCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 	line := cmd.Name + " " + strings.Join(cmd.Args, " ")
-	want := "docker run --rm --interactive --network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 1000:1000 --tmpfs /tmp --workdir /tmp " +
+	want := "docker run --rm --interactive --network none --read-only --cap-drop ALL --security-opt no-new-privileges --memory 256m --pids-limit 128 --user 1000:1000 --tmpfs /tmp --workdir /tmp " +
 		"--env-file " + envFile + " --env HOME=/tmp --env DOCKER_CONFIG=/tmp/.docker" +
 		" docker:29-cli compose --project-name " + testProject + " --project-directory " + testDir + " --file - config --format json --no-interpolate"
 	if line != want {

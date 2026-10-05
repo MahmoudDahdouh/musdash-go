@@ -333,8 +333,10 @@ type RouteRow struct {
 // RoutesForServer returns the domains of every app that is serving on the
 // given server.
 func (d *DB) RoutesForServer(ctx context.Context, serverID string) ([]RouteRow, error) {
-	// An app is routed while it has a serving container; a service's
-	// endpoint while its stack is up, also when part of it is not.
+	// An app is routed while it has a serving container. A service's
+	// endpoint is routed unless the stack was never started or was stopped
+	// on purpose: while it is being redeployed, and after a redeployment
+	// that failed, the containers from before are still answering.
 	rows, err := d.QueryContext(ctx, `SELECT m.host, m.tls, m.redirect_www, a.host_port
 		FROM domains m JOIN apps a ON m.resource_kind = 'app' AND m.resource_id = a.id
 		WHERE a.server_id = ? AND a.host_port > 0 AND a.container <> '' AND a.status <> 'stopped'
@@ -342,7 +344,7 @@ func (d *DB) RoutesForServer(ctx context.Context, serverID string) ([]RouteRow, 
 		SELECT m.host, m.tls, m.redirect_www, ep.host_port
 		FROM domains m JOIN service_endpoints ep ON m.resource_kind = 'service' AND m.resource_id = ep.id
 			JOIN services s ON s.id = ep.service_id
-		WHERE s.server_id = ? AND ep.host_port > 0 AND s.status IN ('running', 'degraded')
+		WHERE s.server_id = ? AND ep.host_port > 0 AND s.status NOT IN ('created', 'stopped')
 		ORDER BY 1`, serverID, serverID)
 	if err != nil {
 		return nil, err

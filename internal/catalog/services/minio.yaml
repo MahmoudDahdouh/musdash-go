@@ -3,7 +3,9 @@
 # docs: https://min.io/docs/minio/container/index.html
 services:
   minio:
-    image: minio/minio:latest
+    # MinIO no longer publishes its own image. This one is built from MinIO's
+    # source by Chainguard and takes the same command and variables.
+    image: cgr.dev/chainguard/minio:latest
     command: server /data --console-address ":9001"
     environment:
       # Two addresses: the S3 API on 9000 and the web console on 9001.

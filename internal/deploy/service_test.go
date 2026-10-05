@@ -229,7 +229,9 @@ func TestServiceWithDocker(t *testing.T) {
 	bad.Compose = strings.Replace(smallStack, "image: nginx:alpine", "image: nginx:alpine\n    privileged: true\n    pid: host", 1)
 	e.db.UpdateServiceCompose(ctx, e.team, bad)
 	bad, _ = e.db.ServiceByID(ctx, s.ID)
-	if bad = e.deployService(bad, 2*time.Minute); bad.Status != db.AppFailed || !strings.Contains(bad.LastError, `"privileged" is not allowed`) || !strings.Contains(bad.LastError, `"pid" is not allowed`) {
+	// The service is still what its running containers make it; the
+	// refusal is its last error.
+	if bad = e.deployService(bad, 2*time.Minute); bad.Status != db.AppRunning || !strings.Contains(bad.LastError, `"privileged" is not allowed`) || !strings.Contains(bad.LastError, `"pid" is not allowed`) {
 		t.Fatalf("a privileged stack: %s %s", bad.Status, bad.LastError)
 	}
 	if body, err := fetch(); err != nil || !strings.Contains(body, "kept across a redeploy") {
@@ -353,7 +355,7 @@ func TestDeployService(t *testing.T) {
 	compose := "docker compose --project-name " + project + " --project-directory " + dir + " --file " + dir + "/compose.resolved.json --ansi never "
 	order := []string{
 		"docker image inspect --format {{.Id}} docker:29-cli",
-		"docker run --rm --interactive --network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 1000:1000",
+		"docker run --rm --interactive --network none --read-only --cap-drop ALL --security-opt no-new-privileges --memory 256m --pids-limit 128 --user 1000:1000",
 		" --file - config --format json",
 		compose + "pull --ignore-buildable",
 		compose + "up --detach --remove-orphans --wait --wait-timeout 600",
@@ -553,10 +555,130 @@ func TestServiceFailuresAreExplained(t *testing.T) {
 		return st.handle(line, c)
 	}
 	before, _ := e.db.ListEndpoints(context.Background(), s.ID)
+	loadsBefore := countCalls(e.fake.Calls(), "config --format json")
 	got = e.deployService(got, 10*time.Second)
 	after, _ := e.db.ListEndpoints(context.Background(), s.ID)
 	if got.Status != db.AppRunning || ups != 2 || after[0].HostPort == before[0].HostPort {
 		t.Fatalf("after a taken port: %+v, %d attempts, port %d then %d", got, ups, before[0].HostPort, after[0].HostPort)
+	}
+	// The second attempt starts from the document that was checked, not
+	// from one loaded again.
+	if loads := countCalls(e.fake.Calls(), "config --format json") - loadsBefore; loads != 2 {
+		t.Fatalf("the file was loaded %d times for one deployment, want 2", loads)
+	}
+}
+
+func countCalls(calls []string, part string) int {
+	n := 0
+	for _, c := range calls {
+		if strings.Contains(c, part) {
+			n++
+		}
+	}
+	return n
+}
+
+// A redeployment that fails before anything is started leaves the stack
+// from before running. It must stay reachable, and say so.
+func TestFailedRedeployKeepsWhatWasServing(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, st := e.scriptedService(false)
+	got := e.deployService(s, 10*time.Second)
+	if got.Status != db.AppRunning {
+		t.Fatalf("%+v", got)
+	}
+	routed := func() bool {
+		if err := e.d.SyncRoutes(ctx, e.server); err != nil && !errors.Is(err, ErrProxyDown) {
+			t.Fatal(err)
+		}
+		for _, r := range e.routes().Routes {
+			if r.Host == "front.site.example.test" {
+				return true
+			}
+		}
+		return false
+	}
+	if !routed() {
+		t.Fatal("not routed after the first deployment")
+	}
+
+	project := ServiceProject(s.ID)
+	ps := project + "-front-1\trunning\tservice\t" + s.ID + "\t\tUp 2 minutes\n" +
+		project + "-cache-1\trunning\tservice\t" + s.ID + "\t\tUp 2 minutes\n" +
+		// A migration that ran and ended well is not a container that is down.
+		project + "-migrate-1\texited\tservice\t" + s.ID + "\t\tExited (0) 2 minutes ago\n"
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		switch {
+		case strings.HasPrefix(line, "docker ps"):
+			return ps, nil
+		case strings.Contains(line, "config --format json"):
+			return "", runnertest.Exit("docker", 15, "yaml: line 3: did not find expected key")
+		}
+		return st.handle(line, c)
+	}
+	got = e.deployService(got, 10*time.Second)
+	if got.Status != db.AppRunning || !strings.Contains(got.LastError, "did not find expected key") {
+		t.Fatalf("a failed redeploy over a running stack: status %q, error %q", got.Status, got.LastError)
+	}
+	if !routed() {
+		t.Fatal("the running stack lost its route because a redeployment failed")
+	}
+
+	// With a container that really is down, the stack is degraded, and
+	// still routed.
+	ps = strings.Replace(ps, "cache-1\trunning", "cache-1\texited", 1)
+	ps = strings.Replace(ps, "Up 2 minutes\n"+project+"-migrate", "Exited (1) 5 seconds ago\n"+project+"-migrate", 1)
+	got = e.deployService(got, 10*time.Second)
+	if got.Status != db.AppDegraded || !routed() {
+		t.Fatalf("status %q, routed %v", got.Status, routed())
+	}
+
+	// Nothing running at all: that is a failed service.
+	ps = ""
+	if got = e.deployService(got, 10*time.Second); got.Status != db.AppFailed {
+		t.Fatalf("status %q", got.Status)
+	}
+}
+
+// Stop pressed while a deployment waits its turn is the last word.
+func TestQueuedDeployGivesWayToStop(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, _ := e.scriptedService(false)
+	if err := e.db.SetServiceState(ctx, s.ID, db.AppStopped, ""); err != nil {
+		t.Fatal(err)
+	}
+	before := len(e.fake.Calls())
+	if err := e.d.runServiceJob(ctx, []byte(`{"id":"`+s.ID+`"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if calls := e.fake.Calls()[before:]; len(calls) != 0 {
+		t.Fatalf("a stopped service was deployed by a job queued before the stop: %v", calls)
+	}
+	if got, _ := e.db.ServiceByID(ctx, s.ID); got.Status != db.AppStopped {
+		t.Fatalf("status %q", got.Status)
+	}
+
+	// A deployment queued behind another shows as deploying while it runs,
+	// whatever the first one left.
+	if err := e.db.SetServiceState(ctx, s.ID, db.AppRunning, ""); err != nil {
+		t.Fatal(err)
+	}
+	seen := ""
+	inner := e.fake.Handle
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		if strings.HasPrefix(line, "docker version") {
+			got, _ := e.db.ServiceByID(ctx, s.ID)
+			seen = got.Status
+		}
+		return inner(line, c)
+	}
+	if err := e.d.runServiceJob(ctx, []byte(`{"id":"`+s.ID+`"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if seen != db.AppDeploying {
+		t.Fatalf("status while the second deployment ran: %q", seen)
 	}
 }
 

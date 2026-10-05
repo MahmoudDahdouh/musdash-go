@@ -229,24 +229,31 @@ type Listed struct {
 	Kind       string
 	Resource   string
 	Deployment string
+	// Status is Docker's sentence about the container, such as
+	// "Exited (0) 2 minutes ago".
+	Status string
 }
 
 // List returns every managed container, running or not.
 func (c Client) List(ctx context.Context) ([]Listed, error) {
-	format := "{{.Names}}\t{{.State}}\t{{.Label \"" + LabelKind + "\"}}\t{{.Label \"" + LabelResource + "\"}}\t{{.Label \"" + LabelDeployment + "\"}}"
+	format := "{{.Names}}\t{{.State}}\t{{.Label \"" + LabelKind + "\"}}\t{{.Label \"" + LabelResource + "\"}}\t{{.Label \"" + LabelDeployment + "\"}}\t{{.Status}}"
 	out, err := c.R.Output(ctx, cmd("ps", "--all", "--filter", "label="+ManagedLabel+"=true", "--format", format))
 	if err != nil {
 		return nil, err
 	}
 	var list []Listed
-	// Only the line ends are trimmed: a container without a deployment
-	// label, such as a database, ends its line with an empty field.
+	// Only the line ends are trimmed: a field may be empty, such as the
+	// deployment of a database's container.
 	for _, line := range strings.Split(string(out), "\n") {
 		f := strings.Split(strings.TrimRight(line, "\r"), "\t")
-		if len(f) != 5 {
+		if len(f) < 5 {
 			continue
 		}
-		list = append(list, Listed{Name: f[0], State: f[1], Kind: f[2], Resource: f[3], Deployment: f[4]})
+		c := Listed{Name: f[0], State: f[1], Kind: f[2], Resource: f[3], Deployment: f[4]}
+		if len(f) > 5 {
+			c.Status = f[5]
+		}
+		list = append(list, c)
 	}
 	return list, nil
 }
