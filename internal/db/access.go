@@ -16,8 +16,8 @@ func (d *DB) SetTOTPPending(ctx context.Context, userID, sealedKey string) error
 
 // EnableTOTP makes the pending key the person's second step. step is the
 // step of the code that confirmed it, so that code cannot be used again
-// to sign in. Every other session ends, and the recovery codes are
-// replaced by the given ones.
+// to sign in. Every other session and every API token ends, and the
+// recovery codes are replaced by the given ones.
 func (d *DB) EnableTOTP(ctx context.Context, userID, sealedKey string, step int64, keepTokenHash string, codeHashes []string) error {
 	return d.Tx(ctx, func(tx *sql.Tx) error {
 		if err := affected(tx.ExecContext(ctx, `UPDATE users SET totp_secret = ?, totp_pending = '', totp_step = ? WHERE id = ? AND totp_pending = ?`,
@@ -27,19 +27,27 @@ func (d *DB) EnableTOTP(ctx context.Context, userID, sealedKey string, step int6
 		if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?`, userID, keepTokenHash); err != nil {
 			return err
 		}
+		// A token is a way in that asks for no code. One made before the
+		// second step, by whoever had the account then, ends with the
+		// sessions.
+		if _, err := tx.ExecContext(ctx, `DELETE FROM api_tokens WHERE user_id = ?`, userID); err != nil {
+			return err
+		}
 		return replaceRecoveryCodes(ctx, tx, userID, codeHashes)
 	})
 }
 
 // DisableTOTP removes a person's second step and its recovery codes.
 func (d *DB) DisableTOTP(ctx context.Context, userID string) error {
-	return d.Tx(ctx, func(tx *sql.Tx) error {
-		if err := affected(tx.ExecContext(ctx, `UPDATE users SET totp_secret = '', totp_pending = '', totp_step = 0 WHERE id = ?`, userID)); err != nil {
-			return err
-		}
-		_, err := tx.ExecContext(ctx, `DELETE FROM recovery_codes WHERE user_id = ?`, userID)
+	return d.Tx(ctx, func(tx *sql.Tx) error { return disableTOTP(ctx, tx, userID) })
+}
+
+func disableTOTP(ctx context.Context, tx *sql.Tx, userID string) error {
+	if err := affected(tx.ExecContext(ctx, `UPDATE users SET totp_secret = '', totp_pending = '', totp_step = 0 WHERE id = ?`, userID)); err != nil {
 		return err
-	})
+	}
+	_, err := tx.ExecContext(ctx, `DELETE FROM recovery_codes WHERE user_id = ?`, userID)
+	return err
 }
 
 // UseTOTPStep records that a code of this step was accepted. It returns

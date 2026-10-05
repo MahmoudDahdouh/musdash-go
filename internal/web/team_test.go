@@ -238,7 +238,8 @@ func TestInvitations(t *testing.T) {
 		t.Fatal("the invitation token was written to the log")
 	}
 	inv, err := a.db.InvitationByHash(ctx, secret.HashToken(token))
-	if err != nil || inv.Role != db.RoleAdmin || inv.InvitedBy != "Owner" {
+	owner, _ := a.db.UserByEmail(ctx, testEmail)
+	if err != nil || inv.Role != db.RoleAdmin || inv.InvitedBy != owner.ID {
 		t.Fatalf("stored invitation: %+v %v", inv, err)
 	}
 	var stored string
@@ -253,7 +254,7 @@ func TestInvitations(t *testing.T) {
 	}
 	// The link is shown once: the page does not carry it again.
 	_, page := a.get("/team")
-	if strings.Contains(page, token) || !strings.Contains(page, "new@example.com") {
+	if strings.Contains(page, token) || !strings.Contains(page, "new@example.com") || !strings.Contains(page, "invited by Owner") {
 		t.Fatal("the Team page should list the invitation without its link")
 	}
 
@@ -438,6 +439,13 @@ func TestRolesAndRemovalOnTheTeamPage(t *testing.T) {
 	if role(ad.user.ID) != db.RoleOwner || role(owner.ID) != db.RoleMember {
 		t.Fatalf("handover: %s / %s", role(ad.user.ID), role(owner.ID))
 	}
+	// Being given a higher role signs a person out: they sign in again.
+	if res, _ := ad.get("/"); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("the promoted Admin's old session still works: %d", res.StatusCode)
+	}
+	var signedInAs *http.Response
+	ad.client, signedInAs = a.signIn("admin@example.com", testPassword)
+	wantRedirect(t, signedInAs, "/")
 	// The change holds at once: the former Owner's next request is a Member's.
 	res, _ = a.get("/settings")
 	wantStatus(t, res, http.StatusForbidden)
@@ -447,5 +455,100 @@ func TestRolesAndRemovalOnTheTeamPage(t *testing.T) {
 	wantRedirect(t, res, "/team")
 	if got, _ := a.db.Team(ctx, team); got.Name != "Acme" {
 		t.Fatalf("team name %q", got.Name)
+	}
+}
+
+// What follows was found by the phase's independent review: authority
+// that was checked once and held on to.
+
+// A reset link made for a Member is not a reset link for the Owner that
+// Member becomes.
+func TestAResetLinkEndsWhenItsAccountIsPromoted(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+	team := firstTeam(t, a)
+	ad := a.newPerson("Admin", db.RoleAdmin)
+	mem := a.newPerson("Member", db.RoleMember)
+	memToken := mem.newToken(db.AbilityDeploy)
+
+	res, body := ad.post("/team/members/"+mem.user.ID+"/reset", nil)
+	wantStatus(t, res, http.StatusOK)
+	link := linkRE.FindStringSubmatch(html.UnescapeString(body))
+	if link == nil {
+		t.Fatal("no reset link")
+	}
+
+	res, _ = a.post("/team", "/team/members/"+mem.user.ID+"/role", url.Values{"role": {db.RoleOwner}})
+	wantRedirect(t, res, "/team")
+
+	// The link in the Admin's hand, the Member's session and their API
+	// token all ended with the promotion.
+	req, _ := http.NewRequest(http.MethodGet, a.url+"/reset/"+link[3], nil)
+	res, _ = a.do(a.newClient(), req)
+	wantStatus(t, res, http.StatusNotFound)
+	res, _ = mem.get("/")
+	wantRedirect(t, res, "/login")
+	res, _ = a.call(http.MethodGet, "/api/v1/me", memToken)
+	wantStatus(t, res, http.StatusUnauthorized)
+	// And the Admin may not ask for another.
+	res, _ = ad.post("/team/members/"+mem.user.ID+"/reset", nil)
+	wantStatus(t, res, http.StatusForbidden)
+	if got, _ := a.db.Member(ctx, team, ad.user.ID); got.Role != db.RoleAdmin {
+		t.Fatalf("the Admin is now %s", got.Role)
+	}
+	// The promoted person signs in again with their own password.
+	_, res = a.signIn("member@example.com", testPassword)
+	wantRedirect(t, res, "/")
+}
+
+// An invitation is withdrawn with the person who made it.
+func TestAnInvitationEndsWithItsMaker(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	second := a.newPerson("Second", db.RoleAdmin)
+	res, _ := a.post("/team", "/team/members/"+second.user.ID+"/role", url.Values{"role": {db.RoleOwner}})
+	wantRedirect(t, res, "/team")
+	second.client, res = a.signIn("second@example.com", testPassword)
+	wantRedirect(t, res, "/")
+
+	invite := func(email string) string {
+		t.Helper()
+		res, body := second.post("/team/invitations", url.Values{"email": {email}, "role": {db.RoleAdmin}})
+		wantStatus(t, res, http.StatusOK)
+		m := linkRE.FindStringSubmatch(html.UnescapeString(body))
+		if m == nil {
+			t.Fatal("no invitation link")
+		}
+		return m[3]
+	}
+	opens := func(token string) int {
+		req, _ := http.NewRequest(http.MethodGet, a.url+"/invite/"+token, nil)
+		res, _ := a.do(a.newClient(), req)
+		return res.StatusCode
+	}
+
+	// Made as an Owner, then the maker is given a lower role.
+	first := invite("one@example.com")
+	if opens(first) != http.StatusOK {
+		t.Fatal("the invitation should work while its maker is an Owner")
+	}
+	res, _ = a.post("/team", "/team/members/"+second.user.ID+"/role", url.Values{"role": {db.RoleAdmin}})
+	wantRedirect(t, res, "/team")
+	if opens(first) != http.StatusNotFound {
+		t.Fatal("an Admin invitation outlived its maker's demotion")
+	}
+
+	// Made as an Admin (for a Member), then the maker is removed.
+	res, body := second.post("/team/invitations", url.Values{"email": {"two@example.com"}})
+	wantStatus(t, res, http.StatusOK)
+	way := linkRE.FindStringSubmatch(html.UnescapeString(body))[3]
+	res, _ = a.post("/team", "/team/members/"+second.user.ID+"/delete", url.Values{"confirm": {"second@example.com"}})
+	wantRedirect(t, res, "/team")
+	if opens(way) != http.StatusNotFound {
+		t.Fatal("an invitation outlived its maker's removal")
+	}
+	if list, _ := a.db.ListInvitations(context.Background(), firstTeam(t, a)); len(list) != 0 {
+		t.Fatalf("invitations left: %+v", list)
 	}
 }

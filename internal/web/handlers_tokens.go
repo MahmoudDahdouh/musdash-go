@@ -41,6 +41,11 @@ func (s *Server) tokenCreate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		f.Fail("token_expires", "Choose when the token ends.")
 	}
+	// A token is a way in that lasts and asks for no second step. Like
+	// the second step itself, a session left open is not enough to make one.
+	if f.OK() {
+		s.passwordAgain(r, &f, "token_password")
+	}
 	if !f.OK() {
 		s.renderAccountWith(w, r, http.StatusUnprocessableEntity, ui.Form{}, ui.Form{}, ui.Form{}, f, "")
 		return

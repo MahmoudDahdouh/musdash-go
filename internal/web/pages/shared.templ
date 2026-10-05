@@ -83,7 +83,7 @@ templ SharedVariables(s ui.Shell, v SharedView, f ui.Form) {
 					<p class="code block">MAIL_HOST={ v.example() }</p>
 					<p class="code block">MAIL_URL=smtp://{ v.example() }:587</p>
 					<p>
-						The name is replaced when the resource is deployed, so a changed value takes effect at the next deploy. A deploy fails, and says which name, when it uses one that does not exist.
+						The name is replaced when the resource is deployed, so a changed value takes effect at the next deploy. A deploy fails, and says which name, when it uses one that does not exist. To give an app this very text, put a backslash before it: <span class="code">{ "\\" + v.example() }</span>.
 					</p>
 				</div>
 			</section>

@@ -15,8 +15,10 @@ import (
 //	API=https://{{team.API_HOST}}/v1
 //
 // Only this exact form is read. Anything else in double braces, such as
-// "{{ .Name }}" for a template engine, is left as it is.
-var sharedRE = regexp.MustCompile(`\{\{\s*(team|project|environment|server)\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
+// "{{ .Name }}" for a template engine, is left as it is. A value that needs
+// this very text for itself puts a backslash before it: "\{{team.NAME}}"
+// reaches the container as "{{team.NAME}}".
+var sharedRE = regexp.MustCompile(`(\\?)\{\{\s*(team|project|environment|server)\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
 
 // SharedRef names one shared variable.
 type SharedRef struct {
@@ -34,7 +36,10 @@ func SharedRefs(value string) []SharedRef {
 	var out []SharedRef
 	seen := map[SharedRef]bool{}
 	for _, m := range sharedRE.FindAllStringSubmatch(value, -1) {
-		ref := SharedRef{Scope: m[1], Name: m[2]}
+		if m[1] != "" {
+			continue // escaped: the text itself is wanted
+		}
+		ref := SharedRef{Scope: m[2], Name: m[3]}
 		if !seen[ref] {
 			seen[ref] = true
 			out = append(out, ref)
@@ -55,10 +60,13 @@ func ExpandShared(value string, lookup func(scope, name string) (string, bool)) 
 	seen := map[SharedRef]bool{}
 	out := sharedRE.ReplaceAllStringFunc(value, func(match string) string {
 		m := sharedRE.FindStringSubmatch(match)
-		if v, ok := lookup(m[1], m[2]); ok {
+		if m[1] != "" {
+			return match[1:]
+		}
+		if v, ok := lookup(m[2], m[3]); ok {
 			return v
 		}
-		if ref := (SharedRef{Scope: m[1], Name: m[2]}); !seen[ref] {
+		if ref := (SharedRef{Scope: m[2], Name: m[3]}); !seen[ref] {
 			seen[ref] = true
 			missing = append(missing, ref)
 		}
@@ -134,7 +142,8 @@ func (d *Deployer) MissingShared(ctx context.Context, environmentID, serverID st
 func (d *Deployer) expandShared(ctx context.Context, environmentID, serverID string, vars []db.EnvVar) error {
 	uses := false
 	for _, v := range vars {
-		if len(SharedRefs(v.Value)) > 0 {
+		// An escaped name counts too: its backslash has to come off.
+		if strings.Contains(v.Value, "{{") && sharedRE.MatchString(v.Value) {
 			uses = true
 			break
 		}
@@ -149,8 +158,8 @@ func (d *Deployer) expandShared(ctx context.Context, environmentID, serverID str
 	for i := range vars {
 		value, missing := ExpandShared(vars[i].Value, lookup)
 		if len(missing) > 0 {
-			return fmt.Errorf("%s uses %s, and there is no %s variable of that name: add it under the %s's shared variables, or change %s",
-				vars[i].Key, missing[0], missing[0].Scope, missing[0].Scope, vars[i].Key)
+			return fmt.Errorf("%s uses %s, and there is no %s variable of that name: add it under the %s's shared variables, or write \\%s if %s is meant to hold that text itself",
+				vars[i].Key, missing[0], missing[0].Scope, missing[0].Scope, missing[0], vars[i].Key)
 		}
 		vars[i].Value = value
 	}

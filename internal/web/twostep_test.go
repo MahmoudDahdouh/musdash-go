@@ -420,3 +420,35 @@ func TestResetLinkKeepsTheSecondStep(t *testing.T) {
 	res, _ = a.sendCode(c, codeIn(key, 1))
 	wantRedirect(t, res, "/")
 }
+
+// The count of wrong codes is the account's and cannot be emptied from
+// outside: the limiter that counts by address is another one.
+func TestCodeLimitSurvivesAFloodOfOtherAddresses(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	key, _ := a.turnOnTwoStep()
+
+	c, _ := a.signIn(testEmail, testPassword)
+	for i := 0; i < 5; i++ {
+		res, _ := a.sendCode(c, "00000"+itoa(i))
+		wantStatus(t, res, http.StatusUnauthorized)
+	}
+	// More addresses than the by-address table holds, each asking for an
+	// invitation that does not exist. (The test server is on loopback, so
+	// X-Forwarded-For is believed, as it is behind the musdash proxy.)
+	plain := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for i := 0; i < 4200; i++ {
+		req, _ := http.NewRequest(http.MethodGet, a.url+"/invite/x", nil)
+		req.Header.Set("X-Forwarded-For", "10."+itoa(i>>16&255)+"."+itoa(i>>8&255)+"."+itoa(i&255))
+		res, err := plain.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+	}
+	res, _ := a.sendCode(c, codeIn(key, 1))
+	wantStatus(t, res, http.StatusTooManyRequests)
+	if signedIn(a, c) {
+		t.Fatal("the account's limit on codes was reset from outside")
+	}
+}

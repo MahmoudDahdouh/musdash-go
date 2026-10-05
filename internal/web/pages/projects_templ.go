@@ -1052,7 +1052,7 @@ func Account(s ui.Shell, profile, password, twoStep, token ui.Form, v AccountVie
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.FormCard("Password", "Changing it signs you out everywhere else.", "/account/password", s.CSRF, "Change password").Render(templ.WithChildren(ctx, templ_7745c5c3_Var42), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.FormCard("Password", "Changing it signs you out everywhere else and revokes your API tokens.", "/account/password", s.CSRF, "Change password").Render(templ.WithChildren(ctx, templ_7745c5c3_Var42), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

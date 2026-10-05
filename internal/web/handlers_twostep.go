@@ -37,8 +37,13 @@ var errTOTPKey = errors.New("the second step's key cannot be decrypted: was the 
 // by account and not by address: a code has a million values and three
 // are right at any moment, so somebody with the password and many
 // addresses could otherwise try them all.
+//
+// These counts live in a limiter of their own, whose keys are accounts.
+// The sign-in limiter is keyed by address: anybody can fill its table
+// from many addresses, and a full table is emptied, which would hand out
+// fresh guesses.
 func (s *Server) codeAllowed(userID string) (bool, time.Duration) {
-	return s.logins.Take("code:" + userID)
+	return s.accounts.Take("code:" + userID)
 }
 
 // secondStep reports whether what was typed is a code the person's app
@@ -78,7 +83,7 @@ func (s *Server) secondStep(ctx context.Context, user db.User, typed string) (bo
 func (s *Server) passwordAgain(r *http.Request, f *ui.Form, field string) bool {
 	sess := sessionFrom(r)
 	key := "password:" + sess.UserID
-	if ok, wait := s.logins.Take(key); !ok {
+	if ok, wait := s.accounts.Take(key); !ok {
 		f.Fail(field, "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		return false
 	}
@@ -86,7 +91,7 @@ func (s *Server) passwordAgain(r *http.Request, f *ui.Form, field string) bool {
 		f.Fail(field, "That is not your current password.")
 		return false
 	}
-	s.logins.Reset(key)
+	s.accounts.Reset(key)
 	return true
 }
 
@@ -195,7 +200,7 @@ func (s *Server) twoStepConfirm(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.logins.Reset("code:" + sess.UserID)
+	s.accounts.Reset("code:" + sess.UserID)
 	s.Log.Info("second step turned on", "user", sess.UserID)
 	s.render(w, r, http.StatusOK, pages.RecoveryCodes(s.shell(w, r, "Recovery codes", "account"), codes, true))
 }
@@ -228,7 +233,7 @@ func (s *Server) twoStepCodes(w http.ResponseWriter, r *http.Request) {
 		s.renderAccount(w, r, http.StatusUnprocessableEntity, ui.Form{}, ui.Form{}, f)
 		return
 	}
-	s.logins.Reset("code:" + sess.UserID)
+	s.accounts.Reset("code:" + sess.UserID)
 	codes, hashes := newRecoveryCodes()
 	if err := s.DB.ReplaceRecoveryCodes(r.Context(), sess.UserID, hashes); err != nil {
 		s.fail(w, r, err)
@@ -264,7 +269,7 @@ func (s *Server) twoStepOff(w http.ResponseWriter, r *http.Request) {
 		s.renderAccount(w, r, http.StatusUnprocessableEntity, ui.Form{}, ui.Form{}, f)
 		return
 	}
-	s.logins.Reset("code:" + sess.UserID)
+	s.accounts.Reset("code:" + sess.UserID)
 	if err := s.DB.DisableTOTP(r.Context(), sess.UserID); err != nil {
 		s.fail(w, r, err)
 		return
@@ -281,8 +286,8 @@ func (s *Server) memberTwoStepOff(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.DB.DisableTOTP(r.Context(), m.UserID); err != nil {
-		s.fail(w, r, err)
+	sess := sessionFrom(r)
+	if s.managedNoMore(w, r, s.DB.DisableTOTPBy(r.Context(), sess.TeamID, sess.UserID, m.UserID)) {
 		return
 	}
 	s.Log.Info("second step turned off", "user", m.UserID, "by", sessionFrom(r).UserID)
@@ -377,7 +382,7 @@ func (s *Server) loginCodeSubmit(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, http.StatusUnauthorized, pages.LoginCode(f, anonCSRF(w, r)))
 		return
 	}
-	s.logins.Reset("code:" + user.ID)
+	s.accounts.Reset("code:" + user.ID)
 	clearTwoStepCookie(w, r)
 	teamID, err := s.DB.FirstTeamOf(r.Context(), user.ID)
 	if err != nil {

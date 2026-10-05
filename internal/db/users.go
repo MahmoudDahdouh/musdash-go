@@ -105,13 +105,17 @@ func (d *DB) UpdateUserProfile(ctx context.Context, id, name, email string) erro
 }
 
 // SetPassword stores a new hash and ends every session of the user except
-// keepTokenHash, so a changed password locks out anyone else who was signed in.
+// keepTokenHash, and every API token of theirs, so a changed password
+// locks out anyone else who was signed in or had made a token.
 func (d *DB) SetPassword(ctx context.Context, userID, passwordHash, keepTokenHash string) error {
 	return d.Tx(ctx, func(tx *sql.Tx) error {
 		if err := affected(tx.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, passwordHash, userID)); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?`, userID, keepTokenHash); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM api_tokens WHERE user_id = ?`, userID); err != nil {
 			return err
 		}
 		_, err := tx.ExecContext(ctx, `DELETE FROM password_resets WHERE user_id = ?`, userID)

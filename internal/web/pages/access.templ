@@ -204,7 +204,7 @@ func codesTitle(justOn bool) string {
 
 func codesNote(justOn bool) string {
 	if justOn {
-		return "Other devices were signed out."
+		return "Other devices were signed out, and your API tokens were revoked."
 	}
 	return "The old ones no longer work."
 }
@@ -267,7 +267,7 @@ templ tokensCard(s ui.Shell, v AccountView, f ui.Form) {
 		<div class="card-head">
 			<div>
 				<h2 class="card-title">API tokens</h2>
-				<p class="muted text-sm">For scripts and pipelines. A token acts as you: it sees what you see, and stops working when you leave the team.</p>
+				<p class="muted text-sm">For scripts and pipelines. A token acts as you: it sees what you see, and stops working when you leave the team, change your password, turn on two-step sign-in or are given a higher role.</p>
 			</div>
 		</div>
 		if v.NewToken != "" {
@@ -316,6 +316,7 @@ templ tokensCard(s ui.Shell, v AccountView, f ui.Form) {
 					@ui.Select("token_expires", expiryOptions, orDefault(f.V("token_expires"), "90"), nil)
 				}
 			</div>
+			@ui.TextField(f, "Current password", "A token is a way in that lasts: making one asks for your password.", ui.InputProps{ID: "token_password", Type: "password", Autocomplete: "current-password", Required: true})
 			<div>
 				@ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}) {
 					Create token

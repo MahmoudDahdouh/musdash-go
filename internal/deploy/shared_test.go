@@ -57,6 +57,14 @@ func TestExpandShared(t *testing.T) {
 			[]SharedRef{{"project", "NOPE"}, {"server", "X"}}},
 		// Braces around a reference.
 		{"{{{team.TOKEN}}}", "{t0k}", nil},
+		// A backslash keeps the text for the app itself, known name or not.
+		{`\{{team.TOKEN}}`, "{{team.TOKEN}}", nil},
+		{`\{{ environment.name }}`, "{{ environment.name }}", nil},
+		{`a \{{team.NOPE}} b {{team.TOKEN}}`, "a {{team.NOPE}} b t0k", nil},
+		// Only directly before the braces, and only one is taken.
+		{`\\{{team.TOKEN}}`, `\{{team.TOKEN}}`, nil},
+		{`\ {{team.TOKEN}}`, `\ t0k`, nil},
+		{`\{{ .Name }}`, `\{{ .Name }}`, nil},
 	} {
 		got, missing := ExpandShared(tc.in, lookup)
 		if got != tc.want || !reflect.DeepEqual(missing, tc.missing) {
@@ -70,6 +78,9 @@ func TestSharedRefs(t *testing.T) {
 	want := []SharedRef{{"team", "A"}, {"project", "B"}, {"server", "D"}, {"environment", "E"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
+	}
+	if got := SharedRefs(`\{{team.A}} {{team.B}}`); !reflect.DeepEqual(got, []SharedRef{{"team", "B"}}) {
+		t.Fatalf("an escaped name was listed: %v", got)
 	}
 	if SharedRefs("no braces here") != nil || SharedRefs("{{nothing}}") != nil {
 		t.Fatal("found references where there are none")
@@ -165,6 +176,7 @@ func TestSharedVariablesReachAnApp(t *testing.T) {
 		"URL":   "postgres://{{project.DB_HOST}}/{{environment.STAGE}}",
 		"PLAIN": "as it is",
 		"TMPL":  "{{ .Values.name }}",
+		"OWN":   `\{{ environment.name }}`,
 	})
 	dep := e.deploy()
 	if dep.Status != db.DeploySuccess {
@@ -173,6 +185,7 @@ func TestSharedVariablesReachAnApp(t *testing.T) {
 	want := map[string]string{
 		"A": "team-token", "B": "db.internal", "C": "production", "D": "fra",
 		"URL": "postgres://db.internal/production", "PLAIN": "as it is", "TMPL": "{{ .Values.name }}",
+		"OWN": "{{ environment.name }}",
 	}
 	if got := e.envFile(e.app.ID); !reflect.DeepEqual(got, want) {
 		t.Fatalf("env file:\n got %v\nwant %v", got, want)

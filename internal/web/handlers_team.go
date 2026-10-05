@@ -93,7 +93,7 @@ func (s *Server) invitationCreate(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case want != db.RoleAdmin:
 			f.Fail("role", "Choose Member or Admin.")
-		case sess.Role != db.RoleOwner:
+		case !db.MayInvite(sess.Role, want):
 			f.Fail("email", "Only an Owner can invite an Admin.")
 		default:
 			role = db.RoleAdmin
@@ -116,7 +116,7 @@ func (s *Server) invitationCreate(w http.ResponseWriter, r *http.Request) {
 	token := secret.RandomToken(32)
 	_, err := s.DB.CreateInvitation(ctx, db.Invitation{
 		TeamID: sess.TeamID, Email: email, Role: role, TokenHash: secret.HashToken(token),
-		InvitedBy: sess.User.Name, ExpiresAt: time.Now().Add(invitationLifetime).Unix(),
+		InvitedBy: sess.UserID, ExpiresAt: time.Now().Add(invitationLifetime).Unix(),
 	})
 	switch {
 	case errors.Is(err, db.ErrHasAccount):
@@ -187,6 +187,23 @@ func (s *Server) loadManaged(w http.ResponseWriter, r *http.Request) (db.Member,
 	return m, true
 }
 
+// managedNoMore answers a write that the database refused although the
+// page allowed it: the member's role, or the asker's, changed in between.
+// It reports whether it wrote the response.
+func (s *Server) managedNoMore(w http.ResponseWriter, r *http.Request, err error) bool {
+	switch {
+	case err == nil:
+		return false
+	case errors.Is(err, db.ErrNotAllowed):
+		s.render(w, r, http.StatusForbidden, pages.Forbidden(s.shell(w, r, "Not allowed", ""), owner.needs()))
+	case errors.Is(err, db.ErrNotFound):
+		s.notFound(w, r)
+	default:
+		s.fail(w, r, err)
+	}
+	return true
+}
+
 func (s *Server) memberRole(w http.ResponseWriter, r *http.Request) {
 	m, ok := s.loadMember(w, r)
 	if !ok {
@@ -210,7 +227,12 @@ func (s *Server) memberRole(w http.ResponseWriter, r *http.Request) {
 		return
 	default:
 		s.Log.Info("role changed", "member", m.UserID, "role", role, "by", sessionFrom(r).UserID)
-		setFlash(w, r, ui.ToneOK, m.Name+" is now "+pages.RoleLabel(role)+".")
+		note := ""
+		if db.RoleRank(role) > db.RoleRank(m.Role) {
+			// So that nothing made under the lower role carries over.
+			note = " They were signed out, and their API tokens and reset links no longer work."
+		}
+		setFlash(w, r, ui.ToneOK, m.Name+" is now "+pages.RoleLabel(role)+"."+note)
 	}
 	redirect(w, r, "/team")
 }
@@ -221,8 +243,9 @@ func (s *Server) memberReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := secret.RandomToken(32)
-	if err := s.DB.CreatePasswordReset(r.Context(), secret.HashToken(token), m.UserID, time.Now().Add(memberResetLifetime).Unix()); err != nil {
-		s.fail(w, r, err)
+	sess := sessionFrom(r)
+	err := s.DB.CreatePasswordResetBy(r.Context(), sess.TeamID, sess.UserID, m.UserID, secret.HashToken(token), time.Now().Add(memberResetLifetime).Unix())
+	if s.managedNoMore(w, r, err) {
 		return
 	}
 	s.Log.Info("reset link made", "member", m.UserID, "by", sessionFrom(r).UserID)
@@ -243,8 +266,12 @@ func (s *Server) memberRemove(w http.ResponseWriter, r *http.Request) {
 		redirect(w, r, "/team")
 		return
 	}
-	err := s.DB.RemoveMember(r.Context(), sessionFrom(r).TeamID, m.UserID)
+	sess := sessionFrom(r)
+	err := s.DB.RemoveMemberBy(r.Context(), sess.TeamID, sess.UserID, m.UserID)
 	switch {
+	case errors.Is(err, db.ErrNotAllowed):
+		s.managedNoMore(w, r, err)
+		return
 	case errors.Is(err, db.ErrLastOwner):
 		setFlash(w, r, ui.ToneWarn, m.Name+" is the only Owner and cannot be removed.")
 	case errors.Is(err, db.ErrNotFound):

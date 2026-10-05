@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"html"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -19,7 +20,7 @@ var newTokenRE = regexp.MustCompile(`id="new-token">(msd_[A-Za-z0-9_-]+)<`)
 // newToken makes an API token for the owner through the Account page.
 func (a *app) newToken(ability string) string {
 	a.t.Helper()
-	res, body := a.post("/account", "/account/tokens", url.Values{"token_name": {"ci"}, "token_ability": {ability}, "token_expires": {"never"}})
+	res, body := a.post("/account", "/account/tokens", url.Values{"token_name": {"ci"}, "token_ability": {ability}, "token_expires": {"never"}, "token_password": {testPassword}})
 	wantStatus(a.t, res, http.StatusOK)
 	m := newTokenRE.FindStringSubmatch(body)
 	if m == nil {
@@ -30,7 +31,7 @@ func (a *app) newToken(ability string) string {
 
 func (p person) newToken(ability string) string {
 	p.a.t.Helper()
-	res, body := p.post("/account/tokens", url.Values{"token_name": {"ci"}, "token_ability": {ability}, "token_expires": {"30"}})
+	res, body := p.post("/account/tokens", url.Values{"token_name": {"ci"}, "token_ability": {ability}, "token_expires": {"30"}, "token_password": {testPassword}})
 	wantStatus(p.a.t, res, http.StatusOK)
 	m := newTokenRE.FindStringSubmatch(body)
 	if m == nil {
@@ -72,11 +73,17 @@ func TestAPITokensOnTheAccountPage(t *testing.T) {
 		"no name":      {"token_name": {""}, "token_ability": {"read"}, "token_expires": {"never"}},
 		"bad ability":  {"token_name": {"x"}, "token_ability": {"root"}, "token_expires": {"never"}},
 		"bad lifetime": {"token_name": {"x"}, "token_ability": {"read"}, "token_expires": {"3650"}},
+		// A session alone does not make a token.
+		"no password":    {"token_name": {"x"}, "token_ability": {"read"}, "token_expires": {"never"}},
+		"wrong password": {"token_name": {"x"}, "token_ability": {"read"}, "token_expires": {"never"}, "token_password": {"not my password"}},
 	} {
 		res, body := a.post("/account", "/account/tokens", form)
 		if res.StatusCode != http.StatusUnprocessableEntity || newTokenRE.MatchString(body) {
 			t.Errorf("%s: status %d", name, res.StatusCode)
 		}
+	}
+	if list, _ := a.db.ListAPITokens(ctx, owner.ID, team); len(list) != 0 {
+		t.Fatalf("a refused form made a token: %+v", list)
 	}
 
 	token := a.newToken(db.AbilityDeploy)
@@ -119,7 +126,7 @@ func TestAPITokensOnTheAccountPage(t *testing.T) {
 	for i := 0; i < db.MaxAPITokens; i++ {
 		a.newToken(db.AbilityRead)
 	}
-	res, _ = a.post("/account", "/account/tokens", url.Values{"token_name": {"one more"}, "token_ability": {"read"}, "token_expires": {"never"}})
+	res, _ = a.post("/account", "/account/tokens", url.Values{"token_name": {"one more"}, "token_ability": {"read"}, "token_expires": {"never"}, "token_password": {testPassword}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
 }
 
@@ -488,10 +495,22 @@ func TestAPINeverReturnsSecrets(t *testing.T) {
 	password, _ := a.server.Box.OpenString(a.waitDatabase(database.ID).Password)
 	forbidden = append(forbidden, "plain-env-value-1", "plain-env-value-2", "plain-service-value", "plain-shared-value", password, testPassword)
 
+	// A deployment that failed, so its free-text error is read too. It
+	// fails on a shared variable that does not exist, with others set.
+	res, _ = a.post("/apps/"+gitApp.ID+"/environment", "/apps/"+gitApp.ID+"/environment", url.Values{"vars": {"SECRET=plain-env-value-1\nA={{team.T}}\nB={{team.NOPE}}"}, "build_vars": {"BUILD_SECRET=plain-env-value-2"}})
+	wantRedirect(t, res, "/apps/"+gitApp.ID+"/environment")
+	res, _ = a.post("/apps/"+gitApp.ID, "/apps/"+gitApp.ID+"/deploy", nil)
+	if res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("deploy: %d", res.StatusCode)
+	}
+	failed := a.waitDeployed(gitApp.ID)
+	if failed.Status != db.DeployFailed || failed.Error == "" {
+		t.Fatalf("the fixture deployment should have failed: %+v", failed)
+	}
 	paths := []string{
 		"/api/v1/me", "/api/v1/servers", "/api/v1/projects", "/api/v1/tags", "/api/v1/apps", "/api/v1/apps/" + gitApp.ID,
-		"/api/v1/apps/" + gitApp.ID + "/deployments", "/api/v1/databases", "/api/v1/databases/" + database.ID,
-		"/api/v1/services", "/api/v1/services/" + svc.ID,
+		"/api/v1/apps/" + gitApp.ID + "/deployments", "/api/v1/deployments/" + failed.ID,
+		"/api/v1/databases", "/api/v1/databases/" + database.ID, "/api/v1/services", "/api/v1/services/" + svc.ID,
 	}
 	// The walk must cover every GET route of the API.
 	gets := 0
@@ -500,8 +519,8 @@ func TestAPINeverReturnsSecrets(t *testing.T) {
 			gets++
 		}
 	}
-	if gets != len(paths)+1 { // + deployments/{id}, which has no row here
-		t.Fatalf("the API has %d GET routes and this test reads %d: add the new one here", gets, len(paths)+1)
+	if gets != len(paths) {
+		t.Fatalf("the API has %d GET routes and this test reads %d: add the new one here", gets, len(paths))
 	}
 	for _, path := range paths {
 		res, body := a.call(http.MethodGet, path, token)
@@ -563,5 +582,50 @@ func TestATokenActsAsItsPersonNow(t *testing.T) {
 	wantRedirect(t, res, "/team")
 	if role() != db.RoleMember {
 		t.Fatalf("after the role changed: %q", role())
+	}
+}
+
+// Changing or resetting a password, and turning the second step on, end
+// the API tokens with the sessions: a token asks for neither.
+func TestAPITokensEndWithThePassword(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ad := a.newPerson("Admin", db.RoleAdmin)
+	mem := a.newPerson("Member", db.RoleMember)
+	works := func(token string) bool {
+		res, _ := a.call(http.MethodGet, "/api/v1/me", token)
+		return res.StatusCode == http.StatusOK
+	}
+
+	// A reset through a link.
+	token := mem.newToken(db.AbilityDeploy)
+	res, body := ad.post("/team/members/"+mem.user.ID+"/reset", nil)
+	wantStatus(t, res, http.StatusOK)
+	link := linkRE.FindStringSubmatch(html.UnescapeString(body))[3]
+	fresh := a.newClient()
+	req, _ := http.NewRequest(http.MethodGet, a.url+"/reset/"+link, nil)
+	_, page := a.do(fresh, req)
+	if !works(token) {
+		t.Fatal("the token should work until the password is changed")
+	}
+	res, _ = a.postRaw(fresh, "/reset/"+link, url.Values{"_csrf": {csrfRE.FindStringSubmatch(page)[1]}, "password": {"a brand new password"}}, nil)
+	wantRedirect(t, res, "/login")
+	if works(token) {
+		t.Fatal("an API token outlived a password reset")
+	}
+
+	// A change on the Account page.
+	token = ad.newToken(db.AbilityRead)
+	res, _ = ad.post("/account/password", url.Values{"current": {testPassword}, "password": {"another long password"}})
+	wantRedirect(t, res, "/account")
+	if works(token) {
+		t.Fatal("an API token outlived a password change")
+	}
+
+	// Turning the second step on.
+	token = a.newToken(db.AbilityRead)
+	a.turnOnTwoStep()
+	if works(token) {
+		t.Fatal("an API token outlived turning the second step on")
 	}
 }

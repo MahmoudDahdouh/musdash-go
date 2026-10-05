@@ -12,6 +12,10 @@ import (
 // Owner: nobody could manage the install after it.
 var ErrLastOwner = errors.New("the team needs at least one owner")
 
+// ErrNotAllowed is returned when the person asking may not do this to this
+// member: an Admin to anybody above a Member, anybody to themselves.
+var ErrNotAllowed = errors.New("your role does not allow this")
+
 // ErrHasAccount is returned when an invitation names an email that already
 // has an account. With one team per install, that person is a member.
 var ErrHasAccount = errors.New("an account already uses this email")
@@ -39,9 +43,14 @@ type Invitation struct {
 	Email     string
 	Role      string
 	TokenHash string
+	// InvitedBy is the id of the member who made it. An invitation goes
+	// with its maker: when they are removed, or given a lower role, what
+	// they handed out while they held the higher one stops working.
 	InvitedBy string
 	CreatedAt int64
 	ExpiresAt int64
+	// InviterName is filled by ListInvitations.
+	InviterName string
 }
 
 // RoleRank orders the roles: a higher rank may do everything a lower one
@@ -56,6 +65,19 @@ func RoleRank(role string) int {
 		return 1
 	}
 	return 0
+}
+
+// MayInvite reports whether a person with actorRole may invite somebody
+// as role: an Admin a Member, an Owner a Member or an Admin. Nobody is
+// invited as an Owner: an Owner is made by an Owner changing a role.
+func MayInvite(actorRole, role string) bool {
+	switch role {
+	case RoleMember:
+		return RoleRank(actorRole) >= RoleRank(RoleAdmin)
+	case RoleAdmin:
+		return actorRole == RoleOwner
+	}
+	return false
 }
 
 // CanManage reports whether a person with actorRole may remove a member,
@@ -132,18 +154,84 @@ func keepsAnOwner(ctx context.Context, tx *sql.Tx, teamID, userID string) error 
 }
 
 // SetRole gives a member another role. The team's only owner keeps theirs.
+//
+// A role is authority over an account, and whoever could act on the
+// account under its old role must not carry that over:
+//   - Raised: the person's sessions, reset links and API tokens end. An
+//     Admin may make a reset link for a Member; held back until that
+//     Member is made an Owner, it would be a reset link for an Owner.
+//   - Lowered: the invitations they made are withdrawn. An Owner may
+//     invite an Admin; an Owner who was made a Member may not have one
+//     waiting.
 func (d *DB) SetRole(ctx context.Context, teamID, userID, role string) error {
 	if RoleRank(role) == 0 {
 		return errors.New("unknown role")
 	}
 	return d.Tx(ctx, func(tx *sql.Tx) error {
+		var old string
+		if err := tx.QueryRowContext(ctx, `SELECT role FROM team_members WHERE team_id = ? AND user_id = ?`, teamID, userID).Scan(&old); err != nil {
+			return notFound(err)
+		}
+		if role == old {
+			return nil
+		}
 		if role != RoleOwner {
 			if err := keepsAnOwner(ctx, tx, teamID, userID); err != nil {
 				return err
 			}
 		}
-		return affected(tx.ExecContext(ctx, `UPDATE team_members SET role = ? WHERE team_id = ? AND user_id = ?`, role, teamID, userID))
+		if err := affected(tx.ExecContext(ctx, `UPDATE team_members SET role = ? WHERE team_id = ? AND user_id = ?`, role, teamID, userID)); err != nil {
+			return err
+		}
+		if RoleRank(role) > RoleRank(old) {
+			for _, table := range []string{"sessions", "password_resets", "api_tokens"} {
+				if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE user_id = ?`, userID); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		_, err := tx.ExecContext(ctx, `DELETE FROM invitations WHERE team_id = ? AND invited_by = ?`, teamID, userID)
+		return err
 	})
+}
+
+// managing checks, inside the transaction that is about to act, that
+// actorID may still manage userID. The check a page made a moment ago is
+// not enough: a role can change between the page and the write.
+func managing(ctx context.Context, tx *sql.Tx, teamID, actorID, userID string) error {
+	var actorRole string
+	if err := tx.QueryRowContext(ctx, `SELECT role FROM team_members WHERE team_id = ? AND user_id = ?`, teamID, actorID).Scan(&actorRole); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotAllowed
+		}
+		return err
+	}
+	m := Member{UserID: userID}
+	if err := tx.QueryRowContext(ctx, `SELECT role FROM team_members WHERE team_id = ? AND user_id = ?`, teamID, userID).Scan(&m.Role); err != nil {
+		return notFound(err)
+	}
+	if !CanManage(actorRole, actorID, m) {
+		return ErrNotAllowed
+	}
+	return nil
+}
+
+// removeMember takes a person out of the team inside a transaction.
+func removeMember(ctx context.Context, tx *sql.Tx, teamID, userID string) error {
+	if err := keepsAnOwner(ctx, tx, teamID, userID); err != nil {
+		return err
+	}
+	if err := affected(tx.ExecContext(ctx, `DELETE FROM team_members WHERE team_id = ? AND user_id = ?`, teamID, userID)); err != nil {
+		return err
+	}
+	// What they invited goes with them: a link made before leaving must
+	// not be a way back in.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM invitations WHERE team_id = ? AND invited_by = ?`, teamID, userID); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = ? AND NOT EXISTS (SELECT 1 FROM team_members WHERE user_id = ?)`, userID, userID)
+	return err
 }
 
 // RemoveMember takes a person out of the team. An account is a member of
@@ -151,23 +239,40 @@ func (d *DB) SetRole(ctx context.Context, teamID, userID, role string) error {
 // and second step: one left behind could not sign in, and could not be
 // invited again while its email was taken.
 func (d *DB) RemoveMember(ctx context.Context, teamID, userID string) error {
+	return d.Tx(ctx, func(tx *sql.Tx) error { return removeMember(ctx, tx, teamID, userID) })
+}
+
+// RemoveMemberBy is RemoveMember for a person who asks through the Team
+// page. It returns ErrNotAllowed when they may not, as things are now.
+func (d *DB) RemoveMemberBy(ctx context.Context, teamID, actorID, userID string) error {
 	return d.Tx(ctx, func(tx *sql.Tx) error {
-		if err := keepsAnOwner(ctx, tx, teamID, userID); err != nil {
+		if err := managing(ctx, tx, teamID, actorID, userID); err != nil {
 			return err
 		}
-		if err := affected(tx.ExecContext(ctx, `DELETE FROM team_members WHERE team_id = ? AND user_id = ?`, teamID, userID)); err != nil {
+		return removeMember(ctx, tx, teamID, userID)
+	})
+}
+
+// CreatePasswordResetBy stores a reset link that actorID makes for another
+// member, when they may.
+func (d *DB) CreatePasswordResetBy(ctx context.Context, teamID, actorID, userID, tokenHash string, expiresAt int64) error {
+	return d.Tx(ctx, func(tx *sql.Tx) error {
+		if err := managing(ctx, tx, teamID, actorID, userID); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = ? AND NOT EXISTS (SELECT 1 FROM team_members WHERE user_id = ?)`, userID, userID)
+		_, err := tx.ExecContext(ctx, `INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES (?, ?, ?)`, tokenHash, userID, expiresAt)
 		return err
 	})
 }
 
-// EndSessions signs a person out everywhere, after their password or
-// second step was changed for them.
-func (d *DB) EndSessions(ctx context.Context, userID string) error {
-	_, err := d.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, userID)
-	return err
+// DisableTOTPBy turns off another member's second step, when actorID may.
+func (d *DB) DisableTOTPBy(ctx context.Context, teamID, actorID, userID string) error {
+	return d.Tx(ctx, func(tx *sql.Tx) error {
+		if err := managing(ctx, tx, teamID, actorID, userID); err != nil {
+			return err
+		}
+		return disableTOTP(ctx, tx, userID)
+	})
 }
 
 // CreateInvitation stores an invitation. An email that already has an
@@ -202,18 +307,20 @@ func scanInvitation(row interface{ Scan(...any) error }) (Invitation, error) {
 	return m, notFound(err)
 }
 
-// ListInvitations returns the team's invitations that can still be used.
+// ListInvitations returns the team's invitations that can still be used,
+// each with the name of who made it.
 func (d *DB) ListInvitations(ctx context.Context, teamID string) ([]Invitation, error) {
-	rows, err := d.QueryContext(ctx, `SELECT `+invitationColumns+` FROM invitations
-		WHERE team_id = ? AND expires_at > ? ORDER BY created_at, id`, teamID, now())
+	rows, err := d.QueryContext(ctx, `SELECT i.id, i.team_id, i.email, i.role, i.token_hash, i.invited_by, i.created_at, i.expires_at, coalesce(u.name, '')
+		FROM invitations i LEFT JOIN users u ON u.id = i.invited_by
+		WHERE i.team_id = ? AND i.expires_at > ? ORDER BY i.created_at, i.id`, teamID, now())
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []Invitation
 	for rows.Next() {
-		m, err := scanInvitation(rows)
-		if err != nil {
+		var m Invitation
+		if err := rows.Scan(&m.ID, &m.TeamID, &m.Email, &m.Role, &m.TokenHash, &m.InvitedBy, &m.CreatedAt, &m.ExpiresAt, &m.InviterName); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -240,6 +347,17 @@ func (d *DB) AcceptInvitation(ctx context.Context, tokenHash, name, passwordHash
 	err := d.Tx(ctx, func(tx *sql.Tx) error {
 		inv, err := scanInvitation(tx.QueryRowContext(ctx, `SELECT `+invitationColumns+` FROM invitations
 			WHERE token_hash = ? AND expires_at > ?`, tokenHash, now()))
+		if err != nil {
+			return err
+		}
+		// Asked again where the account is made: the maker must still be
+		// somebody who may give this role. Removal and demotion withdraw
+		// their invitations already; this holds whatever else changes.
+		var makerRole string
+		err = tx.QueryRowContext(ctx, `SELECT role FROM team_members WHERE team_id = ? AND user_id = ?`, inv.TeamID, inv.InvitedBy).Scan(&makerRole)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && !MayInvite(makerRole, inv.Role)) {
+			return ErrNotFound
+		}
 		if err != nil {
 			return err
 		}

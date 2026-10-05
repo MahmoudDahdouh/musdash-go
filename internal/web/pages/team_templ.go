@@ -579,7 +579,7 @@ func Team(s ui.Shell, v TeamView, invite, rename ui.Form) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, " is signed out everywhere and their account, API tokens and second step are deleted. What they deployed stays. To let them back in, invite them again.</p>")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, " is signed out everywhere and their account, API tokens and second step are deleted. Invitations they made stop working. What they deployed stays. To let them back in, invite them again.</p>")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -656,15 +656,15 @@ func Team(s ui.Shell, v TeamView, invite, rename ui.Form) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					if inv.InvitedBy != "" {
+					if inv.InviterName != "" {
 						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "· invited by ")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var29 string
-						templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(inv.InvitedBy)
+						templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(inv.InviterName)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/team.templ`, Line: 166, Col: 40}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/team.templ`, Line: 166, Col: 42}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 						if templ_7745c5c3_Err != nil {

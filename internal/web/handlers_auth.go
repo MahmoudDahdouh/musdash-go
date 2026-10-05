@@ -326,13 +326,13 @@ func (s *Server) accountPassword(w http.ResponseWriter, r *http.Request) {
 	// A stolen or unattended session must not be able to guess the current
 	// password without limit.
 	key := "password:" + sess.UserID
-	if ok, wait := s.logins.Take(key); !ok {
+	if ok, wait := s.accounts.Take(key); !ok {
 		f.Fail("current", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		s.renderAccount(w, r, http.StatusTooManyRequests, ui.Form{}, f, ui.Form{})
 		return
 	}
 	if s.checkPassword(r, sess.User.PasswordHash, r.PostFormValue("current")) {
-		s.logins.Reset(key)
+		s.accounts.Reset(key)
 	} else {
 		f.Fail("current", "That is not your current password.")
 	}
@@ -352,6 +352,6 @@ func (s *Server) accountPassword(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	setFlash(w, r, ui.ToneOK, "Password changed. Other devices were signed out.")
+	setFlash(w, r, ui.ToneOK, "Password changed. Other devices were signed out, and your API tokens were revoked.")
 	redirect(w, r, "/account")
 }

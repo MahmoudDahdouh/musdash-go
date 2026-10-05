@@ -137,7 +137,7 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 											ID: "remove-" + m.UserID, Title: "Remove " + m.Name, Action: "/team/members/" + m.UserID + "/delete",
 											CSRF: s.CSRF, Match: m.Email, Submit: "Remove member", Trigger: "Remove",
 										}) {
-											<p>{ m.Name } is signed out everywhere and their account, API tokens and second step are deleted. What they deployed stays. To let them back in, invite them again.</p>
+											<p>{ m.Name } is signed out everywhere and their account, API tokens and second step are deleted. Invitations they made stop working. What they deployed stays. To let them back in, invite them again.</p>
 										}
 									</div>
 								}
@@ -162,8 +162,8 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 									<p class="truncate font-semibold">{ inv.Email }</p>
 									<p class="muted text-sm">
 										{ RoleLabel(inv.Role) }
-										if inv.InvitedBy != "" {
-											· invited by { inv.InvitedBy }
+										if inv.InviterName != "" {
+											· invited by { inv.InviterName }
 										}
 										· made { ui.Ago(inv.CreatedAt) }
 									</p>

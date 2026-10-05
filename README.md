@@ -250,7 +250,8 @@ The account made at setup is the team's first Owner. Others join by invitation: 
 | Remove a member, make them a password reset link, turn off their second step | | Members | anybody else |
 | Change a role | | | yes |
 
-- Removing a member deletes their account, their sessions and their API tokens. What they deployed stays.
+- Removing a member deletes their account, their sessions and their API tokens, and withdraws the invitations they made. What they deployed stays.
+- Giving somebody a higher role signs them out and ends their API tokens and reset links, so nothing made under the lower role carries over. Giving them a lower one withdraws the invitations they made.
 - The team always has an Owner: the last one cannot be removed or given another role.
 - Roles decide who manages the team and its servers. They do not limit what a container is given: a Member deploys containers on the team's servers under the same rules as everybody.
 - One install has one team.
@@ -286,7 +287,7 @@ MAIL_URL=smtp://{{team.SMTP_HOST}}:587
 - Team and server variables are changed by Admins, and their values are shown only to Admins. That is not secrecy from Members: a Member can name one in an app they deploy, and the app then reads it. Keep there what the whole team may use.
 - The name is replaced at each deployment with the value stored then, so a changed value takes effect at the next deploy. A preview resolves the names as its app does.
 - A deployment that names a variable which does not exist fails and says which. Saving an app's variables warns about such names.
-- Only this exact form is read. `{{ .Name }}` and the like, for a template engine, are left alone. A shared variable's own value cannot name another one.
+- Only this exact form is read. `{{ .Name }}` and the like, for a template engine, are left alone. An app that needs this very text for itself puts a backslash before it: `\{{environment.name}}` reaches it as `{{environment.name}}`. A shared variable's own value cannot name another one.
 
 ## Tags
 
@@ -294,7 +295,7 @@ An app's and a service's Settings page takes tags: short names such as `nightly`
 
 ## The API
 
-For scripts and pipelines. Under Account, make a token: it is shown once, and stored as a hash. A token may read, or read and deploy; it can have an end date; it acts as the person who made it and stops working when they leave the team.
+For scripts and pipelines. Under Account, make a token: it asks for your password, is shown once, and is stored as a hash. A token may read, or read and deploy; it can have an end date; it acts as the person who made it. It stops working when they leave the team, change or reset their password, turn on two-step sign-in, or are given a higher role.
 
 ```bash
 curl -H "Authorization: Bearer $MUSDASH_TOKEN" https://musdash.example.com/api/v1/apps

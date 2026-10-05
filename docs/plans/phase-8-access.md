@@ -161,7 +161,7 @@ func (s *Server) handle(mux *http.ServeMux, pattern string, who access, h http.H
 - [x] Tests: no token, a wrong one, an expired one, a removed person's → 401, indistinguishable; a `read` token cannot deploy; a session cookie is not accepted by the API and a token is not accepted by a page; another team's id → 404; no response carries a sealed value or a hash; the per-token limit; the done-when: a deploy through the API.
 
 ### Task 6 — End
-- [ ] Independent review; README and CLAUDE.md; RSS on Linux.
+- [x] Independent review; README and CLAUDE.md; RSS on Linux.
 
 ## Outcome
 
@@ -186,6 +186,24 @@ func (s *Server) handle(mux *http.ServeMux, pattern string, who access, h http.H
   - No outgoing mail: invitation and reset links are shown to whoever made them, to pass on.
   - Databases are not tagged.
 - Built at the same time as phase 9, in the same repository. This phase is on `main`; phase 9 is on a branch of its own and will meet three things here when it is merged: migration `0013_access.sql` (its own planned migration needs the next number), the route table in `internal/web/server.go` (new routes are registered with `handle` and a role), and `ui.Shell`'s `Admin` and `Owner`.
+
+## Independent review
+
+A second reader went through the phase against the threat list below. It found no route a role could reach that the table says it cannot, no session before the second step, no way to forge or move the cookie between password and code, no code or recovery code accepted twice, no token that worked after removal, expiry or revocation, no cookie accepted by the API or token by a page, no row of another team reachable through the API or a tag, and no secret in a log, a redirect or a flash. What it did find had one root, authority that was checked once and then held on to. All fixed, each with the reviewer's own proof turned into a test:
+
+| Finding | Fix |
+|---|---|
+| A reset link an Admin made for a Member still worked after that Member was made an Owner: the Admin chose the new Owner's password and signed in as one. A session the Admin already held on that account was promoted with it | Giving somebody a higher role ends their sessions, reset links and API tokens (`db.SetRole`). They sign in again |
+| The limit on wrong codes lived in the limiter that also counts by address. That table is emptied when it is full, so requests from about four thousand addresses bought five more guesses, again and again | Attempts at an account's password and second step are counted in a limiter of their own, whose keys are accounts that exist: nobody outside can fill it |
+| An invitation outlived the person who made it. An Owner about to be removed could keep an Admin invitation as a way back; a demoted Owner could undo the demotion | An invitation records who made it. Removing that member, or giving them a lower role, withdraws their invitations; and when the account is made, the maker must still be somebody who may give that role |
+| Who may remove a member, reset their password or turn off their second step was checked when the page was loaded, not where it was written: a promotion committing in between would let an Admin remove an Owner | `RemoveMemberBy`, `CreatePasswordResetBy` and `DisableTOTPBy` ask again inside the transaction that acts |
+| API tokens survived everything that "signs you out everywhere": a password reset, a password change, turning the second step on. And a token needed only a session to make | All three end the person's tokens; making a token asks for the password |
+| An app with a variable such as `TITLE={{ environment.name }}`, meant for its own template engine, would fail its next deployment with no way to say "this is my text" | A backslash keeps the text: `\{{environment.name}}` reaches the app as `{{environment.name}}`, and the deployment's error says so |
+| `EndSessions` had no caller; the test that reads every API answer for secrets skipped a deployment and never saw a failed one's error text | The function is gone; the test now reads a failed deployment's answer too |
+
+An automated check of the shared-variable pages pointed at what the decisions table already says, that a Member can read a team or server variable by naming it in an app they deploy. The behaviour stays, since that is what those variables are for; the page where an Admin keeps them now says that every member can use them.
+
+Not examined by the review: whether Docker's or Compose's own error text can repeat a variable's value into a deployment log or a notification (true of ordinary variables since phase 4, and shared ones are no different there); a Member's app on a sibling subdomain of the dashboard setting cookies for it.
 
 ## Review focus
 

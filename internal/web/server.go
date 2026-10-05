@@ -48,6 +48,9 @@ type Server struct {
 	GitHub *source.GitHub
 
 	logins *auth.Limiter
+	// accounts counts attempts at one account's password and second step.
+	// Its keys are accounts that exist, so nobody outside can fill it.
+	accounts *auth.Limiter
 	// hooks limits the endpoints other machines call; hookBodies lets one
 	// webhook body be read at a time.
 	hooks      *auth.Limiter
@@ -70,6 +73,7 @@ type Server struct {
 // Handler builds the route table.
 func (s *Server) Handler() http.Handler {
 	s.logins = auth.NewLimiter(5, 15*time.Minute)
+	s.accounts = auth.NewLimiter(5, 15*time.Minute)
 	s.hooks = auth.NewLimiter(120, time.Minute)
 	s.apiCalls = auth.NewLimiter(apiPerMinute, time.Minute)
 	s.apiAddrs = auth.NewLimiter(apiPerMinuteByAddress, time.Minute)
