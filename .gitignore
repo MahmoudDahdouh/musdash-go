@@ -13,3 +13,6 @@
 
 # Local preview configuration for Claude Code
 /.claude/
+
+# Screenshots from the VPS test's browser sweep (4.5 MB of PNG; the report has the results)
+/docs/testing/screenshots/
