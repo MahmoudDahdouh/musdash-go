@@ -887,12 +887,10 @@ func (s *Server) syncRoutes(r *http.Request, serverID string) {
 	}
 }
 
-func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
-	v, ok := s.loadApp(w, r)
-	if !ok {
-		return
-	}
-	var f ui.Form
+// addAppDomain reads the Add domain form and gives the app the domain. What
+// is wrong with the form is recorded in f; an error is one of the server's.
+// app is one a loader returned for the team.
+func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) error {
 	raw := strings.TrimSpace(r.PostFormValue("host"))
 	tls := r.PostFormValue("tls") == "1"
 	www := r.PostFormValue("redirect_www") == "1"
@@ -906,36 +904,49 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 	// The password is not put back in the form: it is typed again.
 	f.Set("auth_user", strings.TrimSpace(r.PostFormValue("auth_user")))
 
-	host := s.checkHost(r.Context(), &f, "host", raw)
-	path := domainPath(&f, "path", r.PostFormValue("path"))
-	authUser, authHash := domainAuth(&f, r.PostFormValue("auth_user"), r.PostFormValue("auth_password"))
+	host := s.checkHost(r.Context(), f, "host", raw)
+	path := domainPath(f, "path", r.PostFormValue("path"))
+	authUser, authHash := domainAuth(f, r.PostFormValue("auth_user"), r.PostFormValue("auth_password"))
 	// "www." is added in front for the redirect; the result must still fit
 	// in a host name.
 	if f.OK() && www && !strings.HasPrefix(host, "www.") && !proxy.ValidHost("www."+host) {
 		f.Fail("host", "This name is too long to also carry a www form. Untick the redirect or use a shorter name.")
 	}
-	if n, err := s.DB.CountDomains(r.Context(), db.KindApp, v.App.ID); err == nil && n >= maxDomains {
+	if n, err := s.DB.CountDomains(r.Context(), db.KindApp, app.ID); err == nil && n >= maxDomains {
 		f.Fail("host", "An app can have up to 20 domains.")
 	}
-	if f.OK() {
-		if isGeneratedDomain(host) {
-			tls = false
-		}
-		_, err := s.DB.AddDomain(r.Context(), sessionFrom(r).TeamID, v.App.ServerID, db.Domain{
-			ResourceKind: db.KindApp, ResourceID: v.App.ID, Host: host, Path: path, StripPrefix: strip && path != "",
-			TLS: tls, RedirectWWW: www, AuthUser: authUser, AuthHash: authHash,
-		})
-		switch {
-		case db.IsUnique(err) && path != "":
-			f.Fail("path", "This path of the domain is already routed to something.")
-		case db.IsUnique(err), errors.Is(err, db.ErrHostTaken):
-			f.Fail("host", domainTaken)
-		case errors.Is(err, db.ErrHostElsewhere):
-			f.Fail("host", "This domain is routed on another server. A domain's paths are all served by the server its DNS points at.")
-		case err != nil:
-			s.fail(w, r, err)
-			return
-		}
+	if !f.OK() {
+		return nil
+	}
+	if isGeneratedDomain(host) {
+		tls = false
+	}
+	_, err := s.DB.AddDomain(r.Context(), sessionFrom(r).TeamID, app.ServerID, db.Domain{
+		ResourceKind: db.KindApp, ResourceID: app.ID, Host: host, Path: path, StripPrefix: strip && path != "",
+		TLS: tls, RedirectWWW: www, AuthUser: authUser, AuthHash: authHash,
+	})
+	switch {
+	case db.IsUnique(err) && path != "":
+		f.Fail("path", "This path of the domain is already routed to something.")
+	case db.IsUnique(err), errors.Is(err, db.ErrHostTaken):
+		f.Fail("host", domainTaken)
+	case errors.Is(err, db.ErrHostElsewhere):
+		f.Fail("host", "This domain is routed on another server. A domain's paths are all served by the server its DNS points at.")
+	case err != nil:
+		return err
+	}
+	return nil
+}
+
+func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadApp(w, r)
+	if !ok {
+		return
+	}
+	var f ui.Form
+	if err := s.addAppDomain(r, v.App, &f); err != nil {
+		s.fail(w, r, err)
+		return
 	}
 	if !f.OK() {
 		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, f, ui.Form{})
@@ -962,6 +973,13 @@ func (s *Server) appDomainDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	s.syncRoutes(r, v.App.ServerID)
 	setFlash(w, r, ui.ToneOK, "Domain removed.")
+	// Back to where it was removed from: the project's Domains tab posts
+	// here too, and says so. The address is built here, never taken from
+	// the form.
+	if r.PostFormValue("from") == "project" {
+		redirect(w, r, "/projects/"+v.Project.ID+"/domains")
+		return
+	}
 	redirect(w, r, "/apps/"+v.App.ID+"/settings#domains")
 }
 

@@ -157,6 +157,8 @@ func (s *Server) Handler() http.Handler {
 	handle("GET /environments/{id}/switch/resources", member, s.switchResources)
 	handle("POST /projects/{id}", member, s.projectUpdate)
 	handle("GET /projects/{id}/settings", member, s.projectSettings)
+	handle("GET /projects/{id}/domains", member, s.projectDomains)
+	handle("POST /projects/{id}/domains", member, s.projectDomainAdd)
 	handle("POST /projects/{id}/delete", member, s.projectDelete)
 	handle("POST /projects/{id}/environments", member, s.environmentCreate)
 	handle("POST /environments/{id}/delete", member, s.environmentDelete)

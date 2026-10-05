@@ -71,6 +71,7 @@ func projectTabs(p db.Project, envID string) []ui.Tab {
 	}
 	return []ui.Tab{
 		{Key: "resources", Label: "Resources", Href: resources, Icon: "dashboard"},
+		{Key: "domains", Label: "Domains", Href: "/projects/" + p.ID + "/domains", Icon: "globe"},
 		{Key: "settings", Label: "Settings", Href: "/projects/" + p.ID + "/settings", Icon: "settings"},
 	}
 }
@@ -94,6 +95,126 @@ templ ProjectShow(s ui.Shell, p db.Project, env db.Environment, res Resources) {
 			}
 		} else {
 			@ResourceTiles(res)
+		}
+	}
+}
+
+// AppChoice is an app a domain can be added to from the project's tab.
+type AppChoice struct {
+	ID   string
+	Name string
+	Env  string
+}
+
+func appChoiceOptions(apps []AppChoice) []ui.Option {
+	opts := make([]ui.Option, 0, len(apps))
+	for _, a := range apps {
+		opts = append(opts, ui.Option{Value: a.ID, Label: a.Name + " in " + a.Env})
+	}
+	return opts
+}
+
+func projectDomainOwner(d db.ProjectDomain) string {
+	if d.OwnerKind == db.KindService {
+		return "/services/" + d.OwnerID + "/settings"
+	}
+	return "/apps/" + d.OwnerID + "/settings#domains"
+}
+
+func projectDomainURL(d db.ProjectDomain) string { return domainURL(d.Domain) }
+
+// ProjectDomains is every address of what a project runs, in one list: an
+// app's domains and a service's endpoints, in whichever environment. f is
+// the Add domain form.
+templ ProjectDomains(s ui.Shell, p db.Project, list []db.ProjectDomain, apps []AppChoice, f ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader(p.Name, p.Description) {
+			if len(apps) > 0 {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "add-domain"}) {
+					Add domain
+				}
+			}
+		}
+		@ui.Tabs(projectTabs(p, ""), "domains")
+		if len(list) == 0 {
+			if len(apps) > 0 {
+				@ui.EmptyState("globe", "No domain yet", "Give an app a domain to reach it from outside. Point the domain's DNS at the app's server first, so its certificate can be issued.") {
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "add-domain"}) {
+						Add domain
+					}
+				}
+			} else {
+				@ui.EmptyState("globe", "No domain yet", "A domain leads to an app or to a service. Add one of those to the project first.")
+			}
+		} else {
+			<section class="card">
+				@ui.Table("Domain", "Leads to", "Environment", "", "") {
+					for _, d := range list {
+						<tr>
+							<td>
+								<a class="fact break-all" href={ templ.SafeURL(projectDomainURL(d)) } target="_blank" rel="noopener">{ d.Host + d.Path }</a>
+							</td>
+							<td>
+								<a class="inline-flex items-center gap-2 text-ink" href={ templ.SafeURL(projectDomainOwner(d)) }>
+									@ui.Icon(KindIcon(d.OwnerKind), "text-ink-mute")
+									<span class="font-semibold">{ d.OwnerName }</span>
+									if d.Endpoint != "" {
+										<span class="fact text-ink-mute">{ d.Endpoint }</span>
+									}
+								</a>
+							</td>
+							<td>
+								<a class="fact" href={ templ.SafeURL("/projects/" + p.ID + "/e/" + d.EnvID) }>{ d.EnvName }</a>
+							</td>
+							<td>
+								<span class="flex flex-wrap gap-1">
+									if d.TLS {
+										@ui.Badge("HTTPS", ui.ToneOK)
+									} else {
+										@ui.Badge("HTTP", ui.ToneNeutral)
+									}
+									if d.AuthUser != "" {
+										@ui.Badge("Password", ui.ToneNeutral)
+									}
+									if d.RedirectWWW {
+										@ui.Badge("www redirect", ui.ToneNeutral)
+									}
+									if d.StripPrefix {
+										@ui.Badge("Path removed", ui.ToneNeutral)
+									}
+								</span>
+							</td>
+							<td class="text-right">
+								if d.OwnerKind == db.KindApp {
+									<form method="post" action={ templ.SafeURL("/apps/" + d.OwnerID + "/domains/" + d.ID + "/delete") }>
+										@ui.CSRF(s.CSRF)
+										<input type="hidden" name="from" value="project"/>
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove "+d.Host+d.Path+"?", d.OwnerName+" stops answering at this address at once.", "Remove domain", true)}) {
+											Remove
+										}
+									</form>
+								} else {
+									@ui.LinkButton(projectDomainOwner(d), ui.ButtonProps{Small: true}) {
+										Change
+									}
+								}
+							</td>
+						</tr>
+					}
+				}
+			</section>
+		}
+		if len(apps) > 0 {
+			@ui.FormDialog(ui.DialogProps{ID: "add-domain", Title: "Add domain", Description: "Point the domain's DNS at the app's server first, so its certificate can be issued. A www redirect, a password and path removal are set in the app's own Settings.", Action: "/projects/" + p.ID + "/domains", CSRF: s.CSRF, Submit: "Add domain", Open: !f.OK()}) {
+				@ui.Field(ui.FieldProps{Label: "App", For: "domain-app", Error: f.E("app")}) {
+					@ui.SelectNamed("domain-app", "app", appChoiceOptions(apps), f.V("app"), nil)
+				}
+				@ui.TextField(f, "Domain", "", ui.InputProps{ID: "domain-host", Name: "host", Mono: true, Required: true, Placeholder: "app.example.com"})
+				@ui.TextField(f, "Only under this path", "Optional. With /api, the app answers app.example.com/api and what is below it.", ui.InputProps{ID: "domain-path", Name: "path", Mono: true, Placeholder: "/api"})
+				@ui.Checkbox("tls", f.V("tls") != "0", nil) {
+					Serve over HTTPS with an automatic certificate
+				}
+			}
 		}
 	}
 }
