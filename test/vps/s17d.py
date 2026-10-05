@@ -1,0 +1,23 @@
+exec(open("s17a.py").read().split("setvars(f\"/apps/{A}/environment\"")[0])
+f = [x for x in parse_forms(c.get(f"/apps/{A}/settings", follow=True).text) if x["action"] == f"/apps/{A}/settings"][0]
+c.post_form(f, health_path="/does-not-exist", health_timeout="45")
+old = shout(f"docker ps --format '{{{{.Names}}}}' | grep musdash-{A}"); print("old container", old)
+fd = [x for x in parse_forms(c.get(f"/apps/{A}/environment", follow=True).text) if x["action"] == f"/apps/{A}/deploy"][0]
+n0 = shout("ls /var/lib/musdash/logs/deployments | wc -l"); c.post_form(fd, follow=False)
+wait_for(lambda: shout("ls /var/lib/musdash/logs/deployments | wc -l") != n0, 30, 1)
+logf = shout("ls -t /var/lib/musdash/logs/deployments/*.log | head -1")
+wait_for(lambda: "Waiting for GET" in shout(f"cat {logf}"), 40, 1)
+pid0 = shout("systemctl show -p MainPID --value musdash-server"); print("kill -9", pid0, time.strftime("%H:%M:%S"), shout(f"tail -2 {logf}"))
+shout(f"kill -9 {pid0}")
+time.sleep(4)
+pid1 = shout("systemctl show -p MainPID --value musdash-server"); print("new pid", pid1, "healthz", Client().get("/healthz").status)
+print("containers now:", shout(f"docker ps -a --format '{{{{.Names}}}} {{{{.Status}}}}' | grep musdash-{A}"))
+wait_for(lambda: re.search(r"Failed:|Deployed\.", shout(f"tail -3 {logf}")) and 1, 150, 4)
+time.sleep(3)
+print("log tail:\n" + shout(f"tail -8 {logf}"))
+cs = shout(f"docker ps -a --format '{{{{.Names}}}} {{{{.Status}}}}' | grep musdash-{A}"); print("containers after:", cs)
+jobs = shout("journalctl -u musdash-server --since '-4min' --no-pager | grep -iE 'requeue|recover|job' | tail -6")
+print(jobs)
+c2 = owner_client(); 
+st = flash(c2.get(f"/apps/{A}/deployments", follow=True))
+check("S17.1", old in cs and cs.count("\n") == 0 and Client().get("/healthz").status == 200, f"after kill -9 mid-deploy: old container still up and no orphaned new container: {cs!r}")

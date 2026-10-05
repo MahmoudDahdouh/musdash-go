@@ -1,0 +1,20 @@
+exec(open("s17a.py").read().split("setvars(f\"/apps/{A}/environment\"")[0])
+n = shout(f"docker ps --format '{{{{.Names}}}}' | grep musdash-{A}")
+pol = shout(f"docker inspect {n} --format '{{{{.HostConfig.RestartPolicy.Name}}}}'")
+print("start:", n, "status", status(), "policy", pol)
+shout(f"docker kill {n}")
+seen = []
+for i in range(30):
+    seen.append((status(), shout(f"docker ps -a --filter name=musdash-{A} --format '{{{{.Status}}}}'")[:24])); time.sleep(2)
+uniq = [s for i, s in enumerate(seen) if i == 0 or s != seen[i - 1]]; print(uniq)
+up = shout(f"docker ps --filter name=musdash-{A} --format '{{{{.Status}}}}'")
+check("S17.4a", up.startswith("Up"), f"docker kill: restart policy ({pol}) brings the container back: {up!r}")
+check("S17.4b", status() == "Running" and any(s[0] != "Running" for s in seen), f"app status followed the kill and the recovery: {uniq}")
+print("final status", status())
+# S17.5: docker rm -f
+n = shout(f"docker ps --format '{{{{.Names}}}}' | grep musdash-{A}")
+shout(f"docker rm -f {n}"); time.sleep(8)
+st = status(); print("after rm -f:", st)
+check("S17.5a", st != "Running", f"status reflects a removed container: {st!r}", sev="S3")
+print(deploy()); time.sleep(3)
+check("S17.5b", status() == "Running" and shout(f"docker ps --filter name=musdash-{A} --format '{{{{.Status}}}}'").startswith("Up"), f"redeploy recovers: {status()}")

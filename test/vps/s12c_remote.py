@@ -1,0 +1,3 @@
+from lib import *
+c = owner_client(); st = state()
+print(sh("""docker rm -f t-remote >/dev/null 2>&1; docker run -d --name t-remote --privileged -e DOCKER_TLS_CERTDIR= -p 2222:22 docker:29-dind >/dev/null && sleep 6 && docker exec t-remote sh -c 'apk add --no-cache openssh bash git curl >/dev/null 2>&1; ssh-keygen -A >/dev/null; mkdir -p /root/.ssh; chmod 700 /root/.ssh; printf "PermitRootLogin prohibit-password\\nPasswordAuthentication no\\n" >> /etc/ssh/sshd_config; passwd -u root >/dev/null 2>&1; /usr/sbin/sshd; docker version --format "{{.Server.Version}}" ; docker compose version --short; ss -tln | grep :22'""", timeout=300)[1])
