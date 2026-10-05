@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 )
@@ -33,14 +34,14 @@ var deliveryIDRE = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
 // readSigned reads a webhook body and checks its signature against the
 // secret. Bodies are read one at a time: each is bounded, and so is what all
 // of them together can hold in memory.
-func (s *Server) readSigned(w http.ResponseWriter, r *http.Request, secret []byte) (source.Push, bool) {
+func (s *Server) readSigned(w http.ResponseWriter, r *http.Request, secret []byte) (source.Event, bool) {
 	// Best effort: not every ResponseWriter can set a deadline.
 	http.NewResponseController(w).SetReadDeadline(time.Now().Add(hookReadTimeout))
 	select {
 	case s.hookBodies <- struct{}{}:
 		defer func() { <-s.hookBodies }()
 	case <-r.Context().Done():
-		return source.Push{}, false
+		return source.Event{}, false
 	}
 	body := http.MaxBytesReader(w, r.Body, maxWebhookBytes)
 	if len(secret) == 0 {
@@ -48,10 +49,10 @@ func (s *Server) readSigned(w http.ResponseWriter, r *http.Request, secret []byt
 		// read and hashed all the same: otherwise how long a large request
 		// takes would tell an id that has a secret from one that has none
 		// or does not exist.
-		source.ReadPush(body, hookDummyKey, r.Header.Get("X-Hub-Signature-256"))
-		return source.Push{}, false
+		source.ReadEvent(body, hookDummyKey, r.Header.Get("X-Hub-Signature-256"))
+		return source.Event{}, false
 	}
-	return source.ReadPush(body, secret, r.Header.Get("X-Hub-Signature-256"))
+	return source.ReadEvent(body, secret, r.Header.Get("X-Hub-Signature-256"))
 }
 
 // hookDummyKey stands in for the secret of a resource that has none.
@@ -144,6 +145,101 @@ func (s *Server) enqueuePush(w http.ResponseWriter, r *http.Request, apps []db.A
 	writeJSON(w, http.StatusOK, map[string]any{"deployments": queued})
 }
 
+// pullRequest acts on a pull request event: a preview is made or deployed
+// again when one is opened or pushed to, and removed when it is closed.
+//
+// only is the one app a webhook added by hand belongs to; without it the
+// event came through a GitHub App and concerns every app of the repository
+// that App serves.
+func (s *Server) pullRequest(w http.ResponseWriter, r *http.Request, sourceID string, pr source.PullRequest, only *db.App) {
+	ctx := r.Context()
+	none := func(note string) {
+		answer := map[string]any{"previews": 0}
+		if note != "" {
+			answer["note"] = note
+		}
+		writeJSON(w, http.StatusOK, answer)
+	}
+	if pr.Number <= 0 || pr.Repo == "" {
+		none("")
+		return
+	}
+	opened := pr.Action == "opened" || pr.Action == "reopened" || pr.Action == "synchronize"
+	if !opened && pr.Action != "closed" {
+		// Labels, reviews, edits: nothing that changes what is deployed.
+		none("")
+		return
+	}
+	var parents, previews []db.App
+	var err error
+	switch {
+	case only != nil && opened:
+		parents = []db.App{*only}
+	case only != nil:
+		var child db.App
+		if child, err = s.DB.Preview(ctx, only.ID, pr.Number); err == nil {
+			previews = []db.App{child}
+		} else if errors.Is(err, db.ErrNotFound) {
+			err = nil
+		}
+	case opened:
+		parents, err = s.DB.AppsForPullRequest(ctx, sourceID, pr.Repo, pr.BaseBranch)
+	default:
+		previews, err = s.DB.PreviewsForPullRequest(ctx, sourceID, pr.Repo, pr.Number)
+	}
+	if err != nil {
+		s.hookFail(w, r, err)
+		return
+	}
+	if len(parents) == 0 && len(previews) == 0 {
+		none("")
+		return
+	}
+	delivery := deliveryID(r)
+	if seen, err := s.DB.SeenDelivery(ctx, delivery); err != nil {
+		s.hookFail(w, r, err)
+		return
+	} else if seen {
+		none("this delivery was already handled")
+		return
+	}
+	fail := func(err error) {
+		forget, cancel := detached(r, 10*time.Second)
+		if ferr := s.DB.ForgetDelivery(forget, delivery); ferr != nil {
+			s.Log.Error("forget webhook delivery", "err", ferr)
+		}
+		cancel()
+		s.hookFail(w, r, err)
+	}
+	done, note := 0, ""
+	for _, parent := range parents {
+		_, err := s.Deploy.SyncPreview(ctx, parent, pr)
+		switch {
+		case errors.Is(err, deploy.ErrNoPreview):
+			// From a fork, into another branch, previews switched off.
+		case errors.Is(err, db.ErrPreviewLimit):
+			note = "this app has as many previews as it may have"
+		case err != nil:
+			fail(err)
+			return
+		default:
+			done++
+		}
+	}
+	for _, preview := range previews {
+		if err := s.Deploy.ClosePreview(ctx, preview); err != nil {
+			fail(err)
+			return
+		}
+		done++
+	}
+	answer := map[string]any{"previews": done}
+	if note != "" {
+		answer["note"] = note
+	}
+	writeJSON(w, http.StatusOK, answer)
+}
+
 // deployServiceFromOutside queues a deployment of a service for a push or
 // an API call. One that is already waiting will read the repository when
 // it starts, so nothing more is queued behind it.
@@ -169,9 +265,14 @@ func (s *Server) githubWebhook(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		key, err = s.Box.Open(src.WebhookSecret)
 	}
-	push, ok := s.readSigned(w, r, key)
+	ev, ok := s.readSigned(w, r, key)
 	if err != nil || !ok {
 		http.Error(w, "The signature does not match.", http.StatusUnauthorized)
+		return
+	}
+	push := ev.Push
+	if r.Header.Get("X-GitHub-Event") == "pull_request" {
+		s.pullRequest(w, r, src.ID, ev.PR, nil)
 		return
 	}
 	if r.Header.Get("X-GitHub-Event") != "push" || push.Branch == "" || push.Repo == "" {
@@ -219,15 +320,27 @@ func (s *Server) gitWebhook(w http.ResponseWriter, r *http.Request) {
 	if err == nil && sealed != "" {
 		key, err = s.Box.Open(sealed)
 	}
-	push, ok := s.readSigned(w, r, key)
+	ev, ok := s.readSigned(w, r, key)
 	if err != nil || !ok {
 		http.Error(w, "The signature does not match.", http.StatusUnauthorized)
 		return
 	}
+	push := ev.Push
 	if notJSON(r) {
 		// Signed correctly, but the event cannot be read in this encoding.
 		// Say so where the person looks: the host's delivery log.
 		writeJSON(w, http.StatusOK, map[string]any{"deployments": 0, "note": notJSONNote})
+		return
+	}
+	// A webhook added by hand that also sends pull request events. What
+	// the event is about is read from its body: hosts name their event
+	// headers differently.
+	if ev.PR.Number > 0 {
+		if svc.ID != "" || !git {
+			writeJSON(w, http.StatusOK, map[string]any{"previews": 0})
+			return
+		}
+		s.pullRequest(w, r, "", ev.PR, &app)
 		return
 	}
 	// Only a push to the resource's own branch deploys. The repository

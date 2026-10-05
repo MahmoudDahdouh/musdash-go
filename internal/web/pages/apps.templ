@@ -16,6 +16,16 @@ type AppView struct {
 	Domains []db.Domain
 	// Servers are the team's servers, filled in for the Settings page.
 	Servers []db.Server
+	// Parent is the app a preview belongs to; nil for an ordinary app.
+	Parent *db.App
+	// Previews are the app's previews, filled in for the Settings page.
+	Previews []PreviewRow
+}
+
+// PreviewRow is one preview in its parent's list.
+type PreviewRow struct {
+	App db.App
+	URL string // "" when the preview has no address
 }
 
 // buildServerOptions offers the app's own server first, then the others.
@@ -41,6 +51,15 @@ func domainURL(d db.Domain) string {
 
 func appTabs(v AppView) []ui.Tab {
 	b := v.base()
+	if v.App.IsPreview() {
+		// A preview has no variables, storage or tasks of its own.
+		return []ui.Tab{
+			{Key: "overview", Label: "Overview", Href: b},
+			{Key: "deployments", Label: "Deployments", Href: b + "/deployments"},
+			{Key: "logs", Label: "Logs", Href: b + "/logs"},
+			{Key: "settings", Label: "Settings", Href: b + "/settings"},
+		}
+	}
 	return []ui.Tab{
 		{Key: "overview", Label: "Overview", Href: b},
 		{Key: "deployments", Label: "Deployments", Href: b + "/deployments"},
@@ -114,6 +133,13 @@ templ AppHeader(csrf string, app db.App) {
 templ appFrame(s ui.Shell, v AppView, tab string) {
 	@ui.Layout(s) {
 		@AppHeader(s.CSRF, v.App)
+		if v.Parent != nil {
+			<p class="muted mb-4 text-sm">
+				The preview of pull request #{ strconv.Itoa(v.App.PRNumber) } of
+				<a class="link" href={ templ.SafeURL("/apps/" + v.Parent.ID) }>{ v.Parent.Name }</a>.
+				It runs with that app's variables and files, and is removed when the pull request is closed.
+			</p>
+		}
 		@ui.Tabs(appTabs(v), tab)
 		{ children... }
 	}
@@ -680,7 +706,86 @@ templ triggersCard(csrf, base, what string, git bool, tr Triggers) {
 	</section>
 }
 
-templ AppSettings(s ui.Shell, v AppView, general, domain, src ui.Form, choices GitChoices, tr Triggers) {
+// PreviewSettings is the Settings page of a preview: it has nothing of its
+// own to set.
+templ PreviewSettings(s ui.Shell, v AppView) {
+	@appFrame(s, v, "settings") {
+		<div class="grid max-w-3xl gap-6">
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Settings</h2>
+						<p class="muted text-sm">A preview is built and run with the settings, variables and files of the app it previews. Change them there; they apply to the preview when it is next deployed.</p>
+					</div>
+				</div>
+			</section>
+			<section class="card card-danger">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Remove preview</h2>
+						<p class="muted text-sm">Stops the preview and removes it. A new push to the pull request makes it again.</p>
+					</div>
+				</div>
+				<form class="card-body grid gap-4" method="post" action={ templ.SafeURL(v.base() + "/delete") }>
+					@ui.CSRF(s.CSRF)
+					<input type="hidden" name="confirm" value={ v.App.Name }/>
+					<div>
+						@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.DangerQuiet, Icon: "trash"}) {
+							Remove preview
+						}
+					</div>
+				</form>
+			</section>
+		</div>
+	}
+}
+
+// previewsCard is where an app's pull requests get their previews.
+templ previewsCard(csrf string, v AppView, f ui.Form) {
+	<section class="card" id="previews">
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">Pull request previews</h2>
+				<p class="muted text-sm">Each pull request into { v.App.Branch } gets a deployment and an address of its own, updated on every push and removed when the pull request is closed.</p>
+			</div>
+		</div>
+		if len(v.Previews) > 0 {
+			<div class="rows">
+				for _, p := range v.Previews {
+					<div class="row">
+						<a class="link font-semibold" href={ templ.SafeURL("/apps/" + p.App.ID) }>#{ strconv.Itoa(p.App.PRNumber) }</a>
+						<span class="fact min-w-0 flex-1 truncate">{ p.App.Branch }</span>
+						@ui.StatusPill(p.App.Status)
+						if p.URL != "" {
+							<a class="link fact truncate" href={ templ.SafeURL(p.URL) } target="_blank" rel="noopener">{ p.URL }</a>
+						}
+						<form method="post" action={ templ.SafeURL(v.base() + "/previews/" + strconv.Itoa(p.App.PRNumber) + "/delete") }>
+							@ui.CSRF(csrf)
+							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
+								Remove
+							}
+						</form>
+					</div>
+				}
+			</div>
+		}
+		<form class="card-body grid gap-4 border-t border-line" method="post" action={ templ.SafeURL(v.base() + "/previews") }>
+			@ui.CSRF(csrf)
+			@ui.Checkbox("previews", v.App.Previews, nil) {
+				Give every pull request a preview
+			}
+			@ui.TextField(f, "Domain for previews", "Optional. With preview.example.com, pull request 12 is served at pr-12-" + v.App.Name + ".preview.example.com: point *.preview.example.com at this server. Empty uses generated addresses over plain HTTP.", ui.InputProps{ID: "preview_domain", Mono: true, Value: v.App.PreviewDomain, Placeholder: "preview.example.com"})
+			<p class="muted text-sm">A preview runs the pull request's code with this app's variables, so anyone who can push a branch to the repository can read them. Pull requests from forks get no preview. Up to ten previews exist at once. A webhook added by hand must also send pull request events.</p>
+			<div>
+				@ui.Button(ui.ButtonProps{Type: "submit"}) {
+					Save
+				}
+			</div>
+		</form>
+	</section>
+}
+
+templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, choices GitChoices, tr Triggers) {
 	@appFrame(s, v, "settings") {
 		<div class="grid max-w-3xl gap-6">
 			if tr.NewToken != "" {
@@ -721,6 +826,9 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src ui.Form, choices G
 				}
 			}
 			@triggersCard(s.CSRF, v.base(), "app", v.App.Source == db.SourceGit, tr)
+			if v.App.Source == db.SourceGit {
+				@previewsCard(s.CSRF, v, previews)
+			}
 			<section class="card" id="domains">
 				<div class="card-head">
 					<div>

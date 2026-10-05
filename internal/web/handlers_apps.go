@@ -54,6 +54,12 @@ func (s *Server) loadApp(w http.ResponseWriter, r *http.Request) (pages.AppView,
 	if err == nil {
 		v.Domains, err = s.DB.ListDomains(ctx, db.KindApp, app.ID)
 	}
+	if err == nil && app.IsPreview() {
+		var parent db.App
+		if parent, err = s.DB.App(ctx, teamID, app.PreviewOf); err == nil {
+			v.Parent = &parent
+		}
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return v, false
@@ -62,11 +68,14 @@ func (s *Server) loadApp(w http.ResponseWriter, r *http.Request) (pages.AppView,
 }
 
 func appCrumbs(v pages.AppView) []ui.Crumb {
-	return []ui.Crumb{
+	crumbs := []ui.Crumb{
 		{Label: "Projects", Href: "/"},
 		{Label: v.Project.Name, Href: "/projects/" + v.Project.ID + "?env=" + v.Env.ID},
-		{Label: v.App.Name},
 	}
+	if v.Parent != nil {
+		crumbs = append(crumbs, ui.Crumb{Label: v.Parent.Name, Href: "/apps/" + v.Parent.ID})
+	}
+	return append(crumbs, ui.Crumb{Label: v.App.Name})
 }
 
 func (s *Server) appShell(w http.ResponseWriter, r *http.Request, v pages.AppView) ui.Shell {
@@ -978,6 +987,11 @@ func (s *Server) appDelete(w http.ResponseWriter, r *http.Request) {
 		s.Log.Error("delete app", "app", v.App.ID, "err", err)
 		setFlash(w, r, ui.ToneDanger, "The app could not be deleted: "+err.Error())
 		redirect(w, r, back)
+		return
+	}
+	if v.App.IsPreview() {
+		setFlash(w, r, ui.ToneOK, "Preview removed.")
+		redirect(w, r, "/apps/"+v.App.PreviewOf+"/settings#previews")
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "App deleted.")

@@ -360,7 +360,7 @@ func (d *Deployer) refuseSymlinks(ctx context.Context, r runner.Runner, checkout
 
 // buildArgs returns the app's build-time variables, opened.
 func (d *Deployer) buildArgs(ctx context.Context, app db.App) (map[string]string, error) {
-	sealed, err := d.DB.ListEnvVars(ctx, db.KindApp, app.ID)
+	sealed, err := d.DB.ListEnvVars(ctx, db.KindApp, app.ConfigOwner())
 	if err != nil {
 		return nil, err
 	}

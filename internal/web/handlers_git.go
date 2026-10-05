@@ -135,6 +135,26 @@ func (s *Server) triggers(r *http.Request, app db.App, newToken string) (pages.T
 
 // renderAppSettings draws the Settings page with the given form states.
 func (s *Server) renderAppSettings(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, general, domain, src ui.Form, newToken string) {
+	s.renderAppSettingsForms(w, r, status, v, general, domain, src, ui.Form{}, newToken)
+}
+
+// renderAppSettingsWith draws the Settings page with the previews form in
+// the given state.
+func (s *Server) renderAppSettingsWith(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, previews ui.Form) {
+	s.renderAppSettingsForms(w, r, status, v, ui.Form{}, ui.Form{}, ui.Form{}, previews, "")
+}
+
+func (s *Server) renderAppSettingsForms(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, general, domain, src, previews ui.Form, newToken string) {
+	if v.App.IsPreview() {
+		// Nothing of its own to set: where it comes from, and how to
+		// remove it.
+		s.render(w, r, status, pages.PreviewSettings(s.appShell(w, r, v), v))
+		return
+	}
+	if err := s.loadPreviews(r.Context(), &v); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	choices, err := s.gitChoices(r)
 	if err != nil {
 		s.fail(w, r, err)
@@ -149,7 +169,7 @@ func (s *Server) renderAppSettings(w http.ResponseWriter, r *http.Request, statu
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, status, pages.AppSettings(s.appShell(w, r, v), v, general, domain, src, choices, tr))
+	s.render(w, r, status, pages.AppSettings(s.appShell(w, r, v), v, general, domain, src, previews, choices, tr))
 }
 
 func (s *Server) appSourceSave(w http.ResponseWriter, r *http.Request) {

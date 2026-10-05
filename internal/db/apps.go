@@ -101,7 +101,44 @@ type App struct {
 	// BuildServerID is the server the image is built on when that is not
 	// the one the app runs on; "" builds where it runs.
 	BuildServerID string
+
+	// Previews says that pull requests of the app's repository get a
+	// preview each, and PreviewDomain under which domain
+	// (pr-<n>-<app>.<domain>); "" uses a generated address.
+	Previews      bool
+	PreviewDomain string
+	// PreviewOf is the app this one previews a pull request of, PRNumber
+	// that pull request, and PRCommentID the comment on it that carries
+	// the preview's address. All empty for an ordinary app.
+	PreviewOf   string
+	PRNumber    int
+	PRCommentID int64
 }
+
+// IsPreview reports whether the app is the preview of a pull request.
+func (a App) IsPreview() bool { return a.PreviewOf != "" }
+
+// ConfigOwner is the app whose variables and files this app runs with: a
+// preview has none of its own and takes its parent's, as they are when it
+// is deployed.
+func (a App) ConfigOwner() string {
+	if a.PreviewOf != "" {
+		return a.PreviewOf
+	}
+	return a.ID
+}
+
+// MaxPreviews is how many pull requests of one app can have a preview at
+// once. Each is a running container; a burst of pull requests must not
+// fill the server.
+const MaxPreviews = 10
+
+// ErrHasPreviews is returned when an app that still has previews is
+// deleted. They are removed first.
+var ErrHasPreviews = errors.New("this app still has previews")
+
+// ErrPreviewLimit is returned when an app has MaxPreviews previews already.
+var ErrPreviewLimit = errors.New("this app has as many previews as it may have")
 
 // Sources of an app's image.
 const (
@@ -113,7 +150,7 @@ const appColumns = `a.id, a.environment_id, a.server_id, a.name, a.source, a.ima
 	a.health_path, a.health_cmd, a.health_timeout, a.status, a.container, a.host_port, a.deployed_image, a.created_at, a.updated_at,
 	a.repo_url, a.repo_name, a.branch, a.build_pack, a.dockerfile_path, a.base_dir, a.publish_dir, a.spa_fallback,
 	a.git_source_id, a.ssh_key_id, a.auto_deploy, a.webhook_secret, a.deploy_token_hash, a.start_command, a.docker_options,
-	a.build_server_id`
+	a.build_server_id, a.previews, a.preview_domain, a.preview_of, a.pr_number, a.pr_comment_id`
 
 func scanApp(row interface{ Scan(...any) error }) (App, error) {
 	var a App
@@ -121,7 +158,7 @@ func scanApp(row interface{ Scan(...any) error }) (App, error) {
 		&a.HealthPath, &a.HealthCmd, &a.HealthTimeout, &a.Status, &a.Container, &a.HostPort, &a.DeployedImage, &a.CreatedAt, &a.UpdatedAt,
 		&a.RepoURL, &a.RepoName, &a.Branch, &a.BuildPack, &a.DockerfilePath, &a.BaseDir, &a.PublishDir, &a.SPAFallback,
 		&a.GitSourceID, &a.SSHKeyID, &a.AutoDeploy, &a.WebhookSecret, &a.DeployTokenHash, &a.StartCommand, &a.DockerOptions,
-		&a.BuildServerID)
+		&a.BuildServerID, &a.Previews, &a.PreviewDomain, &a.PreviewOf, &a.PRNumber, &a.PRCommentID)
 	return a, err
 }
 
@@ -391,9 +428,111 @@ func (d *DB) queryApps(ctx context.Context, query string, args ...any) ([]App, e
 }
 
 // ListApps returns the apps of one environment. The caller has already
-// checked the environment belongs to the team.
+// checked the environment belongs to the team. Previews are not among
+// them: they are listed with the app they belong to.
 func (d *DB) ListApps(ctx context.Context, environmentID string) ([]App, error) {
-	return d.queryApps(ctx, `SELECT `+appColumns+` FROM apps a WHERE a.environment_id = ? ORDER BY a.name`, environmentID)
+	return d.queryApps(ctx, `SELECT `+appColumns+` FROM apps a WHERE a.environment_id = ? AND a.preview_of = '' ORDER BY a.name`, environmentID)
+}
+
+// Previews returns an app's previews, by pull request number.
+func (d *DB) Previews(ctx context.Context, appID string) ([]App, error) {
+	return d.queryApps(ctx, `SELECT `+appColumns+` FROM apps a WHERE a.preview_of = ? ORDER BY a.pr_number`, appID)
+}
+
+// Preview returns an app's preview of one pull request, or ErrNotFound.
+func (d *DB) Preview(ctx context.Context, appID string, number int) (App, error) {
+	a, err := scanApp(d.QueryRowContext(ctx, `SELECT `+appColumns+` FROM apps a WHERE a.preview_of = ? AND a.pr_number = ?`, appID, number))
+	return a, notFound(err)
+}
+
+// CreatePreview adds the preview of a pull request to an app: an app of
+// its own with the parent's build and run settings, the pull request's
+// branch, and none of what makes the parent reachable from outside (its
+// webhook secret, its deploy token, its domains). Pushes do not deploy it;
+// the pull request's own events do.
+//
+// It returns ErrPreviewLimit when the parent has MaxPreviews already, and
+// ErrNameTaken when the environment has something of that name.
+func (d *DB) CreatePreview(ctx context.Context, parent App, number int, name, branch string) (App, error) {
+	id, at := secret.RandomID(), now()
+	err := d.Tx(ctx, func(tx *sql.Tx) error {
+		var n int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM apps WHERE preview_of = ?`, parent.ID).Scan(&n); err != nil {
+			return err
+		}
+		if n >= MaxPreviews {
+			return ErrPreviewLimit
+		}
+		taken, err := nameTaken(ctx, tx, parent.EnvironmentID, name, "")
+		if err != nil {
+			return err
+		}
+		if taken {
+			return ErrNameTaken
+		}
+		// Copied in the database, from the row as it is now, and only when
+		// that row is an ordinary Git app: a preview has no previews.
+		return affected(tx.ExecContext(ctx, `INSERT INTO apps (id, environment_id, server_id, name, source, image, port, memory_mb, cpus,
+				health_path, health_cmd, health_timeout, status, created_at, updated_at,
+				repo_url, repo_name, branch, build_pack, dockerfile_path, base_dir, publish_dir, spa_fallback,
+				git_source_id, ssh_key_id, auto_deploy, start_command, docker_options, build_server_id,
+				preview_of, pr_number)
+			SELECT ?, environment_id, server_id, ?, source, image, port, memory_mb, cpus,
+				health_path, health_cmd, health_timeout, ?, ?, ?,
+				repo_url, repo_name, ?, build_pack, dockerfile_path, base_dir, publish_dir, spa_fallback,
+				git_source_id, ssh_key_id, 0, start_command, docker_options, build_server_id,
+				id, ?
+			FROM apps WHERE id = ? AND source = 'git' AND preview_of = ''`,
+			id, name, AppCreated, at, at, branch, number, parent.ID))
+	})
+	if err != nil {
+		return App{}, err
+	}
+	return d.AppByID(ctx, id)
+}
+
+// PreviewsForPullRequest returns the previews of one pull request of a
+// repository: one for each app of that repository that gave it one. With
+// sourceID set, only apps connected through that GitHub App are returned.
+func (d *DB) PreviewsForPullRequest(ctx context.Context, sourceID, repoName string, number int) ([]App, error) {
+	query := `SELECT ` + appColumns + ` FROM apps a WHERE a.preview_of <> '' AND a.pr_number = ? AND a.repo_name = ?`
+	args := []any{number, strings.ToLower(repoName)}
+	if sourceID != "" {
+		query += ` AND a.git_source_id = ?`
+		args = append(args, sourceID)
+	}
+	return d.queryApps(ctx, query+` ORDER BY a.created_at, a.rowid`, args...)
+}
+
+// SetAppBranch changes the branch an app is built from.
+func (d *DB) SetAppBranch(ctx context.Context, id, branch string) error {
+	return affected(d.ExecContext(ctx, `UPDATE apps SET branch = ?, updated_at = ? WHERE id = ?`, branch, now(), id))
+}
+
+// SetAppPreviews turns previews of pull requests on or off for an app of
+// the team and sets the domain they are served under.
+func (d *DB) SetAppPreviews(ctx context.Context, teamID, id string, on bool, domain string) error {
+	return affected(d.ExecContext(ctx, `UPDATE apps SET previews = ?, preview_domain = ?, updated_at = ?
+		WHERE id = ? AND source = 'git' AND preview_of = ''`+teamApps, on, domain, now(), id, teamID))
+}
+
+// SetPRComment records the comment that carries a preview's address.
+func (d *DB) SetPRComment(ctx context.Context, id string, commentID int64) error {
+	_, err := d.ExecContext(ctx, `UPDATE apps SET pr_comment_id = ? WHERE id = ?`, commentID, id)
+	return err
+}
+
+// AppsForPullRequest returns the apps that give a pull request of the
+// given repository, to be merged into the given branch, a preview. With
+// sourceID set, only apps connected through that GitHub App are returned.
+func (d *DB) AppsForPullRequest(ctx context.Context, sourceID, repoName, baseBranch string) ([]App, error) {
+	query := `SELECT ` + appColumns + ` FROM apps a WHERE a.source = 'git' AND a.previews = 1 AND a.preview_of = '' AND a.repo_name = ? AND a.branch = ?`
+	args := []any{strings.ToLower(repoName), baseBranch}
+	if sourceID != "" {
+		query += ` AND a.git_source_id = ?`
+		args = append(args, sourceID)
+	}
+	return d.queryApps(ctx, query+` ORDER BY a.created_at, a.rowid`, args...)
 }
 
 // AppsOnServer returns every app placed on a server.
@@ -476,7 +615,9 @@ func (d *DB) AppByDeployToken(ctx context.Context, id, hash string) (App, error)
 // branch should redeploy. With sourceID set, only apps connected through
 // that GitHub App are returned.
 func (d *DB) AppsForPush(ctx context.Context, sourceID, repoName, branch string) ([]App, error) {
-	query := `SELECT ` + appColumns + ` FROM apps a WHERE a.source = 'git' AND a.auto_deploy = 1 AND a.repo_name = ? AND a.branch = ?`
+	// A preview follows its pull request's events, not pushes: a push to
+	// its branch arrives as one of those as well.
+	query := `SELECT ` + appColumns + ` FROM apps a WHERE a.source = 'git' AND a.auto_deploy = 1 AND a.preview_of = '' AND a.repo_name = ? AND a.branch = ?`
 	args := []any{strings.ToLower(repoName), branch}
 	if sourceID != "" {
 		query += ` AND a.git_source_id = ?`
@@ -564,6 +705,15 @@ func (d *DB) UsedHostPorts(ctx context.Context, serverID string) (map[int]bool, 
 // DeleteApp removes an app and everything recorded against it.
 func (d *DB) DeleteApp(ctx context.Context, id string) error {
 	return d.Tx(ctx, func(tx *sql.Tx) error {
+		// A preview is found through its parent. Without one it would be a
+		// running app that no page lists.
+		var previews int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM apps WHERE preview_of = ?`, id).Scan(&previews); err != nil {
+			return err
+		}
+		if previews > 0 {
+			return ErrHasPreviews
+		}
 		for _, table := range []string{"domains", "env_vars", "storages"} {
 			if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE resource_kind = ? AND resource_id = ?`, KindApp, id); err != nil {
 				return err

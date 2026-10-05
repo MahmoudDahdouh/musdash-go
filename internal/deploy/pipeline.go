@@ -13,6 +13,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -54,6 +55,8 @@ type Deployer struct {
 	Probe Probe
 	// Tokens mints repository tokens for apps deployed through a GitHub App.
 	Tokens TokenSource
+	// Comments tells a pull request where its preview is. Nil writes none.
+	Comments PullRequestComments
 	// InstanceTarget is the control plane's own loopback address, routed
 	// when a dashboard domain is set.
 	InstanceTarget string
@@ -129,6 +132,7 @@ func New(d *db.DB, box *secret.Box, q *jobs.Queue, r Runners, cfg *config.Config
 	return &Deployer{
 		DB: d, Box: box, Queue: q, Runners: r, Cfg: cfg, Log: log,
 		Tokens:              source.NewGitHub(),
+		Comments:            source.NewGitHub(),
 		InstanceTarget:      instanceTarget,
 		healthEvery:         time.Second,
 		drain:               3 * time.Second,
@@ -165,6 +169,7 @@ func (d *Deployer) Register() {
 	d.Queue.Register(JobDeploy, d.runJob)
 	d.Queue.Register(JobDatabase, d.runDatabaseJob)
 	d.Queue.Register(JobService, d.runServiceJob)
+	d.Queue.Register(JobClosePreview, d.runClosePreview)
 }
 
 type payload struct {
@@ -228,21 +233,27 @@ func keptName(appID, deploymentID string) string {
 	return ImageRepository(appID) + ":d-" + deploymentID
 }
 
-func (d *Deployer) enqueue(ctx context.Context, app db.App, dep db.Deployment) (db.Deployment, error) {
-	// Deployments of one app never overlap. Builds additionally run one at
-	// a time per server: an image build can use a gigabyte or more of
-	// memory, and two at once would exhaust a small server. Every Git
-	// deployment of an app is on that app's one server, so the build lock
-	// also keeps them in order; a rollback of such an app takes the same
-	// lock for that reason, though it builds nothing.
-	lock := "deploy:" + app.ID
-	if app.Source == db.SourceGit {
-		// The lock is of the server that does the building.
-		lock = "build:" + app.ServerID
-		if app.BuildServerID != "" {
-			lock = "build:" + app.BuildServerID
-		}
+// deployLock is the lock key under which an app's deployments are queued.
+//
+// Deployments of one app never overlap. Builds additionally run one at a
+// time per server: an image build can use a gigabyte or more of memory,
+// and two at once would exhaust a small server. Every Git deployment of an
+// app is on that app's one server, so the build lock also keeps them in
+// order; a rollback of such an app takes the same lock for that reason,
+// though it builds nothing.
+func deployLock(app db.App) string {
+	if app.Source != db.SourceGit {
+		return "deploy:" + app.ID
 	}
+	// The lock is of the server that does the building.
+	if app.BuildServerID != "" {
+		return "build:" + app.BuildServerID
+	}
+	return "build:" + app.ServerID
+}
+
+func (d *Deployer) enqueue(ctx context.Context, app db.App, dep db.Deployment) (db.Deployment, error) {
+	lock := deployLock(app)
 	dep, err := d.DB.CreateDeployment(ctx, dep)
 	if err != nil {
 		return dep, err
@@ -308,6 +319,11 @@ func (d *Deployer) runJob(ctx context.Context, raw []byte) error {
 			return ferr
 		}
 		d.pruneDeployments(rec, app.ID)
+		if app.IsPreview() {
+			if done, derr := d.DB.DeploymentByID(rec, dep.ID); derr == nil {
+				d.announcePreview(rec, app, done)
+			}
+		}
 		d.tell(app.EnvironmentID, notify.Event{Kind: notify.EventDeploy, OK: true, At: time.Now(),
 			Title: app.Name + " was deployed", URL: "/apps/" + app.ID + "/deployments/" + dep.ID})
 		return nil
@@ -586,13 +602,20 @@ func pickPort(used map[int]bool) int {
 // writeEnvFile writes the app's runtime variables to its env file on the
 // server and returns the path. The file is private: it holds secrets.
 func (d *Deployer) writeEnvFile(ctx context.Context, r runner.Runner, app db.App) (string, error) {
-	sealed, err := d.DB.ListEnvVars(ctx, db.KindApp, app.ID)
+	// A preview runs with its parent's variables, as they are now.
+	sealed, err := d.DB.ListEnvVars(ctx, db.KindApp, app.ConfigOwner())
 	if err != nil {
 		return "", err
 	}
-	vars := make([]db.EnvVar, 0, len(sealed))
+	vars := make([]db.EnvVar, 0, len(sealed)+2)
+	// What lets an app tell that it is a preview, and of which pull
+	// request: to use another database than production's, for one.
+	if app.IsPreview() {
+		vars = append(vars, db.EnvVar{Key: "MUSDASH_PREVIEW", Value: "1"},
+			db.EnvVar{Key: "MUSDASH_PULL_REQUEST", Value: strconv.Itoa(app.PRNumber)})
+	}
 	for _, v := range sealed {
-		if v.BuildTime {
+		if v.BuildTime || (app.IsPreview() && (v.Key == "MUSDASH_PREVIEW" || v.Key == "MUSDASH_PULL_REQUEST")) {
 			continue
 		}
 		plain, err := d.Box.OpenString(v.Value)
@@ -619,12 +642,18 @@ func (d *Deployer) writeEnvFile(ctx context.Context, r runner.Runner, app db.App
 // prepareMounts turns the app's storages into mounts, writing file mounts to
 // the server first.
 func (d *Deployer) prepareMounts(ctx context.Context, r runner.Runner, app db.App) ([]docker.Mount, error) {
-	storages, err := d.DB.ListStorages(ctx, db.KindApp, app.ID)
+	storages, err := d.DB.ListStorages(ctx, db.KindApp, app.ConfigOwner())
 	if err != nil {
 		return nil, err
 	}
 	var mounts []docker.Mount
 	for _, s := range storages {
+		// A preview gets its parent's files and nothing that holds data:
+		// a directory of the server would be production's own, and a
+		// volume would be one more thing to remove with every pull request.
+		if app.IsPreview() && s.Kind != db.StorageFile {
+			continue
+		}
 		switch s.Kind {
 		case db.StorageVolume:
 			mounts = append(mounts, docker.Mount{Kind: docker.MountVolume, Source: VolumeName(app.ID, s.Source), Target: s.Target})
@@ -716,7 +745,24 @@ func (d *Deployer) stopLocked(ctx context.Context, app db.App) (db.Server, error
 // Destroy stops an app and deletes it, with its env file, file mounts and
 // deployment logs. Docker volumes are kept: they hold the person's data,
 // and removing them is a separate, explicit act.
+//
+// An app's previews go first, each as an app of its own.
 func (d *Deployer) Destroy(ctx context.Context, appID string) error {
+	previews, err := d.DB.Previews(ctx, appID)
+	if err != nil {
+		return err
+	}
+	for _, p := range previews {
+		// Before this app's own lock is taken: the locks are shared among
+		// apps, and a preview may wait on the same one.
+		if err := d.destroy(ctx, p.ID); err != nil && !errors.Is(err, db.ErrNotFound) {
+			return err
+		}
+	}
+	return d.destroy(ctx, appID)
+}
+
+func (d *Deployer) destroy(ctx context.Context, appID string) error {
 	mu := d.lockFor(appID)
 	if !lockSoon(mu) {
 		return ErrBusy

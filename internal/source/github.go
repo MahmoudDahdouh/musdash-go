@@ -172,6 +172,13 @@ var ErrNotInstalled = errors.New("the GitHub App is not installed on this reposi
 // right even when the App is installed on several accounts. The token is
 // never stored.
 func (g *GitHub) InstallationToken(ctx context.Context, appID int64, key []byte, owner, repo string) (string, error) {
+	// Scoped to reading the one repository's contents.
+	return g.token(ctx, appID, key, owner, repo, map[string]string{"contents": "read"})
+}
+
+// token returns a one-hour token for one repository with the given
+// permissions and no others.
+func (g *GitHub) token(ctx context.Context, appID int64, key []byte, owner, repo string, permissions map[string]string) (string, error) {
 	jwt, err := AppJWT(appID, key, time.Now())
 	if err != nil {
 		return "", err
@@ -190,8 +197,7 @@ func (g *GitHub) InstallationToken(ctx context.Context, appID int64, key []byte,
 	var tok struct {
 		Token string `json:"token"`
 	}
-	// Scope the token to the one repository and to reading its contents.
-	body := map[string]any{"repositories": []string{repo}, "permissions": map[string]string{"contents": "read"}}
+	body := map[string]any{"repositories": []string{repo}, "permissions": permissions}
 	if err := g.call(ctx, http.MethodPost, "/app/installations/"+strconv.FormatInt(inst.ID, 10)+"/access_tokens", jwt, body, &tok); err != nil {
 		return "", err
 	}
@@ -199,6 +205,50 @@ func (g *GitHub) InstallationToken(ctx context.Context, appID int64, key []byte,
 		return "", errors.New("GitHub returned an empty installation token")
 	}
 	return tok.Token, nil
+}
+
+// maxComment bounds a comment's text.
+const maxComment = 4000
+
+// CommentOnPullRequest writes a comment on a pull request as the App, or
+// rewrites the comment with the given id when there is one. It returns the
+// comment's id.
+//
+// It needs the App to have the "Pull requests: write" permission. An App
+// without it gets an error here and nothing else changes: the comment is a
+// courtesy, not part of a deployment.
+func (g *GitHub) CommentOnPullRequest(ctx context.Context, appID int64, key []byte, owner, repo string, number int, commentID int64, text string) (int64, error) {
+	if number <= 0 {
+		return 0, errors.New("not a pull request number")
+	}
+	if len(text) > maxComment {
+		text = text[:maxComment]
+	}
+	// Scoped to the one repository and to writing on its pull requests.
+	token, err := g.token(ctx, appID, key, owner, repo, map[string]string{"pull_requests": "write"})
+	if err != nil {
+		return 0, err
+	}
+	base := "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo) + "/issues/"
+	body := map[string]string{"body": text}
+	var out struct {
+		ID int64 `json:"id"`
+	}
+	if commentID > 0 {
+		err := g.call(ctx, http.MethodPatch, base+"comments/"+strconv.FormatInt(commentID, 10), token, body, &out)
+		var apiErr *APIError
+		if err == nil {
+			return commentID, nil
+		}
+		// Somebody deleted the comment: write a new one.
+		if !errors.As(err, &apiErr) || apiErr.Status != http.StatusNotFound {
+			return 0, err
+		}
+	}
+	if err := g.call(ctx, http.MethodPost, base+strconv.Itoa(number)+"/comments", token, body, &out); err != nil {
+		return 0, err
+	}
+	return out.ID, nil
 }
 
 // RepoInfo is one repository the App can read.
