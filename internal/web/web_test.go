@@ -94,6 +94,8 @@ func newAppWithLog(t *testing.T, dev bool, logTo io.Writer) *app {
 	queue := jobs.New(d.DB, log, 2)
 	deployer := deploy.New(d, box, queue, pool, cfg, log, "127.0.0.1:8000")
 	deployer.Probe = okProbe{}
+	// No test writes to GitHub.
+	deployer.Comments = nil
 	deployer.Register()
 	if err := queue.Start(context.Background()); err != nil {
 		t.Fatal(err)

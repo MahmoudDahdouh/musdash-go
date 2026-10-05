@@ -14,6 +14,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -247,6 +249,9 @@ type fakeGitHub struct {
 	mu       sync.Mutex
 	requests []string
 	tokenReq map[string]any
+	// comments holds the text of each comment by id; a deleted one is "".
+	comments map[int64]string
+	nextID   int64
 }
 
 func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -290,6 +295,34 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			f.t.Errorf("repositories called with %q", bearer)
 		}
 		io.WriteString(w, `{"repositories":[{"full_name":"acme/shop","default_branch":"main","private":true},{"full_name":"acme/site","default_branch":"trunk","private":false}]}`)
+	case r.Method == "POST" && r.URL.Path == "/repos/acme/shop/issues/12/comments",
+		r.Method == "PATCH" && strings.HasPrefix(r.URL.Path, "/repos/acme/shop/issues/comments/"):
+		if bearer != "ghs_installation_token" {
+			f.t.Errorf("comment written with %q", bearer)
+		}
+		var body struct {
+			Body string `json:"body"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if f.comments == nil {
+			f.comments, f.nextID = map[int64]string{}, 9000
+		}
+		id := f.nextID + 1
+		if r.Method == "PATCH" {
+			id, _ = strconv.ParseInt(path.Base(r.URL.Path), 10, 64)
+			if f.comments[id] == "" {
+				w.WriteHeader(http.StatusNotFound)
+				io.WriteString(w, `{"message":"Not Found"}`)
+				return
+			}
+		} else {
+			f.nextID = id
+			w.WriteHeader(http.StatusCreated)
+		}
+		f.comments[id] = body.Body
+		io.WriteString(w, `{"id":`+strconv.FormatInt(id, 10)+`}`)
 	default:
 		w.WriteHeader(http.StatusTeapot)
 		io.WriteString(w, `{"message":"unexpected request"}`)
@@ -358,5 +391,152 @@ func TestBasicAuthHeader(t *testing.T) {
 	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(got, "Authorization: Basic "))
 	if err != nil || string(raw) != "x-access-token:ghs_abc" {
 		t.Fatalf("%q → %q %v", got, raw, err)
+	}
+}
+
+func TestCommentOnPullRequest(t *testing.T) {
+	ctx := context.Background()
+	gh, fake, key := newFakeGitHub(t)
+
+	id, err := gh.CommentOnPullRequest(ctx, 777, key, "acme", "shop", 12, 0, "deployed at https://pr-12.example.com")
+	if err != nil || id != 9001 {
+		t.Fatalf("first comment: %d %v", id, err)
+	}
+	// The token is asked for one repository and for pull requests only:
+	// it could not read the code.
+	fake.mu.Lock()
+	req := fake.tokenReq
+	fake.mu.Unlock()
+	repos, _ := req["repositories"].([]any)
+	perms, _ := req["permissions"].(map[string]any)
+	if len(repos) != 1 || repos[0] != "shop" || perms["pull_requests"] != "write" || len(perms) != 1 {
+		t.Fatalf("token request was not narrowed: %v", req)
+	}
+
+	// The same comment is rewritten, not a second one added.
+	again, err := gh.CommentOnPullRequest(ctx, 777, key, "acme", "shop", 12, id, "deployed again")
+	if err != nil || again != id {
+		t.Fatalf("rewrite: %d %v", again, err)
+	}
+	fake.mu.Lock()
+	n, text := len(fake.comments), fake.comments[id]
+	fake.mu.Unlock()
+	if n != 1 || text != "deployed again" {
+		t.Fatalf("%d comments, the first says %q", n, text)
+	}
+
+	// Somebody deleted it: a new one takes its place.
+	fake.mu.Lock()
+	fake.comments[id] = ""
+	fake.mu.Unlock()
+	fresh, err := gh.CommentOnPullRequest(ctx, 777, key, "acme", "shop", 12, id, "back")
+	if err != nil || fresh == id || fresh == 0 {
+		t.Fatalf("after the comment was deleted: %d %v", fresh, err)
+	}
+
+	// A long text is cut, and what is not a pull request is refused before
+	// anything is asked of GitHub.
+	if _, err := gh.CommentOnPullRequest(ctx, 777, key, "acme", "shop", 12, fresh, strings.Repeat("x", 3*maxComment)); err != nil {
+		t.Fatal(err)
+	}
+	fake.mu.Lock()
+	long := len(fake.comments[fresh])
+	before := len(fake.requests)
+	fake.mu.Unlock()
+	if long != maxComment {
+		t.Fatalf("a comment of %d bytes was sent", long)
+	}
+	for _, number := range []int{0, -3} {
+		if _, err := gh.CommentOnPullRequest(ctx, 777, key, "acme", "shop", number, 0, "x"); err == nil {
+			t.Errorf("a comment on pull request %d", number)
+		}
+	}
+	fake.mu.Lock()
+	after := len(fake.requests)
+	fake.mu.Unlock()
+	if after != before {
+		t.Fatal("GitHub was asked about something that is not a pull request")
+	}
+	// An App that is not installed there writes nothing.
+	if _, err := gh.CommentOnPullRequest(ctx, 777, key, "acme", "not-installed", 12, 0, "x"); !errors.Is(err, ErrNotInstalled) {
+		t.Fatalf("want ErrNotInstalled, got %v", err)
+	}
+}
+
+// pullRequestBody is a pull request event as GitHub sends it, cut down to
+// its shape.
+func pullRequestBody(action, base, head, branch string, number int) string {
+	headRepo := `{"id":2,"full_name":"` + head + `","fork":` + strconv.FormatBool(base != head) + `}`
+	if head == "" {
+		headRepo = "null" // the fork was deleted
+	}
+	return `{"action":"` + action + `","number":` + strconv.Itoa(number) + `,
+		"pull_request":{"number":` + strconv.Itoa(number) + `,"state":"open","title":"a title with \"action\":\"closed\" in it",
+			"user":{"login":"sam"},
+			"head":{"label":"x:` + branch + `","ref":"` + branch + `","sha":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2","repo":` + headRepo + `},
+			"base":{"ref":"main","sha":"0000000000000000000000000000000000000001","repo":{"id":1,"full_name":"` + base + `"}}},
+		"repository":{"id":1,"full_name":"` + base + `","owner":{"login":"acme"}},
+		"sender":{"login":"sam"}}`
+}
+
+func TestReadEventPullRequests(t *testing.T) {
+	secret := []byte("s3cret")
+	read := func(body string) Event {
+		t.Helper()
+		ev, signed := ReadEvent(strings.NewReader(body), secret, Sign(secret, []byte(body)))
+		if !signed {
+			t.Fatalf("a signed body was refused: %s", body)
+		}
+		return ev
+	}
+	ev := read(pullRequestBody("opened", "acme/shop", "acme/shop", "feature/login", 12))
+	want := PullRequest{Repo: "acme/shop", Number: 12, Action: "opened", Branch: "feature/login",
+		Commit: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", HeadRepo: "acme/shop", BaseBranch: "main"}
+	if ev.PR != want {
+		t.Fatalf("%+v", ev.PR)
+	}
+	if ev.PR.FromFork() {
+		t.Fatal("a branch of the repository itself counts as a fork")
+	}
+	// A pull request is not also a push: its head's "ref" is deeper in.
+	if ev.Push.Branch != "" {
+		t.Fatalf("a pull request was read as a push to %q", ev.Push.Branch)
+	}
+
+	// Where the code is decides whether it is run.
+	forks := map[string]string{
+		"a fork":                   pullRequestBody("opened", "acme/shop", "mallory/shop", "main", 13),
+		"a fork that was deleted":  pullRequestBody("opened", "acme/shop", "", "main", 14),
+		"a repository named alike": pullRequestBody("opened", "acme/shop", "acme/shop-fork", "main", 15),
+	}
+	for name, body := range forks {
+		if pr := read(body).PR; pr.Number == 0 || !pr.FromFork() {
+			t.Errorf("%s: not seen as a fork: %+v", name, pr)
+		}
+	}
+	if pr := read(pullRequestBody("opened", "Acme/Shop", "acme/shop", "x", 16)).PR; pr.FromFork() {
+		t.Error("the same repository in another case is seen as a fork")
+	}
+
+	// What is not about a pull request is not read as one.
+	for name, body := range map[string]string{
+		"a push":                 `{"ref":"refs/heads/main","after":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2","repository":{"full_name":"acme/shop"}}`,
+		"an issue with a number": `{"action":"opened","number":7,"issue":{"number":7},"repository":{"full_name":"acme/shop"}}`,
+		"no number":              `{"action":"opened","pull_request":{"head":{"ref":"x","repo":{"full_name":"acme/shop"}}},"repository":{"full_name":"acme/shop"}}`,
+		"a number that is text":  `{"action":"opened","number":"12","pull_request":{"head":{"ref":"x"}},"repository":{"full_name":"acme/shop"}}`,
+		"a fraction":             `{"action":"opened","number":1.5,"pull_request":{},"repository":{"full_name":"acme/shop"}}`,
+		"a negative number":      `{"action":"opened","number":-4,"pull_request":{},"repository":{"full_name":"acme/shop"}}`,
+		"a huge number":          `{"action":"opened","number":1e40,"pull_request":{},"repository":{"full_name":"acme/shop"}}`,
+		"not an object":          `[{"action":"opened","number":3,"pull_request":{}}]`,
+		"not json":               `action=opened&number=3`,
+	} {
+		if pr := read(body).PR; pr.Number != 0 {
+			t.Errorf("%s: read as pull request %d", name, pr.Number)
+		}
+	}
+	// And a body with a bad signature gives nothing at all.
+	body := pullRequestBody("opened", "acme/shop", "acme/shop", "x", 12)
+	if ev, signed := ReadEvent(strings.NewReader(body), secret, Sign([]byte("guess"), []byte(body))); signed || ev.PR.Number != 0 {
+		t.Fatalf("a wrongly signed pull request was read: %+v", ev)
 	}
 }

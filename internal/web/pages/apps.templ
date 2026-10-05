@@ -331,8 +331,10 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 			<section class="card">
 				<div class="card-head">
 					<h2 class="card-title">Domains</h2>
-					@ui.LinkButton(v.base()+"/settings#domains", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
-						Manage
+					if !v.App.IsPreview() {
+						@ui.LinkButton(v.base()+"/settings#domains", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+							Manage
+						}
 					}
 				</div>
 				if len(v.Domains) == 0 {
@@ -753,12 +755,18 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 			<div class="rows">
 				for _, p := range v.Previews {
 					<div class="row">
-						<a class="link font-semibold" href={ templ.SafeURL("/apps/" + p.App.ID) }>#{ strconv.Itoa(p.App.PRNumber) }</a>
-						<span class="fact min-w-0 flex-1 truncate">{ p.App.Branch }</span>
+						<div class="min-w-0 flex-1">
+							<p class="truncate">
+								<a class="link font-semibold" href={ templ.SafeURL("/apps/" + p.App.ID) }>#{ strconv.Itoa(p.App.PRNumber) }</a>
+								<span class="fact ml-2">{ p.App.Branch }</span>
+							</p>
+							if p.URL != "" {
+								<a class="link fact block truncate text-sm" href={ templ.SafeURL(p.URL) } target="_blank" rel="noopener">{ p.URL }</a>
+							} else {
+								<p class="muted text-sm">No address: the one it would have is taken.</p>
+							}
+						</div>
 						@ui.StatusPill(p.App.Status)
-						if p.URL != "" {
-							<a class="link fact truncate" href={ templ.SafeURL(p.URL) } target="_blank" rel="noopener">{ p.URL }</a>
-						}
 						<form method="post" action={ templ.SafeURL(v.base() + "/previews/" + strconv.Itoa(p.App.PRNumber) + "/delete") }>
 							@ui.CSRF(csrf)
 							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {

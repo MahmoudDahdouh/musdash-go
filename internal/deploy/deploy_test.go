@@ -119,6 +119,8 @@ func newEnv(t *testing.T) *env {
 	probe := &stubProbe{}
 	q := jobs.New(d.DB, log, 2)
 	dep := New(d, box, q, fixedRunners{fake}, cfg, log, "127.0.0.1:8000")
+	// No test writes to GitHub: the ones about comments put their own in.
+	dep.Comments = nil
 	dep.Probe = probe
 	dep.healthEvery = 10 * time.Millisecond
 	dep.drain = 0

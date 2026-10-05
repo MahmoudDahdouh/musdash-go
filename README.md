@@ -20,7 +20,8 @@ The full design is in [docs/spec.md](docs/spec.md). Each phase has an implementa
 | 4 | Services: Docker Compose stacks from a catalogue (n8n, WordPress, Ghost, Uptime Kuma, MinIO, Cloudflare Tunnel), your own file, or a Git repository | Done |
 | 5 | Operations: scheduled database backups with S3 copies, retention and restore; scheduled commands; notifications; Docker clean-up | Done |
 | 6 | More servers: deploy to machines reached over SSH, each with its own proxy; build on one server and run on another | Done |
-| 7–9 | Previews, teams, extras | Planned |
+| 7 | Deploy polish: rollback, domains by path, a password in front of a domain, a preview for every pull request | Done |
+| 8–9 | Teams, extras | Planned |
 
 ## Build
 
@@ -112,6 +113,16 @@ If any step before 5 fails, the new container is removed and the previous one ke
 
 Apps in one environment reach each other by name (`web:80`) on that network. From outside, the only way in is the proxy.
 
+### Rolling back
+
+Every deployment's image stays on the server under a name of the app's own, the newest five of them. Open an earlier deployment and choose **Roll back**: that image runs again through the same health check and switch. Nothing is pulled or built, so a tag such as `nginx:latest` that has moved since does not matter. The app's settings and variables stay as they are today; only the image goes back.
+
+### Domains, paths and passwords
+
+A domain can be limited to a path: with `/api`, the app answers `app.example.com/api` and what is below it, and another app of yours on the same server can take the rest of the domain. The longest path that matches wins, on whole segments (`/api` is not `/apix`). The path can be removed before the request is passed on, for apps that expect to live at `/`.
+
+A domain can also ask for a user name and password before anything reaches the app. The password is stored as a hash. Over plain HTTP it travels unencrypted, so use it with HTTPS.
+
 ### Deploying from Git
 
 An app can be built from a repository instead of pulling an image. Step 1 above becomes: clone the branch, then `docker build`. Builds run one at a time per server.
@@ -134,6 +145,17 @@ A CI pipeline can start a deployment with the app's deploy token, created on the
 ```bash
 curl -X POST -H "Authorization: Bearer $MUSDASH_DEPLOY_TOKEN" "https://musdash.example.com/api/v1/deploy?uuid=APP_ID"
 ```
+
+### A preview for every pull request
+
+Switch it on under the app's Settings. Each pull request into the app's branch then gets a deployment of its own, built from the pull request's branch, updated on every push to it and removed when it is closed.
+
+- **Address.** Set a domain for previews, such as `preview.example.com`, and point `*.preview.example.com` at the server: pull request 12 of the app `web` is served at `pr-12-web.preview.example.com` over HTTPS. Without one, each preview gets a generated address over plain HTTP.
+- **What it runs with.** The app's variables and files, as they are when the preview is deployed, plus `MUSDASH_PREVIEW=1` and `MUSDASH_PULL_REQUEST=<number>` so the app can tell. It gets none of the app's volumes or server directories. Unless the app looks at `MUSDASH_PREVIEW`, a preview talks to the same database as the app.
+- **Who can get one.** Only pull requests whose branch is in the repository itself. One from a fork gets none: its code would be built and run with your variables. Anyone who can push a branch to the repository can read those variables through a preview.
+- **Events.** Through a GitHub App they arrive on their own. A webhook added by hand must also send pull request events.
+- **The comment.** Through a GitHub App, the preview's address is written to the pull request. An App created before previews existed may lack the permission: grant "Pull requests: read and write" in the App's settings on GitHub.
+- **Limit.** Ten previews per app at once.
 
 ## Databases
 

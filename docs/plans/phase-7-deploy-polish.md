@@ -36,7 +36,12 @@
 | What a preview is | An app of its own, a child of the app it previews: same repository and build settings, the pull request's branch, a copy of the parent's variables, its own container and address. It is listed under the parent, not among the environment's apps | The whole pipeline (clone, build, health check, routes, logs, delete) then applies unchanged |
 | Which pull requests get a preview | Only those whose branch is in the same repository. A pull request from a fork gets none | A fork's code would be built and run with the app's variables by someone who cannot push to the repository |
 | A preview's address | `pr-<number>-<app>.<base>` where `<base>` is the app's preview domain if one is set, otherwise a generated address on the server's IP | A wildcard DNS record `*.preview.example.com` gives every pull request a name without touching DNS again |
-| Variables | Copied from the parent when the preview is created; `MUSDASH_PREVIEW=1` and `MUSDASH_PULL_REQUEST=<n>` are added | A preview usually wants the parent's configuration. It also means a preview talks to the same database unless the app looks at `MUSDASH_PREVIEW` |
+| Variables and files | Not copied: a preview is built and run with its parent's, as they are at each deployment (`App.ConfigOwner`). `MUSDASH_PREVIEW=1` and `MUSDASH_PULL_REQUEST=<n>` are added | No second copy of the secrets to keep in step or to clean up. It also means a preview talks to the same database unless the app looks at `MUSDASH_PREVIEW` |
+| Volumes and server directories | A preview gets none of its parent's | A directory of the server would be production's own data; a volume would be one more thing to remove with every pull request |
+| Which branch a pull request must go into | The app's own | A preview shows what the app would become |
+| A preview's own settings | None. Its pages for variables, storage, tasks, domains and settings are closed; it can be deployed, stopped, rolled back, read and removed | Everything it runs with is its parent's |
+| Removing a preview | A job under the preview's own deployment lock, so it waits for a build that is running | A pull request is often closed while its last push is still building |
+| Deleting an app | Its previews go first, and the row cannot be deleted while one exists | A preview without a parent would be a running app that no page lists |
 | Telling the pull request | A comment with the address when the first deployment succeeds, updated on later ones, through the GitHub App when it may write to pull requests; otherwise nothing | Best effort: an App created before this phase lacks the permission. The page explains how to grant it |
 | Events | `pull_request` with action `opened`, `reopened`, `synchronize` deploys; `closed` destroys | From the GitHub App's webhook, and from a webhook added by hand that sends pull request events |
 | Limits | At most ten previews per app at once | A burst of pull requests must not fill the server |
@@ -98,10 +103,10 @@ func ReadEvent(body io.Reader, secret []byte, header, event string) (Push, PullR
 - [x] Tests: lookup table cases; a request with no, wrong and right credentials; the hash never in a response or a log; the routes file's mode; certificates requested once per host.
 
 ### Task 3 — Pull request previews
-- [ ] `ReadEvent` reads push and pull request events from one signed body.
-- [ ] `SyncPreview` / `ClosePreview`; previews under the parent app's page; the parent's delete removes its previews.
-- [ ] Comment on the pull request through the GitHub App.
-- [ ] Tests: opened → a child app with the branch, variables and address; synchronize → redeploy, not a second child; closed → destroyed; a fork → nothing; the limit; another repository's event with a valid signature → nothing.
+- [x] `ReadEvent` reads push and pull request events from one signed body.
+- [x] `SyncPreview` / `ClosePreview`; previews under the parent app's page; the parent's delete removes its previews.
+- [x] Comment on the pull request through the GitHub App.
+- [x] Tests: opened → a child app with the branch, variables and address; synchronize → redeploy, not a second child; closed → destroyed; a fork → nothing; the limit; another repository's event with a valid signature → nothing.
 
 ### Task 4 — End
 - [ ] Independent review; README; RSS on Linux for the proxy with basic auth routes.

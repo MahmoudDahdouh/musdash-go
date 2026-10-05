@@ -3,13 +3,16 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
@@ -737,4 +740,325 @@ func TestOtherTeamsSourcesAreNotReachable(t *testing.T) {
 func htmlUnescape(s string) string {
 	r := strings.NewReplacer("&#34;", `"`, "&quot;", `"`, "&amp;", "&", "&#39;", "'", "&lt;", "<", "&gt;", ">")
 	return r.Replace(s)
+}
+
+// prBody is a pull request event as GitHub sends it, cut down to its shape.
+func prBody(action, base, head, branch string, number int) string {
+	headRepo := `{"full_name":"` + head + `"}`
+	if head == "" {
+		headRepo = "null"
+	}
+	return `{"action":"` + action + `","number":` + strconv.Itoa(number) + `,"pull_request":{"number":` + strconv.Itoa(number) + `,
+		"head":{"ref":"` + branch + `","sha":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2","repo":` + headRepo + `},
+		"base":{"ref":"main","repo":{"full_name":"` + base + `"}}},"repository":{"full_name":"` + base + `"}}`
+}
+
+func (a *app) previewsOf(appID string) []db.App {
+	a.t.Helper()
+	list, err := a.db.Previews(context.Background(), appID)
+	if err != nil {
+		a.t.Fatal(err)
+	}
+	return list
+}
+
+// waitGone waits for an app to be removed by a queued job.
+func (a *app) waitGone(appID string) {
+	a.t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := a.db.AppByID(context.Background(), appID); errors.Is(err, db.ErrNotFound) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	a.t.Fatalf("app %s was not removed", appID)
+}
+
+func TestPullRequestsThroughAGitHubApp(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+	projectID, env := a.project("Shop")
+	team := firstTeam(t, a)
+
+	whSecret := []byte("github-generated-secret")
+	src, _ := a.db.StartGitSource(ctx, team, "musdash-test", "st")
+	src.AppID, src.Slug, src.WebhookSecret, src.PrivateKey = 777, "musdash-test", a.seal(string(whSecret)), a.seal("pem")
+	if err := a.db.FinishGitSource(ctx, src); err != nil {
+		t.Fatal(err)
+	}
+	web := a.newGitApp(projectID, env, "web", url.Values{"access": {"source:" + src.ID}})
+	// The same repository: one without previews, one that deploys another
+	// branch, one that is not connected through this App.
+	quiet := a.newGitApp(projectID, env, "quiet", url.Values{"access": {"source:" + src.ID}})
+	staging := a.newGitApp(projectID, env, "staging", url.Values{"access": {"source:" + src.ID}, "branch": {"develop"}})
+	public := a.newGitApp(projectID, env, "public", nil)
+	settings := "/apps/" + web.ID + "/settings"
+	for _, app := range []db.App{web, staging, public} {
+		page := "/apps/" + app.ID + "/settings"
+		res, _ := a.post(page, "/apps/"+app.ID+"/previews", url.Values{"previews": {"1"}})
+		wantRedirect(t, res, page+"#previews")
+	}
+	path := "/webhooks/github/" + src.ID
+	opened := prBody("opened", "Acme/Shop", "acme/shop", "feature/login", 12)
+
+	// Nothing unsigned or wrongly signed makes a preview, and an unknown
+	// source answers like a bad signature.
+	if res, _ := a.hook(path, []byte("guess"), "pull_request", "p-bad", opened); res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("wrong secret: %d", res.StatusCode)
+	}
+	if res, _ := a.hook("/webhooks/github/nosuchsource", whSecret, "pull_request", "p-x", opened); res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("unknown source: %d", res.StatusCode)
+	}
+	// Signed, and not something that gets a preview.
+	for name, body := range map[string]string{
+		"from a fork":          prBody("opened", "acme/shop", "mallory/shop", "main", 20),
+		"from a deleted fork":  prBody("opened", "acme/shop", "", "main", 21),
+		"of another repo":      prBody("opened", "acme/elsewhere", "acme/elsewhere", "x", 22),
+		"only labelled":        prBody("labeled", "acme/shop", "acme/shop", "x", 23),
+		"a branch like a flag": prBody("opened", "acme/shop", "acme/shop", "--upload-pack=x", 24),
+		"closed, never opened": prBody("closed", "acme/shop", "acme/shop", "x", 25),
+		"not about a PR":       `{"action":"opened","number":26,"issue":{"number":26},"repository":{"full_name":"acme/shop"}}`,
+	} {
+		res, answer := a.hook(path, whSecret, "pull_request", "p-"+name, body)
+		if res.StatusCode != http.StatusOK || !strings.Contains(answer, `"previews":0`) {
+			t.Errorf("%s: %d %s", name, res.StatusCode, answer)
+		}
+	}
+	// A pull request body sent as a push is not a push either.
+	if res, answer := a.hook(path, whSecret, "push", "p-as-push", opened); res.StatusCode != http.StatusOK || !strings.Contains(answer, `"deployments":0`) {
+		t.Errorf("a pull request sent as a push: %d %s", res.StatusCode, answer)
+	}
+	for _, app := range []db.App{web, quiet, staging, public} {
+		if n := len(a.previewsOf(app.ID)); n != 0 {
+			t.Fatalf("%s has %d previews after events that give none", app.Name, n)
+		}
+	}
+	if n := a.deployJobs(); n != 0 {
+		t.Fatalf("%d deployments were queued", n)
+	}
+
+	// Opened: exactly the one app that deploys this branch of this
+	// repository through this App, with previews on, gets one.
+	res, answer := a.hook(path, whSecret, "pull_request", "p-1", opened)
+	if res.StatusCode != http.StatusOK || !strings.Contains(answer, `"previews":1`) {
+		t.Fatalf("opened: %d %s", res.StatusCode, answer)
+	}
+	previews := a.previewsOf(web.ID)
+	if len(previews) != 1 || previews[0].PRNumber != 12 || previews[0].Branch != "feature/login" || previews[0].Name != "web-pr-12" {
+		t.Fatalf("previews of web: %+v", previews)
+	}
+	for _, app := range []db.App{quiet, staging, public} {
+		if n := len(a.previewsOf(app.ID)); n != 0 {
+			t.Errorf("%s got a preview", app.Name)
+		}
+	}
+	child := previews[0]
+	if list, _ := a.db.ListDeployments(ctx, child.ID, 5); len(list) != 1 || list[0].Trigger != "pull request" {
+		t.Fatalf("deployments of the preview: %+v", list)
+	}
+	// Redelivered: nothing more.
+	if _, answer = a.hook(path, whSecret, "pull_request", "p-1", opened); !strings.Contains(answer, "already handled") {
+		t.Fatalf("redelivery: %s", answer)
+	}
+	// A push to the pull request's branch is a push event too. It deploys
+	// nothing: the preview follows the pull request's own events.
+	if _, answer = a.hook(path, whSecret, "push", "p-push", pushBody("acme/shop", "refs/heads/feature/login")); !strings.Contains(answer, `"deployments":0`) {
+		t.Fatalf("a push to the pull request's branch: %s", answer)
+	}
+	// New commits: the same preview, deployed again once the first is done.
+	a.db.Exec(`UPDATE deployments SET status = 'failed' WHERE app_id = ?`, child.ID)
+	if _, answer = a.hook(path, whSecret, "pull_request", "p-2", prBody("synchronize", "acme/shop", "acme/shop", "feature/login", 12)); !strings.Contains(answer, `"previews":1`) {
+		t.Fatalf("synchronize: %s", answer)
+	}
+	if n := len(a.previewsOf(web.ID)); n != 1 {
+		t.Fatalf("%d previews after new commits", n)
+	}
+	if list, _ := a.db.ListDeployments(ctx, child.ID, 5); len(list) != 2 {
+		t.Fatalf("%d deployments of the preview", len(list))
+	}
+
+	// On the pages: with its parent, not among the project's apps.
+	_, page := a.get(settings)
+	for _, want := range []string{"Pull request previews", "/apps/" + child.ID, "feature/login", "/previews/12/delete"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the parent's settings lack %q", want)
+		}
+	}
+	if _, page = a.get("/projects/" + projectID + "?env=" + env.ID); strings.Contains(page, "web-pr-12") {
+		t.Error("the project page lists the preview as an app")
+	}
+	_, page = a.get("/apps/" + child.ID)
+	if !strings.Contains(page, "The preview of pull request #12") || !strings.Contains(page, "/apps/"+web.ID) {
+		t.Error("the preview's page does not say what it is")
+	}
+	if strings.Contains(page, "/apps/"+child.ID+"/environment") || strings.Contains(page, "/apps/"+child.ID+"/storage") {
+		t.Error("the preview's page offers variables or storage of its own")
+	}
+
+	// A preview has no settings of its own to change.
+	token := "/apps/" + child.ID
+	for _, post := range []string{"/environment", "/settings", "/domains", "/storage", "/source", "/webhook-secret", "/deploy-token", "/tasks", "/build-server"} {
+		res, _ := a.post(token, "/apps/"+child.ID+post, url.Values{"vars": {"X=1"}, "host": {"x.example.com"}, "name": {"renamed"}})
+		wantRedirect(t, res, "/apps/"+child.ID)
+	}
+	for _, get := range []string{"/environment", "/storage", "/tasks"} {
+		if res, _ := a.get("/apps/" + child.ID + get); res.StatusCode != http.StatusSeeOther {
+			t.Errorf("GET %s on a preview: %d", get, res.StatusCode)
+		}
+	}
+	after, _ := a.db.AppByID(ctx, child.ID)
+	vars, _ := a.db.ListEnvVars(ctx, db.KindApp, child.ID)
+	doms, _ := a.db.ListDomains(ctx, db.KindApp, child.ID)
+	if after.Name != "web-pr-12" || after.WebhookSecret != "" || after.DeployTokenHash != "" || len(vars) != 0 || len(doms) != 1 {
+		t.Fatalf("a preview's settings were changed: %+v, %d variables, %d domains", after, len(vars), len(doms))
+	}
+	// And previews cannot be switched on for a preview.
+	if res, _ := a.post(token, "/apps/"+child.ID+"/previews", url.Values{"previews": {"1"}}); res.StatusCode != http.StatusNotFound {
+		t.Errorf("previews of a preview: %d", res.StatusCode)
+	}
+
+	// Closed: gone.
+	if _, answer = a.hook(path, whSecret, "pull_request", "p-3", prBody("closed", "acme/shop", "acme/shop", "feature/login", 12)); !strings.Contains(answer, `"previews":1`) {
+		t.Fatalf("closed: %s", answer)
+	}
+	a.waitGone(child.ID)
+	if _, err := a.db.AppByID(ctx, web.ID); err != nil {
+		t.Fatalf("the parent went with its preview: %v", err)
+	}
+
+	// Removed by hand from the parent's page; another team's app is not
+	// found, and neither is a pull request that has no preview.
+	a.hook(path, whSecret, "pull_request", "p-4", prBody("reopened", "acme/shop", "acme/shop", "feature/login", 12))
+	again := a.previewsOf(web.ID)
+	if len(again) != 1 {
+		t.Fatalf("reopened: %d previews", len(again))
+	}
+	if res, _ := a.post(settings, "/apps/"+web.ID+"/previews/99/delete", nil); res.StatusCode != http.StatusNotFound {
+		t.Errorf("removing a preview that does not exist: %d", res.StatusCode)
+	}
+	if res, _ := a.post(settings, "/apps/"+quiet.ID+"/previews/12/delete", nil); res.StatusCode != http.StatusNotFound {
+		t.Errorf("removing another app's preview through this one: %d", res.StatusCode)
+	}
+	res, _ = a.post(settings, "/apps/"+web.ID+"/previews/12/delete", nil)
+	wantRedirect(t, res, settings+"#previews")
+	a.waitGone(again[0].ID)
+
+	// Switched off: later pull requests get none.
+	res, _ = a.post(settings, "/apps/"+web.ID+"/previews", url.Values{})
+	wantRedirect(t, res, settings+"#previews")
+	if _, answer = a.hook(path, whSecret, "pull_request", "p-5", prBody("opened", "acme/shop", "acme/shop", "another", 13)); !strings.Contains(answer, `"previews":0`) {
+		t.Fatalf("with previews off: %s", answer)
+	}
+}
+
+func TestPreviewSettingsAndManualWebhook(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+	projectID, env := a.project("Shop")
+	app := a.newGitApp(projectID, env, "web", nil)
+	settings := "/apps/" + app.ID + "/settings"
+
+	// The domain previews are served under.
+	for name, domain := range map[string]string{
+		"not a domain":   "not a domain",
+		"with a path":    "preview.example.com/x",
+		"generated":      "1.2.3.4.sslip.io",
+		"too long a one": strings.Repeat("a", 60) + "." + strings.Repeat("b", 60) + "." + strings.Repeat("c", 60) + "." + strings.Repeat("d", 50) + ".example",
+	} {
+		res, _ := a.post(settings, "/apps/"+app.ID+"/previews", url.Values{"previews": {"1"}, "preview_domain": {domain}})
+		if res.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %d", name, res.StatusCode)
+		}
+	}
+	if got, _ := a.db.AppByID(ctx, app.ID); got.Previews || got.PreviewDomain != "" {
+		t.Fatalf("a refused form was saved: %+v", got)
+	}
+	// A wildcard as people write it in DNS is taken for its domain.
+	res, _ := a.post(settings, "/apps/"+app.ID+"/previews", url.Values{"previews": {"1"}, "preview_domain": {"*.Preview.Example.com"}})
+	wantRedirect(t, res, settings+"#previews")
+	if got, _ := a.db.AppByID(ctx, app.ID); !got.Previews || got.PreviewDomain != "preview.example.com" {
+		t.Fatalf("saved: previews %v, domain %q", got.Previews, got.PreviewDomain)
+	}
+	// An app deployed from an image has no pull requests.
+	image := a.newApp(projectID, env, "img", false, nil)
+	if res, _ := a.post("/apps/"+image+"/settings", "/apps/"+image+"/previews", url.Values{"previews": {"1"}}); res.StatusCode != http.StatusNotFound {
+		t.Errorf("previews for an image app: %d", res.StatusCode)
+	}
+	if _, page := a.get("/apps/" + image + "/settings"); strings.Contains(page, "Pull request previews") {
+		t.Error("an image app's settings offer previews")
+	}
+
+	// A webhook added by hand that also sends pull request events.
+	res, _ = a.post(settings, "/apps/"+app.ID+"/webhook-secret", nil)
+	wantRedirect(t, res, settings+"#triggers")
+	_, page := a.get(settings)
+	m := regexp.MustCompile(`data-copy="([0-9a-f]{48})"`).FindStringSubmatch(page)
+	if m == nil {
+		t.Fatal("no webhook secret on the page")
+	}
+	key, hookPath := []byte(m[1]), "/webhooks/git/"+app.ID
+
+	for name, body := range map[string]string{
+		"from a fork":     prBody("opened", "acme/shop", "mallory/shop", "main", 30),
+		"of another repo": prBody("opened", "someone/else", "someone/else", "x", 31),
+	} {
+		if res, answer := a.hook(hookPath, key, "pull_request", "m-"+name, body); res.StatusCode != http.StatusOK || !strings.Contains(answer, `"previews":0`) {
+			t.Errorf("%s: %d %s", name, res.StatusCode, answer)
+		}
+	}
+	if res, _ := a.hook(hookPath, []byte("guess"), "pull_request", "m-bad", prBody("opened", "acme/shop", "acme/shop", "feature", 32)); res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("wrong secret: %d", res.StatusCode)
+	}
+	if n := len(a.previewsOf(app.ID)); n != 0 {
+		t.Fatalf("%d previews after events that give none", n)
+	}
+	// Whatever the host calls its event header, the body says what it is.
+	res, answer := a.hook(hookPath, key, "", "m-1", prBody("opened", "acme/shop", "acme/shop", "feature", 32))
+	if res.StatusCode != http.StatusOK || !strings.Contains(answer, `"previews":1`) {
+		t.Fatalf("opened: %d %s", res.StatusCode, answer)
+	}
+	previews := a.previewsOf(app.ID)
+	if len(previews) != 1 {
+		t.Fatalf("%d previews", len(previews))
+	}
+	doms, _ := a.db.ListDomains(ctx, db.KindApp, previews[0].ID)
+	if len(doms) != 1 || doms[0].Host != "pr-32-web.preview.example.com" || !doms[0].TLS {
+		t.Fatalf("the preview's address: %+v", doms)
+	}
+	// The preview has no webhook of its own: its id is not an address.
+	if res, _ := a.hook("/webhooks/git/"+previews[0].ID, key, "push", "m-child", pushBody("acme/shop", "refs/heads/feature")); res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("a webhook to the preview's id: %d", res.StatusCode)
+	}
+	if _, answer = a.hook(hookPath, key, "pull_request", "m-2", prBody("closed", "acme/shop", "acme/shop", "feature", 32)); !strings.Contains(answer, `"previews":1`) {
+		t.Fatalf("closed: %s", answer)
+	}
+	a.waitGone(previews[0].ID)
+
+	// Deleting an app takes its previews with it.
+	a.hook(hookPath, key, "pull_request", "m-3", prBody("opened", "acme/shop", "acme/shop", "feature", 33))
+	left := a.previewsOf(app.ID)
+	if len(left) != 1 {
+		t.Fatalf("%d previews before the delete", len(left))
+	}
+	// Let its deployment end first: an app is not deleted under one.
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		list, _ := a.db.ListDeployments(ctx, left[0].ID, 1)
+		if len(list) == 1 && (list[0].Status == db.DeploySuccess || list[0].Status == db.DeployFailed) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	res, _ = a.post(settings, "/apps/"+app.ID+"/delete", url.Values{"confirm": {"web"}})
+	if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(res.Header.Get("Location"), "/projects/") {
+		t.Fatalf("delete: %d to %q", res.StatusCode, res.Header.Get("Location"))
+	}
+	for _, id := range []string{app.ID, left[0].ID} {
+		if _, err := a.db.AppByID(ctx, id); !errors.Is(err, db.ErrNotFound) {
+			t.Errorf("app %s is still there", id)
+		}
+	}
 }
