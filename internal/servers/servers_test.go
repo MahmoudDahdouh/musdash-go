@@ -18,6 +18,7 @@ import (
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
+	"github.com/MahmoudDahdouh/musdash-go/internal/runner/runnertest"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner/sshtest"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/migrations"
@@ -278,5 +279,172 @@ func TestLocalServerAndUnknownKinds(t *testing.T) {
 	}
 	if DefaultDataDir("root") != "/var/lib/musdash" || DefaultDataDir("deploy") != "/home/deploy/.musdash" {
 		t.Fatal("default data directories")
+	}
+}
+
+func TestCheckRecordsWhatItFinds(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	rep, err := e.pool.Check(ctx, e.server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := func(name string) Item {
+		for _, it := range rep.Items {
+			if it.Name == name {
+				return it
+			}
+		}
+		return Item{}
+	}
+	if !item("Connection").OK || !rep.NewHostKey || !strings.HasPrefix(rep.Fingerprint, "SHA256:") {
+		t.Fatalf("%+v", rep)
+	}
+	if it := item("Data directory"); !it.OK || it.Detail != e.server.DataDir {
+		t.Fatalf("%+v", it)
+	}
+	for _, sub := range []string{"apps", "work", "backups", "proxy", "bin"} {
+		info, err := os.Stat(filepath.Join(e.server.DataDir, sub))
+		if err != nil || info.Mode().Perm() != 0o700 {
+			t.Fatalf("%s: %v %v", sub, info, err)
+		}
+	}
+	got, _ := e.db.ServerByID(ctx, e.server.ID)
+	if got.HostKey == "" || got.CheckedAt == 0 || got.Arch == "" || got.IP != "127.0.0.1" {
+		t.Fatalf("stored: %+v", got)
+	}
+	// This machine is the "server": what it lacks decides the status.
+	if rep.OK() != (got.Status == db.ServerOK) || (!rep.OK() && got.StatusDetail == "") {
+		t.Fatalf("status %q (%q) for a report that is ok=%v", got.Status, got.StatusDetail, rep.OK())
+	}
+
+	// A second check is not a first contact.
+	rep, err = e.pool.Check(ctx, got)
+	if err != nil || rep.NewHostKey {
+		t.Fatalf("second check: new key %v, %v", rep.NewHostKey, err)
+	}
+
+	// A server that does not answer is recorded as unreachable, with why.
+	e.srv.Close()
+	e.pool.Forget(got.ID)
+	rep, err = e.pool.Check(ctx, got)
+	if err != nil || rep.OK() {
+		t.Fatalf("a server that is down: ok=%v %v", rep.OK(), err)
+	}
+	down, _ := e.db.ServerByID(ctx, e.server.ID)
+	if down.Status != db.ServerUnreachable || !strings.Contains(down.StatusDetail, "nothing answers on that port") {
+		t.Fatalf("%q %q", down.Status, down.StatusDetail)
+	}
+
+	// Something else at the address: said in so many words, key kept.
+	other := sshtest.Start(t)
+	e.db.Exec(`UPDATE servers SET port = ? WHERE id = ?`, other.Port, e.server.ID)
+	moved, _ := e.db.ServerByID(ctx, e.server.ID)
+	rep, _ = e.pool.Check(ctx, moved)
+	if rep.OK() || !strings.Contains(rep.Problem(), "host key is not the one recorded") {
+		t.Fatalf("a changed host key: %q", rep.Problem())
+	}
+	if after, _ := e.db.ServerByID(ctx, e.server.ID); after.HostKey != got.HostKey {
+		t.Fatal("the check replaced the recorded host key")
+	}
+}
+
+func TestInstallProxy(t *testing.T) {
+	ctx := context.Background()
+	binary := filepath.Join(t.TempDir(), "musdash")
+	os.WriteFile(binary, []byte("\x7fELF the proxy"), 0o755)
+	s := db.Server{Kind: db.ServerSSH, SSHUser: "deploy", DataDir: "/home/deploy/.musdash", Arch: "amd64"}
+
+	uid := "1000\n"
+	fake := &runnertest.Fake{}
+	fake.Handle = func(line string, _ runner.Cmd) (string, error) {
+		if line == "id -u" {
+			return uid, nil
+		}
+		return "", nil
+	}
+	if err := installProxy(ctx, fake, s, binary); err != nil {
+		t.Fatal(err)
+	}
+	copied, mode, _ := fake.File("/home/deploy/.musdash/bin/musdash")
+	if copied != "\x7fELF the proxy" || mode != 0o755 {
+		t.Fatalf("the binary on the server: %q, mode %o", copied, mode)
+	}
+	unit, _, _ := fake.File("/home/deploy/.musdash/musdash-proxy.service")
+	for _, want := range []string{"User=deploy\n", "Environment=MUSDASH_DATA=/home/deploy/.musdash\n", "ExecStart=/home/deploy/.musdash/bin/musdash proxy\n", "AmbientCapabilities=CAP_NET_BIND_SERVICE\n", "Restart=always\n"} {
+		if !strings.Contains(unit, want) {
+			t.Errorf("the unit is missing %q:\n%s", want, unit)
+		}
+	}
+	if routes, _, ok := fake.File("/home/deploy/.musdash/proxy/routes.json"); !ok || !strings.Contains(routes, `"routes":[]`) {
+		t.Fatalf("the first routes file: %q", routes)
+	}
+	all := "\n" + strings.Join(fake.Calls(), "\n") + "\n"
+	order := []string{
+		"\nsudo -n install -m 0644 /home/deploy/.musdash/musdash-proxy.service /etc/systemd/system/musdash-proxy.service\n",
+		"\nsudo -n systemctl daemon-reload\n",
+		"\nsudo -n systemctl enable musdash-proxy.service\n",
+		"\nsudo -n systemctl restart musdash-proxy.service\n",
+	}
+	at := 0
+	for _, want := range order {
+		i := strings.Index(all[at:], want)
+		if i < 0 {
+			t.Fatalf("%q is missing or out of order in:%s", strings.TrimSpace(want), all)
+		}
+		at += i
+	}
+
+	// As root nothing goes through sudo, and routes already there stay.
+	uid = "0\n"
+	root := s
+	root.SSHUser, root.DataDir = "root", "/var/lib/musdash"
+	fake2 := &runnertest.Fake{Handle: fake.Handle}
+	fake2.PutFile("/var/lib/musdash/proxy/routes.json", `{"routes":[{"host":"a.example.com"}]}`)
+	if err := installProxy(ctx, fake2, root, binary); err != nil {
+		t.Fatal(err)
+	}
+	if calls := strings.Join(fake2.Calls(), "\n"); strings.Contains(calls, "sudo") || !strings.Contains(calls, "systemctl restart musdash-proxy.service") {
+		t.Fatalf("as root: %s", calls)
+	}
+	if routes, _, _ := fake2.File("/var/lib/musdash/proxy/routes.json"); !strings.Contains(routes, "a.example.com") {
+		t.Fatal("an install replaced the routes that were there")
+	}
+
+	// A user without sudo is told what is missing.
+	uid = "1000\n"
+	fake3 := &runnertest.Fake{Handle: func(line string, c runner.Cmd) (string, error) {
+		if strings.HasPrefix(line, "sudo -n install") {
+			return "", runnertest.Exit("sudo", 1, "sudo: a password is required")
+		}
+		return fake.Handle(line, c)
+	}}
+	if err := installProxy(ctx, fake3, s, binary); err == nil || !strings.Contains(err.Error(), "cannot use sudo without a password") {
+		t.Fatalf("no sudo: %v", err)
+	}
+
+	// Names that could add a line to the unit file are refused before
+	// anything is written, as is a server that was never checked.
+	pool := New()
+	for _, bad := range []db.Server{
+		{Kind: db.ServerSSH, SSHUser: "deploy\nExecStartPre=/bin/evil", DataDir: "/srv/m", Arch: "amd64"},
+		{Kind: db.ServerSSH, SSHUser: "deploy", DataDir: "/srv/m\nUser=root", Arch: "amd64"},
+		{Kind: db.ServerSSH, SSHUser: "deploy", DataDir: "relative/dir", Arch: "amd64"},
+		{Kind: db.ServerSSH, SSHUser: "deploy", DataDir: "/srv/m", Arch: ""},
+		{Kind: db.ServerLocal},
+	} {
+		if err := pool.InstallProxy(ctx, bad, t.TempDir()); err == nil {
+			t.Errorf("accepted %+v", bad)
+		}
+	}
+	// A server of another architecture needs its own binary, and the
+	// message says where to put it.
+	if _, err := ProxyBinary(t.TempDir(), "riscv64"); err == nil || !strings.Contains(err.Error(), "musdash-linux-riscv64") {
+		t.Fatalf("%v", err)
+	}
+	dist := t.TempDir()
+	os.WriteFile(filepath.Join(dist, "musdash-linux-riscv64"), []byte("x"), 0o755)
+	if got, err := ProxyBinary(dist, "riscv64"); err != nil || got != filepath.Join(dist, "musdash-linux-riscv64") {
+		t.Fatalf("%q %v", got, err)
 	}
 }

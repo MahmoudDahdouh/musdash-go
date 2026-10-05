@@ -148,6 +148,7 @@ func scanServer(row interface{ Scan(...any) error }) (Server, error) {
 const (
 	ServerUnknown     = "unknown"
 	ServerOK          = "ok"
+	ServerProblem     = "problem" // reached, but something a deployment needs is missing
 	ServerUnreachable = "unreachable"
 
 	ProxyNone      = "none"
