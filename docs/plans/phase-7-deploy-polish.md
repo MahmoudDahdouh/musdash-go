@@ -24,6 +24,12 @@
 | Certificates | Per host, as before. A host is requested when any of its paths wants TLS | One certificate serves all paths of a host |
 | Basic auth | A user name and a bcrypt hash on the domain row; the proxy asks for them before passing a request on | The spec's "fields on the route" |
 | Cost of bcrypt per request | The proxy remembers credentials it has verified for five minutes, as a hash, in a table of at most 256 entries | A bcrypt comparison takes tens of milliseconds of CPU; a page with thirty assets would otherwise cost seconds |
+| Who may share a host | Resources of one team, on one server. Another team is told the domain is taken, whatever the path; the same team on another server is told the domain is routed there | Two teams on one host could take each other's traffic by choosing a longer path. Two servers cannot both be where the host's DNS points |
+| The dashboard's own domain | No path of it can be given to an app | A page under it would be the dashboard's origin to a browser |
+| A path that is not in its simplest form | On a host where the path decides the route or a password guards one, `/public/../admin` and `//admin` are redirected to `/admin` first | What the proxy matches is then what the app receives |
+| The password after the check | The `Authorization` header is not passed on to the app | The password is the proxy's; an app's logs are not the place for it |
+| Guessing passwords | One bcrypt comparison at a time across the proxy; a request waits up to five seconds for its turn | A flood of wrong passwords must not take the CPU from every site |
+| Service endpoints | Keep a whole host, without a path or a password, for now | Their domain form replaces the row; it is a separate change |
 | The routes file | Written `0600` | It now holds password hashes. The proxy runs as the account that writes it |
 | What a preview is | An app of its own, a child of the app it previews: same repository and build settings, the pull request's branch, a copy of the parent's variables, its own container and address. It is listed under the parent, not among the environment's apps | The whole pipeline (clone, build, health check, routes, logs, delete) then applies unchanged |
 | Which pull requests get a preview | Only those whose branch is in the same repository. A pull request from a fork gets none | A fork's code would be built and run with the app's variables by someone who cannot push to the repository |
@@ -85,9 +91,9 @@ func ReadEvent(body io.Reader, secret []byte, header, event string) (Push, PullR
 - [ ] Tests: order of commands (no pull, no build), the image gone, team scoping, a rollback of a rollback.
 
 ### Task 2 — Path routing and basic auth
-- [ ] Migration; domain form fields; uniqueness on `(host, path)`; validation of the prefix.
-- [ ] Proxy: longest-prefix lookup on segment boundaries, strip, `WWW-Authenticate`, the verified-credentials table with its bound and expiry.
-- [ ] Tests: lookup table cases; a request with no, wrong and right credentials; the hash never in a response or a log; the routes file's mode; certificates requested once per host.
+- [x] Migration; domain form fields; uniqueness on `(host, path)`; validation of the prefix.
+- [x] Proxy: longest-prefix lookup on segment boundaries, strip, `WWW-Authenticate`, the verified-credentials table with its bound and expiry.
+- [x] Tests: lookup table cases; a request with no, wrong and right credentials; the hash never in a response or a log; the routes file's mode; certificates requested once per host.
 
 ### Task 3 — Pull request previews
 - [ ] `ReadEvent` reads push and pull request events from one signed body.

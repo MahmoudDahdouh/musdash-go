@@ -12,7 +12,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/proxy"
 )
 
 // project creates a project and returns its id and production environment.
@@ -422,7 +425,7 @@ func TestOtherTeamsAppIsNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	dep, _ := a.db.CreateDeployment(ctx, db.Deployment{AppID: other.ID, Image: "nginx"})
-	dom, _ := a.db.AddDomain(ctx, db.KindApp, other.ID, "secret.example.com", true, false)
+	dom, _ := a.db.AddDomain(ctx, "otherteam", "othersrv", db.Domain{ResourceKind: db.KindApp, ResourceID: other.ID, Host: "secret.example.com", TLS: true})
 	base := "/apps/" + other.ID
 
 	for _, path := range []string{"", "/status", "/deployments", "/deployments/" + dep.ID, "/deployments/" + dep.ID + "/status",
@@ -602,5 +605,100 @@ func TestLongFlashIsTruncated(t *testing.T) {
 	f := takeFlash(httptest.NewRecorder(), req2)
 	if f == nil || !strings.HasSuffix(f.Message, "…") || !utf8.ValidString(f.Message) {
 		t.Fatalf("flash: %+v", f)
+	}
+}
+
+// Two apps share a domain by path, one of them behind a password. The
+// routes file is what the proxy reads, so the test hands it to the proxy.
+func TestAppDomainPathsAndPasswords(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	a.fake.PutFile(a.cfg.ProxyPIDPath(), "4242\n")
+	projectID, env := a.project("Shop")
+	web := a.newApp(projectID, env, "web", true, nil)
+	api := a.newApp(projectID, env, "api", true, nil)
+	webPage, apiPage := "/apps/"+web+"/settings", "/apps/"+api+"/settings"
+	const password = "correct horse battery"
+
+	res, _ := a.post(webPage, "/apps/"+web+"/domains", url.Values{"host": {"shop.example.com"}, "tls": {"1"}})
+	wantRedirect(t, res, webPage+"#domains")
+	// Typed loosely: no leading slash, one at the end.
+	res, body := a.post(apiPage, "/apps/"+api+"/domains", url.Values{"host": {"shop.example.com"}, "path": {"api/"}, "strip_prefix": {"1"}, "tls": {"1"},
+		"auth_user": {"ada"}, "auth_password": {password}})
+	wantRedirect(t, res, apiPage+"#domains")
+
+	doms, _ := a.db.ListDomains(context.Background(), db.KindApp, api)
+	if len(doms) != 1 || doms[0].Path != "/api" || !doms[0].StripPrefix || doms[0].AuthUser != "ada" {
+		t.Fatalf("stored: %+v", doms)
+	}
+	if doms[0].AuthHash == "" || strings.Contains(doms[0].AuthHash, password) || bcrypt.CompareHashAndPassword([]byte(doms[0].AuthHash), []byte(password)) != nil {
+		t.Fatalf("the password was not stored as its hash: %q", doms[0].AuthHash)
+	}
+
+	// The file the proxy reads: private, and one the proxy takes.
+	raw, mode, ok := a.fake.File(a.cfg.RoutesPath())
+	if !ok || mode.Perm() != 0o600 {
+		t.Fatalf("routes file mode %v: it holds password hashes", mode)
+	}
+	if strings.Contains(raw, password) {
+		t.Fatal("the password itself is in the routes file")
+	}
+	table, err := proxy.Parse(strings.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	site, _ := table.Lookup("shop.example.com", "/")
+	guarded, _ := table.Lookup("shop.example.com", "/api/users")
+	if site.Target == "" || guarded.Target == "" || site.Target == guarded.Target {
+		t.Fatalf("the two apps are not routed apart: %+v %+v", site, guarded)
+	}
+	if guarded.Path != "/api" || !guarded.StripPrefix || guarded.AuthUser != "ada" || site.AuthUser != "" {
+		t.Fatalf("routes: %+v %+v", site, guarded)
+	}
+
+	// The pages show that a password is asked for, never the hash.
+	for _, page := range []string{apiPage, "/apps/" + api} {
+		_, body = a.get(page)
+		if !strings.Contains(body, "shop.example.com/api") || !strings.Contains(body, "Password") {
+			t.Errorf("%s does not show the path and the password", page)
+		}
+		if strings.Contains(body, doms[0].AuthHash) || strings.Contains(body, password) {
+			t.Errorf("%s shows the password or its hash", page)
+		}
+	}
+
+	// What is refused, and that nothing of it is stored or echoed.
+	bad := map[string]url.Values{
+		"same path again":         {"host": {"shop.example.com"}, "path": {"/api"}},
+		"a path that climbs":      {"host": {"shop.example.com"}, "path": {"/a/../b"}},
+		"a path with a query":     {"host": {"shop.example.com"}, "path": {"/a?b"}},
+		"an encoded path":         {"host": {"shop.example.com"}, "path": {"/a%2Fb"}},
+		"a password and no user":  {"host": {"x.example.com"}, "auth_password": {password}},
+		"a user and no password":  {"host": {"x.example.com"}, "auth_user": {"ada"}},
+		"a short password":        {"host": {"x.example.com"}, "auth_user": {"ada"}, "auth_password": {"short"}},
+		"a password past bcrypt":  {"host": {"x.example.com"}, "auth_user": {"ada"}, "auth_password": {strings.Repeat("p", 73)}},
+		"a user with a colon":     {"host": {"x.example.com"}, "auth_user": {"a:b"}, "auth_password": {password}},
+		"a user with a line feed": {"host": {"x.example.com"}, "auth_user": {"a\nb"}, "auth_password": {password}},
+	}
+	for name, form := range bad {
+		res, body := a.post(webPage, "/apps/"+web+"/domains", form)
+		if res.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %d", name, res.StatusCode)
+		}
+		if strings.Contains(body, password) {
+			t.Errorf("%s: the password was sent back in the page", name)
+		}
+	}
+	if doms, _ := a.db.ListDomains(context.Background(), db.KindApp, web); len(doms) != 1 {
+		t.Fatalf("a refused domain was stored: %+v", doms)
+	}
+
+	// A resource that takes a whole host cannot take one that is in use,
+	// and the dashboard's own address has no paths to give away.
+	res, _ = a.post("/settings", "/settings", url.Values{"instance_domain": {"dash.example.com"}, "acme_email": {"ops@example.com"}})
+	wantRedirect(t, res, "/settings")
+	res, body = a.post(webPage, "/apps/"+web+"/domains", url.Values{"host": {"dash.example.com"}, "path": {"/app"}})
+	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "dashboard&#39;s own address") {
+		t.Errorf("a path of the dashboard's domain was given to an app: %d", res.StatusCode)
 	}
 }

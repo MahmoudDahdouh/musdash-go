@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -314,10 +315,11 @@ func TestAppsAreTeamScopedAndBlockDeletion(t *testing.T) {
 	if err := d.DeleteProject(ctx, team, p.ID); !IsForeignKey(err) {
 		t.Fatalf("deleting a project with an app: want a foreign-key error, got %v", err)
 	}
-	if _, err := d.AddDomain(ctx, KindApp, app.ID, "shop.example.com", true, false); err != nil {
+	shop := Domain{ResourceKind: KindApp, ResourceID: app.ID, Host: "shop.example.com", TLS: true}
+	if _, err := d.AddDomain(ctx, team, server.ID, shop); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.AddDomain(ctx, KindApp, "another-app", "shop.example.com", true, false); !IsUnique(err) {
+	if _, err := d.AddDomain(ctx, team, server.ID, shop); !IsUnique(err) {
 		t.Fatalf("a host used twice: want unique violation, got %v", err)
 	}
 	if err := d.DeleteApp(ctx, app.ID); err != nil {
@@ -396,7 +398,7 @@ func TestResetStuckDeployingAndPrune(t *testing.T) {
 	}
 
 	// Stopped apps are not routed, and an event cannot un-stop them.
-	d.AddDomain(ctx, KindApp, hadContainer.ID, "had.example.com", true, false)
+	d.AddDomain(ctx, team, server.ID, Domain{ResourceKind: KindApp, ResourceID: hadContainer.ID, Host: "had.example.com", TLS: true})
 	d.Exec(`UPDATE apps SET host_port = 20001 WHERE id = ?`, hadContainer.ID)
 	if rows, _ := d.RoutesForServer(ctx, server.ID); len(rows) != 1 {
 		t.Fatalf("%d routes for a running app", len(rows))
@@ -413,5 +415,144 @@ func TestResetStuckDeployingAndPrune(t *testing.T) {
 	}
 	if err := d.SetAppRuntime(ctx, "no-such-app", AppRunning, "c", 1, "i"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("SetAppRuntime on a deleted app: %v", err)
+	}
+}
+
+// A host can be routed more than once, by path, but only by one team and
+// on one server.
+func TestAHostIsSharedByPathWithinOneTeamAndServer(t *testing.T) {
+	ctx := context.Background()
+	d := openTest(t)
+	_, team, _ := d.CreateFirstUser(ctx, "a@example.com", "A", "hash")
+	server, _ := d.EnsureLocalServer(ctx, team, "203.0.113.7")
+	p, _ := d.CreateProject(ctx, team, "Shop", "")
+	envs, _ := d.ListEnvironments(ctx, p.ID)
+	newApp := func(teamID, envID, serverID, name string) App {
+		t.Helper()
+		a, err := d.CreateApp(ctx, teamID, App{EnvironmentID: envID, ServerID: serverID, Name: name, Image: "nginx", Port: 80})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	web, api := newApp(team, envs[0].ID, server.ID, "web"), newApp(team, envs[0].ID, server.ID, "api")
+	add := func(teamID, serverID string, m Domain) error {
+		_, err := d.AddDomain(ctx, teamID, serverID, m)
+		return err
+	}
+	of := func(app App, host, path string) Domain {
+		return Domain{ResourceKind: KindApp, ResourceID: app.ID, Host: host, Path: path, TLS: true}
+	}
+	if err := add(team, server.ID, of(web, "shop.example.com", "")); err != nil {
+		t.Fatal(err)
+	}
+	guarded := of(api, "shop.example.com", "/api")
+	guarded.StripPrefix, guarded.AuthUser, guarded.AuthHash = true, "ada", "$2a$10$hash"
+	if err := add(team, server.ID, guarded); err != nil {
+		t.Fatalf("another path of the team's own host: %v", err)
+	}
+	if err := add(team, server.ID, of(web, "shop.example.com", "/api")); !IsUnique(err) {
+		t.Fatalf("the same host and path twice: %v", err)
+	}
+	list, _ := d.ListDomains(ctx, KindApp, api.ID)
+	if len(list) != 1 || list[0].Path != "/api" || !list[0].StripPrefix || list[0].AuthUser != "ada" || list[0].AuthHash != "$2a$10$hash" {
+		t.Fatalf("stored: %+v", list)
+	}
+
+	// Another team cannot take a path of the host, whichever path.
+	d.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('teamb', 'B', 1)`)
+	d.Exec(`INSERT INTO servers (id, team_id, name, kind, created_at) VALUES ('srvb', 'teamb', 'theirs', 'ssh', 1)`)
+	pb, _ := d.CreateProject(ctx, "teamb", "Other", "")
+	envsB, _ := d.ListEnvironments(ctx, pb.ID)
+	theirs := newApp("teamb", envsB[0].ID, "srvb", "theirs")
+	for _, path := range []string{"/admin", "/api/v2", ""} {
+		if err := add("teamb", "srvb", of(theirs, "shop.example.com", path)); !errors.Is(err, ErrHostTaken) && !IsUnique(err) {
+			t.Fatalf("another team on the host at %q: %v", path, err)
+		}
+	}
+	if err := add("teamb", "srvb", of(theirs, "shop.example.com", "/admin")); !errors.Is(err, ErrHostTaken) {
+		t.Fatalf("another team on a free path of the host: %v", err)
+	}
+	if err := add("teamb", "srvb", of(theirs, "theirs.example.com", "")); err != nil {
+		t.Fatalf("a host of their own: %v", err)
+	}
+
+	// Nor can the same team route it on a second server.
+	d.Exec(`INSERT INTO servers (id, team_id, name, kind, created_at) VALUES ('srv2', ?, 'second', 'ssh', 1)`, team)
+	far := newApp(team, envs[0].ID, "srv2", "far")
+	if err := add(team, "srv2", of(far, "shop.example.com", "/far")); !errors.Is(err, ErrHostElsewhere) {
+		t.Fatalf("the host on a second server: %v", err)
+	}
+
+	// A service's endpoint counts as its team's.
+	d.Exec(`INSERT INTO services (id, environment_id, server_id, name, created_at, updated_at) VALUES ('svc1', ?, ?, 'stack', 1, 1)`, envs[0].ID, server.ID)
+	d.Exec(`INSERT INTO service_endpoints (id, service_id, name) VALUES ('ep1', 'svc1', 'WEB')`)
+	if err := d.SetEndpointDomain(ctx, "svc1", "ep1", "stack.example.com", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := add(team, server.ID, of(web, "stack.example.com", "/app")); err != nil {
+		t.Fatalf("a path beside the team's own service: %v", err)
+	}
+	if err := add("teamb", "srvb", of(theirs, "stack.example.com", "/x")); !errors.Is(err, ErrHostTaken) {
+		t.Fatalf("another team beside a service: %v", err)
+	}
+
+	// A row nobody can be found for shares its host with no one.
+	d.Exec(`INSERT INTO domains (id, resource_kind, resource_id, host, created_at) VALUES ('orphan', 'app', 'gone', 'old.example.com', 1)`)
+	if err := add(team, server.ID, of(web, "old.example.com", "/x")); !errors.Is(err, ErrHostTaken) {
+		t.Fatalf("a host with a row of unknown owner: %v", err)
+	}
+
+	// Routes carry what the proxy needs.
+	d.Exec(`UPDATE apps SET host_port = 20001, container = 'c1', status = 'running' WHERE id = ?`, web.ID)
+	d.Exec(`UPDATE apps SET host_port = 20002, container = 'c2', status = 'running' WHERE id = ?`, api.ID)
+	rows, err := d.RoutesForServer(ctx, server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, r := range rows {
+		got = append(got, r.Host+r.Path+"|"+r.AuthUser)
+	}
+	want := "shop.example.com| shop.example.com/api|ada stack.example.com/app|"
+	if strings.Join(got, " ") != want {
+		t.Fatalf("routes %q, want %q", got, want)
+	}
+}
+
+// The domains of an install made before paths existed are kept as they
+// were by the migration that rebuilds the table.
+func TestDomainsSurviveTheirTableBeingRebuilt(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(filepath.Join(t.TempDir(), "old.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	// Everything before the rebuild, then a row, then the rest.
+	entries, _ := fs.ReadDir(migrations.FS, ".")
+	before, after := fstest.MapFS{}, fstest.MapFS{}
+	for _, e := range entries {
+		raw, _ := fs.ReadFile(migrations.FS, e.Name())
+		after[e.Name()] = &fstest.MapFile{Data: raw}
+		if e.Name() < "0012" {
+			before[e.Name()] = &fstest.MapFile{Data: raw}
+		}
+	}
+	if err := d.Migrate(ctx, before); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO domains (id, resource_kind, resource_id, host, tls, redirect_www, created_at) VALUES ('d1', 'app', 'a1', 'old.example.com', 1, 1, 42)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Migrate(ctx, after); err != nil {
+		t.Fatal(err)
+	}
+	list, err := d.ListDomains(ctx, KindApp, "a1")
+	if err != nil || len(list) != 1 {
+		t.Fatalf("%v %+v", err, list)
+	}
+	if m := list[0]; m.ID != "d1" || m.Host != "old.example.com" || !m.TLS || !m.RedirectWWW || m.CreatedAt != 42 || m.Path != "" || m.AuthUser != "" {
+		t.Fatalf("after the rebuild: %+v", m)
 	}
 }

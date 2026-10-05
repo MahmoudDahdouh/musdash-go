@@ -103,7 +103,7 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.AddDomain(ctx, db.KindApp, app.ID, "shop.example.com", true, true); err != nil {
+	if _, err := d.AddDomain(ctx, team, server.ID, db.Domain{ResourceKind: db.KindApp, ResourceID: app.ID, Host: "shop.example.com", TLS: true, RedirectWWW: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -626,6 +626,41 @@ func TestBuildRoutes(t *testing.T) {
 	raw, _ = json.Marshal(empty)
 	if string(raw) != `{"routes":[]}` {
 		t.Fatalf("empty file: %s", raw)
+	}
+}
+
+func TestBuildRoutesByPath(t *testing.T) {
+	rows := []db.RouteRow{
+		{Host: "example.com", TLS: true, RedirectWWW: true, HostPort: 20001},
+		{Host: "example.com", Path: "/api", StripPrefix: true, TLS: true, RedirectWWW: true, AuthUser: "ada", AuthHash: "$2a$04$abcdefghijklmnopqrstuuJ8nZ0mK8zXc5l1o9vQ2r3s4t5u6v7w8", HostPort: 20002},
+		// Without a path there is nothing to take off.
+		{Host: "plain.example.com", StripPrefix: true, HostPort: 20003},
+		{Host: "bad.example.com", Path: "/a/../b", HostPort: 20004},
+	}
+	file, skipped := BuildRoutes(rows, "", "", "")
+	if len(skipped) != 1 || skipped[0] != "bad.example.com/a/../b" {
+		t.Fatalf("skipped %v", skipped)
+	}
+	got := map[string]proxy.Route{}
+	for _, r := range file.Routes {
+		if _, dup := got[r.Host+r.Path]; dup {
+			t.Fatalf("%s%s routed twice", r.Host, r.Path)
+		}
+		got[r.Host+r.Path] = r
+	}
+	want := map[string]proxy.Route{
+		"example.com":       {Host: "example.com", Target: "127.0.0.1:20001", TLS: true},
+		"example.com/api":   {Host: "example.com", Path: "/api", StripPrefix: true, Target: "127.0.0.1:20002", TLS: true, AuthUser: "ada", AuthHash: rows[1].AuthHash},
+		"www.example.com":   {Host: "www.example.com", RedirectTo: "example.com", TLS: true}, // once, for the host
+		"plain.example.com": {Host: "plain.example.com", Target: "127.0.0.1:20003"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("routes: %+v", file.Routes)
+	}
+	for key, w := range want {
+		if got[key] != w {
+			t.Errorf("%s: %+v, want %+v", key, got[key], w)
+		}
 	}
 }
 

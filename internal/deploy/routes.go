@@ -37,11 +37,15 @@ func BuildRoutes(rows []db.RouteRow, email, instanceDomain, instanceTarget strin
 		file.Routes = append(file.Routes, proxy.Route{Host: instanceDomain, Target: instanceTarget, TLS: true})
 	}
 	for _, r := range rows {
-		if !proxy.ValidHost(r.Host) {
-			skipped = append(skipped, r.Host)
+		if !proxy.ValidHost(r.Host) || !proxy.ValidPath(r.Path) {
+			skipped = append(skipped, r.Host+r.Path)
 			continue
 		}
-		file.Routes = append(file.Routes, proxy.Route{Host: r.Host, Target: "127.0.0.1:" + strconv.Itoa(r.HostPort), TLS: r.TLS})
+		file.Routes = append(file.Routes, proxy.Route{
+			Host: r.Host, Path: r.Path, StripPrefix: r.StripPrefix && r.Path != "",
+			Target: "127.0.0.1:" + strconv.Itoa(r.HostPort), TLS: r.TLS,
+			AuthUser: r.AuthUser, AuthHash: r.AuthHash,
+		})
 		if !r.RedirectWWW {
 			continue
 		}
@@ -111,8 +115,9 @@ func (d *Deployer) SyncRoutes(ctx context.Context, server db.Server) error {
 	if err := r.MkdirAll(ctx, d.at(r).ProxyDir(), 0o700); err != nil {
 		return err
 	}
-	// 0644: the proxy may run as a different user than the control plane.
-	if err := r.WriteFile(ctx, d.at(r).RoutesPath(), 0o644, bytes.NewReader(raw)); err != nil {
+	// 0600: the file holds the password hashes of guarded routes. The
+	// proxy runs as the account that owns the data directory, as this does.
+	if err := r.WriteFile(ctx, d.at(r).RoutesPath(), 0o600, bytes.NewReader(raw)); err != nil {
 		return err
 	}
 	return d.signalProxy(ctx, r)

@@ -33,9 +33,9 @@ func (v AppView) base() string { return "/apps/" + v.App.ID }
 // URL is the address a domain is reached at.
 func domainURL(d db.Domain) string {
 	if d.TLS {
-		return "https://" + d.Host
+		return "https://" + d.Host + d.Path
 	}
-	return "http://" + d.Host
+	return "http://" + d.Host + d.Path
 }
 
 func appTabs(v AppView) []ui.Tab {
@@ -315,7 +315,10 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 						for _, d := range v.Domains {
 							<a class="row" href={ templ.SafeURL(domainURL(d)) } target="_blank" rel="noopener">
 								@ui.Icon("globe", "text-ink-mute")
-								<span class="fact min-w-0 flex-1 truncate">{ d.Host }</span>
+								<span class="fact min-w-0 flex-1 truncate">{ d.Host + d.Path }</span>
+								if d.AuthUser != "" {
+									@ui.Badge("Password", ui.ToneNeutral)
+								}
 								if d.TLS {
 									@ui.Badge("HTTPS", ui.ToneOK)
 								} else {
@@ -688,7 +691,13 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src ui.Form, choices G
 					<div class="rows">
 						for _, d := range v.Domains {
 							<div class="row">
-								<span class="fact min-w-0 flex-1 truncate">{ d.Host }</span>
+								<span class="fact min-w-0 flex-1 truncate">{ d.Host + d.Path }</span>
+								if d.StripPrefix {
+									@ui.Badge("Path removed", ui.ToneNeutral)
+								}
+								if d.AuthUser != "" {
+									@ui.Badge("Password: " + d.AuthUser, ui.ToneNeutral)
+								}
 								if d.RedirectWWW {
 									@ui.Badge("www redirect", ui.ToneNeutral)
 								}
@@ -709,13 +718,27 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src ui.Form, choices G
 				}
 				<form class="card-body grid gap-4 border-t border-line" method="post" action={ templ.SafeURL(v.base() + "/domains") }>
 					@ui.CSRF(s.CSRF)
-					@ui.TextField(domain, "Add a domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com"})
+					<div class="grid gap-4 sm:grid-cols-2">
+						@ui.TextField(domain, "Add a domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com"})
+						@ui.TextField(domain, "Only under this path", "Optional. With /api, this app answers app.example.com/api and what is below it; another app can take the rest of the domain.", ui.InputProps{ID: "path", Mono: true, Placeholder: "/api"})
+					</div>
 					@ui.Checkbox("tls", domain.V("tls") != "0", nil) {
 						Serve over HTTPS with an automatic certificate
 					}
 					@ui.Checkbox("redirect_www", domain.V("redirect_www") == "1", nil) {
 						Also redirect the www form of the name to it (or the bare name, if this one starts with www)
 					}
+					@ui.Checkbox("strip_prefix", domain.V("strip_prefix") == "1", nil) {
+						Remove the path before passing a request on: the app sees /users for /api/users
+					}
+					<fieldset class="grid gap-4">
+						<legend class="field-label">Ask for a password</legend>
+						<p class="muted text-sm">Optional. The browser asks for this user name and password before anything reaches the app. Over plain HTTP they travel unencrypted.</p>
+						<div class="grid gap-4 sm:grid-cols-2">
+							@ui.TextField(domain, "User name", "", ui.InputProps{ID: "auth_user", Autocomplete: "off"})
+							@ui.TextField(domain, "Password", "8 to 72 characters. It is stored as a hash and cannot be shown again.", ui.InputProps{ID: "auth_password", Type: "password", Autocomplete: "new-password"})
+						</div>
+					</fieldset>
 					<div>
 						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}) {
 							Add domain

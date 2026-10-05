@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 )
@@ -16,13 +17,29 @@ type Domain struct {
 	ResourceKind string
 	ResourceID   string
 	Host         string
-	TLS          bool
-	RedirectWWW  bool
-	CreatedAt    int64
+	// Path is "" for the whole host, or a prefix such as "/api".
+	Path        string
+	StripPrefix bool
+	TLS         bool
+	RedirectWWW bool
+	// AuthUser and AuthHash (bcrypt) put a password in front of the route.
+	AuthUser  string
+	AuthHash  string
+	CreatedAt int64
 }
 
+// ErrHostTaken is returned when a host is already routed by another team.
+// A team may route one host several times, by path; two teams never share
+// one, or either could take the other's traffic.
+var ErrHostTaken = errors.New("this host is routed by someone else")
+
+// ErrHostElsewhere is returned when a host is already routed on another
+// server: its DNS points at one of them, and the other's routes for it
+// would never be reached.
+var ErrHostElsewhere = errors.New("this host is routed on another server")
+
 func (d *DB) ListDomains(ctx context.Context, kind, id string) ([]Domain, error) {
-	rows, err := d.QueryContext(ctx, `SELECT id, resource_kind, resource_id, host, tls, redirect_www, created_at
+	rows, err := d.QueryContext(ctx, `SELECT id, resource_kind, resource_id, host, path, strip_prefix, tls, redirect_www, auth_user, auth_hash, created_at
 		FROM domains WHERE resource_kind = ? AND resource_id = ? ORDER BY created_at, rowid`, kind, id)
 	if err != nil {
 		return nil, err
@@ -31,7 +48,7 @@ func (d *DB) ListDomains(ctx context.Context, kind, id string) ([]Domain, error)
 	var out []Domain
 	for rows.Next() {
 		var m Domain
-		if err := rows.Scan(&m.ID, &m.ResourceKind, &m.ResourceID, &m.Host, &m.TLS, &m.RedirectWWW, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.ResourceKind, &m.ResourceID, &m.Host, &m.Path, &m.StripPrefix, &m.TLS, &m.RedirectWWW, &m.AuthUser, &m.AuthHash, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -39,12 +56,67 @@ func (d *DB) ListDomains(ctx context.Context, kind, id string) ([]Domain, error)
 	return out, rows.Err()
 }
 
-// AddDomain routes a host to a resource. A host already in use anywhere on
-// the install fails with a unique violation (see IsUnique).
-func (d *DB) AddDomain(ctx context.Context, kind, id, host string, tls, redirectWWW bool) (Domain, error) {
-	m := Domain{ID: secret.RandomID(), ResourceKind: kind, ResourceID: id, Host: host, TLS: tls, RedirectWWW: redirectWWW, CreatedAt: now()}
-	_, err := d.ExecContext(ctx, `INSERT INTO domains (id, resource_kind, resource_id, host, tls, redirect_www, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, m.ID, m.ResourceKind, m.ResourceID, m.Host, m.TLS, m.RedirectWWW, m.CreatedAt)
+// hostOwners is who routes a host already: the team and server of each
+// resource that has a domain on it.
+const hostOwners = `
+	SELECT p.team_id, a.server_id FROM domains m
+		JOIN apps a ON m.resource_kind = 'app' AND a.id = m.resource_id
+		JOIN environments e ON e.id = a.environment_id JOIN projects p ON p.id = e.project_id
+	WHERE m.host = ?
+	UNION ALL
+	SELECT p.team_id, s.server_id FROM domains m
+		JOIN service_endpoints ep ON m.resource_kind = 'service' AND ep.id = m.resource_id
+		JOIN services s ON s.id = ep.service_id
+		JOIN environments e ON e.id = s.environment_id JOIN projects p ON p.id = e.project_id
+	WHERE m.host = ?`
+
+// AddDomain routes a host, or a path of it, to a resource of the given team
+// on the given server. The fields of m other than ID and CreatedAt are the
+// caller's.
+//
+// The same host and path twice fails with a unique violation (see
+// IsUnique). A host that another team routes fails with ErrHostTaken, and
+// one routed on another server with ErrHostElsewhere.
+func (d *DB) AddDomain(ctx context.Context, teamID, serverID string, m Domain) (Domain, error) {
+	m.ID, m.CreatedAt = secret.RandomID(), now()
+	err := d.Tx(ctx, func(tx *sql.Tx) error {
+		var rows int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM domains WHERE host = ?`, m.Host).Scan(&rows); err != nil {
+			return err
+		}
+		if rows > 0 {
+			owners, err := tx.QueryContext(ctx, hostOwners, m.Host, m.Host)
+			if err != nil {
+				return err
+			}
+			defer owners.Close()
+			known := 0
+			for owners.Next() {
+				var team, server string
+				if err := owners.Scan(&team, &server); err != nil {
+					return err
+				}
+				if team != teamID {
+					return ErrHostTaken
+				}
+				if server != serverID {
+					return ErrHostElsewhere
+				}
+				known++
+			}
+			if err := owners.Err(); err != nil {
+				return err
+			}
+			// A row whose resource cannot be found belongs to nobody that
+			// can be asked; the host is not shared with it.
+			if known != rows {
+				return ErrHostTaken
+			}
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO domains (id, resource_kind, resource_id, host, path, strip_prefix, tls, redirect_www, auth_user, auth_hash, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, m.ID, m.ResourceKind, m.ResourceID, m.Host, m.Path, m.StripPrefix, m.TLS, m.RedirectWWW, m.AuthUser, m.AuthHash, m.CreatedAt)
+		return err
+	})
 	return m, err
 }
 
@@ -322,11 +394,16 @@ func (d *DB) CountDomains(ctx context.Context, kind, id string) (int, error) {
 	return n, err
 }
 
-// RouteRow is one host to publish in a server's routes file.
+// RouteRow is one host, or one path of a host, to publish in a server's
+// routes file.
 type RouteRow struct {
 	Host        string
+	Path        string
+	StripPrefix bool
 	TLS         bool
 	RedirectWWW bool
+	AuthUser    string
+	AuthHash    string
 	HostPort    int
 }
 
@@ -337,15 +414,15 @@ func (d *DB) RoutesForServer(ctx context.Context, serverID string) ([]RouteRow, 
 	// endpoint is routed unless the stack was never started or was stopped
 	// on purpose: while it is being redeployed, and after a redeployment
 	// that failed, the containers from before are still answering.
-	rows, err := d.QueryContext(ctx, `SELECT m.host, m.tls, m.redirect_www, a.host_port
+	rows, err := d.QueryContext(ctx, `SELECT m.host, m.path, m.strip_prefix, m.tls, m.redirect_www, m.auth_user, m.auth_hash, a.host_port
 		FROM domains m JOIN apps a ON m.resource_kind = 'app' AND m.resource_id = a.id
 		WHERE a.server_id = ? AND a.host_port > 0 AND a.container <> '' AND a.status <> 'stopped'
 		UNION ALL
-		SELECT m.host, m.tls, m.redirect_www, ep.host_port
+		SELECT m.host, m.path, m.strip_prefix, m.tls, m.redirect_www, m.auth_user, m.auth_hash, ep.host_port
 		FROM domains m JOIN service_endpoints ep ON m.resource_kind = 'service' AND m.resource_id = ep.id
 			JOIN services s ON s.id = ep.service_id
 		WHERE s.server_id = ? AND ep.host_port > 0 AND s.status NOT IN ('created', 'stopped')
-		ORDER BY 1`, serverID, serverID)
+		ORDER BY 1, 2`, serverID, serverID)
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +430,7 @@ func (d *DB) RoutesForServer(ctx context.Context, serverID string) ([]RouteRow, 
 	var out []RouteRow
 	for rows.Next() {
 		var r RouteRow
-		if err := rows.Scan(&r.Host, &r.TLS, &r.RedirectWWW, &r.HostPort); err != nil {
+		if err := rows.Scan(&r.Host, &r.Path, &r.StripPrefix, &r.TLS, &r.RedirectWWW, &r.AuthUser, &r.AuthHash, &r.HostPort); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

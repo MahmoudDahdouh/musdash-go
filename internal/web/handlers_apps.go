@@ -14,6 +14,8 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/proxy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const appNameRule = "Use lowercase letters, numbers and hyphens, up to 32 characters."
@@ -128,8 +130,12 @@ func isGeneratedDomain(host string) bool {
 	return strings.HasSuffix(host, ".sslip.io") || strings.HasSuffix(host, ".nip.io")
 }
 
-// checkDomain normalises and validates a host name for routing.
-func (s *Server) checkDomain(ctx context.Context, f *ui.Form, key, value string) string {
+// checkHost normalises and validates a host name for routing.
+//
+// The dashboard's own address is refused whatever the path: a page served
+// from there would be the dashboard's origin to a browser, with its
+// cookies.
+func (s *Server) checkHost(ctx context.Context, f *ui.Form, key, value string) string {
 	host := proxy.NormalizeHost(value)
 	if !proxy.ValidHost(host) || !strings.Contains(host, ".") {
 		f.Fail(key, "Enter a domain such as app.example.com, without http:// or a path.")
@@ -140,11 +146,77 @@ func (s *Server) checkDomain(ctx context.Context, f *ui.Form, key, value string)
 		f.Fail(key, "This domain is the dashboard's own address.")
 		return ""
 	}
+	return host
+}
+
+// domainTaken is what a person is told when a host, or the path of it they
+// asked for, cannot be theirs. It says the same whoever has it.
+const domainTaken = "This domain is already routed to something on this install."
+
+// checkDomain is checkHost for a resource that takes a whole host: nothing
+// else may be routed on it.
+func (s *Server) checkDomain(ctx context.Context, f *ui.Form, key, value string) string {
+	host := s.checkHost(ctx, f, key, value)
+	if host == "" {
+		return ""
+	}
 	if used, err := s.DB.HostInUse(ctx, host); err == nil && used {
-		f.Fail(key, "This domain is already routed to something on this install.")
+		f.Fail(key, domainTaken)
 		return ""
 	}
 	return host
+}
+
+// Limits of the user name and password in front of a domain. bcrypt reads
+// 72 bytes of a password and no more.
+const (
+	maxDomainUser     = 64
+	minDomainPassword = 8
+	maxDomainPassword = 72
+	// domainHashCost is what one sign-in costs the proxy, which checks
+	// passwords one at a time: less than the dashboard's own, because the
+	// proxy also has every site's traffic to serve.
+	domainHashCost = 10
+)
+
+// domainPath normalises a path prefix as a person types it: "api/" is
+// "/api".
+func domainPath(f *ui.Form, key, value string) string {
+	p := strings.TrimSpace(value)
+	if p == "" || p == "/" {
+		return ""
+	}
+	p = "/" + strings.Trim(p, "/")
+	if !proxy.ValidPath(p) {
+		f.Fail(key, "Enter a path such as /api. It cannot hold spaces, %, ?, # or dots that climb.")
+		return ""
+	}
+	return p
+}
+
+// domainAuth validates the user name and password for a domain and returns
+// the name with the password's hash, or two empty strings when neither was
+// given.
+func domainAuth(f *ui.Form, user, password string) (string, string) {
+	user = strings.TrimSpace(user)
+	if user == "" && password == "" {
+		return "", ""
+	}
+	if user == "" || len(user) > maxDomainUser || strings.ContainsFunc(user, func(c rune) bool { return c == ':' || c < ' ' || c == 0x7f }) {
+		f.Fail("auth_user", "Enter a user name of up to 64 characters without a colon.")
+	}
+	if len(password) < minDomainPassword || len(password) > maxDomainPassword {
+		f.Fail("auth_password", "Enter a password of 8 to 72 characters.")
+	}
+	if !f.OK() {
+		return "", ""
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), domainHashCost)
+	if err != nil {
+		f.Fail("auth_password", "This password cannot be used.")
+		return "", ""
+	}
+	return user, string(hash)
 }
 
 func (s *Server) appNew(w http.ResponseWriter, r *http.Request) {
@@ -276,9 +348,9 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	domainTaken := false
 	if host != "" {
-		_, err := s.DB.AddDomain(ctx, db.KindApp, app.ID, host, !isGeneratedDomain(host), false)
+		_, err := s.DB.AddDomain(ctx, teamID, app.ServerID, db.Domain{ResourceKind: db.KindApp, ResourceID: app.ID, Host: host, TLS: !isGeneratedDomain(host)})
 		switch {
-		case db.IsUnique(err):
+		case db.IsUnique(err), errors.Is(err, db.ErrHostTaken), errors.Is(err, db.ErrHostElsewhere):
 			// Taken between the check above and now. The app exists; say
 			// that its domain still has to be added.
 			domainTaken = true
@@ -797,11 +869,19 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 	raw := strings.TrimSpace(r.PostFormValue("host"))
 	tls := r.PostFormValue("tls") == "1"
 	www := r.PostFormValue("redirect_www") == "1"
+	strip := r.PostFormValue("strip_prefix") == "1"
+	onOff := map[bool]string{true: "1", false: "0"}
 	f.Set("host", raw)
-	f.Set("tls", map[bool]string{true: "1", false: "0"}[tls])
-	f.Set("redirect_www", map[bool]string{true: "1", false: "0"}[www])
+	f.Set("path", strings.TrimSpace(r.PostFormValue("path")))
+	f.Set("tls", onOff[tls])
+	f.Set("redirect_www", onOff[www])
+	f.Set("strip_prefix", onOff[strip])
+	// The password is not put back in the form: it is typed again.
+	f.Set("auth_user", strings.TrimSpace(r.PostFormValue("auth_user")))
 
-	host := s.checkDomain(r.Context(), &f, "host", raw)
+	host := s.checkHost(r.Context(), &f, "host", raw)
+	path := domainPath(&f, "path", r.PostFormValue("path"))
+	authUser, authHash := domainAuth(&f, r.PostFormValue("auth_user"), r.PostFormValue("auth_password"))
 	// "www." is added in front for the redirect; the result must still fit
 	// in a host name.
 	if f.OK() && www && !strings.HasPrefix(host, "www.") && !proxy.ValidHost("www."+host) {
@@ -814,9 +894,18 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 		if isGeneratedDomain(host) {
 			tls = false
 		}
-		if _, err := s.DB.AddDomain(r.Context(), db.KindApp, v.App.ID, host, tls, www); db.IsUnique(err) {
-			f.Fail("host", "This domain is already routed to something on this install.")
-		} else if err != nil {
+		_, err := s.DB.AddDomain(r.Context(), sessionFrom(r).TeamID, v.App.ServerID, db.Domain{
+			ResourceKind: db.KindApp, ResourceID: v.App.ID, Host: host, Path: path, StripPrefix: strip && path != "",
+			TLS: tls, RedirectWWW: www, AuthUser: authUser, AuthHash: authHash,
+		})
+		switch {
+		case db.IsUnique(err) && path != "":
+			f.Fail("path", "This path of the domain is already routed to something.")
+		case db.IsUnique(err), errors.Is(err, db.ErrHostTaken):
+			f.Fail("host", domainTaken)
+		case errors.Is(err, db.ErrHostElsewhere):
+			f.Fail("host", "This domain is routed on another server. A domain's paths are all served by the server its DNS points at.")
+		case err != nil:
 			s.fail(w, r, err)
 			return
 		}

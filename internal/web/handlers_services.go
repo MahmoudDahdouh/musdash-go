@@ -700,7 +700,7 @@ func (s *Server) serviceEndpointSave(w http.ResponseWriter, r *http.Request) {
 		err := s.DB.SetEndpointDomain(ctx, v.Service.ID, current.ID, host, tls)
 		switch {
 		case db.IsUnique(err):
-			f.Fail("host", "This domain is already routed to something on this install.")
+			f.Fail("host", domainTaken)
 		case errors.Is(err, db.ErrNotFound):
 			s.notFound(w, r)
 			return
