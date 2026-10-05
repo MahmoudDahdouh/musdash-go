@@ -90,18 +90,29 @@ func (s *Server) passwordAgain(r *http.Request, f *ui.Form, field string) bool {
 	return true
 }
 
-// renderAccount draws the Account page.
+// renderAccount draws the Account page with its profile, password and
+// second-step forms in the given states.
 func (s *Server) renderAccount(w http.ResponseWriter, r *http.Request, status int, profile, password, twoStep ui.Form) {
+	s.renderAccountWith(w, r, status, profile, password, twoStep, ui.Form{}, "")
+}
+
+// renderAccountWith also takes the state of the API token form, and a
+// token that was just made: it is shown in this response and no other.
+func (s *Server) renderAccountWith(w http.ResponseWriter, r *http.Request, status int, profile, password, twoStep, token ui.Form, newToken string) {
 	sess := sessionFrom(r)
-	v := pages.AccountView{TwoStep: sess.User.TwoStep()}
+	v := pages.AccountView{TwoStep: sess.User.TwoStep(), NewToken: newToken, Base: s.publicBase(r)}
+	var err error
 	if v.TwoStep {
-		var err error
 		if v.RecoveryCodes, err = s.DB.CountRecoveryCodes(r.Context(), sess.UserID); err != nil {
 			s.fail(w, r, err)
 			return
 		}
 	}
-	s.render(w, r, status, pages.Account(s.shell(w, r, "Account", "account"), profile, password, twoStep, v))
+	if v.Tokens, err = s.DB.ListAPITokens(r.Context(), sess.UserID, sess.TeamID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, status, pages.Account(s.shell(w, r, "Account", "account"), profile, password, twoStep, token, v))
 }
 
 // newRecoveryCodes makes a set of recovery codes and their hashes.

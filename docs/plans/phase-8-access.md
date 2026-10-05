@@ -49,7 +49,7 @@
 | What the API covers | What the pages show (servers, projects, apps, deployments, databases, services, tags) and what their buttons do (deploy, stop, start, deploy by tag). Not their forms: creating and configuring stay in the dashboard | The spec says "the same handlers with JSON responses". The pages' handlers are form handlers whose answer is a page; the API shares what is underneath them (loaders, queries, the deployer) and has small handlers of its own |
 | What the API never returns | A sealed value, a hash, or a variable's value | Its structs are written out field by field; a row is never marshalled as it is |
 | The deploy endpoint from phase 2 | Stays. `POST /api/v1/deploy?uuid=…` also takes an API token, several ids, and `tag=` | Existing pipelines keep working |
-| Rate limits | By address before anything is looked up (as for webhooks), and 120 calls a minute per token after | A stolen token cannot be used to keep the server busy, and guesses cost nothing to refuse |
+| Rate limits | By address before anything is looked up (600 calls a minute), and 120 calls a minute per token after | A stolen token cannot be used to keep the server busy, and guesses cost nothing to refuse. The address's allowance is the larger one: pipelines share addresses, and with equal numbers a token's own limit could never be reached |
 
 ## Who may do what
 
@@ -155,10 +155,10 @@ func (s *Server) handle(mux *http.ServeMux, pattern string, who access, h http.H
 - [x] Tests: the name rule; a tag's page lists only the team's; deploy all queues one deployment each and none behind a waiting one; tags go with the resource; a preview cannot be tagged.
 
 ### Task 5 — API tokens and the API
-- [ ] Account page: tokens (make, shown once, revoke).
-- [ ] `/api/v1`: the token check, both limits, the handlers, JSON errors.
-- [ ] `POST /api/v1/deploy` with an API token, several ids, a tag.
-- [ ] Tests: no token, a wrong one, an expired one, a removed person's → 401, indistinguishable; a `read` token cannot deploy; a session cookie is not accepted by the API and a token is not accepted by a page; another team's id → 404; no response carries a sealed value or a hash; the per-token limit; the done-when: a deploy through the API.
+- [x] Account page: tokens (make, shown once, revoke).
+- [x] `/api/v1`: the token check, both limits, the handlers, JSON errors.
+- [x] `POST /api/v1/deploy` with an API token, several ids, a tag.
+- [x] Tests: no token, a wrong one, an expired one, a removed person's → 401, indistinguishable; a `read` token cannot deploy; a session cookie is not accepted by the API and a token is not accepted by a page; another team's id → 404; no response carries a sealed value or a hash; the per-token limit; the done-when: a deploy through the API.
 
 ### Task 6 — End
 - [ ] Independent review; README and CLAUDE.md; RSS on Linux.

@@ -218,7 +218,7 @@ templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, 
 	}
 }
 
-templ Account(s ui.Shell, profile, password, twoStep ui.Form, v AccountView) {
+templ Account(s ui.Shell, profile, password, twoStep, token ui.Form, v AccountView) {
 	@ui.Layout(s) {
 		@ui.PageHeader("Account", "")
 		<div class="grid max-w-2xl gap-6">
@@ -231,6 +231,7 @@ templ Account(s ui.Shell, profile, password, twoStep ui.Form, v AccountView) {
 				@ui.TextField(password, "New password", "10 to 72 characters.", ui.InputProps{ID: "password", Type: "password", Autocomplete: "new-password", Required: true})
 			}
 			@twoStepCard(s, v, twoStep)
+			@tokensCard(s, v, token)
 		</div>
 	}
 }

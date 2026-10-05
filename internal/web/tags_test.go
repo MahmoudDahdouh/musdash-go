@@ -19,7 +19,7 @@ func TestTagsOnAppsAndServices(t *testing.T) {
 	projectID, env := a.project("Shop")
 	web := a.newApp(projectID, env, "web", false, nil)
 	api := a.newApp(projectID, env, "api", false, nil)
-	a.stackServer("web", "80", nil)
+	a.stackServer("front", "3000", nil)
 	svc := a.newService(projectID, env, "blog", nil)
 	tagsOf := func(kind, id string) []string {
 		got, err := a.db.TagsOf(ctx, team, kind, id)
@@ -102,7 +102,9 @@ func TestTagsOnAppsAndServices(t *testing.T) {
 	if serviceJobs != 1 {
 		t.Fatalf("%d service deployments, want 1", serviceJobs)
 	}
-	a.waitService(svc.ID)
+	if got := a.waitService(svc.ID); got.Status != db.AppRunning {
+		t.Fatalf("the service after Deploy all: %s: %s", got.Status, got.LastError)
+	}
 	res, _ = a.post("/tags/nightly", "/tags/nosuchtag/deploy", nil)
 	wantStatus(t, res, http.StatusNotFound)
 

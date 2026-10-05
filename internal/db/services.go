@@ -154,6 +154,11 @@ func (d *DB) ListServices(ctx context.Context, environmentID string) ([]Service,
 	return d.queryServices(ctx, `SELECT `+serviceColumns+` FROM services s WHERE s.environment_id = ? ORDER BY s.name`, environmentID)
 }
 
+// TeamServices returns every service of the team, by name.
+func (d *DB) TeamServices(ctx context.Context, teamID string) ([]Service, error) {
+	return d.queryServices(ctx, `SELECT `+serviceColumns+` FROM services s`+serviceTeamJoin+`WHERE p.team_id = ? ORDER BY s.name, s.id`, teamID)
+}
+
 // ServicesOnServer returns every service placed on a server.
 func (d *DB) ServicesOnServer(ctx context.Context, serverID string) ([]Service, error) {
 	return d.queryServices(ctx, `SELECT `+serviceColumns+` FROM services s WHERE s.server_id = ? ORDER BY s.created_at, s.rowid`, serverID)

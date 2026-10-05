@@ -52,6 +52,10 @@ type Server struct {
 	// webhook body be read at a time.
 	hooks      *auth.Limiter
 	hookBodies chan struct{}
+	// apiCalls limits how many calls one API token makes in a minute, and
+	// apiAddrs how many one address makes, with or without a token.
+	apiCalls *auth.Limiter
+	apiAddrs *auth.Limiter
 	// hashing bounds how many password hashes run at once. Each costs about
 	// a quarter of a second of CPU; without a bound a burst of sign-in
 	// requests would pile them up.
@@ -67,6 +71,8 @@ type Server struct {
 func (s *Server) Handler() http.Handler {
 	s.logins = auth.NewLimiter(5, 15*time.Minute)
 	s.hooks = auth.NewLimiter(120, time.Minute)
+	s.apiCalls = auth.NewLimiter(apiPerMinute, time.Minute)
+	s.apiAddrs = auth.NewLimiter(apiPerMinuteByAddress, time.Minute)
 	if s.GitHub == nil {
 		s.GitHub = source.NewGitHub()
 	}
@@ -86,6 +92,28 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /webhooks/github/{id}", open, s.githubWebhook)
 	handle("POST /webhooks/git/{id}", open, s.gitWebhook)
 	handle("POST /api/v1/deploy", open, s.apiDeploy)
+
+	// The API: each request carries a person's API token and no session.
+	read, operate := db.AbilityRead, db.AbilityDeploy
+	handle("GET /api/v1/me", open, s.api(read, s.apiMe))
+	handle("GET /api/v1/servers", open, s.api(read, s.apiServers))
+	handle("GET /api/v1/projects", open, s.api(read, s.apiProjects))
+	handle("GET /api/v1/tags", open, s.api(read, s.apiTags))
+	handle("GET /api/v1/apps", open, s.api(read, s.apiApps))
+	handle("GET /api/v1/apps/{id}", open, s.api(read, s.apiApp))
+	handle("GET /api/v1/apps/{id}/deployments", open, s.api(read, s.apiAppDeployments))
+	handle("POST /api/v1/apps/{id}/deploy", open, s.api(operate, s.apiAppDeploy))
+	handle("POST /api/v1/apps/{id}/stop", open, s.api(operate, s.apiAppStop))
+	handle("GET /api/v1/deployments/{id}", open, s.api(read, s.apiDeployment))
+	handle("GET /api/v1/databases", open, s.api(read, s.apiDatabases))
+	handle("GET /api/v1/databases/{id}", open, s.api(read, s.apiDatabase))
+	handle("POST /api/v1/databases/{id}/start", open, s.api(operate, s.apiDatabaseStart))
+	handle("POST /api/v1/databases/{id}/stop", open, s.api(operate, s.apiDatabaseStop))
+	handle("GET /api/v1/services", open, s.api(read, s.apiServices))
+	handle("GET /api/v1/services/{id}", open, s.api(read, s.apiService))
+	handle("POST /api/v1/services/{id}/deploy", open, s.api(operate, s.apiServiceDeploy))
+	handle("POST /api/v1/services/{id}/stop", open, s.api(operate, s.apiServiceStop))
+	handle("/api/", open, s.apiNotFound)
 
 	// Signed-out pages.
 	handle("GET /setup", signedOut, s.setupForm)
@@ -108,6 +136,8 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /account/two-step/confirm", member, s.twoStepConfirm)
 	handle("POST /account/two-step/codes", member, s.twoStepCodes)
 	handle("POST /account/two-step/off", member, s.twoStepOff)
+	handle("POST /account/tokens", member, s.tokenCreate)
+	handle("POST /account/tokens/{id}/delete", member, s.tokenDelete)
 	handle("GET /sys/mem", member, s.memReadout)
 
 	handle("GET /{$}", member, s.projectList)

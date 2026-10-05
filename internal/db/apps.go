@@ -434,6 +434,11 @@ func (d *DB) ListApps(ctx context.Context, environmentID string) ([]App, error) 
 	return d.queryApps(ctx, `SELECT `+appColumns+` FROM apps a WHERE a.environment_id = ? AND a.preview_of = '' ORDER BY a.name`, environmentID)
 }
 
+// TeamApps returns every app of the team, previews left out, by name.
+func (d *DB) TeamApps(ctx context.Context, teamID string) ([]App, error) {
+	return d.queryApps(ctx, `SELECT `+appColumns+` FROM apps a`+teamJoin+`WHERE p.team_id = ? AND a.preview_of = '' ORDER BY a.name, a.id`, teamID)
+}
+
 // Previews returns an app's previews, by pull request number.
 func (d *DB) Previews(ctx context.Context, appID string) ([]App, error) {
 	return d.queryApps(ctx, `SELECT `+appColumns+` FROM apps a WHERE a.preview_of = ? ORDER BY a.pr_number`, appID)

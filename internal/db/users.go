@@ -153,7 +153,8 @@ func (d *DB) DeleteSession(ctx context.Context, tokenHash string) error {
 	return err
 }
 
-// DeleteExpired removes expired sessions, reset tokens and invitations.
+// DeleteExpired removes expired sessions, reset tokens, invitations and
+// API tokens.
 func (d *DB) DeleteExpired(ctx context.Context) error {
 	t := now()
 	for _, table := range []string{"sessions", "password_resets", "invitations"} {
@@ -161,7 +162,9 @@ func (d *DB) DeleteExpired(ctx context.Context) error {
 			return err
 		}
 	}
-	return nil
+	// An API token without an end date has expires_at 0 and stays.
+	_, err := d.ExecContext(ctx, `DELETE FROM api_tokens WHERE expires_at > 0 AND expires_at <= ?`, t)
+	return err
 }
 
 func (d *DB) CreatePasswordReset(ctx context.Context, tokenHash, userID string, expiresAt int64) error {
