@@ -13,8 +13,10 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -314,12 +316,26 @@ func TestTerminal(t *testing.T) {
 	if res.Header.Get("Sec-WebSocket-Accept") == "" || !strings.EqualFold(res.Header.Get("Upgrade"), "websocket") {
 		t.Fatalf("handshake answer: %v", res.Header)
 	}
+	// What a terminal ran is ended once the terminal is closed, not before.
+	var early atomic.Bool
+	prev := a.fake.Handle
+	a.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		if strings.Contains(line, "MUSDASH_HANGUP=") && !st.term(st.count()-1).isClosed() {
+			early.Store(true)
+		}
+		if prev != nil {
+			return prev(line, c)
+		}
+		return "", nil
+	}
 	ws.text(hi(csrf))
 	waitFor(t, "a terminal being started", func() bool { return st.count() == 1 })
 	term := st.term(0)
 	// A fixed command in the app's own container, with the size the page
-	// measured. Nothing of the request is in it.
-	want := "docker exec --interactive --tty --env TERM=xterm-256color " + app.Container + " sh -c " + shellPick
+	// measured. Nothing of the request is in it; the mark is an id made
+	// for this terminal.
+	mark := markOf(t, st.line(0))
+	want := "docker exec --interactive --tty --env TERM=xterm-256color --env MUSDASH_TERMINAL=" + mark + " " + app.Container + " sh -c " + shellPick
 	if st.line(0) != want {
 		t.Fatalf("the terminal runs %q\nwant              %q", st.line(0), want)
 	}
@@ -359,14 +375,24 @@ func TestTerminal(t *testing.T) {
 		t.Fatalf("a message of the largest size was not passed on: %d bytes back", len(got))
 	}
 
-	// The browser leaves: the shell is hung up.
+	// The browser leaves: the shell is hung up. Docker ends only its own
+	// client then, so the container is asked to end what carries the mark.
 	ws.frame(0x80|wsClose, true, binary.BigEndian.AppendUint16(nil, wsNormal))
 	waitFor(t, "the terminal being closed", term.isClosed)
+	hung := func(mark string) func() bool {
+		line := "docker exec --env MUSDASH_HANGUP=" + mark + " " + app.Container + " sh -c " + hangUp
+		return func() bool { return slices.Contains(a.fake.Calls(), line) }
+	}
+	waitFor(t, "what the terminal ran being ended", hung(mark))
 
 	// The shell ends: the page is told, and the connection closed.
 	_, ws = a.dialWS(path, nil)
 	ws.text(hi(csrf))
 	waitFor(t, "a second terminal", func() bool { return st.count() == 2 })
+	second := markOf(t, st.line(1))
+	if second == mark {
+		t.Fatal("two terminals share a mark: closing one would end the other")
+	}
 	close(st.term(1).out)
 	if note := string(ws.until(wsText)); !strings.Contains(note, `"exit"`) {
 		t.Fatalf("note %q", note)
@@ -374,8 +400,106 @@ func TestTerminal(t *testing.T) {
 	if code := ws.closeCode(); code != wsNormal {
 		t.Fatalf("closed with %d", code)
 	}
+	// What it left in the background is ended too.
+	waitFor(t, "what the second terminal ran being ended", hung(second))
 	// Both places are given back.
 	waitFor(t, "the terminals' places being given back", func() bool { return len(a.server.terminals) == 0 })
+	if early.Load() {
+		t.Fatal("a terminal's processes were hung up while it was still open")
+	}
+}
+
+// markOf reads the mark a terminal's command gave its shell.
+func markOf(t *testing.T, line string) string {
+	t.Helper()
+	m := regexp.MustCompile(` --env MUSDASH_TERMINAL=([a-z][a-z2-7]{11}) `).FindStringSubmatch(line)
+	if m == nil {
+		t.Fatalf("the terminal's command carries no mark: %q", line)
+	}
+	return m[1]
+}
+
+func TestTerminalCommandsRefuseWhatIsNotAnID(t *testing.T) {
+	for _, mark := range []string{"", "abc", "abcdefghijk$", "abcdefghijkl x", "-bcdefghijkl", "abcdefghijkl\n"} {
+		if _, err := terminalCmd("musdash-web", mark); err == nil {
+			t.Errorf("a terminal with the mark %q", mark)
+		}
+		if _, err := hangUpCmd("musdash-web", mark); err == nil {
+			t.Errorf("a hang-up with the mark %q", mark)
+		}
+	}
+	if _, err := hangUpCmd("--privileged", "abcdefghijkl"); err == nil {
+		t.Error("a hang-up in a container named like an option")
+	}
+}
+
+// Shutting down closes the terminals, and the process waits until what each
+// ran was ended: after it there would be nobody left to do it.
+func TestShuttingDownEndsTerminalsAndWaitsForThem(t *testing.T) {
+	a, appID, csrf, st := terminalApp(t)
+	closing, shutDown := context.WithCancel(context.Background())
+	defer shutDown()
+	a.server.Closing = closing
+	// The hang-up takes as long as the test says.
+	release := make(chan struct{})
+	prev := a.fake.Handle
+	a.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		if strings.Contains(line, "MUSDASH_HANGUP=") {
+			<-release
+		}
+		if prev != nil {
+			return prev(line, c)
+		}
+		return "", nil
+	}
+	// A program that does not read: its goroutine cannot see the connection
+	// close, so shutting down must end the terminal itself.
+	st.make = func() *fakeTerminal {
+		term := newFakeTerminal()
+		term.deaf = true
+		return term
+	}
+	_, ws := a.dialWS("/apps/"+appID+"/terminal/ws", nil)
+	ws.text(hi(csrf))
+	waitFor(t, "a terminal", func() bool { return st.count() == 1 })
+	ws.binary("typed into a program that does not read")
+
+	// While it is open, waiting gives up when its time is over and keeps
+	// no place for itself.
+	short, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	if a.server.WaitTerminals(short) {
+		t.Fatal("waiting did not wait for an open terminal")
+	}
+	cancel()
+	if n := len(a.server.terminals); n != 1 {
+		t.Fatalf("%d places taken after waiting gave up, want the terminal's one", n)
+	}
+
+	shutDown()
+	waitFor(t, "the terminal being closed", st.term(0).isClosed)
+	done := make(chan bool, 1)
+	go func() {
+		long, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		done <- a.server.WaitTerminals(long)
+	}()
+	select {
+	case <-done:
+		t.Fatal("waiting was over before what the terminal ran was ended")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case ok := <-done:
+		if !ok {
+			t.Fatal("waiting gave up although the terminal was done")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("waiting did not end")
+	}
+	if n := len(a.server.terminals); n != 0 {
+		t.Fatalf("%d places still taken", n)
+	}
 }
 
 func TestTerminalIsRefused(t *testing.T) {
@@ -613,4 +737,38 @@ func TestTerminalStuckTypingIsStillClosed(t *testing.T) {
 	ws.conn.Close()
 	waitFor(t, "the terminal being closed", st.term(0).isClosed)
 	waitFor(t, "its place being given back", func() bool { return len(a.server.terminals) == 0 })
+}
+
+// A browser that stops reading while the shell prints holds the write for
+// as long as the write timeout, and the write holds the lock. Closing must
+// not wait behind it: shutting down has only so long to end what every
+// terminal ran.
+func TestClosingAWebSocketEndsAWriteNobodyTakes(t *testing.T) {
+	server, client := net.Pipe()
+	defer client.Close()
+	ws := &wsConn{conn: server, r: bufio.NewReader(server), goodbye: 50 * time.Millisecond}
+	wrote := make(chan error, 1)
+	// Nobody reads the other end: this waits.
+	go func() { wrote <- ws.Write(wsBinary, make([]byte, 1<<16)) }()
+	select {
+	case err := <-wrote:
+		t.Fatalf("the write did not wait: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	started := time.Now()
+	ws.Close(wsGoingAway, "musdash is restarting")
+	if took := time.Since(started); took > 2*time.Second {
+		t.Fatalf("closing took %s: it waited for the write", took)
+	}
+	select {
+	case err := <-wrote:
+		if err == nil {
+			t.Fatal("the write that nobody took succeeded")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the write is still waiting after the connection was closed")
+	}
+	if err := ws.Write(wsBinary, []byte("x")); err == nil {
+		t.Fatal("a write after closing succeeded")
+	}
 }

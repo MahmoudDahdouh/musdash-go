@@ -276,6 +276,19 @@ func runServer(args []string) error {
 	}
 
 	log.Info("shutting down")
+	// Open terminals are closed by ctx. Each then ends the shell it ran in
+	// its container, and the process must not go before that is done. They
+	// are waited for next to the rest, within the time the others have.
+	terminals := make(chan struct{})
+	go func() {
+		defer close(terminals)
+		wait, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if !app.WaitTerminals(wait) {
+			log.Warn("a terminal was still open when the time for shutting down ran out")
+		}
+	}()
+	defer func() { <-terminals }()
 	// Requests and jobs each get their own allowance: a slow page must not
 	// eat the time a running deployment needs to finish.
 	httpCtx, cancelHTTP := context.WithTimeout(context.Background(), 10*time.Second)
