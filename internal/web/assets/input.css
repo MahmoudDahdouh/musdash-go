@@ -926,6 +926,7 @@
     padding: 8px 0;
     box-shadow: inset 0 -1px 0 var(--color-line);
     overflow-x: auto;
+    scrollbar-width: none;
   }
   .tab {
     position: relative;
@@ -1552,8 +1553,12 @@
     font-size: var(--text-base);
     color: var(--color-ink-mute);
   }
-  .crumbs > .crumb-sep {
+  /* Steps keep their width and the trail scrolls: a switcher that shrank
+     would run into the step after it. */
+  .crumbs > * {
     flex: none;
+  }
+  .crumbs > .crumb-sep {
     color: var(--color-ink-faint);
   }
   .crumb {

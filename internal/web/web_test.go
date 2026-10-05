@@ -750,6 +750,37 @@ func TestAccount(t *testing.T) {
 	}
 }
 
+// The policy forbids inline script and style on every page, not only the
+// first one: the pages a signed-in person works in, with their dialogs,
+// switchers and tiles, and the component gallery, must have none either.
+func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
+	a := newApp(t, true)
+	a.setup()
+	projectID, env := a.project("Shop")
+	appID := a.newApp(projectID, env, "web", false, nil)
+	base := "/projects/" + projectID
+	for _, page := range []string{
+		"/", "/projects", base, base + "/e/" + env.ID, base + "/e/" + env.ID + "/new", base + "/domains", base + "/settings",
+		"/apps/" + appID, "/apps/" + appID + "/environment", "/apps/" + appID + "/environment/edit", "/apps/" + appID + "/storage", "/apps/" + appID + "/settings",
+		"/tags", "/keys", "/servers", "/sources", "/team", "/team/variables", "/account",
+		"/settings", "/settings/storages", "/settings/notifications", "/_ui",
+	} {
+		res, body := a.get(page)
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("%s: status %d", page, res.StatusCode)
+			continue
+		}
+		if csp := res.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || strings.Contains(csp, "unsafe") {
+			t.Errorf("%s: CSP = %q", page, csp)
+		}
+		for _, inline := range []string{"<script>", " style=", "onclick=", "javascript:"} {
+			if strings.Contains(body, inline) {
+				t.Errorf("%s contains %q, which the CSP blocks", page, inline)
+			}
+		}
+	}
+}
+
 func TestSecurityHeadersAndStatic(t *testing.T) {
 	a := newApp(t, false)
 	res, body := a.get("/setup")

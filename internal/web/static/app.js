@@ -26,6 +26,18 @@
     dialog.querySelector("[aria-invalid=true]")?.focus();
   });
 
+  // On a narrow screen the trail and a row of tabs are wider than the page
+  // and scroll sideways. They start at where the person is: the end of the
+  // trail, and the tab that is open.
+  document.querySelectorAll(".crumbs").forEach((trail) => {
+    trail.scrollLeft = trail.scrollWidth;
+  });
+  document.querySelectorAll(".tabs [aria-current]").forEach((tab) => {
+    const row = tab.closest(".tabs");
+    const from = tab.getBoundingClientRect().left - row.getBoundingClientRect().left;
+    row.scrollLeft += from - (row.clientWidth - tab.offsetWidth) / 2;
+  });
+
   // Critical actions: a submit button carrying data-confirm does not send
   // its form. It fills in the page's one confirm dialog and opens it, and
   // that dialog's button sends the form, as if this one had been pressed.
