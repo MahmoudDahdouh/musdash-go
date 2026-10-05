@@ -49,7 +49,9 @@ type Deployer struct {
 	Runners Runners
 	Cfg     *config.Config
 	Log     *slog.Logger
-	Probe   Probe
+	// Probe replaces the health probe, which otherwise connects through
+	// each server's Runner. Tests set it.
+	Probe Probe
 	// Tokens mints repository tokens for apps deployed through a GitHub App.
 	Tokens TokenSource
 	// InstanceTarget is the control plane's own loopback address, routed
@@ -107,7 +109,6 @@ func (d *Deployer) lockFor(appID string) *sync.Mutex {
 func New(d *db.DB, box *secret.Box, q *jobs.Queue, r Runners, cfg *config.Config, log *slog.Logger, instanceTarget string) *Deployer {
 	return &Deployer{
 		DB: d, Box: box, Queue: q, Runners: r, Cfg: cfg, Log: log,
-		Probe:               newLocalProbe(),
 		Tokens:              source.NewGitHub(),
 		InstanceTarget:      instanceTarget,
 		healthEvery:         time.Second,

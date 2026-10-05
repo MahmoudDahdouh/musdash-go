@@ -88,10 +88,10 @@ func (c Config) On(s db.Server) Config // the same layout under the server's dat
 - [x] Tests against an SSH server started inside the test (the `x/crypto/ssh` server side, running commands with the local shell): output and exit codes, stdin, quoting of hostile arguments and file names, a secret in `Env` absent from every command line, a cancelled command gone from the process list, a wrong host key refused, atomic write, `Dial` reaching a listener on the "server".
 
 ### Task 2 — Paths and probes per server
-- [ ] `Config.On(server)`; every path given to a Runner goes through it. Logs the control plane writes with `os` stay on the control plane.
-- [ ] `Runner.Dial`; the probe uses the server's Runner.
-- [ ] The pool: one connection per server, idle close, reconnect after a drop, a changed host key reported as such.
-- [ ] Tests: the whole deploy suite still passes on the local path; a deploy through an `SSHRunner` to this machine with a different data directory writes nothing into the control plane's.
+- [x] `Config.On(server)`; every path given to a Runner goes through it. Logs the control plane writes with `os` stay on the control plane.
+- [x] `Runner.Dial`; the probe uses the server's Runner.
+- [x] The pool: one connection per server, idle close, reconnect after a drop, a changed host key reported as such.
+- [x] Tests: the whole deploy suite still passes on the local path; a deploy through an `SSHRunner` to this machine with a different data directory writes nothing into the control plane's.
 
 ### Task 3 — Servers in the dashboard
 - [ ] Add a server (name, address, port, user, key: an existing one or a new one whose public key is shown to be installed); check it (reachable, host key recorded, Docker and its version, Compose plugin, git, architecture, memory, disk, data directory created); status on the list.

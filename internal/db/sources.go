@@ -174,7 +174,8 @@ func (d *DB) ListSSHKeys(ctx context.Context, teamID string) ([]SSHKey, error) {
 func (d *DB) DeleteSSHKey(ctx context.Context, teamID, id string) error {
 	return d.Tx(ctx, func(tx *sql.Tx) error {
 		var n int
-		if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM apps WHERE ssh_key_id = ?1) + (SELECT count(*) FROM services WHERE ssh_key_id = ?1)`, id).Scan(&n); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM apps WHERE ssh_key_id = ?1) + (SELECT count(*) FROM services WHERE ssh_key_id = ?1)
+			+ (SELECT count(*) FROM servers WHERE ssh_key_id = ?1)`, id).Scan(&n); err != nil {
 			return err
 		}
 		if n > 0 {

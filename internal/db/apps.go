@@ -39,6 +39,17 @@ type Server struct {
 	SSHUser   string
 	IP        string
 	CreatedAt int64
+
+	// For a server reached over SSH.
+	SSHKeyID      string // the key musdash signs in with
+	HostKey       string // the server's own key once seen, as an authorized_keys line
+	DataDir       string // where musdash keeps its files there; "" for the local server
+	Arch          string // "amd64", "arm64", … as last checked
+	DockerVersion string
+	Status        string // ServerUnknown, ServerOK, ServerUnreachable
+	StatusDetail  string
+	CheckedAt     int64
+	Proxy         string // ProxyNone, ProxyInstalled
 }
 
 const (
@@ -123,12 +134,94 @@ func (d *DB) EnsureLocalServer(ctx context.Context, teamID, ip string) (Server, 
 	return d.localServer(ctx)
 }
 
-const serverColumns = `id, team_id, name, kind, host, port, ssh_user, ip, created_at`
+const serverColumns = `id, team_id, name, kind, host, port, ssh_user, ip, created_at,
+	ssh_key_id, host_key, data_dir, arch, docker_version, status, status_detail, checked_at, proxy`
 
 func scanServer(row interface{ Scan(...any) error }) (Server, error) {
 	var s Server
-	err := row.Scan(&s.ID, &s.TeamID, &s.Name, &s.Kind, &s.Host, &s.Port, &s.SSHUser, &s.IP, &s.CreatedAt)
+	err := row.Scan(&s.ID, &s.TeamID, &s.Name, &s.Kind, &s.Host, &s.Port, &s.SSHUser, &s.IP, &s.CreatedAt,
+		&s.SSHKeyID, &s.HostKey, &s.DataDir, &s.Arch, &s.DockerVersion, &s.Status, &s.StatusDetail, &s.CheckedAt, &s.Proxy)
 	return s, notFound(err)
+}
+
+// Server statuses, and whether the proxy was installed.
+const (
+	ServerUnknown     = "unknown"
+	ServerOK          = "ok"
+	ServerUnreachable = "unreachable"
+
+	ProxyNone      = "none"
+	ProxyInstalled = "installed"
+)
+
+// CreateServer adds a server reached over SSH. Its key must be the team's.
+func (d *DB) CreateServer(ctx context.Context, s Server) (Server, error) {
+	if _, err := d.SSHKey(ctx, s.TeamID, s.SSHKeyID); err != nil {
+		return Server{}, err
+	}
+	s.ID = secret.RandomID()
+	s.Kind = ServerSSH
+	s.Status = ServerUnknown
+	s.Proxy = ProxyNone
+	s.CreatedAt = now()
+	_, err := d.ExecContext(ctx, `INSERT INTO servers (id, team_id, name, kind, host, port, ssh_user, ip, created_at, ssh_key_id, data_dir)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		s.ID, s.TeamID, s.Name, s.Kind, s.Host, s.Port, s.SSHUser, s.IP, s.CreatedAt, s.SSHKeyID, s.DataDir)
+	return s, err
+}
+
+// SetServerHostKey records the key a server presented, if none is recorded
+// yet. It reports whether this call recorded it: when two first connections
+// race, only one key becomes the server's.
+func (d *DB) SetServerHostKey(ctx context.Context, id, hostKey string) (bool, error) {
+	res, err := d.ExecContext(ctx, `UPDATE servers SET host_key = ? WHERE id = ? AND host_key = ''`, hostKey, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// ForgetServerHostKey drops the recorded key, so that the next check
+// records whatever the server then presents.
+func (d *DB) ForgetServerHostKey(ctx context.Context, teamID, id string) error {
+	return affected(d.ExecContext(ctx, `UPDATE servers SET host_key = '', status = ?, status_detail = '' WHERE id = ? AND team_id = ? AND kind = ?`,
+		ServerUnknown, id, teamID, ServerSSH))
+}
+
+// SetServerChecked records what a check of the server found.
+func (d *DB) SetServerChecked(ctx context.Context, s Server) error {
+	return affected(d.ExecContext(ctx, `UPDATE servers SET status = ?, status_detail = ?, checked_at = ?, arch = ?, docker_version = ?, ip = ?, data_dir = ? WHERE id = ?`,
+		s.Status, s.StatusDetail, now(), s.Arch, s.DockerVersion, s.IP, s.DataDir, s.ID))
+}
+
+// SetServerProxy records whether the proxy is installed on a server.
+func (d *DB) SetServerProxy(ctx context.Context, id, state string) error {
+	return affected(d.ExecContext(ctx, `UPDATE servers SET proxy = ? WHERE id = ?`, state, id))
+}
+
+// ServerUse counts what runs on a server.
+func (d *DB) ServerUse(ctx context.Context, id string) (int, error) {
+	var n int
+	err := d.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM apps WHERE server_id = ?1 OR build_server_id = ?1)
+		+ (SELECT count(*) FROM databases WHERE server_id = ?1) + (SELECT count(*) FROM services WHERE server_id = ?1)`, id).Scan(&n)
+	return n, err
+}
+
+// DeleteServer removes a server that nothing runs on. The local server is
+// never removed.
+func (d *DB) DeleteServer(ctx context.Context, teamID, id string) error {
+	return d.Tx(ctx, func(tx *sql.Tx) error {
+		var n int
+		if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM apps WHERE server_id = ?1 OR build_server_id = ?1)
+			+ (SELECT count(*) FROM databases WHERE server_id = ?1) + (SELECT count(*) FROM services WHERE server_id = ?1)`, id).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			return ErrInUse
+		}
+		return affected(tx.ExecContext(ctx, `DELETE FROM servers WHERE id = ? AND team_id = ? AND kind = ?`, id, teamID, ServerSSH))
+	})
 }
 
 func (d *DB) localServer(ctx context.Context) (Server, error) {

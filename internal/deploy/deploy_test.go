@@ -3,11 +3,18 @@ package deploy
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
+	"github.com/MahmoudDahdouh/musdash-go/internal/runner/sshtest"
+	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
+	"golang.org/x/crypto/ssh"
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1078,3 +1085,122 @@ func dockerClient(r runner.Runner) docker.Client { return docker.Client{R: r} }
 type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
+// remoteServer adds a server that is reached over SSH and is really this
+// machine: an SSH server inside the test, with a data directory of its own.
+// It returns the server's row, the pool that reaches it and the SSH server.
+func (e *env) remoteServer() (db.Server, *servers.Pool, *sshtest.Server) {
+	e.t.Helper()
+	ctx := context.Background()
+	_, private, _ := ed25519.GenerateKey(rand.Reader)
+	block, err := ssh.MarshalPrivateKey(private, "")
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	signer, _ := ssh.NewSignerFromKey(private)
+	srv := sshtest.StartWithKey(e.t, signer)
+	sealed, _ := e.d.Box.Seal(pem.EncodeToMemory(block))
+	key, err := e.db.CreateSSHKey(ctx, e.team, "server key", servers.HostKeyLine(signer.PublicKey()), sealed)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	server, err := e.db.CreateServer(ctx, db.Server{TeamID: e.team, Name: "second", Host: srv.Host, Port: srv.Port, SSHUser: "deploy",
+		SSHKeyID: key.ID, DataDir: filepath.Join(e.t.TempDir(), "remote-data"), IP: "198.51.100.20"})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	pool := servers.New()
+	pool.DB, pool.Box = e.db, e.d.Box
+	e.t.Cleanup(func() { pool.Forget(server.ID) })
+	first, _, err := pool.FirstContact(ctx, server)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	first.Close()
+	server, _ = e.db.ServerByID(ctx, server.ID)
+	return server, pool, srv
+}
+
+// The same deployment, to a server reached over SSH. The "remote" server
+// is this machine, so Docker is real and so is everything in between: the
+// protocol, the quoting, the paths, the forwarded health check.
+func TestDeployToARemoteServerWithDocker(t *testing.T) {
+	if os.Getenv("MUSDASH_DOCKER_TEST") != "1" {
+		t.Skip("set MUSDASH_DOCKER_TEST=1 to run against the local Docker daemon")
+	}
+	e := newEnv(t)
+	ctx := context.Background()
+	server, pool, srv := e.remoteServer()
+	e.d.Runners = pool
+	e.d.Probe = nil // through the server's connection, as in production
+	e.d.healthEvery = 300 * time.Millisecond
+	e.db.Exec(`UPDATE apps SET server_id = ?, health_timeout = 60, health_path = '/' WHERE id = ?`, server.ID, e.app.ID)
+	secretValue := "s3cret-value-" + secret.RandomID()
+	sealed, _ := e.d.Box.SealString(secretValue)
+	if err := e.db.ReplaceEnvVars(ctx, db.KindApp, e.app.ID, []db.EnvVar{{Key: "API_TOKEN", Value: sealed}}); err != nil {
+		t.Fatal(err)
+	}
+	local := runner.NewLocal()
+	dk := docker.Client{R: local}
+	t.Cleanup(func() {
+		out, _ := local.Output(ctx, runner.Cmd{Name: "docker", Args: []string{"ps", "--all", "--quiet", "--filter", "label=" + docker.LabelResource + "=" + e.app.ID}})
+		for _, id := range strings.Fields(string(out)) {
+			dk.Remove(ctx, id)
+		}
+		local.Run(ctx, runner.Cmd{Name: "docker", Args: []string{"network", "rm", NetworkName(e.app.EnvironmentID)}})
+	})
+
+	dep := e.deployWithin(5 * time.Minute)
+	if dep.Status != db.DeploySuccess {
+		t.Fatalf("%s %q\n%s", dep.Status, dep.Error, e.log(dep))
+	}
+	app := e.reload()
+	res, err := http.Get("http://127.0.0.1:" + strconv.Itoa(app.HostPort) + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if !strings.Contains(string(body), "nginx") {
+		t.Fatalf("the app answers %q", body)
+	}
+	// The container has the variable; no command line on the way did.
+	out, err := local.Output(ctx, runner.Cmd{Name: "docker", Args: []string{"exec", app.Container, "printenv", "API_TOKEN"}})
+	if err != nil || strings.TrimSpace(string(out)) != secretValue {
+		t.Fatalf("the variable in the container: %q %v", out, err)
+	}
+	for _, line := range srv.Commands() {
+		if strings.Contains(line, secretValue) {
+			t.Fatalf("a secret crossed in a command line: %s", line)
+		}
+	}
+	// What a deployment writes is under the server's data directory, and
+	// nothing of it under the control plane's.
+	if left, _ := filepath.Glob(filepath.Join(server.DataDir, "apps", app.ID, "*")); len(left) == 0 {
+		t.Fatal("nothing was written under the server's data directory")
+	}
+	if _, err := os.Stat(e.cfg.AppDir(app.ID)); !os.IsNotExist(err) {
+		t.Fatal("the deployment wrote into the control plane's data directory")
+	}
+	routes, err := os.ReadFile(filepath.Join(server.DataDir, "proxy", "routes.json"))
+	if err != nil || !strings.Contains(string(routes), "shop.example.com") || !strings.Contains(string(routes), strconv.Itoa(app.HostPort)) {
+		t.Fatalf("the server's routes file: %q %v", routes, err)
+	}
+	if _, err := os.Stat(e.cfg.RoutesPath()); err == nil {
+		if local, _ := os.ReadFile(e.cfg.RoutesPath()); strings.Contains(string(local), "shop.example.com") {
+			t.Fatal("the app's route was written to the control plane's proxy")
+		}
+	}
+
+	// Stop and delete work over the same connection.
+	if err := e.d.Stop(ctx, app.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.d.Destroy(ctx, app.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(server.DataDir, "apps", app.ID)); !os.IsNotExist(err) {
+		t.Fatal("the app's directory on the server was left behind")
+	}
+	t.Logf("deployed over SSH: %d commands crossed, files under %s", len(srv.Commands()), server.DataDir)
+}

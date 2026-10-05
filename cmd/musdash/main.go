@@ -208,6 +208,9 @@ func runServer(args []string) error {
 		}
 	}
 	pool := servers.New()
+	// The pool reads a remote server's key and host key from the database.
+	pool.DB, pool.Box = d, box
+	go pool.Run(ctx)
 	queue := jobs.New(d.DB, log, *workers)
 	deployer := deploy.New(d, box, queue, pool, cfg, log, net.JoinHostPort("127.0.0.1", port))
 	deployer.Register()

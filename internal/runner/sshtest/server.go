@@ -33,6 +33,14 @@ type Server struct {
 	// Commands are the command lines received, in order.
 	commands []string
 	conns    []net.Conn
+	accepted int
+}
+
+// Accepted is how many connections the server has accepted so far.
+func (s *Server) Accepted() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.accepted
 }
 
 func newSigner(t testing.TB) ssh.Signer {
@@ -48,11 +56,18 @@ func newSigner(t testing.TB) ssh.Signer {
 	return signer
 }
 
-// Start runs a server on a loopback port until the test ends.
+// Start runs a server on a loopback port until the test ends. It accepts a
+// key generated for it, available as Signer.
 func Start(t testing.TB) *Server {
 	t.Helper()
+	return StartWithKey(t, newSigner(t))
+}
+
+// StartWithKey is Start for a server that accepts the given key.
+func StartWithKey(t testing.TB, client ssh.Signer) *Server {
+	t.Helper()
 	hostSigner := newSigner(t)
-	s := &Server{Host: "127.0.0.1", Signer: newSigner(t), HostKey: hostSigner.PublicKey()}
+	s := &Server{Host: "127.0.0.1", Signer: client, HostKey: hostSigner.PublicKey()}
 	cfg := &ssh.ServerConfig{
 		PublicKeyCallback: func(_ ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			if string(key.Marshal()) == string(s.Signer.PublicKey().Marshal()) {
@@ -77,6 +92,7 @@ func Start(t testing.TB) *Server {
 			}
 			s.mu.Lock()
 			s.conns = append(s.conns, conn)
+			s.accepted++
 			s.mu.Unlock()
 			go s.serve(conn, cfg)
 		}

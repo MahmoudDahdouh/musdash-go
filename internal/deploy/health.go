@@ -13,14 +13,15 @@ import (
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
+	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
 )
 
 // errExited means the new container stopped before it became healthy.
 var errExited = errors.New("the container exited")
 
 // Probe checks that a published port answers on the server's loopback. The
-// default implementation connects from this process, which is correct for
-// the local server; remote servers supply their own in phase 6.
+// default one connects through the server's Runner, so for a remote server
+// the connection is made from that server, where the port is.
 type Probe interface {
 	// HTTP passes when GET http://127.0.0.1:<port><path> answers below 400.
 	HTTP(ctx context.Context, port int, path string) error
@@ -28,18 +29,38 @@ type Probe interface {
 	TCP(ctx context.Context, port int) error
 }
 
-type localProbe struct{ client *http.Client }
+// dialFunc opens a connection as a server sees it.
+type dialFunc func(ctx context.Context, network, address string) (net.Conn, error)
 
-func newLocalProbe() Probe {
-	return localProbe{client: &http.Client{
+type dialProbe struct {
+	dial   dialFunc
+	client *http.Client
+}
+
+func newDialProbe(dial dialFunc) Probe {
+	return dialProbe{dial: dial, client: &http.Client{
 		Timeout: 5 * time.Second,
 		// A redirect is an answer; following it could leave the container.
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		Transport:     &http.Transport{DisableKeepAlives: true},
+		Transport:     &http.Transport{DisableKeepAlives: true, DialContext: dial, Proxy: nil},
 	}}
 }
 
-func (p localProbe) HTTP(ctx context.Context, port int, path string) error {
+// newLocalProbe probes ports of this machine.
+func newLocalProbe() Probe {
+	var d net.Dialer
+	return newDialProbe(d.DialContext)
+}
+
+// probeFor returns the probe for containers on the server r reaches.
+func (d *Deployer) probeFor(r runner.Runner) Probe {
+	if d.Probe != nil {
+		return d.Probe
+	}
+	return newDialProbe(r.Dial)
+}
+
+func (p dialProbe) HTTP(ctx context.Context, port int, path string) error {
 	u, err := HealthURL(port, path)
 	if err != nil {
 		return err
@@ -102,11 +123,10 @@ func HealthURL(port int, path string) (string, error) {
 // So after connecting, the probe waits briefly: a closed connection means
 // nothing is there, while silence (a server waiting for a request) or data
 // (a server that speaks first) means the app is up.
-func (localProbe) TCP(ctx context.Context, port int) error {
-	var dialer net.Dialer
+func (p dialProbe) TCP(ctx context.Context, port int) error {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	conn, err := dialer.DialContext(ctx, "tcp", "127.0.0.1:"+strconv.Itoa(port))
+	conn, err := p.dial(ctx, "tcp", "127.0.0.1:"+strconv.Itoa(port))
 	if err != nil {
 		return err
 	}
@@ -138,11 +158,12 @@ func (d *Deployer) waitHealthy(ctx context.Context, dk docker.Client, app db.App
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	check := func() error { return d.Probe.TCP(ctx, port) }
+	probe := d.probeFor(dk.R)
+	check := func() error { return probe.TCP(ctx, port) }
 	switch {
 	case app.HealthPath != "":
 		log.Step("Waiting for GET %s to answer (up to %s)", app.HealthPath, timeout)
-		check = func() error { return d.Probe.HTTP(ctx, port, app.HealthPath) }
+		check = func() error { return probe.HTTP(ctx, port, app.HealthPath) }
 	case app.HealthCmd != "":
 		log.Step("Waiting for the health command to pass (up to %s)", timeout)
 		check = func() error { return dk.Exec(ctx, container, "sh", "-c", app.HealthCmd) }
