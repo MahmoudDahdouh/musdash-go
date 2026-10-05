@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"net"
 	"reflect"
 	"strings"
 	"testing"
@@ -175,7 +176,10 @@ func (s *scripted) ReadFile(context.Context, string) (io.ReadCloser, error) {
 }
 func (s *scripted) MkdirAll(context.Context, string, fs.FileMode) error { return nil }
 func (s *scripted) RemoveAll(context.Context, string) error             { return nil }
-func (s *scripted) Close() error                                        { return nil }
+func (s *scripted) Dial(context.Context, string, string) (net.Conn, error) {
+	return nil, errors.New("not scripted")
+}
+func (s *scripted) Close() error { return nil }
 
 func TestState(t *testing.T) {
 	ctx := context.Background()
