@@ -53,6 +53,25 @@
   --color-log-fg: #d7e1f2;
   --color-log-dim: #8fa2c2;
 
+  /* The sixteen colours a program in a terminal can ask for by number,
+     chosen to read on the log background. */
+  --color-term-0: #3b4a66;
+  --color-term-1: #f47067;
+  --color-term-2: #57c785;
+  --color-term-3: #e5c07b;
+  --color-term-4: #6ea8fe;
+  --color-term-5: #c792ea;
+  --color-term-6: #56c8d8;
+  --color-term-7: #d7e1f2;
+  --color-term-8: #7f8fa9;
+  --color-term-9: #ff8f88;
+  --color-term-10: #7ee2a8;
+  --color-term-11: #f5d99a;
+  --color-term-12: #93c0ff;
+  --color-term-13: #dbb2f7;
+  --color-term-14: #84e0ec;
+  --color-term-15: #ffffff;
+
   /* Type -------------------------------------------------------------- */
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -819,6 +838,173 @@
   .meter-detail {
     font-size: var(--text-xs);
     color: var(--color-ink-mute);
+  }
+
+  /* Terminal -----------------------------------------------------------
+   * Drawn by static/terminal.js as rows of text. The box has a fixed
+   * height; how many columns and rows fit is measured from it.
+   */
+  .term {
+    position: relative;
+    height: min(34rem, 70vh);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 10px 12px;
+    background: var(--color-log-bg);
+    color: var(--color-log-fg);
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: 1.3;
+    font-variant-ligatures: none;
+    cursor: text;
+  }
+  .term-focus {
+    outline: 2px solid var(--color-brand-400);
+    outline-offset: 2px;
+  }
+  .term-row {
+    height: 1.3em;
+    overflow: hidden;
+    white-space: pre;
+  }
+  .term-probe {
+    position: absolute;
+    visibility: hidden;
+    white-space: pre;
+  }
+  .term-cursor {
+    outline: 1px solid var(--color-log-fg);
+    outline-offset: -1px;
+  }
+  .term-focus .term-cursor {
+    outline: none;
+    background: var(--color-log-fg);
+    color: var(--color-log-bg);
+  }
+  .term-inv {
+    background: var(--color-log-fg);
+    color: var(--color-log-bg);
+  }
+  .term-fg-bg {
+    color: var(--color-log-bg);
+  }
+  .term-bg-fg {
+    background: var(--color-log-fg);
+  }
+  .term-b {
+    font-weight: 700;
+  }
+  .term-dim {
+    opacity: 0.6;
+  }
+  .term-i {
+    font-style: italic;
+  }
+  .term-u {
+    text-decoration: underline;
+  }
+  .term-s {
+    text-decoration: line-through;
+  }
+  .term-hidden {
+    visibility: hidden;
+  }
+  .tf0 {
+    color: var(--color-term-0);
+  }
+  .tb0 {
+    background: var(--color-term-0);
+  }
+  .tf1 {
+    color: var(--color-term-1);
+  }
+  .tb1 {
+    background: var(--color-term-1);
+  }
+  .tf2 {
+    color: var(--color-term-2);
+  }
+  .tb2 {
+    background: var(--color-term-2);
+  }
+  .tf3 {
+    color: var(--color-term-3);
+  }
+  .tb3 {
+    background: var(--color-term-3);
+  }
+  .tf4 {
+    color: var(--color-term-4);
+  }
+  .tb4 {
+    background: var(--color-term-4);
+  }
+  .tf5 {
+    color: var(--color-term-5);
+  }
+  .tb5 {
+    background: var(--color-term-5);
+  }
+  .tf6 {
+    color: var(--color-term-6);
+  }
+  .tb6 {
+    background: var(--color-term-6);
+  }
+  .tf7 {
+    color: var(--color-term-7);
+  }
+  .tb7 {
+    background: var(--color-term-7);
+  }
+  .tf8 {
+    color: var(--color-term-8);
+  }
+  .tb8 {
+    background: var(--color-term-8);
+  }
+  .tf9 {
+    color: var(--color-term-9);
+  }
+  .tb9 {
+    background: var(--color-term-9);
+  }
+  .tf10 {
+    color: var(--color-term-10);
+  }
+  .tb10 {
+    background: var(--color-term-10);
+  }
+  .tf11 {
+    color: var(--color-term-11);
+  }
+  .tb11 {
+    background: var(--color-term-11);
+  }
+  .tf12 {
+    color: var(--color-term-12);
+  }
+  .tb12 {
+    background: var(--color-term-12);
+  }
+  .tf13 {
+    color: var(--color-term-13);
+  }
+  .tb13 {
+    background: var(--color-term-13);
+  }
+  .tf14 {
+    color: var(--color-term-14);
+  }
+  .tb14 {
+    background: var(--color-term-14);
+  }
+  .tf15 {
+    color: var(--color-term-15);
+  }
+  .tb15 {
+    background: var(--color-term-15);
   }
 
   /* Empty state -------------------------------------------------------- */

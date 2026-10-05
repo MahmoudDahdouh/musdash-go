@@ -17,22 +17,39 @@ import (
 	"sync"
 )
 
-//go:embed app.css app.js htmx.min.js htmx-sse.js favicon.svg
+//go:embed app.css app.js htmx.min.js htmx-sse.js favicon.svg terminal.js
 var files embed.FS
 
 type asset struct {
 	name string
+	mime string
+
+	// Read and hashed when first asked for, not when the program starts
+	// and not with the others: reading an embedded file copies it onto the
+	// heap, the proxy is the same binary and serves none of them, and a
+	// script only one page uses should cost nothing until that page is
+	// opened.
+	load sync.Once
 	raw  []byte
 	hash string
-	mime string
 
 	once sync.Once
 	gz   []byte // built on first request, so an idle server never pays for it
 }
 
-// assets reads and hashes the embedded files on first use, not when the
-// program starts: the proxy is the same binary and never serves them, and
-// reading them copies them onto the heap.
+func (a *asset) read() {
+	a.load.Do(func() {
+		raw, err := files.ReadFile(a.name)
+		if err != nil {
+			panic(err)
+		}
+		sum := sha256.Sum256(raw)
+		a.raw, a.hash = raw, hex.EncodeToString(sum[:6])
+	})
+}
+
+// assets lists the embedded files on first use. Their content is not read
+// here.
 var assets = sync.OnceValue(func() map[string]*asset {
 	entries, err := files.ReadDir(".")
 	if err != nil {
@@ -40,17 +57,7 @@ var assets = sync.OnceValue(func() map[string]*asset {
 	}
 	all := make(map[string]*asset, len(entries))
 	for _, e := range entries {
-		raw, err := files.ReadFile(e.Name())
-		if err != nil {
-			panic(err)
-		}
-		sum := sha256.Sum256(raw)
-		all[e.Name()] = &asset{
-			name: e.Name(),
-			raw:  raw,
-			hash: hex.EncodeToString(sum[:6]),
-			mime: mime.TypeByExtension(path.Ext(e.Name())),
-		}
+		all[e.Name()] = &asset{name: e.Name(), mime: mime.TypeByExtension(path.Ext(e.Name()))}
 	}
 	return all
 })
@@ -61,6 +68,7 @@ func URL(name string) string {
 	if !ok {
 		panic("static: unknown asset " + name)
 	}
+	a.read()
 	return "/static/" + name + "?v=" + a.hash
 }
 
@@ -72,6 +80,7 @@ func Handler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		a.read()
 		h := w.Header()
 		h.Set("Content-Type", a.mime)
 		h.Set("Vary", "Accept-Encoding")

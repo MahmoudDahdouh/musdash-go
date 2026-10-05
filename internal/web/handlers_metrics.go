@@ -403,16 +403,7 @@ func (s *Server) serverMetricsNow(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			row := pages.UsageRow{Name: c.Name, CPU: ui.Percent(float64(c.CPU) / 100), Mem: ui.Bytes(float64(c.Mem))}
-			if resourceIDRE.MatchString(o.Resource) {
-				switch o.Kind {
-				case db.KindApp:
-					row.Href = "/apps/" + o.Resource + "/metrics"
-				case db.KindDatabase:
-					row.Href = "/databases/" + o.Resource + "/metrics"
-				case db.KindService:
-					row.Href = "/services/" + o.Resource + "/metrics"
-				}
-			}
+			row.Href = s.resourcePage(r, o.Kind, o.Resource)
 			u.Rows = append(u.Rows, row)
 		}
 	}
@@ -436,4 +427,32 @@ func (s *Server) serverMetricsSave(w http.ResponseWriter, r *http.Request) {
 		setFlash(w, r, ui.ToneOK, "Sampling is off, and what was kept is removed.")
 	}
 	redirect(w, r, "/servers/"+server.ID+"/metrics")
+}
+
+// resourcePage is the metrics page of what a container says it belongs to,
+// or "" when that is nothing of the signed-in team's. The label is the
+// server's word: it becomes a link only when it names something here.
+func (s *Server) resourcePage(r *http.Request, kind, id string) string {
+	if !resourceIDRE.MatchString(id) {
+		return ""
+	}
+	team := sessionFrom(r).TeamID
+	var err error
+	switch kind {
+	case db.KindApp:
+		_, err = s.DB.App(r.Context(), team, id)
+		kind = "apps"
+	case db.KindDatabase:
+		_, err = s.DB.Database(r.Context(), team, id)
+		kind = "databases"
+	case db.KindService:
+		_, err = s.DB.Service(r.Context(), team, id)
+		kind = "services"
+	default:
+		return ""
+	}
+	if err != nil {
+		return ""
+	}
+	return "/" + kind + "/" + id + "/metrics"
 }

@@ -480,6 +480,32 @@ func (m *remote) Dial(ctx context.Context, network, address string) (net.Conn, e
 	return &heldConn{Conn: c, done: func() { m.p.release(conn, r, false) }}, nil
 }
 
+// Terminal keeps the connection in use until the terminal is closed.
+func (m *remote) Terminal(ctx context.Context, c runner.Cmd, cols, rows int) (runner.Terminal, error) {
+	conn, r, err := m.p.acquire(ctx, m.id)
+	if err != nil {
+		return nil, err
+	}
+	t, err := r.Terminal(ctx, c, cols, rows)
+	if err != nil {
+		m.p.release(conn, r, failedConnection(err))
+		return nil, err
+	}
+	return &heldTerminal{Terminal: t, done: func() { m.p.release(conn, r, false) }}, nil
+}
+
+type heldTerminal struct {
+	runner.Terminal
+	once sync.Once
+	done func()
+}
+
+func (h *heldTerminal) Close() error {
+	err := h.Terminal.Close()
+	h.once.Do(h.done)
+	return err
+}
+
 // Close does nothing: the connection is the pool's.
 func (m *remote) Close() error { return nil }
 

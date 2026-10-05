@@ -44,6 +44,9 @@ type Runner interface {
 	// is the server's own loopback interface, wherever musdash runs. A
 	// health check of a container's port goes through it.
 	Dial(ctx context.Context, network, address string) (net.Conn, error)
+	// Terminal runs c on a terminal of its own, cols wide and rows high,
+	// for a person to type into. It ends when it is closed or ctx ends.
+	Terminal(ctx context.Context, c Cmd, cols, rows int) (Terminal, error)
 	// Close releases any connection the runner holds.
 	Close() error
 }

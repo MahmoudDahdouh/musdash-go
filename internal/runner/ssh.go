@@ -603,3 +603,80 @@ func (r *SSHRunner) RemoveAll(ctx context.Context, p string) error {
 func (r *SSHRunner) Dial(ctx context.Context, network, address string) (net.Conn, error) {
 	return r.client.DialContext(ctx, network, address)
 }
+
+// sshTerminal is a command on a terminal the server made for it.
+type sshTerminal struct {
+	session *ssh.Session
+	in      io.WriteCloser
+	out     io.Reader
+	release func()
+	once    sync.Once
+	stop    func() bool
+}
+
+// Terminal runs c in a session that has asked the server for a terminal.
+// A command's environment cannot be given this way: what a terminal needs
+// set, it sets in its own arguments.
+func (r *SSHRunner) Terminal(ctx context.Context, c Cmd, cols, rows int) (Terminal, error) {
+	if len(c.Env) > 0 {
+		return nil, errors.New("ssh: a terminal's command takes no environment")
+	}
+	session, release, err := r.session(ctx)
+	if err != nil {
+		return nil, err
+	}
+	fail := func(err error) (Terminal, error) {
+		session.Close()
+		release()
+		return nil, fmt.Errorf("ssh: open a terminal: %w", err)
+	}
+	width, height := clampSize(cols, rows)
+	modes := ssh.TerminalModes{ssh.ECHO: 1, ssh.TTY_OP_ISPEED: 38400, ssh.TTY_OP_OSPEED: 38400}
+	if _, err := within(ctx, 0, func() (struct{}, error) {
+		return struct{}{}, session.RequestPty("xterm-256color", int(height), int(width), modes)
+	}, nil); err != nil {
+		return fail(err)
+	}
+	in, err := session.StdinPipe()
+	if err != nil {
+		return fail(err)
+	}
+	// With a terminal, the command's errors arrive on the same stream as
+	// the rest of what it prints.
+	out, err := session.StdoutPipe()
+	if err != nil {
+		return fail(err)
+	}
+	if err := begin(ctx, session, "exec sh -c "+Quote(script(c))); err != nil {
+		return fail(err)
+	}
+	t := &sshTerminal{session: session, in: in, out: out, release: release}
+	t.stop = context.AfterFunc(ctx, func() { t.Close() })
+	return t, nil
+}
+
+func (t *sshTerminal) Read(p []byte) (int, error) {
+	n, err := t.out.Read(p)
+	if err != nil && n == 0 {
+		return 0, io.EOF
+	}
+	return n, nil
+}
+
+func (t *sshTerminal) Write(p []byte) (int, error) { return t.in.Write(p) }
+
+func (t *sshTerminal) Resize(cols, rows int) error {
+	width, height := clampSize(cols, rows)
+	return t.session.WindowChange(int(height), int(width))
+}
+
+// Close ends the session. The server hangs up the terminal, which ends
+// what was running on it.
+func (t *sshTerminal) Close() error {
+	t.once.Do(func() {
+		t.stop()
+		t.session.Close()
+		t.release()
+	})
+	return nil
+}

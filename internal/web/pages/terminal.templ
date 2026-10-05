@@ -1,0 +1,86 @@
+package pages
+
+import (
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/static"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// terminalPanel is the terminal itself: an empty screen that
+// static/terminal.js fills once it has connected to ws. The form token is
+// sent as the connection's first message; a WebSocket carries no form.
+templ terminalPanel(ws, csrf string) {
+	<div class="grid gap-2">
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<p class="muted text-sm" data-term-status role="status">Connecting…</p>
+			<button type="button" class="btn btn-secondary btn-sm" data-term-reconnect hidden>
+				@ui.Icon("refresh")
+				Connect again
+			</button>
+		</div>
+		<div
+			class="term"
+			data-terminal={ ws }
+			data-csrf={ csrf }
+			role="group"
+			aria-label="Terminal"
+		></div>
+		<p class="muted text-sm">
+			Copy by selecting text. Paste with <span class="code">Ctrl+Shift+V</span>, or <span class="code">⌘V</span> on a Mac.
+			<span class="code">Shift+PageUp</span> scrolls back.
+		</p>
+	</div>
+	<script src={ static.URL("terminal.js") } defer></script>
+}
+
+templ AppTerminal(s ui.Shell, v AppView) {
+	@appFrame(s, v, "terminal") {
+		if v.App.Container == "" {
+			@ui.EmptyState("terminal", "Nothing is running", "A terminal opens in the app's running container. Deploy the app first.")
+		} else {
+			<div class="grid max-w-5xl gap-3">
+				<p class="muted text-sm">A shell in the app's running container, as the user its image runs as. It ends when you leave this page; what it changed in the container is gone with the next deployment.</p>
+				@terminalPanel(v.base()+"/terminal/ws", s.CSRF)
+			</div>
+		}
+	}
+}
+
+templ DatabaseTerminal(s ui.Shell, v DatabaseView) {
+	@databaseFrame(s, v, "terminal") {
+		if v.DB.Container == "" {
+			@ui.EmptyState("terminal", "Nothing is running", "A terminal opens in the database's running container. Start the database first.")
+		} else {
+			<div class="grid max-w-5xl gap-3">
+				<p class="muted text-sm">A shell in the database's container, where its own command line is: <span class="code">psql</span>, <span class="code">mysql</span>, <span class="code">redis-cli</span>, <span class="code">mongosh</span>. It ends when you leave this page.</p>
+				@terminalPanel(v.base()+"/terminal/ws", s.CSRF)
+			</div>
+		}
+	}
+}
+
+// ServiceTerminal offers a terminal in one of a service's containers.
+templ ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen string) {
+	@serviceFrame(s, v, "terminal") {
+		if chosen == "" {
+			@ui.EmptyState("terminal", "Nothing is running", "A terminal opens in one of the service's running containers. Deploy the service first.")
+		} else {
+			<div class="grid max-w-5xl gap-3">
+				<p class="muted text-sm">A shell in one of the service's containers. It ends when you leave this page.</p>
+				if len(containers) > 1 {
+					<nav class="flex flex-wrap gap-1" aria-label="Container">
+						for _, name := range containers {
+							<a
+								class={ "btn btn-sm", templ.KV("btn-secondary", name == chosen), templ.KV("btn-ghost", name != chosen) }
+								href={ templ.SafeURL(v.base() + "/terminal?container=" + name) }
+								if name == chosen {
+									aria-current="true"
+								}
+							>{ name }</a>
+						}
+					</nav>
+				}
+				@terminalPanel(v.base()+"/terminal/ws?container="+chosen, s.CSRF)
+			</div>
+		}
+	}
+}

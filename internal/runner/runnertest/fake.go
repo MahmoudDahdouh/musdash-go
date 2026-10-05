@@ -26,6 +26,8 @@ type Fake struct {
 	// Hang, when set, makes the commands it reports true for run until
 	// their context ends, as a stalled process would.
 	Hang func(line string) bool
+	// Term, when set, answers a request for a terminal.
+	Term func(line string, c runner.Cmd, cols, rows int) (runner.Terminal, error)
 
 	mu    sync.Mutex
 	calls []string
@@ -120,6 +122,20 @@ func (f *Fake) RemoveAll(_ context.Context, path string) error {
 func (f *Fake) Dial(ctx context.Context, network, address string) (net.Conn, error) {
 	var d net.Dialer
 	return d.DialContext(ctx, network, address)
+}
+
+// Terminal records the command and answers through Term. Without one a
+// scripted server has no terminal to give.
+func (f *Fake) Terminal(_ context.Context, c runner.Cmd, cols, rows int) (runner.Terminal, error) {
+	line := Line(c)
+	f.mu.Lock()
+	f.calls = append(f.calls, "terminal "+line)
+	term := f.Term
+	f.mu.Unlock()
+	if term == nil {
+		return nil, runner.ErrNoTerminal
+	}
+	return term(line, c, cols, rows)
 }
 
 func (f *Fake) Close() error { return nil }

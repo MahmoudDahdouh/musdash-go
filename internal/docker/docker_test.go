@@ -179,6 +179,9 @@ func (s *scripted) RemoveAll(context.Context, string) error             { return
 func (s *scripted) Dial(context.Context, string, string) (net.Conn, error) {
 	return nil, errors.New("not scripted")
 }
+func (s *scripted) Terminal(context.Context, runner.Cmd, int, int) (runner.Terminal, error) {
+	return nil, runner.ErrNoTerminal
+}
 func (s *scripted) Close() error { return nil }
 
 func TestState(t *testing.T) {

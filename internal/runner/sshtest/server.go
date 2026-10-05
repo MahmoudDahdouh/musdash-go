@@ -6,6 +6,7 @@
 package sshtest
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/binary"
@@ -19,6 +20,8 @@ import (
 	"testing"
 
 	"golang.org/x/crypto/ssh"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
 )
 
 // Server is a running test server.
@@ -211,9 +214,24 @@ func forward(ch ssh.NewChannel) {
 	channel.Close()
 }
 
+// ptySize is the part of a terminal request and of a window change that
+// says how large the screen is.
+type ptySize struct {
+	Cols, Rows, Width, Height uint32
+}
+
 func (s *Server) session(channel ssh.Channel, requests <-chan *ssh.Request) {
 	defer channel.Close()
 	var cmd *exec.Cmd
+	// With a terminal asked for, the command runs on one, as under sshd.
+	var size *ptySize
+	var term runner.Terminal
+	defer func() {
+		// The client went away: sshd hangs up the terminal.
+		if term != nil {
+			term.Close()
+		}
+	}()
 	done := make(chan struct{})
 	for {
 		select {
@@ -226,9 +244,26 @@ func (s *Server) session(channel ssh.Channel, requests <-chan *ssh.Request) {
 				return
 			}
 			switch req.Type {
+			case "pty-req":
+				var payload struct {
+					Term                      string
+					Cols, Rows, Width, Height uint32
+					Modes                     string
+				}
+				if err := ssh.Unmarshal(req.Payload, &payload); err != nil {
+					req.Reply(false, nil)
+					continue
+				}
+				size = &ptySize{Cols: payload.Cols, Rows: payload.Rows}
+				req.Reply(true, nil)
+			case "window-change":
+				var payload ptySize
+				if err := ssh.Unmarshal(req.Payload, &payload); err == nil && term != nil {
+					term.Resize(int(payload.Cols), int(payload.Rows))
+				}
 			case "exec":
 				var payload struct{ Command string }
-				if err := ssh.Unmarshal(req.Payload, &payload); err != nil || cmd != nil {
+				if err := ssh.Unmarshal(req.Payload, &payload); err != nil || cmd != nil || term != nil {
 					req.Reply(false, nil)
 					continue
 				}
@@ -238,6 +273,23 @@ func (s *Server) session(channel ssh.Channel, requests <-chan *ssh.Request) {
 				s.mu.Lock()
 				s.commands = append(s.commands, payload.Command)
 				s.mu.Unlock()
+				if size != nil {
+					var err error
+					term, err = runner.NewLocal().Terminal(context.Background(), runner.Cmd{Name: "sh", Args: []string{"-c", payload.Command}}, int(size.Cols), int(size.Rows))
+					if err != nil {
+						req.Reply(false, nil)
+						return
+					}
+					req.Reply(true, nil)
+					go io.Copy(term, channel)
+					go func(term runner.Terminal) {
+						io.Copy(channel, term)
+						channel.SendRequest("exit-status", false, make([]byte, 4))
+						channel.CloseWrite()
+						close(done)
+					}(term)
+					continue
+				}
 				cmd = exec.Command("sh", "-c", payload.Command)
 				cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 				cmd.Stdout = channel

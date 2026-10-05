@@ -22,7 +22,8 @@
 | WebSocket | A server-side implementation of our own in `internal/web/ws.go`: the handshake, masked frames in, unmasked frames out, ping, close, messages of at most 64 KB. No extensions, no compression | The terminal is its only user, and it needs a tenth of what a library offers. A module is avoided |
 | A terminal on the local server | `/dev/ptmx` opened with the `syscall` package (Linux and macOS), the command started as the leader of a session of its own with the terminal as its controlling one | What `creack/pty` does, in sixty lines, for the two systems musdash runs on |
 | A terminal on a remote server | An SSH session with `RequestPty`; a resize is `WindowChange` | As the spec says |
-| xterm.js | Not used. `static/terminal.js` is a terminal emulator of our own: a grid of cells, the escape sequences shells and full-screen programs use (cursor movement, erase, insert and delete, scroll regions, the alternate screen, SGR colours with 256 and 24-bit, bracketed paste, application cursor keys), scrollback of 2000 lines, drawn as rows of text | xterm.js is about 290 KB, three times everything else the dashboard sends, and its renderer writes `<style>` elements, which the content policy forbids. A shell, `vi`, `top`, `psql` and `less` need a small part of it. Text drawn as text can be selected and copied by the browser |
+| xterm.js | Not used. `static/terminal.js` is a terminal emulator of our own: a grid of cells, the escape sequences shells and full-screen programs use (cursor movement, erase, insert and delete, scroll regions, the alternate screen, SGR colours with 256 and 24-bit, line-drawing characters, bracketed paste, application cursor keys), scrollback of 2000 lines, drawn as rows of text | xterm.js is about 290 KB, three times everything else the dashboard sends, and its renderer writes `<style>` elements, which the content policy forbids. A shell, `vi`, `top`, `psql` and `less` need a small part of it. Text drawn as text can be selected and copied by the browser |
+| Where typing goes | Into a text field nobody sees, next to the terminal | A field is what a browser delivers text to: plain keys, an on-screen keyboard, a dead key, an input method. Special keys are read from its key events |
 | What the terminal claims to be | `TERM=xterm-256color` | Every image has that entry; the emulator implements what programs use of it. What it does not: mouse reporting, sixel, double-width characters (drawn, but counted as one cell) |
 | What a terminal runs | `docker exec -it <container> sh -c '<fixed text>'`, the text choosing `bash` when the image has it and `sh` otherwise | Nothing a person typed is part of the command |
 | Which containers | An app's serving container, a database's container, and one container of a service chosen from a list | The spec's "container terminal" |
@@ -128,11 +129,11 @@ func acceptWS(w http.ResponseWriter, r *http.Request) (*wsConn, error)
 - [x] Tests: sampling stores and prunes; a hanging server does not hold the tick; pages of another team's resources answer 404.
 
 ### Task 4 — Terminal
-- [ ] `runner`: `Terminal` for the local machine, SSH, the pool's remote runner and the test fakes; tests against a real shell locally and through `sshtest` (a resize is seen by `stty size`; closing ends the process).
-- [ ] `web/ws.go` with tests against a hand-written client: handshake, masking, fragments, ping, close, an oversized message, an unmasked frame.
-- [ ] Handlers: origin, CSRF in the first message, the limit, the idle timeout, shutdown; pages and the tab.
-- [ ] `terminal.js` and its styles; assets read lazily.
-- [ ] Verified in a browser against real containers: a shell, `vi`, `top`, paste, resize, copy.
+- [x] `runner`: `Terminal` for the local machine, SSH, the pool's remote runner and the test fakes; tests against a real shell locally and through `sshtest` (a resize is seen by `stty size`; closing ends the process).
+- [x] `web/ws.go` with tests against a hand-written client: handshake, masking, fragments, ping, close, an oversized message, an unmasked frame.
+- [x] Handlers: origin, CSRF in the first message, the limit, the idle timeout, shutdown; pages and the tab.
+- [x] `terminal.js` and its styles; assets read lazily.
+- [x] Verified in a browser against real containers: a shell, `vi`, `top`, paste, resize, copy.
 
 ### Task 5 — End
 - [ ] Independent review; README; CLAUDE.md; idle memory on Linux.

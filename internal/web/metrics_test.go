@@ -134,10 +134,12 @@ func TestServerMetrics(t *testing.T) {
 	app, _ := a.db.AppByID(ctx, appID)
 	a.measured(app.Container+"\t12.50%\t100MiB / 512MiB\t0B / 0B\t0B / 0B\t7\n"+
 		"somebody-elses\t90.00%\t1GiB / 2GiB\t0B / 0B\t0B / 0B\t50\n"+
-		"forged\t1.00%\t1MiB / 2MiB\t0B / 0B\t0B / 0B\t1\n",
+		"forged\t1.00%\t1MiB / 2MiB\t0B / 0B\t0B / 0B\t1\n"+
+		"stranger\t2.00%\t1MiB / 2MiB\t0B / 0B\t0B / 0B\t1\n",
 		func() string {
 			return app.Container + "\trunning\tapp\t" + appID + "\td1\tUp\n" +
-				"forged\trunning\tapp\t../../settings\t\tUp\n"
+				"forged\trunning\tapp\t../../settings\t\tUp\n" +
+				"stranger\trunning\tapp\tabcdefghijkl\t\tUp\n"
 		})
 	base := "/servers/" + app.ServerID + "/metrics"
 
@@ -159,6 +161,11 @@ func TestServerMetrics(t *testing.T) {
 	}
 	// Containers that are not musdash's are not listed, and a label that
 	// is not an id is not made into a link.
+	// A container of an app this dashboard does not know is listed by
+	// name, without a page to go to.
+	if !strings.Contains(now, "stranger") || strings.Contains(now, "/apps/abcdefghijkl") {
+		t.Fatalf("a container of an unknown app:\n%s", now)
+	}
 	if strings.Contains(now, "somebody-elses") || strings.Contains(now, "../../settings") {
 		t.Fatalf("the reading shows what it should not:\n%s", now)
 	}
