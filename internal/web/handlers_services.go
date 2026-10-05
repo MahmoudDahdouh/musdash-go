@@ -601,6 +601,10 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 		s.renderServiceCompose(w, r, http.StatusUnprocessableEntity, v, f)
 		return
 	}
+	typed := make([]string, 0, len(entered))
+	for _, value := range entered {
+		typed = append(typed, value)
+	}
 	// What was generated before is kept; what the person entered replaces
 	// what they had entered.
 	stored, err := s.Deploy.ServiceVariables(v.Service)
@@ -633,7 +637,7 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 			redirect(w, r, "/services/"+svc.ID)
 			return
 		}
-		setFlash(w, r, ui.ToneOK, "Saved. Deploy to apply it.")
+		s.warnMissingShared(w, r, svc.EnvironmentID, svc.ServerID, typed, "Saved. Deploy to apply it.")
 		redirect(w, r, "/services/"+svc.ID+"/compose")
 		return
 	}
@@ -655,7 +659,7 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 		redirect(w, r, "/services/"+svc.ID)
 		return
 	}
-	setFlash(w, r, ui.ToneOK, "Saved. Deploy to apply it.")
+	s.warnMissingShared(w, r, svc.EnvironmentID, svc.ServerID, typed, "Saved. Deploy to apply it.")
 	redirect(w, r, "/services/"+svc.ID+"/compose")
 }
 

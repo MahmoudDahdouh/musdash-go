@@ -215,6 +215,24 @@ func (d *Deployer) PrepareService(ctx context.Context, s db.Service, vars map[st
 	return d.DB.SyncEndpoints(ctx, s.ID, endpoints, newHost)
 }
 
+// fillShared returns a service's variables with the shared variables
+// their values name filled in.
+func (d *Deployer) fillShared(ctx context.Context, s db.Service, vars map[string]string) (map[string]string, error) {
+	list := make([]db.EnvVar, 0, len(vars))
+	for k, v := range vars {
+		list = append(list, db.EnvVar{Key: k, Value: v})
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].Key < list[j].Key })
+	if err := d.expandShared(ctx, s.EnvironmentID, s.ServerID, list); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(list))
+	for _, v := range list {
+		out[v.Key] = v.Value
+	}
+	return out, nil
+}
+
 // serviceEnv renders the variables a stack's file is filled in with: the
 // stored ones, and the address variables worked out from the endpoints'
 // domains.
@@ -318,7 +336,13 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 	if err != nil {
 		return err
 	}
-	env, err := serviceEnv(s.Compose, vars, endpoints)
+	// Shared variables are filled in for this deployment only: what is
+	// stored keeps naming them.
+	filled, err := d.fillShared(ctx, s, vars)
+	if err != nil {
+		return err
+	}
+	env, err := serviceEnv(s.Compose, filled, endpoints)
 	if err != nil {
 		return err
 	}

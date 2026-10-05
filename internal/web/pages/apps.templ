@@ -546,6 +546,12 @@ templ AppEnvironment(s ui.Shell, v AppView, f ui.Form) {
 						@ui.Textarea(ui.InputProps{ID: "build_vars", Mono: true, Rows: 5, Value: f.V("build_vars"), Invalid: f.E("build_vars") != "", Described: true, Placeholder: "NPM_TOKEN=…"})
 					}
 				}
+				<p class="text-sm text-ink-soft">
+					A value can come from a shared variable: write
+					<span class="code">{ "{{team.NAME}}" }</span>, <span class="code">{ "{{project.NAME}}" }</span>, <span class="code">{ "{{environment.NAME}}" }</span> or <span class="code">{ "{{server.NAME}}" }</span>
+					as the value or inside it. Shared variables are kept under
+					<a href="/team/variables">Team</a>, the <a href={ templ.SafeURL("/projects/" + v.Project.ID + "/settings#variables") }>project's settings</a> and <a href="/servers">Servers</a>.
+				</p>
 			}
 		</div>
 	}

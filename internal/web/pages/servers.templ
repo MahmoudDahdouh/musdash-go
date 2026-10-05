@@ -126,6 +126,8 @@ templ localServerCard(s ui.Shell, info ServerInfo, f ui.Form) {
 				</dd>
 				<dt>Runs</dt>
 				<dd class="fact">{ strconv.Itoa(info.Apps) }</dd>
+				<dt>Shared variables</dt>
+				<dd><a href={ templ.SafeURL("/servers/" + info.Server.ID + "/variables") }>Values for what runs here</a></dd>
 				if !s.Admin && info.Server.IP != "" {
 					<dt>Public IP address</dt>
 					<dd class="fact">{ info.Server.IP }</dd>
@@ -222,6 +224,8 @@ templ remoteServerCard(s ui.Shell, info ServerInfo) {
 				}
 				<dt>Runs</dt>
 				<dd class="fact">{ strconv.Itoa(info.Apps) }</dd>
+				<dt>Shared variables</dt>
+				<dd><a href={ templ.SafeURL("/servers/" + info.Server.ID + "/variables") }>Values for what runs here</a></dd>
 			</dl>
 			if s.Admin && info.PublicKey != "" && info.Server.Status != db.ServerOK {
 				<div class="grid gap-2">

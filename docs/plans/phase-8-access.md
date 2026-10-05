@@ -143,11 +143,11 @@ func (s *Server) handle(mux *http.ServeMux, pattern string, who access, h http.H
 - [x] Tests: no session before the code; the limit on guesses; a recovery code once; the cookie expired, tampered with, or another account's; turning on needs the password; other sessions end when it is turned on.
 
 ### Task 3 — Shared variables
-- [ ] `SharedRefs` / `ExpandShared`, table-tested first: the exact form, several in one value, an unknown scope left alone, a missing name reported.
-- [ ] The four pages (team, project, environment, server), one template; names only for a reader who may not change them.
-- [ ] Expansion where an app's env file and build arguments are written, and where a service's variables are; a missing name fails the deployment with its name.
-- [ ] Saving an app's variables warns about names that do not exist yet.
-- [ ] Tests: each scope resolves for an app and for a service; a preview resolves as its parent; another team's variable cannot be named; rows go with their project, environment and server.
+- [x] `SharedRefs` / `ExpandShared`, table-tested first: the exact form, several in one value, an unknown scope left alone, a missing name reported.
+- [x] The four pages (team, project, environment, server), one template; names only for a reader who may not change them.
+- [x] Expansion where an app's env file and build arguments are written, and where a service's variables are; a missing name fails the deployment with its name.
+- [x] Saving an app's or a service's variables warns about names that do not exist yet. A shared variable's own value may not name another: refused when it is saved.
+- [x] Tests: each scope resolves for an app and for a service; a preview resolves as its parent; another team's variable cannot be named; rows go with their project, environment and server.
 
 ### Task 4 — Tags
 - [ ] Tags on an app's and a service's settings page; the Tags page; a tag's page with "Deploy all".

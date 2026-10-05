@@ -175,6 +175,26 @@ templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, 
 					}
 				</form>
 			</section>
+			<section class="card" id="variables">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Shared variables</h2>
+						<p class="muted text-sm">Values that apps and services take by name, such as <span class="code">{ "{{project.NAME}}" }</span>, so they are written once.</p>
+					</div>
+				</div>
+				<div class="rows">
+					<a class="row" href={ templ.SafeURL("/projects/" + p.ID + "/variables") }>
+						<span class="min-w-0 flex-1">The whole project</span>
+						@ui.Icon("chevron-right", "text-ink-mute")
+					</a>
+					for _, e := range envs {
+						<a class="row" href={ templ.SafeURL("/environments/" + e.ID + "/variables") }>
+							<span class="min-w-0 flex-1">Only <span class="fact">{ e.Name }</span></span>
+							@ui.Icon("chevron-right", "text-ink-mute")
+						</a>
+					}
+				</div>
+			</section>
 			<section class="card card-danger">
 				<div class="card-head">
 					<div>

@@ -696,7 +696,9 @@ func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
 		buildVars[i].BuildTime = true
 	}
 	all := append(vars, buildVars...)
+	values := make([]string, 0, len(all))
 	for i := range all {
+		values = append(values, all[i].Value)
 		if all[i].Value, err = s.Box.SealString(all[i].Value); err != nil {
 			s.fail(w, r, err)
 			return
@@ -706,7 +708,7 @@ func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	setFlash(w, r, ui.ToneOK, "Variables saved. Redeploy to apply them.")
+	s.warnMissingShared(w, r, v.App.EnvironmentID, v.App.ServerID, values, "Variables saved. Redeploy to apply them.")
 	redirect(w, r, "/apps/"+v.App.ID+"/environment")
 }
 

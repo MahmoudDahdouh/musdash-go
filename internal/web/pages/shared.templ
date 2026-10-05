@@ -1,0 +1,81 @@
+package pages
+
+import "github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+
+// SharedView is one scope's page of shared variables.
+type SharedView struct {
+	Title  string // "Team variables"
+	Intro  string
+	Scope  string // "team", "project", "environment" or "server": how a value names them
+	Action string // where the form posts
+	// CanEdit is false for a reader whose role may not change these. They
+	// are shown the names and no values.
+	CanEdit bool
+	Names   []string
+	// Tabs are drawn above the page when it sits among others (the Team's).
+	Tabs      []ui.Tab
+	TabActive string
+}
+
+func (v SharedView) example() string { return "{{" + v.Scope + ".NAME}}" }
+
+// TeamTabs are the sections of the Team page.
+func TeamTabs() []ui.Tab {
+	return []ui.Tab{
+		{Key: "members", Label: "Members", Href: "/team"},
+		{Key: "variables", Label: "Shared variables", Href: "/team/variables"},
+	}
+}
+
+templ SharedVariables(s ui.Shell, v SharedView, f ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader(v.Title, v.Intro)
+		if len(v.Tabs) > 0 {
+			@ui.Tabs(v.Tabs, v.TabActive)
+		}
+		<div class="grid max-w-3xl gap-6">
+			if v.CanEdit {
+				@ui.FormCard("Variables", "Stored encrypted. A resource gets the value that is here when it is deployed.", v.Action, s.CSRF, "Save variables") {
+					@ui.Field(ui.FieldProps{Label: "Variables", For: "vars", Hint: "One NAME=value per line. Lines starting with # are ignored.", Error: f.E("vars")}) {
+						@ui.Textarea(ui.InputProps{ID: "vars", Mono: true, Rows: 10, Value: f.V("vars"), Invalid: f.E("vars") != "", Described: true, Placeholder: "SMTP_HOST=mail.example.com\nSENTRY_DSN=https://…"})
+					}
+				}
+			} else {
+				<section class="card">
+					<div class="card-head">
+						<div>
+							<h2 class="card-title">Variables</h2>
+							<p class="muted text-sm">An Admin sets these. You can use them by name; their values are not shown here.</p>
+						</div>
+					</div>
+					if len(v.Names) > 0 {
+						<ul class="rows">
+							for _, name := range v.Names {
+								<li class="row">
+									<span class="fact min-w-0 flex-1 truncate">{ "{{" + v.Scope + "." + name + "}}" }</span>
+								</li>
+							}
+						</ul>
+					} else {
+						<p class="card-body muted">None yet.</p>
+					}
+				</section>
+			}
+			<section class="card">
+				<div class="card-head">
+					<h2 class="card-title">Using one</h2>
+				</div>
+				<div class="card-body grid gap-3 text-ink-soft">
+					<p>
+						Nothing here reaches a container by itself. An app or a service takes a value by naming it in one of its own variables, alone or inside a longer value:
+					</p>
+					<p class="code block">MAIL_HOST={ v.example() }</p>
+					<p class="code block">MAIL_URL=smtp://{ v.example() }:587</p>
+					<p>
+						The name is replaced when the resource is deployed, so a changed value takes effect at the next deploy. A deploy fails, and says which name, when it uses one that does not exist.
+					</p>
+				</div>
+			</section>
+		</div>
+	}
+}

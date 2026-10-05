@@ -637,6 +637,12 @@ func (d *Deployer) writeEnvFile(ctx context.Context, r runner.Runner, app db.App
 		}
 		vars = append(vars, db.EnvVar{Key: v.Key, Value: plain})
 	}
+	// Shared variables are filled in now, from what is stored now. A
+	// preview is in its parent's environment and on its server, so it
+	// resolves the same names.
+	if err := d.expandShared(ctx, app.EnvironmentID, app.ServerID, vars); err != nil {
+		return "", err
+	}
 	body, err := EnvFile(vars)
 	if err != nil {
 		return "", err
