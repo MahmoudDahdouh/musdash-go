@@ -312,7 +312,8 @@ func Run(ctx context.Context, o Options) error {
 	quiet := log.New(io.Discard, "", 0)
 	newServer := func(h http.Handler) *http.Server {
 		return &http.Server{
-			Handler:           h,
+			Handler: h,
+			// Also the deadline for a TLS handshake: guardCerts counts on it.
 			ReadHeaderTimeout: 10 * time.Second,
 			IdleTimeout:       120 * time.Second,
 			MaxHeaderBytes:    64 << 10,
@@ -340,6 +341,7 @@ func Run(ctx context.Context, o Options) error {
 		cfg := manager.TLSConfig()
 		cfg.MinVersion = tls.VersionTLS12
 		srv := newServer(p.HTTPS())
+		p.guardCerts(srv, cfg, manager.GetCertificate, o.Log)
 		servers = append(servers, srv)
 		go func() { errc <- srv.Serve(tls.NewListener(tlsLn, cfg)) }()
 		o.Log.Info("proxy listening", "https", tlsLn.Addr().String())
