@@ -31,8 +31,9 @@ type SSHConfig struct {
 	User   string
 	Signer ssh.Signer
 	// HostKey is the key the server must present, in wire format. When it
-	// is empty any key is accepted and reported through Seen, which may
-	// refuse it: that is how a new server's key is first recorded.
+	// is empty the key the server presents is handed to Seen, which
+	// records or refuses it: that is how a new server's key is first
+	// learned. One of the two must be set.
 	HostKey []byte
 	Seen    func(key ssh.PublicKey) error
 	// WorkDir is a private directory on the server for the short-lived
@@ -57,6 +58,11 @@ func DialSSH(ctx context.Context, cfg SSHConfig) (*SSHRunner, error) {
 	if cfg.Signer == nil {
 		return nil, errors.New("ssh: no key to sign in with")
 	}
+	// With no key to compare with and nobody to show a new one to, any
+	// server would do. That is never what a caller means.
+	if len(cfg.HostKey) == 0 && cfg.Seen == nil {
+		return nil, errors.New("ssh: no host key is recorded for this server and there is no way to record one")
+	}
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 15 * time.Second
 	}
@@ -71,10 +77,7 @@ func DialSSH(ctx context.Context, cfg SSHConfig) (*SSHRunner, error) {
 				}
 				return nil
 			}
-			if cfg.Seen != nil {
-				return cfg.Seen(key)
-			}
-			return nil
+			return cfg.Seen(key)
 		},
 	}
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))

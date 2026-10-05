@@ -197,6 +197,16 @@ func TestSSHHostKeyIsPinned(t *testing.T) {
 	}); err == nil {
 		t.Fatal("a refused key was used")
 	}
+	// Neither a recorded key nor anyone to show a new one to: refused
+	// before a connection is made, rather than trusting whoever answers.
+	before := len(srv.Commands())
+	if r, err := dial(t, srv, func(c *runner.SSHConfig) { c.HostKey, c.Seen = nil, nil }); err == nil {
+		r.Run(context.Background(), runner.Cmd{Name: "true"})
+		t.Fatal("connected without any way to check the server's key")
+	}
+	if len(srv.Commands()) != before {
+		t.Fatal("something ran on a server whose key was never checked")
+	}
 	// Something else answering at the address, with another key.
 	_, err := dial(t, other, func(c *runner.SSHConfig) { c.HostKey = srv.HostKey.Marshal(); c.Signer = other.Signer })
 	if !errors.Is(err, runner.ErrHostKeyChanged) {
