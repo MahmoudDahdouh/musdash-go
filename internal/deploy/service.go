@@ -646,7 +646,7 @@ func (t teeWriter) Write(p []byte) (int, error) {
 // StopService stops a service's containers. They and their data stay.
 func (d *Deployer) StopService(ctx context.Context, id string) error {
 	mu := d.lockFor(id)
-	if !mu.TryLock() {
+	if !lockSoon(mu) {
 		return ErrBusy
 	}
 	defer mu.Unlock()
@@ -696,7 +696,7 @@ func (d *Deployer) composeDown(ctx context.Context, r runner.Runner, s db.Servic
 // when deleteData is set.
 func (d *Deployer) DestroyService(ctx context.Context, id string, deleteData bool) error {
 	mu := d.lockFor(id)
-	if !mu.TryLock() {
+	if !lockSoon(mu) {
 		return ErrBusy
 	}
 	defer mu.Unlock()

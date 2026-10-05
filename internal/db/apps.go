@@ -97,6 +97,10 @@ type App struct {
 	// Runtime overrides.
 	StartCommand  string
 	DockerOptions string
+
+	// BuildServerID is the server the image is built on when that is not
+	// the one the app runs on; "" builds where it runs.
+	BuildServerID string
 }
 
 // Sources of an app's image.
@@ -108,14 +112,16 @@ const (
 const appColumns = `a.id, a.environment_id, a.server_id, a.name, a.source, a.image, a.port, a.memory_mb, a.cpus,
 	a.health_path, a.health_cmd, a.health_timeout, a.status, a.container, a.host_port, a.deployed_image, a.created_at, a.updated_at,
 	a.repo_url, a.repo_name, a.branch, a.build_pack, a.dockerfile_path, a.base_dir, a.publish_dir, a.spa_fallback,
-	a.git_source_id, a.ssh_key_id, a.auto_deploy, a.webhook_secret, a.deploy_token_hash, a.start_command, a.docker_options`
+	a.git_source_id, a.ssh_key_id, a.auto_deploy, a.webhook_secret, a.deploy_token_hash, a.start_command, a.docker_options,
+	a.build_server_id`
 
 func scanApp(row interface{ Scan(...any) error }) (App, error) {
 	var a App
 	err := row.Scan(&a.ID, &a.EnvironmentID, &a.ServerID, &a.Name, &a.Source, &a.Image, &a.Port, &a.MemoryMB, &a.CPUs,
 		&a.HealthPath, &a.HealthCmd, &a.HealthTimeout, &a.Status, &a.Container, &a.HostPort, &a.DeployedImage, &a.CreatedAt, &a.UpdatedAt,
 		&a.RepoURL, &a.RepoName, &a.Branch, &a.BuildPack, &a.DockerfilePath, &a.BaseDir, &a.PublishDir, &a.SPAFallback,
-		&a.GitSourceID, &a.SSHKeyID, &a.AutoDeploy, &a.WebhookSecret, &a.DeployTokenHash, &a.StartCommand, &a.DockerOptions)
+		&a.GitSourceID, &a.SSHKeyID, &a.AutoDeploy, &a.WebhookSecret, &a.DeployTokenHash, &a.StartCommand, &a.DockerOptions,
+		&a.BuildServerID)
 	return a, err
 }
 
@@ -431,6 +437,19 @@ func (d *DB) UpdateAppSource(ctx context.Context, teamID string, a App) error {
 		WHERE id = ? AND source = 'git'`+teamApps,
 		a.RepoURL, a.RepoName, a.Branch, a.BuildPack, a.DockerfilePath, a.BaseDir, a.PublishDir, a.SPAFallback,
 		a.GitSourceID, a.SSHKeyID, a.AutoDeploy, a.Port, now(), a.ID, teamID))
+}
+
+// SetAppBuildServer chooses where a Git app's image is built: another
+// server of the team, or "" for the app's own.
+func (d *DB) SetAppBuildServer(ctx context.Context, teamID, id, serverID string) error {
+	if serverID != "" {
+		if _, err := d.Server(ctx, teamID, serverID); err != nil {
+			return err
+		}
+	}
+	// The app's own server is the same as no choice.
+	return affected(d.ExecContext(ctx, `UPDATE apps SET build_server_id = CASE WHEN server_id = ?1 THEN '' ELSE ?1 END, updated_at = ?2 WHERE id = ?3`+teamApps,
+		serverID, now(), id, teamID))
 }
 
 // SetAppWebhookSecret stores the (sealed) secret of the app's own push

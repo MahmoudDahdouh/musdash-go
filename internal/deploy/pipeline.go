@@ -105,6 +105,23 @@ func (d *Deployer) lockFor(appID string) *sync.Mutex {
 	return &d.appLocks[h.Sum32()%uint32(len(d.appLocks))]
 }
 
+// lockSoon takes a resource's lock unless something holds on to it. A
+// deployment keeps the lock for a moment after it has recorded its result;
+// a stop pressed in that moment should wait for it, not be told that a
+// deployment is in progress.
+func lockSoon(mu *sync.Mutex) bool {
+	const patience, step = 750 * time.Millisecond, 15 * time.Millisecond
+	for waited := time.Duration(0); ; waited += step {
+		if mu.TryLock() {
+			return true
+		}
+		if waited >= patience {
+			return false
+		}
+		time.Sleep(step)
+	}
+}
+
 // New returns a Deployer with production timings.
 func New(d *db.DB, box *secret.Box, q *jobs.Queue, r Runners, cfg *config.Config, log *slog.Logger, instanceTarget string) *Deployer {
 	return &Deployer{
@@ -180,7 +197,11 @@ func (d *Deployer) Enqueue(ctx context.Context, app db.App, trigger string) (db.
 	lock := "deploy:" + app.ID
 	if app.Source == db.SourceGit {
 		dep.Image = "" // known once the commit is built
+		// The lock is of the server that does the building.
 		lock = "build:" + app.ServerID
+		if app.BuildServerID != "" {
+			lock = "build:" + app.BuildServerID
+		}
 	}
 	dep, err := d.DB.CreateDeployment(ctx, dep)
 	if err != nil {
@@ -313,7 +334,7 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 
 	if app.Source == db.SourceGit {
 		var commit string
-		if image, commit, err = d.build(ctx, r, app, dep, log); err != nil {
+		if image, commit, err = d.buildFor(ctx, r, server, app, dep, log); err != nil {
 			return err
 		}
 		if err := d.DB.SetDeploymentBuild(ctx, dep.ID, image, commit); err != nil {
@@ -571,7 +592,7 @@ func (d *Deployer) prepareMounts(ctx context.Context, r runner.Runner, app db.Ap
 // timeout); it has its own deadline.
 func (d *Deployer) Stop(ctx context.Context, appID string) error {
 	mu := d.lockFor(appID)
-	if !mu.TryLock() {
+	if !lockSoon(mu) {
 		return ErrBusy
 	}
 	defer mu.Unlock()
@@ -625,7 +646,7 @@ func (d *Deployer) stopLocked(ctx context.Context, app db.App) (db.Server, error
 // and removing them is a separate, explicit act.
 func (d *Deployer) Destroy(ctx context.Context, appID string) error {
 	mu := d.lockFor(appID)
-	if !mu.TryLock() {
+	if !lockSoon(mu) {
 		return ErrBusy
 	}
 	defer mu.Unlock()

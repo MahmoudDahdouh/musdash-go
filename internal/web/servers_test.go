@@ -231,3 +231,48 @@ func TestOtherTeamsServerIsNotReachable(t *testing.T) {
 		t.Fatal("something was put on their server")
 	}
 }
+
+func TestAppBuildServerSetting(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+	projectID, env := a.project("Shop")
+	app := a.newGitApp(projectID, env, "web", nil)
+	settings := "/apps/" + app.ID + "/settings"
+
+	// With one server there is nothing to choose.
+	if _, page := a.get(settings); strings.Contains(page, "Build server") {
+		t.Fatal("the build server is offered with only one server")
+	}
+	server, _ := a.remoteServer("Builder")
+	_, page := a.get(settings)
+	if !strings.Contains(page, "Build server") || !strings.Contains(page, "Builder") || !strings.Contains(page, "The server the app runs on") {
+		t.Fatal("the build server choice is missing")
+	}
+	res, _ := a.post(settings, "/apps/"+app.ID+"/build-server", url.Values{"build_server": {server.ID}})
+	wantRedirect(t, res, settings)
+	if got, _ := a.db.AppByID(ctx, app.ID); got.BuildServerID != server.ID {
+		t.Fatalf("build server %q", got.BuildServerID)
+	}
+	// A server that builds for an app is in use.
+	res, _ = a.post("/servers", "/servers/"+server.ID+"/delete", url.Values{})
+	wantRedirect(t, res, "/servers")
+	if _, err := a.db.ServerByID(ctx, server.ID); err != nil {
+		t.Fatal("a server an app is built on was removed")
+	}
+	// Back to its own server.
+	res, _ = a.post(settings, "/apps/"+app.ID+"/build-server", url.Values{"build_server": {""}})
+	wantRedirect(t, res, settings)
+	if got, _ := a.db.AppByID(ctx, app.ID); got.BuildServerID != "" {
+		t.Fatalf("build server %q", got.BuildServerID)
+	}
+
+	// Not another team's server, and not for an app that is not built.
+	a.db.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('otherteam', 'Other', 1)`)
+	a.db.Exec(`INSERT INTO servers (id, team_id, name, kind, created_at) VALUES ('theirs', 'otherteam', 'theirs', 'ssh', 1)`)
+	res, _ = a.post(settings, "/apps/"+app.ID+"/build-server", url.Values{"build_server": {"theirs"}})
+	wantStatus(t, res, http.StatusNotFound)
+	imageApp := a.newApp(projectID, env, "img", false, nil)
+	res, _ = a.post("/apps/"+imageApp+"/settings", "/apps/"+imageApp+"/build-server", url.Values{"build_server": {server.ID}})
+	wantStatus(t, res, http.StatusNotFound)
+}

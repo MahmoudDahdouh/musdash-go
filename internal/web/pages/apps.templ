@@ -13,6 +13,19 @@ type AppView struct {
 	Project db.Project
 	Env     db.Environment
 	Domains []db.Domain
+	// Servers are the team's servers, filled in for the Settings page.
+	Servers []db.Server
+}
+
+// buildServerOptions offers the app's own server first, then the others.
+func buildServerOptions(v AppView) []ui.Option {
+	opts := []ui.Option{{Value: "", Label: "The server the app runs on"}}
+	for _, s := range v.Servers {
+		if s.ID != v.App.ServerID {
+			opts = append(opts, ui.Option{Value: s.ID, Label: s.Name})
+		}
+	}
+	return opts
 }
 
 func (v AppView) base() string { return "/apps/" + v.App.ID }
@@ -654,6 +667,13 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src ui.Form, choices G
 				@ui.FormCard("Source", "Where the code comes from and how it is built.", v.base()+"/source", s.CSRF, "Save source") {
 					<input type="hidden" name="_submitted" value="1"/>
 					@gitSourceFields(src, choices, v.App)
+				}
+			}
+			if v.App.Source == db.SourceGit && len(v.Servers) > 1 {
+				@ui.FormCard("Build server", "A build can need a gigabyte of memory or more. On a small server, build the image on another one: it is moved over when it is ready.", v.base()+"/build-server", s.CSRF, "Save") {
+					@ui.Field(ui.FieldProps{Label: "Build on", For: "build_server", Hint: "Applies from the next deployment."}) {
+						@ui.Select("build_server", buildServerOptions(v), v.App.BuildServerID, templ.Attributes{"aria-describedby": "build_server-hint"})
+					}
 				}
 			}
 			@triggersCard(s.CSRF, v.base(), "app", v.App.Source == db.SourceGit, tr)

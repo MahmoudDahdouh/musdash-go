@@ -289,7 +289,7 @@ func (d *Deployer) waitDatabase(ctx context.Context, dk docker.Client, container
 // in its volume.
 func (d *Deployer) StopDatabase(ctx context.Context, id string) error {
 	mu := d.lockFor(id)
-	if !mu.TryLock() {
+	if !lockSoon(mu) {
 		return ErrBusy
 	}
 	defer mu.Unlock()
@@ -333,7 +333,7 @@ func (d *Deployer) stopDatabaseLocked(ctx context.Context, m db.Database) (runne
 // only when deleteData is set: losing data needs its own explicit choice.
 func (d *Deployer) DestroyDatabase(ctx context.Context, id string, deleteData bool) error {
 	mu := d.lockFor(id)
-	if !mu.TryLock() {
+	if !lockSoon(mu) {
 		return ErrBusy
 	}
 	defer mu.Unlock()

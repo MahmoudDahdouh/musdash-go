@@ -105,8 +105,8 @@ func (c Config) On(s db.Server) Config // the same layout under the server's dat
 - [x] Tests with the scripted Runner: the commands, `sudo -n` only when not root, nothing done twice.
 
 ### Task 5 — Build server
-- [ ] `apps.build_server_id`; build there under that server's build lock, `docker save` → `docker load` on the target, remove the image from the build server afterwards.
-- [ ] Tests: order of commands on the two servers; a failed transfer leaves the old version serving.
+- [x] `apps.build_server_id`; build there under that server's build lock, `docker save` → `docker load` on the target, remove the image from the build server afterwards.
+- [x] Tests: order of commands on the two servers; a failed transfer leaves the old version serving.
 
 ### Task 6 — End to end
 - [ ] With `MUSDASH_DOCKER_TEST=1`: this machine added as a "remote" server through an SSH server started by the test, an app deployed to it and answering, its routes written under the remote data directory.

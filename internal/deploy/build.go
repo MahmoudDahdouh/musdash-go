@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
@@ -151,6 +153,67 @@ func (d *Deployer) clone(ctx context.Context, r runner.Runner, access db.App, re
 	}
 	log.Step("Checked out %s", commit[:12])
 	return commit, nil
+}
+
+// buildFor produces the app's image on the server it runs on. When the app
+// names a build server the image is built there and moved over: a build
+// can need a gigabyte of memory that a small app server does not have.
+//
+// The image travels as `docker save` piped into `docker load`, through
+// this process as a stream. No registry is involved, and nothing is held
+// in memory or written to a disk on the way.
+func (d *Deployer) buildFor(ctx context.Context, r runner.Runner, server db.Server, app db.App, dep db.Deployment, log *Log) (image, commit string, err error) {
+	if app.BuildServerID == "" || app.BuildServerID == server.ID {
+		return d.build(ctx, r, app, dep, log)
+	}
+	builder, err := d.DB.ServerByID(ctx, app.BuildServerID)
+	if err != nil {
+		return "", "", errors.New("the server this app is built on no longer exists; choose another under Settings")
+	}
+	br, err := d.Runners.Runner(ctx, builder)
+	if err != nil {
+		return "", "", err
+	}
+	log.Step("Building on %s", builder.Name)
+	if image, commit, err = d.build(ctx, br, app, dep, log); err != nil {
+		return "", "", err
+	}
+	// Whatever happens next, the build server does not keep the image:
+	// it runs nothing from it.
+	defer func() {
+		clean, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		if rerr := (docker.Client{R: br}).RemoveImage(clean, image); rerr != nil {
+			d.Log.Warn("remove a built image from the build server", "image", image, "err", rerr)
+		}
+	}()
+
+	log.Step("Moving the image to %s", server.Name)
+	moveCtx, cancel := context.WithTimeout(ctx, d.buildTimeout)
+	defer cancel()
+	pr, pw := io.Pipe()
+	saved := make(chan error, 1)
+	go func() {
+		serr := br.Run(moveCtx, runner.Cmd{Name: "docker", Args: []string{"save", "--", image}, Stdout: pw, Stderr: log})
+		// With an error the reading side fails too, so a cut-off stream
+		// is never taken for a whole image.
+		pw.CloseWithError(serr)
+		saved <- serr
+	}()
+	loadErr := r.Run(moveCtx, runner.Cmd{Name: "docker", Args: []string{"load"}, Stdin: pr, Stdout: log, Stderr: log})
+	// Unblocks the saving side if the loading side gave up first.
+	pr.CloseWithError(loadErr)
+	if serr := <-saved; serr != nil {
+		return "", "", fmt.Errorf("read the image from %s: %w", builder.Name, serr)
+	}
+	if loadErr != nil {
+		return "", "", fmt.Errorf("load the image on %s: %w", server.Name, loadErr)
+	}
+	// What arrived must be what was built.
+	if have, herr := (docker.Client{R: r}).HasImage(ctx, image); herr != nil || !have {
+		return "", "", fmt.Errorf("the image did not arrive on %s", server.Name)
+	}
+	return image, commit, nil
 }
 
 // build clones the app's repository on its server and builds an image from

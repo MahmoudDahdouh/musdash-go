@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -734,5 +735,136 @@ func TestRefuseSymlinksAsksAboutTheExactPath(t *testing.T) {
 		if err := e.d.refuseSymlinks(ctx, local, repo, file); err != nil {
 			t.Errorf("%q: %v", file, err)
 		}
+	}
+}
+
+// byServer hands each server its own scripted Runner.
+type byServer map[string]runner.Runner
+
+func (b byServer) Runner(_ context.Context, s db.Server) (runner.Runner, error) {
+	if r, ok := b[s.ID]; ok {
+		return r, nil
+	}
+	return nil, fmt.Errorf("no runner for %s", s.Name)
+}
+
+// An app that names a build server is built there; the image is moved to
+// the server it runs on, and only then is anything started.
+func TestBuildOnAnotherServer(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.gitApp(nil)
+	_, err := e.db.Exec(`INSERT INTO servers (id, team_id, name, kind, host, port, ssh_user, created_at, data_dir) VALUES ('buildsrv', ?, 'builder', 'ssh', 'b.example.test', 22, 'root', 1, '/var/lib/musdash')`, e.team)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.db.SetAppBuildServer(ctx, e.team, e.app.ID, "buildsrv"); err != nil {
+		t.Fatal(err)
+	}
+	image := ImageRepository(e.app.ID) + ":" + testCommit[:12]
+
+	// The build server builds and streams the image out; the app's server
+	// takes it in.
+	rec := &gitEnvRecorder{}
+	builder := &runnertest.Fake{}
+	failSave := false
+	builder.Handle = func(line string, c runner.Cmd) (string, error) {
+		if strings.HasPrefix(line, "docker save") {
+			if failSave {
+				return "half an ima", runnertest.Exit("docker", 1, "")
+			}
+			return "IMAGE-TARBALL", nil
+		}
+		return rec.handle(line, c)
+	}
+	loaded := ""
+	target := e.fake
+	inner := target.Handle
+	target.Handle = func(line string, c runner.Cmd) (string, error) {
+		switch {
+		case line == "docker load":
+			raw, rerr := io.ReadAll(c.Stdin)
+			if rerr != nil {
+				return "", runnertest.Exit("docker", 1, "unexpected EOF")
+			}
+			loaded = string(raw)
+			return "Loaded image: " + image + "\n", nil
+		case strings.HasPrefix(line, "docker image inspect"):
+			if loaded == "" {
+				return "", runnertest.Exit("docker", 1, "No such image")
+			}
+			return "sha256:abc\n", nil
+		}
+		return inner(line, c)
+	}
+	e.d.Runners = byServer{e.server.ID: target, "buildsrv": builder}
+
+	dep := e.deploy()
+	if dep.Status != db.DeploySuccess {
+		t.Fatalf("%s %q\n%s", dep.Status, dep.Error, e.log(dep))
+	}
+	if loaded != "IMAGE-TARBALL" {
+		t.Fatalf("the app's server was given %q", loaded)
+	}
+	// Each server did its own part and nothing of the other's.
+	built, ran := strings.Join(builder.Calls(), "\n"), strings.Join(target.Calls(), "\n")
+	for _, want := range []string{"git clone", "docker build", "docker save -- " + image, "docker rmi " + image} {
+		if !strings.Contains(built, want) {
+			t.Errorf("the build server did not run %q:\n%s", want, built)
+		}
+	}
+	for _, never := range []string{"docker run", "docker load"} {
+		if strings.Contains(built, never) {
+			t.Errorf("the build server ran %q", never)
+		}
+	}
+	for _, never := range []string{"git clone", "docker build", "docker save"} {
+		if strings.Contains(ran, never) {
+			t.Errorf("the app's server ran %q", never)
+		}
+	}
+	calls := target.Calls()
+	if load, run := indexOf(calls, "docker load"), indexOf(calls, "docker run"); load < 0 || run < load {
+		t.Fatalf("on the app's server the image was not loaded before it was run:\n%s", ran)
+	}
+	// It waited its turn with the build server's builds, not the app server's.
+	var lock string
+	e.db.QueryRowContext(ctx, `SELECT lock_key FROM jobs WHERE kind = ? ORDER BY rowid DESC LIMIT 1`, JobDeploy).Scan(&lock)
+	if lock != "build:buildsrv" {
+		t.Fatalf("lock key %q", lock)
+	}
+
+	// A transfer that breaks off is a failed deployment: half an image is
+	// not loaded, nothing new is started, and the version from before
+	// keeps serving.
+	failSave = true
+	loaded = ""
+	before := len(target.Calls())
+	previous := e.reload().Container
+	dep = e.deploy()
+	if dep.Status != db.DeployFailed || !strings.Contains(dep.Error, "read the image from builder") {
+		t.Fatalf("%s %q", dep.Status, dep.Error)
+	}
+	for _, c := range target.Calls()[before:] {
+		if strings.HasPrefix(c, "docker run") {
+			t.Fatalf("a container was started from an image that did not arrive: %s", c)
+		}
+	}
+	if app := e.reload(); app.Container != previous || app.Status != db.AppRunning {
+		t.Fatalf("after a failed transfer: %+v", app)
+	}
+
+	// Choosing the app's own server is the same as choosing none, and a
+	// server of another team cannot be chosen.
+	if err := e.db.SetAppBuildServer(ctx, e.team, e.app.ID, e.server.ID); err != nil {
+		t.Fatal(err)
+	}
+	if app := e.reload(); app.BuildServerID != "" {
+		t.Fatalf("build server %q after choosing the app's own", app.BuildServerID)
+	}
+	e.db.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('otherteam', 'Other', 1)`)
+	e.db.Exec(`INSERT INTO servers (id, team_id, name, kind, created_at) VALUES ('theirs', 'otherteam', 'theirs', 'ssh', 1)`)
+	if err := e.db.SetAppBuildServer(ctx, e.team, e.app.ID, "theirs"); err != db.ErrNotFound {
+		t.Fatalf("another team's server as build server: %v", err)
 	}
 }

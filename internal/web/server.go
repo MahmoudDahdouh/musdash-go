@@ -138,6 +138,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /apps/{id}/source", s.authed(s.appSourceSave))
 	mux.Handle("POST /apps/{id}/webhook-secret", s.authed(s.appWebhookSecret))
 	mux.Handle("POST /apps/{id}/deploy-token", s.authed(s.appDeployToken))
+	mux.Handle("POST /apps/{id}/build-server", s.authed(s.appBuildServer))
 
 	mux.Handle("GET /projects/{id}/databases/new", s.authed(s.databaseNew))
 	mux.Handle("POST /projects/{id}/databases", s.authed(s.databaseCreate))

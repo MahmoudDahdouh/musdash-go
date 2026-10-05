@@ -145,6 +145,10 @@ func (s *Server) renderAppSettings(w http.ResponseWriter, r *http.Request, statu
 		s.fail(w, r, err)
 		return
 	}
+	if v.Servers, err = s.DB.ListServers(r.Context(), sessionFrom(r).TeamID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	s.render(w, r, status, pages.AppSettings(s.appShell(w, r, v), v, general, domain, src, choices, tr))
 }
 
@@ -204,6 +208,30 @@ func (s *Server) appWebhookSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	setFlash(w, r, ui.ToneOK, "Webhook secret saved. Enter it in the repository's webhook settings.")
 	redirect(w, r, "/apps/"+v.App.ID+"/settings#triggers")
+}
+
+// appBuildServer chooses the server a Git app's image is built on.
+func (s *Server) appBuildServer(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadApp(w, r)
+	if !ok {
+		return
+	}
+	if v.App.Source != db.SourceGit {
+		s.notFound(w, r)
+		return
+	}
+	err := s.DB.SetAppBuildServer(r.Context(), sessionFrom(r).TeamID, v.App.ID, r.PostFormValue("build_server"))
+	if errors.Is(err, db.ErrNotFound) {
+		// Not a server of this team.
+		s.notFound(w, r)
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	setFlash(w, r, ui.ToneOK, "Saved. The next deployment builds there.")
+	redirect(w, r, "/apps/"+v.App.ID+"/settings")
 }
 
 // appDeployToken creates, replaces or revokes the app's deploy token. A new
