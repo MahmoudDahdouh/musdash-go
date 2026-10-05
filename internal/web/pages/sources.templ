@@ -62,7 +62,7 @@ templ Sources(s ui.Shell, sources []db.GitSource, keys []db.SSHKey, appForm, key
 				<div class="card-head">
 					<div>
 						<h2 class="card-title">Deploy keys</h2>
-						<p class="muted text-sm">For repositories on any Git host. Add the public key to the repository as a read-only deploy key.</p>
+						<p class="muted text-sm">For repositories on any Git host: GitHub, GitLab, Bitbucket, Gitea, Forgejo or your own. Add the public key to the repository as a read-only key: GitHub, GitLab and Gitea call it a deploy key, Bitbucket an access key.</p>
 					</div>
 				</div>
 				if newKey != nil {

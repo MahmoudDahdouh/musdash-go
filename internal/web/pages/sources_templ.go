@@ -241,7 +241,7 @@ func Sources(s ui.Shell, sources []db.GitSource, keys []db.SSHKey, appForm, keyF
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div></form></section><section class=\"card\" id=\"keys\"><div class=\"card-head\"><div><h2 class=\"card-title\">Deploy keys</h2><p class=\"muted text-sm\">For repositories on any Git host. Add the public key to the repository as a read-only deploy key.</p></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div></form></section><section class=\"card\" id=\"keys\"><div class=\"card-head\"><div><h2 class=\"card-title\">Deploy keys</h2><p class=\"muted text-sm\">For repositories on any Git host: GitHub, GitLab, Bitbucket, Gitea, Forgejo or your own. Add the public key to the repository as a read-only key: GitHub, GitLab and Gitea call it a deploy key, Bitbucket an access key.</p></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

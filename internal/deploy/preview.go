@@ -103,6 +103,9 @@ func (d *Deployer) SyncPreview(ctx context.Context, parent db.App, pr source.Pul
 		}
 		child.Branch = pr.Branch
 	}
+	if pr.IfChanged && d.deployedCommit(ctx, child.ID, pr.Commit) {
+		return child, nil
+	}
 	// One waiting deployment builds whatever the branch holds when it
 	// starts; a second would build the same.
 	if _, err := d.DB.QueuedDeployment(ctx, child.ID); errors.Is(err, db.ErrNotFound) {
@@ -112,6 +115,21 @@ func (d *Deployer) SyncPreview(ctx context.Context, parent db.App, pr source.Pul
 		return child, err
 	}
 	return child, nil
+}
+
+// deployedCommit reports whether an app's latest deployment is of this
+// commit and did not fail. An event that says no more than "the pull
+// request is open" (a comment, an approval) then has nothing to deploy.
+// Hosts shorten commit ids, so the start is compared.
+func (d *Deployer) deployedCommit(ctx context.Context, appID, commit string) bool {
+	if len(commit) < 7 {
+		return false
+	}
+	last, err := d.DB.ListDeployments(ctx, appID, 1)
+	if err != nil || len(last) == 0 {
+		return false
+	}
+	return last[0].Status != db.DeployFailed && last[0].RollbackOf == "" && strings.HasPrefix(last[0].CommitSHA, commit)
 }
 
 func (d *Deployer) createPreview(ctx context.Context, parent db.App, pr source.PullRequest) (db.App, error) {

@@ -31,10 +31,28 @@ const hookReadTimeout = 30 * time.Second
 // sends a UUID. The value is stored, so anything else is treated as absent.
 var deliveryIDRE = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
 
-// readSigned reads a webhook body and checks its signature against the
-// secret. Bodies are read one at a time: each is bounded, and so is what all
-// of them together can hold in memory.
-func (s *Server) readSigned(w http.ResponseWriter, r *http.Request, secret []byte) (source.Event, bool) {
+// hubProof is the one proof a GitHub App's webhook offers.
+func hubProof(r *http.Request) source.Proof {
+	return source.Proof{Hub256: r.Header.Get("X-Hub-Signature-256")}
+}
+
+// anyProof gathers every way a Git host shows that it knows a webhook's
+// secret. Which host is calling is not asked: the headers that would say
+// so are not signed, and the secret is the same whoever presents it.
+func anyProof(r *http.Request) source.Proof {
+	p := hubProof(r)
+	p.Hub = r.Header.Get("X-Hub-Signature")
+	p.Token = r.Header.Get("X-Gitlab-Token")
+	if p.Bare = r.Header.Get("X-Gitea-Signature"); p.Bare == "" {
+		p.Bare = r.Header.Get("X-Gogs-Signature")
+	}
+	return p
+}
+
+// readSigned reads a webhook body and checks the proof that came with it
+// against the secret. Bodies are read one at a time: each is bounded, and
+// so is what all of them together can hold in memory.
+func (s *Server) readSigned(w http.ResponseWriter, r *http.Request, secret []byte, proof source.Proof) (source.Event, bool) {
 	// Best effort: not every ResponseWriter can set a deadline.
 	http.NewResponseController(w).SetReadDeadline(time.Now().Add(hookReadTimeout))
 	select {
@@ -49,20 +67,28 @@ func (s *Server) readSigned(w http.ResponseWriter, r *http.Request, secret []byt
 		// read and hashed all the same: otherwise how long a large request
 		// takes would tell an id that has a secret from one that has none
 		// or does not exist.
-		source.ReadEvent(body, hookDummyKey, r.Header.Get("X-Hub-Signature-256"))
+		source.ReadHook(body, hookDummyKey, proof)
 		return source.Event{}, false
 	}
-	return source.ReadEvent(body, secret, r.Header.Get("X-Hub-Signature-256"))
+	return source.ReadHook(body, secret, proof)
 }
 
 // hookDummyKey stands in for the secret of a resource that has none.
 var hookDummyKey = secret.RandomBytes(32)
 
+// deliveryHeaders are where the hosts put the id of a delivery: one that
+// stays the same when the delivery is sent again. GitHub, Gitea and Gogs
+// each have their own; GitLab's is Idempotency-Key and Bitbucket's
+// X-Request-UUID.
+var deliveryHeaders = []string{"X-GitHub-Delivery", "X-Gitea-Delivery", "X-Gogs-Delivery", "Idempotency-Key", "X-Request-UUID"}
+
 // deliveryID returns the delivery id of a webhook request, or "" when it
 // carries none that can be recorded.
 func deliveryID(r *http.Request) string {
-	if id := r.Header.Get("X-GitHub-Delivery"); deliveryIDRE.MatchString(id) {
-		return id
+	for _, h := range deliveryHeaders {
+		if id := r.Header.Get(h); deliveryIDRE.MatchString(id) {
+			return id
+		}
 	}
 	return ""
 }
@@ -266,7 +292,7 @@ func (s *Server) githubWebhook(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		key, err = s.Box.Open(src.WebhookSecret)
 	}
-	ev, ok := s.readSigned(w, r, key)
+	ev, ok := s.readSigned(w, r, key, hubProof(r))
 	if err != nil || !ok {
 		http.Error(w, "The signature does not match.", http.StatusUnauthorized)
 		return
@@ -297,7 +323,9 @@ func (s *Server) githubWebhook(w http.ResponseWriter, r *http.Request) {
 
 // gitWebhook receives a push webhook that a person added to a repository by
 // hand, for apps and services that clone with a deploy key or from a public
-// repository. The id in the address is the app's or the service's.
+// repository. The id in the address is the app's or the service's. The
+// repository can be on GitHub, GitLab, Bitbucket, Gitea or Forgejo: each
+// proves the secret in its own header and words its events in its own way.
 func (s *Server) gitWebhook(w http.ResponseWriter, r *http.Request) {
 	if !s.hookAllowed(w, r) {
 		return
@@ -321,12 +349,11 @@ func (s *Server) gitWebhook(w http.ResponseWriter, r *http.Request) {
 	if err == nil && sealed != "" {
 		key, err = s.Box.Open(sealed)
 	}
-	ev, ok := s.readSigned(w, r, key)
+	ev, ok := s.readSigned(w, r, key, anyProof(r))
 	if err != nil || !ok {
 		http.Error(w, "The signature does not match.", http.StatusUnauthorized)
 		return
 	}
-	push := ev.Push
 	if notJSON(r) {
 		// Signed correctly, but the event cannot be read in this encoding.
 		// Say so where the person looks: the host's delivery log.
@@ -345,9 +372,15 @@ func (s *Server) gitWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Only a push to the resource's own branch deploys. The repository
-	// name is compared when the event carries one.
-	if !git || !auto || push.Branch == "" || push.Branch != branch ||
-		(push.Repo != "" && !strings.EqualFold(push.Repo, repo)) {
+	// name is compared when the event carries one. One event can name
+	// several branches.
+	pushed := false
+	for _, push := range ev.Pushes {
+		if push.Branch == branch && (push.Repo == "" || strings.EqualFold(push.Repo, repo)) {
+			pushed = true
+		}
+	}
+	if !git || !auto || branch == "" || !pushed {
 		writeJSON(w, http.StatusOK, map[string]any{"deployments": 0})
 		return
 	}
