@@ -21,7 +21,7 @@ func TestHomeFollowsAnInstall(t *testing.T) {
 
 	res, page := a.get("/")
 	wantStatus(t, res, http.StatusOK)
-	for _, want := range []string{"Getting started", `href="/projects/new"`, "Connect GitHub", "Nothing has been deployed, backed up or run yet.", "This machine"} {
+	for _, want := range []string{"Getting started", `data-open="new-project"`, "Connect GitHub", "Nothing has been deployed, backed up or run yet.", "This machine"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("a new install's Home lacks %q", want)
 		}

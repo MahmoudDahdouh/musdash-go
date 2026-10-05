@@ -21,7 +21,7 @@ import (
 // project creates a project and returns its id and production environment.
 func (a *app) project(name string) (string, db.Environment) {
 	a.t.Helper()
-	res, _ := a.post("/projects/new", "/projects", url.Values{"name": {name}})
+	res, _ := a.post("/projects", "/projects", url.Values{"name": {name}})
 	wantStatus(a.t, res, http.StatusSeeOther)
 	id := strings.TrimPrefix(res.Header.Get("Location"), "/projects/")
 	envs, err := a.db.ListEnvironments(context.Background(), id)
@@ -35,14 +35,14 @@ func (a *app) project(name string) (string, db.Environment) {
 // also waits for the first deployment to finish.
 func (a *app) newApp(projectID string, env db.Environment, name string, deploy bool, extra url.Values) string {
 	a.t.Helper()
-	form := url.Values{"env": {env.ID}, "name": {name}, "image": {"nginx:alpine"}, "port": {"80"}}
+	form := url.Values{"name": {name}, "image": {"nginx:alpine"}, "port": {"80"}}
 	if deploy {
 		form.Set("deploy", "1")
 	}
 	for k, v := range extra {
 		form[k] = v
 	}
-	res, body := a.post("/projects/"+projectID+"/apps/new?env="+env.ID, "/projects/"+projectID+"/apps", form)
+	res, body := a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
 	if res.StatusCode != http.StatusSeeOther {
 		a.t.Fatalf("create app: %d\n%s", res.StatusCode, body)
 	}
@@ -79,7 +79,7 @@ func TestCreateAndDeployApp(t *testing.T) {
 	projectID, env := a.project("Shop")
 
 	// The form suggests a generated address that needs no DNS.
-	_, form := a.get("/projects/" + projectID + "/apps/new?env=" + env.ID)
+	_, form := a.get("/projects/" + projectID + "/e/" + env.ID + "/apps/new")
 	m := regexp.MustCompile(`name="domain"[^>]*value="([a-z2-7]{8}\.127\.0\.0\.1\.sslip\.io)"`).FindStringSubmatch(form)
 	if m == nil {
 		t.Fatal("no generated domain in the form")
@@ -103,7 +103,7 @@ func TestCreateAndDeployApp(t *testing.T) {
 		t.Fatalf("routes: %s", a.routesFile())
 	}
 
-	_, list := a.get("/projects/" + projectID + "?env=" + env.ID)
+	_, list := a.get("/projects/" + projectID + "/e/" + env.ID)
 	if !strings.Contains(list, `data-state="running"`) {
 		t.Fatal("the project page does not show the app as running")
 	}
@@ -149,11 +149,11 @@ func TestAppFormValidation(t *testing.T) {
 		{url.Values{"domain": {"localhost"}}, "Enter a domain such as"},
 	}
 	for _, c := range cases {
-		form := url.Values{"env": {env.ID}, "name": {"api"}, "image": {"nginx"}, "port": {"80"}}
+		form := url.Values{"name": {"api"}, "image": {"nginx"}, "port": {"80"}}
 		for k, v := range c.field {
 			form[k] = v
 		}
-		res, body := a.post("/projects/"+projectID+"/apps/new?env="+env.ID, "/projects/"+projectID+"/apps", form)
+		res, body := a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
 		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, c.want) {
 			t.Errorf("%v: status %d, want 422 with %q", c.field, res.StatusCode, c.want)
 		}
@@ -379,7 +379,7 @@ func TestStopRedeployAndDeleteApp(t *testing.T) {
 	res, _ = a.post(appSettings, "/apps/"+appID+"/delete", url.Values{"confirm": {"wrong"}})
 	wantRedirect(t, res, appSettings)
 	res, _ = a.post(appSettings, "/apps/"+appID+"/delete", url.Values{"confirm": {"web"}})
-	wantRedirect(t, res, "/projects/"+projectID+"?env="+env.ID)
+	wantRedirect(t, res, "/projects/"+projectID+"/e/"+env.ID)
 	res, _ = a.get("/apps/" + appID)
 	wantStatus(t, res, http.StatusNotFound)
 
@@ -435,7 +435,7 @@ func TestOtherTeamsAppIsNotFound(t *testing.T) {
 			t.Errorf("GET %s: %d", path, res.StatusCode)
 		}
 	}
-	token := a.csrf("/projects/new")
+	token := a.csrf("/projects")
 	for path, form := range map[string]url.Values{
 		"/deploy":                        {},
 		"/stop":                          {},
@@ -458,8 +458,8 @@ func TestOtherTeamsAppIsNotFound(t *testing.T) {
 	res, _ := a.get("/apps/" + mine + "/deployments/" + dep.ID)
 	wantStatus(t, res, http.StatusNotFound)
 	// Nor can an app be created in another team's environment.
-	res, _ = a.post("/projects/"+projectID+"/apps/new?env="+env.ID, "/projects/"+projectID+"/apps",
-		url.Values{"env": {envs[0].ID}, "name": {"x"}, "image": {"nginx"}, "port": {"80"}})
+	res, _ = a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+envs[0].ID+"/apps",
+		url.Values{"name": {"x"}, "image": {"nginx"}, "port": {"80"}})
 	wantStatus(t, res, http.StatusNotFound)
 
 	if got, _ := a.db.AppByID(ctx, other.ID); got.Name != "secret-app" {
@@ -495,7 +495,7 @@ func TestServersAndInstanceSettings(t *testing.T) {
 
 	// New apps are now offered an address on the server's public IP.
 	projectID, env := a.project("Shop")
-	_, form := a.get("/projects/" + projectID + "/apps/new?env=" + env.ID)
+	_, form := a.get("/projects/" + projectID + "/e/" + env.ID + "/apps/new")
 	if !strings.Contains(form, ".203.0.113.7.sslip.io") {
 		t.Fatal("the generated domain does not use the server's address")
 	}

@@ -15,7 +15,7 @@ var deployTokenRE = regexp.MustCompile(`mdt_[A-Za-z0-9_-]{20,}`)
 
 func gitServiceForm(env db.Environment, name string) url.Values {
 	return url.Values{
-		"env": {env.ID}, "template": {db.TemplateGit}, "name": {name},
+		"template": {db.TemplateGit}, "name": {name},
 		"access": {"public"}, "repo": {"https://github.com/Acme/Stack"}, "branch": {"main"},
 		"compose_path": {"deploy/compose.yaml"}, "auto_deploy": {"1"},
 	}
@@ -26,13 +26,13 @@ func TestServiceFromGitPages(t *testing.T) {
 	a.setup()
 	ctx := context.Background()
 	projectID, env := a.project("Shop")
-	newPage := "/projects/" + projectID + "/services/new?env=" + env.ID
+	newPage := "/projects/" + projectID + "/e/" + env.ID + "/services/new"
 
 	// Offered next to the catalogue, with its own form.
-	if _, body := a.get(newPage); !strings.Contains(body, "A Compose file in a Git repository") || !strings.Contains(body, "template=git") {
+	if _, body := a.get("/projects/" + projectID + "/e/" + env.ID + "/new"); !strings.Contains(body, "Compose file in a Git repository") || !strings.Contains(body, "template=git") {
 		t.Fatal("the catalogue does not offer a stack from a repository")
 	}
-	res, form := a.get(newPage + "&template=git")
+	res, form := a.get(newPage + "?template=git")
 	wantStatus(t, res, http.StatusOK)
 	for _, want := range []string{`name="repo"`, `name="branch"`, `name="compose_path"`, `value="docker-compose.yml"`, "Deploy automatically when the branch is pushed"} {
 		if !strings.Contains(form, want) {
@@ -52,18 +52,18 @@ func TestServiceFromGitPages(t *testing.T) {
 	} {
 		bad := gitServiceForm(env, "stack")
 		bad.Set(key, c[0])
-		res, body := a.post(newPage+"&template=git", "/projects/"+projectID+"/services", bad)
+		res, body := a.post(newPage+"?template=git", "/projects/"+projectID+"/e/"+env.ID+"/services", bad)
 		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, `id="`+c[1]+`"`) {
 			t.Errorf("%s=%q: %d, error on the field: %v", key, c[0], res.StatusCode, strings.Contains(body, `id="`+c[1]+`"`))
 		}
 	}
 	bad := gitServiceForm(env, "stack")
 	bad.Set("repo", "git@github.com:acme/stack.git")
-	if _, body := a.post(newPage+"&template=git", "/projects/"+projectID+"/services", bad); !strings.Contains(body, "An SSH address needs a deploy key") {
+	if _, body := a.post(newPage+"?template=git", "/projects/"+projectID+"/e/"+env.ID+"/services", bad); !strings.Contains(body, "An SSH address needs a deploy key") {
 		t.Error("an SSH address without a key was not explained")
 	}
 
-	res, _ = a.post(newPage+"&template=git", "/projects/"+projectID+"/services", gitServiceForm(env, "stack"))
+	res, _ = a.post(newPage+"?template=git", "/projects/"+projectID+"/e/"+env.ID+"/services", gitServiceForm(env, "stack"))
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("create: %d", res.StatusCode)
 	}

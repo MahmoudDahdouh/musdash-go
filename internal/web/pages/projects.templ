@@ -14,135 +14,131 @@ func plural(n int, one, many string) string {
 	return strconv.Itoa(n) + " " + many
 }
 
-templ ProjectList(s ui.Shell, projects []db.Project) {
+// noun is the word for n of something, without the figure.
+func noun(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+// NewProjectDialog is the form a project is made with. The Projects page
+// and Home both open it; a refused form comes back on the Projects page.
+templ NewProjectDialog(csrf string, f ui.Form) {
+	@ui.FormDialog(ui.DialogProps{ID: "new-project", Title: "New project", Description: "A project groups the apps, databases and services of one product. It starts with one environment called production.", Action: "/projects", CSRF: csrf, Submit: "Create project", Open: !f.OK()}) {
+		@ui.TextField(f, "Name", "", ui.InputProps{ID: "project-name", Name: "name", Required: true, Autofocus: true, Attrs: templ.Attributes{"maxlength": "60"}})
+		@ui.TextField(f, "Description", "Optional.", ui.InputProps{ID: "project-description", Name: "description", Attrs: templ.Attributes{"maxlength": "200"}})
+	}
+}
+
+templ ProjectList(s ui.Shell, projects []db.Project, f ui.Form) {
 	@ui.Layout(s) {
 		@ui.PageHeader("Projects", "A project groups the apps, databases and services of one product.") {
 			if len(projects) > 0 {
-				@ui.LinkButton("/projects/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-project"}) {
 					New project
 				}
 			}
 		}
 		if len(projects) == 0 {
 			@ui.EmptyState("folder", "No projects yet", "Create a project, then deploy apps, databases and services into it.") {
-				@ui.LinkButton("/projects/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-project"}) {
 					New project
 				}
 			}
 		} else {
-			<div class="card rows">
+			@ui.Tiles("Projects", false) {
 				for _, p := range projects {
-					<a class="row" href={ templ.SafeURL("/projects/" + p.ID) }>
-						@ui.Icon("folder", "text-ink-mute")
-						<div class="min-w-0 flex-1">
-							<p class="truncate font-semibold">{ p.Name }</p>
-							if p.Description != "" {
-								<p class="muted truncate text-sm">{ p.Description }</p>
-							}
-						</div>
-						<span class="muted text-sm whitespace-nowrap">{ plural(p.EnvCount, "environment", "environments") }</span>
-						@ui.Icon("chevron-right", "text-ink-mute")
-					</a>
+					@ui.Tile(ui.TileProps{Href: "/projects/" + p.ID, Icon: "folder", Title: p.Name, Text: p.Description}) {
+						@ui.Meta(KindIcon(db.KindApp), strconv.Itoa(p.Apps), noun(p.Apps, "app", "apps"))
+						@ui.Meta(KindIcon(db.KindDatabase), strconv.Itoa(p.Databases), noun(p.Databases, "database", "databases"))
+						@ui.Meta(KindIcon(db.KindService), strconv.Itoa(p.Services), noun(p.Services, "service", "services"))
+						@ui.Meta("", plural(p.EnvCount, "environment", "environments"), "")
+					}
 				}
-			</div>
-		}
-	}
-}
-
-templ ProjectNew(s ui.Shell, f ui.Form) {
-	@ui.Layout(s) {
-		@ui.PageHeader("New project", "")
-		<div class="max-w-xl">
-			@ui.FormCard("Project details", "It starts with one environment called production.", "/projects", s.CSRF, "Create project") {
-				@ui.TextField(f, "Name", "", ui.InputProps{ID: "name", Required: true, Autofocus: true, Attrs: templ.Attributes{"maxlength": "60"}})
-				@ui.TextField(f, "Description", "Optional.", ui.InputProps{ID: "description", Attrs: templ.Attributes{"maxlength": "200"}})
 			}
-		</div>
+		}
+		@NewProjectDialog(s.CSRF, f)
 	}
 }
 
-func projectTabs(p db.Project, envs []db.Environment) []ui.Tab {
-	tabs := make([]ui.Tab, 0, len(envs)+1)
-	for _, e := range envs {
-		tabs = append(tabs, ui.Tab{Key: e.ID, Label: e.Name, Href: "/projects/" + p.ID + "?env=" + e.ID})
+// projectTabs are the sections of a project. envID is the environment the
+// person is in, when the page has one, so Resources leads back to it.
+func projectTabs(p db.Project, envID string) []ui.Tab {
+	resources := "/projects/" + p.ID
+	if envID != "" {
+		resources += "/e/" + envID
 	}
-	return append(tabs, ui.Tab{Key: "settings", Label: "Settings", Href: "/projects/" + p.ID + "/settings"})
+	return []ui.Tab{
+		{Key: "resources", Label: "Resources", Href: resources, Icon: "dashboard"},
+		{Key: "settings", Label: "Settings", Href: "/projects/" + p.ID + "/settings", Icon: "settings"},
+	}
 }
 
-// ProjectShow lists what is deployed in one environment of a project.
-templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, current db.Environment, apps []db.App, databases []db.Database, services []db.Service) {
+// ProjectShow is one environment of a project: what runs in it.
+templ ProjectShow(s ui.Shell, p db.Project, env db.Environment, res Resources) {
 	@ui.Layout(s) {
 		@ui.PageHeader(p.Name, p.Description) {
-			if len(apps)+len(databases)+len(services) > 0 {
-				@ui.LinkButton("/projects/"+p.ID+"/services/new?env="+current.ID, ui.ButtonProps{Icon: "layers"}) {
-					New service
-				}
-				@ui.LinkButton("/projects/"+p.ID+"/databases/new?env="+current.ID, ui.ButtonProps{Icon: "database"}) {
-					New database
-				}
-				@ui.LinkButton("/projects/"+p.ID+"/apps/new?env="+current.ID, ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
-					New app
+			if res.Count() > 0 {
+				@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					Add resource
 				}
 			}
 		}
-		@ui.Tabs(projectTabs(p, envs), current.ID)
-		if len(apps)+len(databases)+len(services) == 0 {
-			@ui.EmptyState("box", "Nothing is deployed in "+current.Name, "Start with an app from a Docker image or a Git repository, a database, or a ready-made service such as WordPress or n8n.") {
-				@ui.LinkButton("/projects/"+p.ID+"/apps/new?env="+current.ID, ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
-					New app
-				}
-				@ui.LinkButton("/projects/"+p.ID+"/databases/new?env="+current.ID, ui.ButtonProps{Icon: "database"}) {
-					New database
-				}
-				@ui.LinkButton("/projects/"+p.ID+"/services/new?env="+current.ID, ui.ButtonProps{Icon: "layers"}) {
-					New service
+		@ui.Tabs(projectTabs(p, env.ID), "resources")
+		if res.Count() == 0 {
+			@ui.EmptyState("box", "Nothing is in "+env.Name+" yet", "Add an app from a Git repository or a Docker image, a database, or a ready-made service such as WordPress or n8n.") {
+				@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+					Add resource
 				}
 			}
 		} else {
-			<div class="grid gap-6">
-				if len(apps) > 0 {
-					<section class="grid gap-2">
-						<h2 class="section-title">Apps</h2>
-						@AppRows(apps)
-					</section>
-				}
-				if len(databases) > 0 {
-					<section class="grid gap-2">
-						<h2 class="section-title">Databases</h2>
-						@DatabaseRows(databases)
-					</section>
-				}
-				if len(services) > 0 {
-					<section class="grid gap-2">
-						<h2 class="section-title">Services</h2>
-						@ServiceRows(services)
-					</section>
-				}
-			</div>
+			@ResourceTiles(res)
 		}
 	}
+}
+
+func orNoDescription(text string) string {
+	if text == "" {
+		return "None"
+	}
+	return text
 }
 
 templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, envForm ui.Form) {
 	@ui.Layout(s) {
 		@ui.PageHeader(p.Name, p.Description)
-		@ui.Tabs(projectTabs(p, envs), "settings")
+		@ui.Tabs(projectTabs(p, ""), "settings")
 		<div class="grid max-w-2xl gap-6">
-			@ui.FormCard("Project details", "", "/projects/"+p.ID, s.CSRF, "Save changes") {
+			<section class="card">
+				<div class="card-head">
+					<h2 class="card-title">Project details</h2>
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-project"}) {
+						Edit
+					}
+				</div>
+				<div class="card-body">
+					@ui.KeyValue([]ui.KVItem{{Key: "Name", Value: p.Name}, {Key: "Description", Value: orNoDescription(p.Description)}})
+				</div>
+			</section>
+			@ui.FormDialog(ui.DialogProps{ID: "edit-project", Title: "Project details", Action: "/projects/" + p.ID, CSRF: s.CSRF, Submit: "Save changes", Open: !details.OK()}) {
 				@ui.TextField(details, "Name", "", ui.InputProps{ID: "name", Value: p.Name, Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
 				@ui.TextField(details, "Description", "Optional.", ui.InputProps{ID: "description", Value: p.Description, Attrs: templ.Attributes{"maxlength": "200"}})
 			}
-			<section class="card">
+			<section class="card" id="environments">
 				<div class="card-head">
 					<div>
 						<h2 class="card-title">Environments</h2>
 						<p class="muted text-sm">Separate copies of the project, such as production and staging.</p>
 					</div>
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "new-environment"}) {
+						New environment
+					}
 				</div>
 				<div class="rows">
 					for _, e := range envs {
 						<div class="row">
-							<span class="fact min-w-0 flex-1 truncate">{ e.Name }</span>
+							<a class="fact min-w-0 flex-1 truncate" href={ templ.SafeURL("/projects/" + p.ID + "/e/" + e.ID) }>{ e.Name }</a>
 							if len(envs) > 1 {
 								@ui.Confirm(ui.ConfirmProps{
 									ID:      "delete-env-" + e.ID,
@@ -161,20 +157,10 @@ templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, 
 						</div>
 					}
 				</div>
-				<form class="card-foot" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/environments") }>
-					@ui.CSRF(s.CSRF)
-					<div class="min-w-0 flex-1">
-						<label class="sr-only" for="env-name">New environment name</label>
-						@ui.Input(ui.InputProps{ID: "env-name", Name: "name", Placeholder: "staging", Mono: true, Required: true, Value: envForm.V("name"), Invalid: envForm.E("name") != "", Attrs: templ.Attributes{"maxlength": "32"}})
-						if envForm.E("name") != "" {
-							<p class="field-error mt-1" id="env-name-error" role="alert">{ envForm.E("name") }</p>
-						}
-					</div>
-					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}) {
-						Add environment
-					}
-				</form>
 			</section>
+			@ui.FormDialog(ui.DialogProps{ID: "new-environment", Title: "New environment", Description: "It starts empty, with a network of its own: what runs in it does not see the other environments.", Action: "/projects/" + p.ID + "/environments", CSRF: s.CSRF, Submit: "Create environment", Open: !envForm.OK()}) {
+				@ui.TextField(envForm, "Name", "Lowercase letters, numbers and hyphens.", ui.InputProps{ID: "env-name", Name: "name", Placeholder: "staging", Mono: true, Required: true, Attrs: templ.Attributes{"maxlength": "32"}})
+			}
 			<section class="card" id="variables">
 				<div class="card-head">
 					<div>

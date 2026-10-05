@@ -269,6 +269,13 @@
     const current = filtered ? list.querySelector("[data-active]") : document.activeElement;
     const i = all.indexOf(current);
     let next;
+    // Space chooses the focused option, as Enter does. On a link it would
+    // scroll the page instead, which closes the list.
+    if (e.key === " " && !filtered && current?.matches("[role=option]")) {
+      e.preventDefault();
+      current.click();
+      return;
+    }
     if (e.key === "ArrowDown") next = all[(i + 1) % all.length];
     else if (e.key === "ArrowUp") next = all[(i - 1 + all.length) % all.length];
     else if (filtered) {

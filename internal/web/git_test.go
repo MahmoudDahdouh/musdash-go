@@ -22,7 +22,7 @@ import (
 // gitForm is a valid New app form for a public repository.
 func gitForm(env db.Environment, name string) url.Values {
 	return url.Values{
-		"env": {env.ID}, "source": {"git"}, "name": {name}, "port": {"3000"},
+		"source": {"git"}, "name": {name}, "port": {"3000"},
 		"access": {"public"}, "repo": {"https://github.com/Acme/Shop"}, "branch": {"main"},
 		"build_pack": {"dockerfile"}, "auto_deploy": {"1"},
 	}
@@ -35,8 +35,8 @@ func (a *app) newGitApp(projectID string, env db.Environment, name string, extra
 	for k, v := range extra {
 		form[k] = v
 	}
-	page := "/projects/" + projectID + "/apps/new?env=" + env.ID + "&source=git"
-	res, body := a.post(page, "/projects/"+projectID+"/apps", form)
+	page := "/projects/" + projectID + "/e/" + env.ID + "/apps/new?source=git"
+	res, body := a.post(page, "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
 	if res.StatusCode != http.StatusSeeOther {
 		a.t.Fatalf("create git app: %d\n%s", res.StatusCode, body)
 	}
@@ -79,7 +79,7 @@ func TestCreateGitApp(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 
-	_, page := a.get("/projects/" + projectID + "/apps/new?env=" + env.ID + "&source=git")
+	_, page := a.get("/projects/" + projectID + "/e/" + env.ID + "/apps/new?source=git")
 	for _, want := range []string{"Git repository", `name="repo"`, `name="branch"`, "Nothing: the repository is public"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the Git form is missing %q", want)
@@ -131,13 +131,13 @@ func TestGitFormValidation(t *testing.T) {
 		{url.Values{"dockerfile_path": {"/etc/passwd"}}, "Enter a path inside the repository"},
 		{url.Values{"publish_dir": {"a;b"}}, "Enter a path inside the repository"},
 	}
-	page := "/projects/" + projectID + "/apps/new?env=" + env.ID + "&source=git"
+	page := "/projects/" + projectID + "/e/" + env.ID + "/apps/new?source=git"
 	for _, c := range cases {
 		form := gitForm(env, "web")
 		for k, v := range c.field {
 			form[k] = v
 		}
-		res, body := a.post(page, "/projects/"+projectID+"/apps", form)
+		res, body := a.post(page, "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
 		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(strings.ToLower(body), strings.ToLower(c.want)) {
 			t.Errorf("%v: status %d, want 422 with %q", c.field, res.StatusCode, c.want)
 		}
@@ -886,7 +886,7 @@ func TestPullRequestsThroughAGitHubApp(t *testing.T) {
 			t.Errorf("the parent's settings lack %q", want)
 		}
 	}
-	if _, page = a.get("/projects/" + projectID + "?env=" + env.ID); strings.Contains(page, "web-pr-12") {
+	if _, page = a.get("/projects/" + projectID + "/e/" + env.ID); strings.Contains(page, "web-pr-12") {
 		t.Error("the project page lists the preview as an app")
 	}
 	_, page = a.get("/apps/" + child.ID)

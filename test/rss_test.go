@@ -68,7 +68,7 @@ func TestIdleRSS(t *testing.T) {
 		}
 		io.Copy(io.Discard, res.Body)
 		res.Body.Close()
-		for _, path := range []string{"/", "/projects/new", "/account", "/static/app.css", "/static/htmx.min.js"} {
+		for _, path := range []string{"/", "/projects", "/account", "/static/app.css", "/static/htmx.min.js"} {
 			fetch(t, client, base+path)
 		}
 		client.CloseIdleConnections()

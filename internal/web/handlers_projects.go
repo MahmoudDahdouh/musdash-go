@@ -47,29 +47,25 @@ func (s *Server) loadProject(w http.ResponseWriter, r *http.Request) (db.Project
 	return p, true
 }
 
-func projectCrumbs(p db.Project) []ui.Crumb {
-	return []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: p.Name}}
-}
-
-func (s *Server) projectList(w http.ResponseWriter, r *http.Request) {
+// renderProjects draws the Projects page; f is the New project form, with
+// what was refused when it comes back.
+func (s *Server) renderProjects(w http.ResponseWriter, r *http.Request, status int, f ui.Form) {
 	projects, err := s.DB.ListProjects(r.Context(), sessionFrom(r).TeamID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.ProjectList(s.shell(w, r, "Projects", "projects"), projects))
+	s.render(w, r, status, pages.ProjectList(s.shell(w, r, "Projects", "projects"), projects, f))
 }
 
-func (s *Server) projectNew(w http.ResponseWriter, r *http.Request) {
-	crumbs := []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: "New project"}}
-	s.render(w, r, http.StatusOK, pages.ProjectNew(s.shell(w, r, "New project", "projects", crumbs...), ui.Form{}))
+func (s *Server) projectList(w http.ResponseWriter, r *http.Request) {
+	s.renderProjects(w, r, http.StatusOK, ui.Form{})
 }
 
 func (s *Server) projectCreate(w http.ResponseWriter, r *http.Request) {
 	name, description, f := projectForm(r)
 	if !f.OK() {
-		crumbs := []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: "New project"}}
-		s.render(w, r, http.StatusUnprocessableEntity, pages.ProjectNew(s.shell(w, r, "New project", "projects", crumbs...), f))
+		s.renderProjects(w, r, http.StatusUnprocessableEntity, f)
 		return
 	}
 	p, err := s.DB.CreateProject(r.Context(), sessionFrom(r).TeamID, name, description)
@@ -81,6 +77,8 @@ func (s *Server) projectCreate(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, "/projects/"+p.ID)
 }
 
+// projectShow is a project's first environment, which is production unless
+// that one was deleted: where a link to the project itself leads.
 func (s *Server) projectShow(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.loadProject(w, r)
 	if !ok {
@@ -95,36 +93,23 @@ func (s *Server) projectShow(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, errors.New("project "+p.ID+" has no environment"))
 		return
 	}
-	current := envs[0]
-	if want := r.URL.Query().Get("env"); want != "" {
-		found := false
-		for _, e := range envs {
-			if e.ID == want {
-				current, found = e, true
-				break
-			}
-		}
-		if !found {
-			s.notFound(w, r)
-			return
-		}
+	s.renderEnvironment(w, r, p, envs[0])
+}
+
+// environmentShow is one environment of a project, named in the path.
+func (s *Server) environmentShow(w http.ResponseWriter, r *http.Request) {
+	if p, env, ok := s.loadProjectEnv(w, r); ok {
+		s.renderEnvironment(w, r, p, env)
 	}
-	apps, err := s.DB.ListApps(r.Context(), current.ID)
+}
+
+func (s *Server) renderEnvironment(w http.ResponseWriter, r *http.Request, p db.Project, env db.Environment) {
+	res, err := s.envResources(r, env.ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	databases, err := s.DB.ListDatabases(r.Context(), current.ID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	services, err := s.DB.ListServices(r.Context(), current.ID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	s.render(w, r, http.StatusOK, pages.ProjectShow(s.shell(w, r, p.Name, "projects", projectCrumbs(p)...), p, envs, current, apps, databases, services))
+	s.render(w, r, http.StatusOK, pages.ProjectShow(s.shell(w, r, p.Name, "projects", envCrumbs(p, env)...), p, env, res))
 }
 
 // renderSettings draws the project settings page with the given form states.
@@ -134,7 +119,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, status i
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, status, pages.ProjectSettings(s.shell(w, r, p.Name, "projects", projectCrumbs(p)...), p, envs, details, envForm))
+	s.render(w, r, status, pages.ProjectSettings(s.shell(w, r, p.Name, "projects", projectCrumbs(p, ui.Crumb{Label: "Settings"})...), p, envs, details, envForm))
 }
 
 func (s *Server) projectSettings(w http.ResponseWriter, r *http.Request) {
@@ -195,20 +180,26 @@ func (s *Server) environmentCreate(w http.ResponseWriter, r *http.Request) {
 	var f ui.Form
 	name := strings.ToLower(strings.TrimSpace(r.PostFormValue("name")))
 	f.Set("name", name)
+	var env db.Environment
 	if !envNameRE.MatchString(name) {
 		f.Fail("name", envNameRule)
-	} else if _, err := s.DB.CreateEnvironment(r.Context(), p.TeamID, p.ID, name); db.IsUnique(err) {
-		f.Fail("name", "This project already has an environment called "+name+".")
-	} else if err != nil {
-		s.fail(w, r, err)
-		return
+	} else {
+		var err error
+		env, err = s.DB.CreateEnvironment(r.Context(), p.TeamID, p.ID, name)
+		if db.IsUnique(err) {
+			f.Fail("name", "This project already has an environment called "+name+".")
+		} else if err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	if !f.OK() {
 		s.renderSettings(w, r, http.StatusUnprocessableEntity, p, ui.Form{}, f)
 		return
 	}
-	setFlash(w, r, ui.ToneOK, "Environment added.")
-	redirect(w, r, "/projects/"+p.ID+"/settings")
+	// Into the new environment: adding to it is what comes next.
+	setFlash(w, r, ui.ToneOK, "Environment created.")
+	redirect(w, r, envPath(p.ID, env.ID))
 }
 
 func (s *Server) environmentDelete(w http.ResponseWriter, r *http.Request) {

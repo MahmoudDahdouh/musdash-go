@@ -53,28 +53,22 @@ func domainURL(d db.Domain) string {
 
 func appTabs(v AppView) []ui.Tab {
 	b := v.base()
-	if v.App.IsPreview() {
-		// A preview has no variables, storage or tasks of its own.
-		return []ui.Tab{
-			{Key: "overview", Label: "Overview", Href: b},
-			{Key: "deployments", Label: "Deployments", Href: b + "/deployments"},
-			{Key: "logs", Label: "Logs", Href: b + "/logs"},
-			{Key: "metrics", Label: "Metrics", Href: b + "/metrics"},
-			{Key: "terminal", Label: "Terminal", Href: b + "/terminal"},
-			{Key: "settings", Label: "Settings", Href: b + "/settings"},
-		}
+	tabs := []ui.Tab{
+		{Key: "overview", Label: "Overview", Href: b, Icon: "dashboard"},
+		{Key: "deployments", Label: "Deployments", Href: b + "/deployments", Icon: "rocket"},
+		{Key: "logs", Label: "Logs", Href: b + "/logs", Icon: "file"},
+		{Key: "metrics", Label: "Metrics", Href: b + "/metrics", Icon: "chart"},
+		{Key: "terminal", Label: "Terminal", Href: b + "/terminal", Icon: "terminal"},
 	}
-	return []ui.Tab{
-		{Key: "overview", Label: "Overview", Href: b},
-		{Key: "deployments", Label: "Deployments", Href: b + "/deployments"},
-		{Key: "logs", Label: "Logs", Href: b + "/logs"},
-		{Key: "metrics", Label: "Metrics", Href: b + "/metrics"},
-			{Key: "terminal", Label: "Terminal", Href: b + "/terminal"},
-		{Key: "environment", Label: "Environment", Href: b + "/environment"},
-		{Key: "storage", Label: "Storage", Href: b + "/storage"},
-		{Key: "tasks", Label: "Tasks", Href: b + "/tasks"},
-		{Key: "settings", Label: "Settings", Href: b + "/settings"},
+	// A preview has no variables, storage or tasks of its own.
+	if !v.App.IsPreview() {
+		tabs = append(tabs,
+			ui.Tab{Key: "environment", Label: "Environment", Href: b + "/environment", Icon: "variable"},
+			ui.Tab{Key: "storage", Label: "Storage", Href: b + "/storage", Icon: "drive"},
+			ui.Tab{Key: "tasks", Label: "Tasks", Href: b + "/tasks", Icon: "clock"},
+		)
 	}
+	return append(tabs, ui.Tab{Key: "settings", Label: "Settings", Href: b + "/settings", Icon: "settings"})
 }
 
 // appSourceLine says in one line where an app's image comes from.
@@ -151,23 +145,6 @@ templ appFrame(s ui.Shell, v AppView, tab string) {
 	}
 }
 
-// AppRows lists an environment's apps on the project page.
-templ AppRows(apps []db.App) {
-	<div class="card rows">
-		for _, a := range apps {
-			<a class="row rail" data-state={ a.Status } href={ templ.SafeURL("/apps/" + a.ID) }>
-				@ui.Icon("box", "text-ink-mute")
-				<div class="min-w-0 flex-1">
-					<p class="truncate font-semibold">{ a.Name }</p>
-					<p class="fact truncate text-ink-mute">{ appSourceLine(a) }</p>
-				</div>
-				@ui.StatusPill(a.Status)
-				@ui.Icon("chevron-right", "text-ink-mute")
-			</a>
-		}
-	</div>
-}
-
 // AccessOption is one way to reach a repository in the Git forms.
 type AccessOption struct {
 	Value string // "public", "source:<id>" or "key:<id>"
@@ -193,14 +170,6 @@ var buildPackOptions = []ui.Option{
 	{Value: "static", Label: "Static site"},
 	{Value: "nixpacks", Label: "Nixpacks (no Dockerfile needed)"},
 	{Value: "railpack", Label: "Railpack (no Dockerfile needed)"},
-}
-
-func newAppTabs(p db.Project, env db.Environment) []ui.Tab {
-	base := "/projects/" + p.ID + "/apps/new?env=" + env.ID
-	return []ui.Tab{
-		{Key: "image", Label: "Docker image", Href: base},
-		{Key: "git", Label: "Git repository", Href: base + "&source=git"},
-	}
 }
 
 // gitSourceFields are the fields describing a repository and how to build
@@ -266,12 +235,14 @@ func appAccess(app db.App) string {
 
 templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedDomain, source string, choices GitChoices, serverList []db.Server) {
 	@ui.Layout(s) {
-		@ui.PageHeader("New app", "Runs in "+env.Name+".")
-		@ui.Tabs(newAppTabs(p, env), source)
+		if source == db.SourceGit {
+			@ui.PageHeader("New app from a Git repository", "Runs in "+env.Name+".")
+		} else {
+			@ui.PageHeader("New app from a Docker image", "Runs in "+env.Name+".")
+		}
 		<div class="max-w-xl">
-			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/apps") }>
+			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/e/" + env.ID + "/apps") }>
 				@ui.CSRF(s.CSRF)
-				<input type="hidden" name="env" value={ env.ID }/>
 				<input type="hidden" name="source" value={ source }/>
 				<div class="card-body grid gap-4">
 					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens. Other containers in this environment reach the app by this name.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: true, Placeholder: "web", Attrs: templ.Attributes{"maxlength": "32"}})
@@ -288,8 +259,8 @@ templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedD
 					}
 				</div>
 				<div class="card-foot">
-					@ui.LinkButton("/projects/"+p.ID+"?env="+env.ID, ui.ButtonProps{}) {
-						Cancel
+					@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{}) {
+						Back
 					}
 					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
 						Create app

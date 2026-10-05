@@ -24,12 +24,12 @@ func (v ServiceView) base() string { return "/services/" + v.Service.ID }
 func serviceTabs(v ServiceView) []ui.Tab {
 	b := v.base()
 	return []ui.Tab{
-		{Key: "overview", Label: "Overview", Href: b},
-		{Key: "logs", Label: "Logs", Href: b + "/logs"},
-		{Key: "metrics", Label: "Metrics", Href: b + "/metrics"},
-		{Key: "terminal", Label: "Terminal", Href: b + "/terminal"},
-		{Key: "compose", Label: "Compose file", Href: b + "/compose"},
-		{Key: "settings", Label: "Settings", Href: b + "/settings"},
+		{Key: "overview", Label: "Overview", Href: b, Icon: "dashboard"},
+		{Key: "logs", Label: "Logs", Href: b + "/logs", Icon: "file"},
+		{Key: "metrics", Label: "Metrics", Href: b + "/metrics", Icon: "chart"},
+		{Key: "terminal", Label: "Terminal", Href: b + "/terminal", Icon: "terminal"},
+		{Key: "compose", Label: "Compose file", Href: b + "/compose", Icon: "code"},
+		{Key: "settings", Label: "Settings", Href: b + "/settings", Icon: "settings"},
 	}
 }
 
@@ -111,70 +111,6 @@ templ serviceFrame(s ui.Shell, v ServiceView, tab string) {
 	}
 }
 
-// ServiceRows lists an environment's services on the project page.
-templ ServiceRows(list []db.Service) {
-	<div class="card rows">
-		for _, s := range list {
-			<a class="row rail" data-state={ serviceState(s) } href={ templ.SafeURL("/services/" + s.ID) }>
-				@ui.Icon("layers", "text-ink-mute")
-				<div class="min-w-0 flex-1">
-					<p class="truncate font-semibold">{ s.Name }</p>
-					<p class="truncate text-ink-mute">{ templateName(s.Template) }</p>
-				</div>
-				@ui.StatusPill(serviceState(s))
-				@ui.Icon("chevron-right", "text-ink-mute")
-			</a>
-		}
-	</div>
-}
-
-func newServiceURL(p db.Project, env db.Environment, template string) string {
-	return "/projects/" + p.ID + "/services/new?env=" + env.ID + "&template=" + template
-}
-
-// ServiceCatalogue is the first step of creating a service: what to run.
-templ ServiceCatalogue(s ui.Shell, p db.Project, env db.Environment, templates []catalog.ServiceTemplate) {
-	@ui.Layout(s) {
-		@ui.PageHeader("New service", "Runs in "+env.Name+". A service is one or more containers described by a Docker Compose file.")
-		<div class="grid max-w-3xl gap-6">
-			<section class="grid gap-2">
-				<h2 class="section-title">Ready to install</h2>
-				<div class="grid gap-3 sm:grid-cols-2">
-					for _, t := range templates {
-						<a class="card row" href={ templ.SafeURL(newServiceURL(p, env, t.Key)) }>
-							@ui.Icon("layers", "text-ink-mute")
-							<div class="min-w-0 flex-1">
-								<p class="font-semibold">{ t.Name }</p>
-								<p class="muted text-sm">{ t.About }</p>
-							</div>
-							@ui.Icon("chevron-right", "text-ink-mute")
-						</a>
-					}
-				</div>
-			</section>
-			<section class="grid gap-2">
-				<h2 class="section-title">Something else</h2>
-				<a class="card row" href={ templ.SafeURL(newServiceURL(p, env, db.TemplateCustom)) }>
-					@ui.Icon("pencil", "text-ink-mute")
-					<div class="min-w-0 flex-1">
-						<p class="font-semibold">Your own Compose file</p>
-						<p class="muted text-sm">Paste a docker-compose.yml. Templates written for Coolify work as they are.</p>
-					</div>
-					@ui.Icon("chevron-right", "text-ink-mute")
-				</a>
-				<a class="card row" href={ templ.SafeURL(newServiceURL(p, env, db.TemplateGit)) }>
-					@ui.Icon("git-branch", "text-ink-mute")
-					<div class="min-w-0 flex-1">
-						<p class="font-semibold">A Compose file in a Git repository</p>
-						<p class="muted text-sm">The file is read from the repository at every deployment, and may build images from the repository's own Dockerfiles.</p>
-					</div>
-					@ui.Icon("chevron-right", "text-ink-mute")
-				</a>
-			</section>
-		</div>
-	}
-}
-
 const composePlaceholder = `services:
   app:
     image: ghcr.io/you/app:1.4
@@ -223,9 +159,8 @@ templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, 
 			@ui.PageHeader("New "+t.Name+" service", t.About)
 		}
 		<div class="max-w-2xl">
-			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/services") }>
+			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/e/" + env.ID + "/services") }>
 				@ui.CSRF(s.CSRF)
-				<input type="hidden" name="env" value={ env.ID }/>
 				<input type="hidden" name="template" value={ template }/>
 				<div class="card-body grid gap-4">
 					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: true, Value: t.Key, Attrs: templ.Attributes{"maxlength": "32"}})
@@ -266,7 +201,7 @@ templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, 
 					}
 				</div>
 				<div class="card-foot">
-					@ui.LinkButton("/projects/"+p.ID+"/services/new?env="+env.ID, ui.ButtonProps{}) {
+					@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{}) {
 						Back
 					}
 					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {

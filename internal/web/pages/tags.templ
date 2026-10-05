@@ -82,18 +82,7 @@ templ Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, base str
 			</form>
 		}
 		<div class="grid max-w-3xl gap-6">
-			if len(apps) > 0 {
-				<section class="grid gap-2">
-					<h2 class="font-semibold">Apps</h2>
-					@AppRows(apps)
-				</section>
-			}
-			if len(services) > 0 {
-				<section class="grid gap-2">
-					<h2 class="font-semibold">Services</h2>
-					@ServiceRows(services)
-				</section>
-			}
+			@ResourceTiles(Resources{Apps: apps, Services: services})
 			<section class="card">
 				<div class="card-head">
 					<div>

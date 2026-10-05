@@ -1635,9 +1635,9 @@ func TaskRuns(v AppView, t db.Task, runs []db.TaskRun, shown string) templ.Compo
 
 func settingsTabs() []ui.Tab {
 	return []ui.Tab{
-		{Key: "dashboard", Label: "Dashboard", Href: "/settings"},
-		{Key: "storages", Label: "Backup storage", Href: "/settings/storages"},
-		{Key: "notifications", Label: "Notifications", Href: "/settings/notifications"},
+		{Key: "dashboard", Label: "Dashboard", Href: "/settings", Icon: "globe"},
+		{Key: "storages", Label: "Backup storage", Href: "/settings/storages", Icon: "archive"},
+		{Key: "notifications", Label: "Notifications", Href: "/settings/notifications", Icon: "bell"},
 	}
 }
 

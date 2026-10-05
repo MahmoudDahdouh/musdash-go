@@ -701,6 +701,10 @@
     padding: 12px;
     border-radius: var(--radius-md);
   }
+  .tile-compact .tile-head {
+    align-items: flex-start;
+    gap: 8px;
+  }
   .tile-compact .tile-icon {
     width: 20px;
     height: 20px;

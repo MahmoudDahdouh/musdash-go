@@ -49,14 +49,8 @@ func (s *Server) loadService(w http.ResponseWriter, r *http.Request) (pages.Serv
 
 func (s *Server) serviceShell(w http.ResponseWriter, r *http.Request, v pages.ServiceView) ui.Shell {
 	return s.shell(w, r, v.Service.Name, "projects",
-		ui.Crumb{Label: "Projects", Href: "/projects"},
-		ui.Crumb{Label: v.Project.Name, Href: "/projects/" + v.Project.ID + "?env=" + v.Env.ID},
-		ui.Crumb{Label: v.Service.Name},
+		envCrumbs(v.Project, v.Env, resourceCrumb(v.Env, db.KindService, v.Service.ID, v.Service.Name))...,
 	)
-}
-
-func newServiceCrumbs(p db.Project, env db.Environment) []ui.Crumb {
-	return []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New service"}}
 }
 
 // serviceTemplate resolves the template of a new service: a catalogue entry
@@ -84,16 +78,17 @@ func requiredVars(composeText string) []catalog.VarRef {
 }
 
 func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) {
-	p, env, ok := s.newDatabaseTarget(w, r, r.URL.Query().Get("env"))
+	p, env, ok := s.loadProjectEnv(w, r)
 	if !ok {
 		return
 	}
-	shell := s.shell(w, r, "New service", "projects", newServiceCrumbs(p, env)...)
 	key := r.URL.Query().Get("template")
 	if key == "" {
-		s.render(w, r, http.StatusOK, pages.ServiceCatalogue(shell, p, env, catalog.Services()))
+		// The templates are on the page every kind of resource is added from.
+		redirect(w, r, envPath(p.ID, env.ID)+"/new")
 		return
 	}
+	shell := s.shell(w, r, "New service", "projects", newResourceCrumbs(p, env, "Service")...)
 	tpl, known := serviceTemplate(key)
 	if !known {
 		s.notFound(w, r)
@@ -163,7 +158,7 @@ func checkCompose(f *ui.Form, text string) {
 }
 
 func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
-	p, env, ok := s.newDatabaseTarget(w, r, r.PostFormValue("env"))
+	p, env, ok := s.loadProjectEnv(w, r)
 	if !ok {
 		return
 	}
@@ -227,7 +222,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	rerender := func() {
-		shell := s.shell(w, r, "New service", "projects", newServiceCrumbs(p, env)...)
+		shell := s.shell(w, r, "New service", "projects", newResourceCrumbs(p, env, "Service")...)
 		s.render(w, r, http.StatusUnprocessableEntity, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), f, choices, serverList))
 	}
 	if !f.OK() {
@@ -769,5 +764,5 @@ func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) {
 	} else {
 		setFlash(w, r, ui.ToneOK, "Service deleted. Its volumes are still on the server.")
 	}
-	redirect(w, r, "/projects/"+v.Project.ID+"?env="+v.Env.ID)
+	redirect(w, r, envPath(v.Project.ID, v.Env.ID))
 }

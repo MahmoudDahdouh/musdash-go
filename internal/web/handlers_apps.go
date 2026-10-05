@@ -67,15 +67,16 @@ func (s *Server) loadApp(w http.ResponseWriter, r *http.Request) (pages.AppView,
 	return v, true
 }
 
+// appCrumbs is an app's trail. An app is a switcher to what else is in its
+// environment; a preview is listed nowhere but with its parent, so its
+// trail goes through the parent instead.
 func appCrumbs(v pages.AppView) []ui.Crumb {
-	crumbs := []ui.Crumb{
-		{Label: "Projects", Href: "/projects"},
-		{Label: v.Project.Name, Href: "/projects/" + v.Project.ID + "?env=" + v.Env.ID},
-	}
 	if v.Parent != nil {
-		crumbs = append(crumbs, ui.Crumb{Label: v.Parent.Name, Href: "/apps/" + v.Parent.ID})
+		return envCrumbs(v.Project, v.Env,
+			ui.Crumb{Label: v.Parent.Name, Href: "/apps/" + v.Parent.ID, Icon: pages.KindIcon(db.KindApp)},
+			ui.Crumb{Label: v.App.Name})
 	}
-	return append(crumbs, ui.Crumb{Label: v.App.Name})
+	return envCrumbs(v.Project, v.Env, resourceCrumb(v.Env, db.KindApp, v.App.ID, v.App.Name))
 }
 
 func (s *Server) appShell(w http.ResponseWriter, r *http.Request, v pages.AppView) ui.Shell {
@@ -233,21 +234,18 @@ func domainAuth(f *ui.Form, user, password string) (string, string) {
 	return user, string(hash)
 }
 
+// newAppShell frames the New app form.
+func (s *Server) newAppShell(w http.ResponseWriter, r *http.Request, p db.Project, env db.Environment) ui.Shell {
+	return s.shell(w, r, "New app", "projects", envCrumbs(p, env,
+		ui.Crumb{Label: "Add resource", Href: envPath(p.ID, env.ID) + "/new"}, ui.Crumb{Label: "App"})...)
+}
+
 func (s *Server) appNew(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.loadProject(w, r)
+	p, env, ok := s.loadProjectEnv(w, r)
 	if !ok {
 		return
 	}
 	teamID := sessionFrom(r).TeamID
-	env, err := s.DB.Environment(r.Context(), teamID, r.URL.Query().Get("env"))
-	if errors.Is(err, db.ErrNotFound) || (err == nil && env.ProjectID != p.ID) {
-		s.notFound(w, r)
-		return
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	serverList, err := s.serverChoices(r.Context(), teamID)
 	if err != nil {
 		s.fail(w, r, err)
@@ -263,26 +261,21 @@ func (s *Server) appNew(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	crumbs := []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
-	s.render(w, r, http.StatusOK, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, ui.Form{}, generatedDomain(server), src, choices, serverList))
+	// The Add resource page may have asked for a way into the repository.
+	var f ui.Form
+	if access := preferredAccess(r, choices); access != "" {
+		f.Set("access", access)
+	}
+	s.render(w, r, http.StatusOK, pages.AppNew(s.newAppShell(w, r, p, env), p, env, f, generatedDomain(server), src, choices, serverList))
 }
 
 func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.loadProject(w, r)
+	p, env, ok := s.loadProjectEnv(w, r)
 	if !ok {
 		return
 	}
 	ctx := r.Context()
 	teamID := sessionFrom(r).TeamID
-	env, err := s.DB.Environment(ctx, teamID, r.PostFormValue("env"))
-	if errors.Is(err, db.ErrNotFound) || (err == nil && env.ProjectID != p.ID) {
-		s.notFound(w, r)
-		return
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	serverList, err := s.serverChoices(ctx, teamID)
 	if err != nil {
 		s.fail(w, r, err)
@@ -336,8 +329,7 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rerender := func(status int) {
-		crumbs := []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: p.Name, Href: "/projects/" + p.ID + "?env=" + env.ID}, {Label: "New app"}}
-		s.render(w, r, status, pages.AppNew(s.shell(w, r, "New app", "projects", crumbs...), p, env, f, rawDomain, src, choices, serverList))
+		s.render(w, r, status, pages.AppNew(s.newAppShell(w, r, p, env), p, env, f, rawDomain, src, choices, serverList))
 	}
 	if !f.OK() {
 		rerender(http.StatusUnprocessableEntity)
@@ -1002,5 +994,5 @@ func (s *Server) appDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "App deleted.")
-	redirect(w, r, "/projects/"+v.Project.ID+"?env="+v.Env.ID)
+	redirect(w, r, envPath(v.Project.ID, v.Env.ID))
 }

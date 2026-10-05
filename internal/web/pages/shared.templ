@@ -27,8 +27,8 @@ func (v SharedView) example() string { return "{{" + v.Scope + ".NAME}}" }
 // TeamTabs are the sections of the Team page.
 func TeamTabs() []ui.Tab {
 	return []ui.Tab{
-		{Key: "members", Label: "Members", Href: "/team"},
-		{Key: "variables", Label: "Shared variables", Href: "/team/variables"},
+		{Key: "members", Label: "Members", Href: "/team", Icon: "users"},
+		{Key: "variables", Label: "Shared variables", Href: "/team/variables", Icon: "variable"},
 	}
 }
 

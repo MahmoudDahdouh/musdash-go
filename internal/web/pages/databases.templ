@@ -21,12 +21,12 @@ func (v DatabaseView) base() string { return "/databases/" + v.DB.ID }
 func databaseTabs(v DatabaseView) []ui.Tab {
 	b := v.base()
 	return []ui.Tab{
-		{Key: "overview", Label: "Overview", Href: b},
-		{Key: "logs", Label: "Logs", Href: b + "/logs"},
-		{Key: "metrics", Label: "Metrics", Href: b + "/metrics"},
-		{Key: "terminal", Label: "Terminal", Href: b + "/terminal"},
-		{Key: "backups", Label: "Backups", Href: b + "/backups"},
-		{Key: "settings", Label: "Settings", Href: b + "/settings"},
+		{Key: "overview", Label: "Overview", Href: b, Icon: "dashboard"},
+		{Key: "logs", Label: "Logs", Href: b + "/logs", Icon: "file"},
+		{Key: "metrics", Label: "Metrics", Href: b + "/metrics", Icon: "chart"},
+		{Key: "terminal", Label: "Terminal", Href: b + "/terminal", Icon: "terminal"},
+		{Key: "backups", Label: "Backups", Href: b + "/backups", Icon: "archive"},
+		{Key: "settings", Label: "Settings", Href: b + "/settings", Icon: "settings"},
 	}
 }
 
@@ -111,53 +111,14 @@ templ databaseFrame(s ui.Shell, v DatabaseView, tab string) {
 	}
 }
 
-// DatabaseRows lists an environment's databases on the project page.
-templ DatabaseRows(list []db.Database) {
-	<div class="card rows">
-		for _, m := range list {
-			<a class="row rail" data-state={ databaseState(m) } href={ templ.SafeURL("/databases/" + m.ID) }>
-				@ui.Icon("database", "text-ink-mute")
-				<div class="min-w-0 flex-1">
-					<p class="truncate font-semibold">{ m.Name }</p>
-					<p class="truncate text-ink-mute">{ engineLabel(m.Engine) } <span class="fact">{ m.Image }</span></p>
-				</div>
-				if m.PublicPort > 0 {
-					@ui.Badge("Public", ui.ToneWarn)
-				}
-				@ui.StatusPill(databaseState(m))
-				@ui.Icon("chevron-right", "text-ink-mute")
-			</a>
-		}
-	</div>
-}
-
-// DatabaseEngines is the first step of creating a database: which engine.
-templ DatabaseEngines(s ui.Shell, p db.Project, env db.Environment, engines []catalog.DBTemplate) {
-	@ui.Layout(s) {
-		@ui.PageHeader("New database", "Runs in "+env.Name+". Choose an engine.")
-		<div class="grid max-w-3xl gap-3 sm:grid-cols-2">
-			for _, t := range engines {
-				<a class="card row" href={ templ.SafeURL("/projects/" + p.ID + "/databases/new?env=" + env.ID + "&engine=" + t.Engine) }>
-					@ui.Icon("database", "text-ink-mute")
-					<div class="min-w-0 flex-1">
-						<p class="font-semibold">{ t.Label }</p>
-						<p class="muted text-sm">{ t.About }</p>
-					</div>
-					@ui.Icon("chevron-right", "text-ink-mute")
-				</a>
-			}
-		</div>
-	}
-}
-
-// DatabaseNew is the second step: a name, and the choices with a default.
+// DatabaseNew is the form for a database of one engine: a name, and the
+// choices with a default.
 templ DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTemplate, f ui.Form, serverList []db.Server) {
 	@ui.Layout(s) {
 		@ui.PageHeader("New "+t.Label+" database", "Runs in "+env.Name+".")
 		<div class="max-w-xl">
-			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/databases") }>
+			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/e/" + env.ID + "/databases") }>
 				@ui.CSRF(s.CSRF)
-				<input type="hidden" name="env" value={ env.ID }/>
 				<input type="hidden" name="engine" value={ t.Engine }/>
 				<div class="card-body grid gap-4">
 					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens. Apps in this environment connect to the database by this name.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: true, Value: t.Engine, Attrs: templ.Attributes{"maxlength": "32"}})
@@ -174,7 +135,7 @@ templ DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTemp
 					</div>
 				</div>
 				<div class="card-foot">
-					@ui.LinkButton("/projects/"+p.ID+"/databases/new?env="+env.ID, ui.ButtonProps{}) {
+					@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{}) {
 						Back
 					}
 					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {

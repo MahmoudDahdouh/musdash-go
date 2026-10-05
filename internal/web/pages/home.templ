@@ -240,12 +240,13 @@ templ Home(s ui.Shell, v HomeView) {
 	@ui.Layout(s) {
 		@ui.PageHeader("Home", "What needs attention, what was done lately, and where it all runs.") {
 			if v.Totals.Projects > 0 {
-				@ui.LinkButton("/projects/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-project"}) {
 					New project
 				}
 			}
 		}
 		@HomeLive(v)
+		@NewProjectDialog(s.CSRF, ui.Form{})
 	}
 }
 
@@ -290,7 +291,7 @@ templ homeStart(v HomeView) {
 		<ol class="rows steps">
 			@homeStep(v.Totals.Projects > 0, "Create a project", "A project groups the apps, databases and services of one product.") {
 				if v.Totals.Projects == 0 {
-					@ui.LinkButton("/projects/new", ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus"}) {
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: "new-project"}) {
 						New project
 					}
 				}

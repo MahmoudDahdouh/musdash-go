@@ -459,7 +459,7 @@ func TestOtherTeamsOperationsAreNotFound(t *testing.T) {
 			t.Errorf("%s lists another team's entry", page)
 		}
 	}
-	token := a.csrf("/projects/new")
+	token := a.csrf("/projects")
 	for _, path := range []string{
 		"/databases/" + theirDB.ID + "/backups",
 		"/databases/" + theirDB.ID + "/backups/schedule",

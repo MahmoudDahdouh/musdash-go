@@ -46,7 +46,7 @@ func (s *Server) sharedProject(w http.ResponseWriter, r *http.Request) (sharedTa
 	}
 	return sharedTarget{
 		scope: db.ScopeProject, id: p.ID, active: "projects",
-		crumbs: append(projectCrumbs(p)[:1:1], ui.Crumb{Label: p.Name, Href: "/projects/" + p.ID + "/settings"}, ui.Crumb{Label: "Shared variables"}),
+		crumbs: projectCrumbs(p, ui.Crumb{Label: "Settings", Href: "/projects/" + p.ID + "/settings"}, ui.Crumb{Label: "Shared variables"}),
 		view: pages.SharedView{
 			Title: "Variables of " + p.Name, Intro: "Shared by everything in this project, in every environment.",
 			Scope: db.ScopeProject, Action: "/projects/" + p.ID + "/variables", CanEdit: true,
@@ -71,7 +71,7 @@ func (s *Server) sharedEnvironment(w http.ResponseWriter, r *http.Request) (shar
 	}
 	return sharedTarget{
 		scope: db.ScopeEnvironment, id: env.ID, active: "projects",
-		crumbs: append(projectCrumbs(p)[:1:1], ui.Crumb{Label: p.Name, Href: "/projects/" + p.ID + "/settings"}, ui.Crumb{Label: env.Name + " variables"}),
+		crumbs: projectCrumbs(p, ui.Crumb{Label: "Settings", Href: "/projects/" + p.ID + "/settings"}, ui.Crumb{Label: env.Name + " variables"}),
 		view: pages.SharedView{
 			Title: "Variables of " + env.Name, Intro: "Shared by everything in the " + env.Name + " environment of " + p.Name + ".",
 			Scope: db.ScopeEnvironment, Action: "/environments/" + env.ID + "/variables", CanEdit: true,

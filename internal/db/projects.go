@@ -21,8 +21,12 @@ type Project struct {
 	Name        string
 	Description string
 	CreatedAt   int64
-	// EnvCount is filled by ListProjects only.
-	EnvCount int
+	// EnvCount and the three counts of what is in the project (previews
+	// left out, as everywhere they are listed) are filled by ListProjects only.
+	EnvCount  int
+	Apps      int
+	Databases int
+	Services  int
 }
 
 type Environment struct {
@@ -53,7 +57,10 @@ func (d *DB) CreateProject(ctx context.Context, teamID, name, description string
 func (d *DB) ListProjects(ctx context.Context, teamID string) ([]Project, error) {
 	rows, err := d.QueryContext(ctx, `
 		SELECT p.id, p.team_id, p.name, p.description, p.created_at,
-		       (SELECT count(*) FROM environments e WHERE e.project_id = p.id)
+		       (SELECT count(*) FROM environments e WHERE e.project_id = p.id),
+		       (SELECT count(*) FROM apps a JOIN environments e ON e.id = a.environment_id WHERE e.project_id = p.id AND a.preview_of = ''),
+		       (SELECT count(*) FROM databases m JOIN environments e ON e.id = m.environment_id WHERE e.project_id = p.id),
+		       (SELECT count(*) FROM services v JOIN environments e ON e.id = v.environment_id WHERE e.project_id = p.id)
 		FROM projects p WHERE p.team_id = ? ORDER BY p.name COLLATE NOCASE, p.id`, teamID)
 	if err != nil {
 		return nil, err
@@ -62,7 +69,7 @@ func (d *DB) ListProjects(ctx context.Context, teamID string) ([]Project, error)
 	var out []Project
 	for rows.Next() {
 		var p Project
-		if err := rows.Scan(&p.ID, &p.TeamID, &p.Name, &p.Description, &p.CreatedAt, &p.EnvCount); err != nil {
+		if err := rows.Scan(&p.ID, &p.TeamID, &p.Name, &p.Description, &p.CreatedAt, &p.EnvCount, &p.Apps, &p.Databases, &p.Services); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

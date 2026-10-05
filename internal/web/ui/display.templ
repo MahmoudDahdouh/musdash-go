@@ -8,14 +8,14 @@ import (
 // PageHeader is the title row at the top of a page. Its children are the
 // page's actions, shown on the right.
 templ PageHeader(title, description string) {
-	<header class="mb-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-		<div class="min-w-0">
+	<header class="mb-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-3 sm:flex-nowrap">
+		<div class="min-w-0 flex-1">
 			<h1 class="text-xl font-semibold tracking-tight">{ title }</h1>
 			if description != "" {
-				<p class="muted mt-0.5">{ description }</p>
+				<p class="muted mt-0.5 max-w-2xl">{ description }</p>
 			}
 		</div>
-		<div class="flex flex-wrap items-center gap-2">
+		<div class="flex flex-none flex-wrap items-center gap-2">
 			{ children... }
 		</div>
 	</header>
@@ -103,7 +103,17 @@ templ switcher(id string, c Crumb) {
 // marks where the person is now. Its children come after the label, on the
 // right: a state, a count.
 templ SwitchOption(href, icon, label string, current bool) {
-	<a class="menu-item" role="option" href={ templ.SafeURL(href) } aria-selected={ strconv.FormatBool(current) } tabindex="-1" data-search={ label }>
+	<a
+		class="menu-item"
+		role="option"
+		href={ templ.SafeURL(href) }
+		aria-selected={ strconv.FormatBool(current) }
+		if current {
+			aria-current="page"
+		}
+		tabindex="-1"
+		data-search={ label }
+	>
 		@Icon("check", "menu-tick")
 		if icon != "" {
 			@Icon(icon, "text-ink-mute")
@@ -171,6 +181,9 @@ templ Tiles(label string, compact bool) {
 templ Tile(p TileProps) {
 	<li
 		class={ "tile", templ.KV("tile-compact", p.Compact) }
+		if p.State != "" {
+			data-state={ p.State }
+		}
 		if p.Search != "" {
 			data-search={ p.Search }
 		}
@@ -179,7 +192,7 @@ templ Tile(p TileProps) {
 			<span class="tile-icon">
 				@Icon(p.Icon)
 			</span>
-			<h3 class="tile-title flex-1 truncate">
+			<h3 class={ "tile-title flex-1", templ.KV("truncate", !p.Compact) }>
 				<a class="tile-link" href={ templ.SafeURL(p.Href) }>{ p.Title }</a>
 			</h3>
 			if p.State != "" {
@@ -198,12 +211,21 @@ templ Tile(p TileProps) {
 }
 
 // Meta is one figure in a tile's bottom row: an icon and a short text.
-// title says what the figure counts, for a pointer and a screen reader.
+// title says what a bare figure counts, for a pointer and a screen reader;
+// a text that says it itself has none.
 templ Meta(icon, text, title string) {
-	<span title={ title }>
-		@Icon(icon)
+	<span
+		if title != "" {
+			title={ title }
+		}
+	>
+		if icon != "" {
+			@Icon(icon)
+		}
 		<span class="truncate">{ text }</span>
-		<span class="sr-only">{ title }</span>
+		if title != "" {
+			<span class="sr-only">{ title }</span>
+		}
 	</span>
 }
 
