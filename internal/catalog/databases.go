@@ -100,9 +100,16 @@ func (t DBTemplate) URL(c Creds, host string, port int) string {
 // the server's own inside the container. The image's entry point is then
 // run as usual, which drops from root to the engine's own user. The clients
 // read the password from REDISCLI_AUTH.
+//
+// The file is removed before it is written, because Docker starts the same
+// container again after a crash or a reboot, and the file of the first
+// start is then there and belongs to the engine's user: a kernel with
+// fs.protected_regular set (Ubuntu's default) lets nobody, root included,
+// open somebody else's file for writing in a directory like /tmp. The
+// container would exit and be started again for ever.
 const (
-	redisCommand = `umask 077 && printf 'requirepass %s\nappendonly yes\n' "$REDIS_PASSWORD" > /tmp/musdash.conf && chown redis /tmp/musdash.conf && exec docker-entrypoint.sh redis-server /tmp/musdash.conf`
-	keydbCommand = `umask 077 && printf 'requirepass %s\nappendonly yes\n' "$REDIS_PASSWORD" > /tmp/musdash.conf && chown keydb /tmp/musdash.conf && exec docker-entrypoint.sh keydb-server /tmp/musdash.conf`
+	redisCommand = `umask 077 && rm -f /tmp/musdash.conf && printf 'requirepass %s\nappendonly yes\n' "$REDIS_PASSWORD" > /tmp/musdash.conf && chown redis /tmp/musdash.conf && exec docker-entrypoint.sh redis-server /tmp/musdash.conf`
+	keydbCommand = `umask 077 && rm -f /tmp/musdash.conf && printf 'requirepass %s\nappendonly yes\n' "$REDIS_PASSWORD" > /tmp/musdash.conf && chown keydb /tmp/musdash.conf && exec docker-entrypoint.sh keydb-server /tmp/musdash.conf`
 	redisURL     = "redis://default:{{.Pass}}@{{.Host}}:{{.Port}}/0"
 	// mongoWithPassword writes the root password to a file only the
 	// container's user can read and leaves its path in $f. printf is the

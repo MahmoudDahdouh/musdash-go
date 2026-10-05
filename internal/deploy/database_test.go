@@ -166,7 +166,7 @@ func TestDatabasePublicPortAndCommand(t *testing.T) {
 	}
 	// The server is given its password in a file its own shell writes, and
 	// started through the image's entry point so it does not run as root.
-	if !strings.Contains(run, ` redis:7-alpine sh -c umask 077 && printf 'requirepass %s`) || !strings.HasSuffix(run, `exec docker-entrypoint.sh redis-server /tmp/musdash.conf`) {
+	if !strings.Contains(run, ` redis:7-alpine sh -c umask 077 && rm -f /tmp/musdash.conf && printf 'requirepass %s`) || !strings.HasSuffix(run, `exec docker-entrypoint.sh redis-server /tmp/musdash.conf`) {
 		t.Errorf("command:\n%s", run)
 	}
 	if strings.Contains(run, "--requirepass") {
@@ -770,6 +770,21 @@ func TestEveryEngineStartsWithDocker(t *testing.T) {
 			top, _ := local.Output(ctx, runner.Cmd{Name: "docker", Args: []string{"top", DatabaseContainer(m.ID), "-eo", "pid,user,args"}})
 			if strings.Contains(string(top), testDBPassword) {
 				t.Errorf("the password is in a process's arguments:\n%s", top)
+			}
+			// Docker starts the same container again after a crash or a
+			// reboot, and the engine must come up from what its first start
+			// left behind. (Redis and KeyDB did not, on a kernel with
+			// fs.protected_regular set, which Docker Desktop's is not: there
+			// this passed without the fix too.)
+			creds, err := e.d.databaseCreds(got)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := local.Run(ctx, runner.Cmd{Name: "docker", Args: []string{"restart", DatabaseContainer(m.ID)}}); err != nil {
+				t.Fatal(err)
+			}
+			if err := e.d.waitDatabase(ctx, dk, DatabaseContainer(m.ID), tpl.RenderHealth(creds)); err != nil {
+				t.Fatalf("after a restart of the same container: %v", err)
 			}
 			// A second start is a restart onto the existing data.
 			if got = e.startDBWithin(got, 6*time.Minute); got.Status != db.AppRunning {
