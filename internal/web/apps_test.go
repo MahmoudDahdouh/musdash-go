@@ -136,7 +136,7 @@ func TestAppFormValidation(t *testing.T) {
 		want  string
 	}{
 		{url.Values{"name": {"Not Valid"}}, appNameRule},
-		{url.Values{"name": {"web"}}, "already has an app or database called web"},
+		{url.Values{"name": {"web"}}, "already has an app, database or service called web"},
 		{url.Values{"image": {"--privileged"}}, "Enter an image name"},
 		{url.Values{"image": {"nginx; rm -rf /"}}, "Enter an image name"},
 		{url.Values{"port": {"0"}}, "between 1 and 65535"},

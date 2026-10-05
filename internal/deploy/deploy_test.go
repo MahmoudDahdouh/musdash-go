@@ -169,7 +169,12 @@ func (e *env) routes() proxy.File {
 	e.t.Helper()
 	raw, _, ok := e.fake.File(e.cfg.RoutesPath())
 	if !ok {
-		return proxy.File{}
+		// A test against the real Docker writes it to disk.
+		onDisk, err := os.ReadFile(e.cfg.RoutesPath())
+		if err != nil {
+			return proxy.File{}
+		}
+		raw = string(onDisk)
 	}
 	var f proxy.File
 	if err := json.Unmarshal([]byte(raw), &f); err != nil {
@@ -734,7 +739,7 @@ func TestStopThatFailsCanBeRunAgain(t *testing.T) {
 		t.Fatal("the route must be withdrawn even though the container could not be stopped")
 	}
 	// A "die" event for a stopped app must not flip it to "exited".
-	e.d.applyEvent(context.Background(), []byte(`{"Action":"die","Actor":{"Attributes":{"musdash.kind":"app","musdash.resource":"`+e.app.ID+`","name":"`+container+`"}}}`))
+	e.d.applyEvent(context.Background(), docker.Client{R: e.fake}, []byte(`{"Action":"die","Actor":{"Attributes":{"musdash.kind":"app","musdash.resource":"`+e.app.ID+`","name":"`+container+`"}}}`))
 	if got := e.reload().Status; got != db.AppStopped {
 		t.Fatalf("status %s", got)
 	}
@@ -943,26 +948,26 @@ func TestMonitorEvents(t *testing.T) {
 		return []byte(`{"Action":"` + action + `","Actor":{"Attributes":{"musdash.kind":"app","musdash.resource":"` + e.app.ID + `","name":"` + name + `"}}}`)
 	}
 
-	e.d.applyEvent(ctx, ev("die", "musdash-"+e.app.ID+"-olddeploy"))
+	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("die", "musdash-"+e.app.ID+"-olddeploy"))
 	if got := e.reload().Status; got != db.AppRunning {
 		t.Fatalf("an old container's exit changed the status to %s", got)
 	}
-	e.d.applyEvent(ctx, ev("die", container))
+	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("die", container))
 	if got := e.reload().Status; got != db.AppExited {
 		t.Fatalf("status %s after the serving container died", got)
 	}
-	e.d.applyEvent(ctx, ev("start", container))
+	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("start", container))
 	if got := e.reload().Status; got != db.AppRunning {
 		t.Fatalf("status %s after Docker restarted the container", got)
 	}
 
 	e.db.SetAppStatus(ctx, e.app.ID, db.AppDeploying)
-	e.d.applyEvent(ctx, ev("die", container))
+	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("die", container))
 	if got := e.reload().Status; got != db.AppDeploying {
 		t.Fatalf("an event overwrote a deployment in progress: %s", got)
 	}
-	e.d.applyEvent(ctx, []byte("not json"))
-	e.d.applyEvent(ctx, ev("exec_create: sh", container))
+	e.d.applyEvent(ctx, docker.Client{R: e.fake}, []byte("not json"))
+	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("exec_create: sh", container))
 }
 
 func TestReconcile(t *testing.T) {

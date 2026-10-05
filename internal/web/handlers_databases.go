@@ -148,7 +148,7 @@ func (s *Server) databaseCreate(w http.ResponseWriter, r *http.Request) {
 		m, err = s.DB.CreateDatabase(ctx, teamID, m)
 		switch {
 		case errors.Is(err, db.ErrNameTaken), db.IsUnique(err):
-			f.Fail("name", "This environment already has an app or database called "+name+".")
+			f.Fail("name", "This environment already has an app, database or service called "+name+".")
 		case errors.Is(err, db.ErrNoFreePort):
 			f.Fail("public", "No public port is free on this server. Create the database without one and choose a port in its settings.")
 		case err != nil:
@@ -221,6 +221,7 @@ func (s *Server) databaseStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	refreshWhenSettled(w, r, m.Status)
 	s.render(w, r, http.StatusOK, pages.DatabaseHeader(sessionFrom(r).CSRFToken, m))
 }
 

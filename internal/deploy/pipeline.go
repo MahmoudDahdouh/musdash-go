@@ -63,6 +63,9 @@ type Deployer struct {
 	// initialises the data directory, and a stop must flush it.
 	dbStartTimeout time.Duration
 	dbStopGrace    time.Duration
+	// How long a service's stack may take to come up, images already
+	// pulled.
+	serviceStartTimeout time.Duration
 	// A clone and a build each get this long before they are stopped.
 	cloneTimeout time.Duration
 	buildTimeout time.Duration
@@ -99,17 +102,18 @@ func (d *Deployer) lockFor(appID string) *sync.Mutex {
 func New(d *db.DB, box *secret.Box, q *jobs.Queue, r Runners, cfg *config.Config, log *slog.Logger, instanceTarget string) *Deployer {
 	return &Deployer{
 		DB: d, Box: box, Queue: q, Runners: r, Cfg: cfg, Log: log,
-		Probe:          newLocalProbe(),
-		Tokens:         source.NewGitHub(),
-		InstanceTarget: instanceTarget,
-		healthEvery:    time.Second,
-		drain:          3 * time.Second,
-		stopGrace:      30 * time.Second,
-		pollWait:       4 * time.Second,
-		dbStartTimeout: 5 * time.Minute,
-		dbStopGrace:    60 * time.Second,
-		cloneTimeout:   10 * time.Minute,
-		buildTimeout:   30 * time.Minute,
+		Probe:               newLocalProbe(),
+		Tokens:              source.NewGitHub(),
+		InstanceTarget:      instanceTarget,
+		healthEvery:         time.Second,
+		drain:               3 * time.Second,
+		stopGrace:           30 * time.Second,
+		pollWait:            4 * time.Second,
+		dbStartTimeout:      5 * time.Minute,
+		dbStopGrace:         60 * time.Second,
+		serviceStartTimeout: 10 * time.Minute,
+		cloneTimeout:        10 * time.Minute,
+		buildTimeout:        30 * time.Minute,
 	}
 }
 
@@ -117,6 +121,7 @@ func New(d *db.DB, box *secret.Box, q *jobs.Queue, r Runners, cfg *config.Config
 func (d *Deployer) Register() {
 	d.Queue.Register(JobDeploy, d.runJob)
 	d.Queue.Register(JobDatabase, d.runDatabaseJob)
+	d.Queue.Register(JobService, d.runServiceJob)
 }
 
 type payload struct {

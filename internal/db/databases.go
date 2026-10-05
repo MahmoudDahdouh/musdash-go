@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 )
@@ -50,15 +51,37 @@ func scanDatabase(row interface{ Scan(...any) error }) (Database, error) {
 	return m, notFound(err)
 }
 
-// nameTaken reports whether an app or database in the environment already
-// uses the name. except is the id of the resource being renamed, if any.
+// nameTaken reports whether an app, database or service in the environment
+// already uses the name. except is the id of the resource being renamed, if any.
 func nameTaken(ctx context.Context, tx *sql.Tx, environmentID, name, except string) (bool, error) {
 	var n int
 	err := tx.QueryRowContext(ctx, `SELECT
 		(SELECT count(*) FROM apps WHERE environment_id = ? AND name = ? AND id <> ?) +
-		(SELECT count(*) FROM databases WHERE environment_id = ? AND name = ? AND id <> ?)`,
-		environmentID, name, except, environmentID, name, except).Scan(&n)
-	return n > 0, err
+		(SELECT count(*) FROM databases WHERE environment_id = ? AND name = ? AND id <> ?) +
+		(SELECT count(*) FROM services WHERE environment_id = ? AND name = ? AND id <> ?)`,
+		environmentID, name, except, environmentID, name, except, environmentID, name, except).Scan(&n)
+	if err != nil || n > 0 {
+		return n > 0, err
+	}
+	// A stack that joined the environment's network answers there to the
+	// names of its Compose services too.
+	rows, err := tx.QueryContext(ctx, `SELECT members FROM services WHERE environment_id = ? AND connect_env = 1 AND id <> ?`, environmentID, except)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var members string
+		if err := rows.Scan(&members); err != nil {
+			return false, err
+		}
+		for _, m := range strings.Split(members, ",") {
+			if m == name {
+				return true, nil
+			}
+		}
+	}
+	return false, rows.Err()
 }
 
 // Public ports musdash hands out to databases that are made public without

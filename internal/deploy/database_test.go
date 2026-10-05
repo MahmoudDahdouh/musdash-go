@@ -375,7 +375,7 @@ func TestStopAndDestroyDatabase(t *testing.T) {
 		t.Fatalf("after stop: %+v", got)
 	}
 	// A "die" event for a database stopped on purpose is not a crash.
-	e.d.applyEvent(ctx, []byte(`{"Action":"die","Actor":{"Attributes":{"musdash.kind":"database","musdash.resource":"`+keep.ID+`","name":"`+DatabaseContainer(keep.ID)+`"}}}`))
+	e.d.applyEvent(ctx, docker.Client{R: e.fake}, []byte(`{"Action":"die","Actor":{"Attributes":{"musdash.kind":"database","musdash.resource":"`+keep.ID+`","name":"`+DatabaseContainer(keep.ID)+`"}}}`))
 	if got, _ := e.db.DatabaseByID(ctx, keep.ID); got.Status != db.AppStopped {
 		t.Fatalf("status %s", got.Status)
 	}
@@ -413,11 +413,11 @@ func TestDatabaseEventsAndReconcile(t *testing.T) {
 	ev := func(action string) []byte {
 		return []byte(`{"Action":"` + action + `","Actor":{"Attributes":{"musdash.kind":"database","musdash.resource":"` + m.ID + `","name":"` + container + `"}}}`)
 	}
-	e.d.applyEvent(ctx, ev("die"))
+	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("die"))
 	if got, _ := e.db.DatabaseByID(ctx, m.ID); got.Status != db.AppExited {
 		t.Fatalf("status %s after the container died", got.Status)
 	}
-	e.d.applyEvent(ctx, ev("start"))
+	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("start"))
 	if got, _ := e.db.DatabaseByID(ctx, m.ID); got.Status != db.AppRunning {
 		t.Fatalf("status %s after Docker restarted it", got.Status)
 	}

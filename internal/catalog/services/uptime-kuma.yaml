@@ -1,0 +1,17 @@
+# name: Uptime Kuma
+# about: Monitors your sites and services and tells you when one is down.
+# docs: https://github.com/louislam/uptime-kuma/wiki
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    environment:
+      - SERVICE_FQDN_UPTIME_KUMA_3001
+    volumes:
+      - uptime-kuma-data:/app/data
+    healthcheck:
+      test: ["CMD", "extra/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  uptime-kuma-data:

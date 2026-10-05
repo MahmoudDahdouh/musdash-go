@@ -423,7 +423,8 @@ func (d *DB) ResetStuckDeploying(ctx context.Context) error {
 
 // UsedHostPorts returns the loopback ports already assigned on a server.
 func (d *DB) UsedHostPorts(ctx context.Context, serverID string) (map[int]bool, error) {
-	rows, err := d.QueryContext(ctx, `SELECT host_port FROM apps WHERE server_id = ? AND host_port > 0`, serverID)
+	rows, err := d.QueryContext(ctx, `SELECT host_port FROM apps WHERE server_id = ? AND host_port > 0
+		UNION SELECT ep.host_port FROM service_endpoints ep JOIN services s ON s.id = ep.service_id WHERE s.server_id = ? AND ep.host_port > 0`, serverID, serverID)
 	if err != nil {
 		return nil, err
 	}

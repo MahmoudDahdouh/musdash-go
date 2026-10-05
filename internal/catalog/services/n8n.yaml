@@ -1,0 +1,27 @@
+# name: n8n
+# about: Workflow automation with a visual editor.
+# docs: https://docs.n8n.io/hosting/
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    environment:
+      - SERVICE_FQDN_N8N_5678
+      - N8N_HOST=${SERVICE_FQDN_N8N}
+      - N8N_PORT=5678
+      - N8N_EDITOR_BASE_URL=${SERVICE_URL_N8N}
+      - WEBHOOK_URL=${SERVICE_URL_N8N}
+      # The sign-in cookie is marked secure only where the address is HTTPS;
+      # over plain HTTP the browser would drop it.
+      - N8N_SECURE_COOKIE=${SERVICE_HTTPS_N8N}
+      - N8N_ENCRYPTION_KEY=${SERVICE_PASSWORD_64_ENCRYPTION}
+      - N8N_PROXY_HOPS=1
+      - GENERIC_TIMEZONE=${TZ:-UTC}
+    volumes:
+      - n8n-data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5678/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  n8n-data:

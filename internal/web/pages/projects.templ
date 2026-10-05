@@ -70,10 +70,13 @@ func projectTabs(p db.Project, envs []db.Environment) []ui.Tab {
 }
 
 // ProjectShow lists what is deployed in one environment of a project.
-templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, current db.Environment, apps []db.App, databases []db.Database) {
+templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, current db.Environment, apps []db.App, databases []db.Database, services []db.Service) {
 	@ui.Layout(s) {
 		@ui.PageHeader(p.Name, p.Description) {
-			if len(apps)+len(databases) > 0 {
+			if len(apps)+len(databases)+len(services) > 0 {
+				@ui.LinkButton("/projects/"+p.ID+"/services/new?env="+current.ID, ui.ButtonProps{Icon: "layers"}) {
+					New service
+				}
 				@ui.LinkButton("/projects/"+p.ID+"/databases/new?env="+current.ID, ui.ButtonProps{Icon: "database"}) {
 					New database
 				}
@@ -83,13 +86,16 @@ templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, current db.En
 			}
 		}
 		@ui.Tabs(projectTabs(p, envs), current.ID)
-		if len(apps)+len(databases) == 0 {
-			@ui.EmptyState("box", "Nothing is deployed in "+current.Name, "Start with an app from a Docker image or a Git repository, or with a database.") {
+		if len(apps)+len(databases)+len(services) == 0 {
+			@ui.EmptyState("box", "Nothing is deployed in "+current.Name, "Start with an app from a Docker image or a Git repository, a database, or a ready-made service such as WordPress or n8n.") {
 				@ui.LinkButton("/projects/"+p.ID+"/apps/new?env="+current.ID, ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
 					New app
 				}
 				@ui.LinkButton("/projects/"+p.ID+"/databases/new?env="+current.ID, ui.ButtonProps{Icon: "database"}) {
 					New database
+				}
+				@ui.LinkButton("/projects/"+p.ID+"/services/new?env="+current.ID, ui.ButtonProps{Icon: "layers"}) {
+					New service
 				}
 			}
 		} else {
@@ -104,6 +110,12 @@ templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, current db.En
 					<section class="grid gap-2">
 						<h2 class="section-title">Databases</h2>
 						@DatabaseRows(databases)
+					</section>
+				}
+				if len(services) > 0 {
+					<section class="grid gap-2">
+						<h2 class="section-title">Services</h2>
+						@ServiceRows(services)
 					</section>
 				}
 			</div>

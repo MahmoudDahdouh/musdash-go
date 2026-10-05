@@ -1,0 +1,24 @@
+# name: MinIO
+# about: S3-compatible object storage, with a web console.
+# docs: https://min.io/docs/minio/container/index.html
+services:
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      # Two addresses: the S3 API on 9000 and the web console on 9001.
+      - SERVICE_FQDN_MINIO_9000
+      - SERVICE_FQDN_CONSOLE_9001
+      - MINIO_ROOT_USER=${SERVICE_USER_MINIO}
+      - MINIO_ROOT_PASSWORD=${SERVICE_PASSWORD_MINIO}
+      - MINIO_SERVER_URL=${SERVICE_URL_MINIO}
+      - MINIO_BROWSER_REDIRECT_URL=${SERVICE_URL_CONSOLE}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  minio-data:

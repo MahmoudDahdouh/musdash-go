@@ -144,7 +144,7 @@ func TestDatabaseFormValidation(t *testing.T) {
 		{url.Values{"image": {"redis:7 --privileged"}}, "Enter an image name"},
 		{url.Values{"image": {"-v"}}, "Enter an image name"},
 		// The name is the address on the environment's network, shared with apps.
-		{url.Values{"name": {"web"}}, "already has an app or database called web"},
+		{url.Values{"name": {"web"}}, "already has an app, database or service called web"},
 	} {
 		form := url.Values{"env": {env.ID}, "engine": {"redis"}, "name": {"cache"}, "image": {"redis:7-alpine"}}
 		for k, v := range c.form {
@@ -182,7 +182,7 @@ func TestDatabaseFormValidation(t *testing.T) {
 	a.newDatabase(projectID, env, "redis", "cache", nil)
 	res, body := a.post("/projects/"+projectID+"/apps/new?env="+env.ID, "/projects/"+projectID+"/apps",
 		url.Values{"env": {env.ID}, "name": {"cache"}, "image": {"nginx"}, "port": {"80"}})
-	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "already has an app or database called cache") {
+	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "already has an app, database or service called cache") {
 		t.Fatalf("an app took a database's name: %d", res.StatusCode)
 	}
 }

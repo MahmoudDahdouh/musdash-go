@@ -17,7 +17,7 @@ The full design is in [docs/spec.md](docs/spec.md). Each phase has an implementa
 | 1 | Deploy Docker images with domains, HTTPS, storage, live logs and rolling updates | Done |
 | 2 | Deploy from Git: Dockerfile and static builds, GitHub App, deploy keys, push webhooks, deploy token | Done |
 | 3 | Databases: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, KeyDB, Dragonfly, ClickHouse | Done |
-| 4 | One-click services | Planned |
+| 4 | Services: Docker Compose stacks from a catalogue (n8n, WordPress, Ghost, Uptime Kuma, MinIO, Cloudflare Tunnel) or your own file | Done, except stacks built from a Git repository |
 | 5–9 | Backups, multi-server, previews, teams, extras | Planned |
 
 ## Build
@@ -144,6 +144,23 @@ curl -X POST -H "Authorization: Bearer $MUSDASH_DEPLOY_TOKEN" "https://musdash.e
 - MongoDB does not start on servers whose Linux kernel is 6.19 or newer; that is MongoDB's own limitation, and its message is shown on the database's page.
 - Deleting a database keeps its volume unless you tick "Also delete the data".
 
+## Services
+
+A service is a stack of containers described by a Docker Compose file. **New service** on a project page offers a small catalogue and "Your own Compose file".
+
+- Give a service of the stack a web address by adding `SERVICE_FQDN_<NAME>_<PORT>` to its environment: `NAME` is the Compose service, `PORT` the port it listens on. musdash gives it a domain (a generated one at first; change it under Settings) and routes it.
+- `SERVICE_URL_<NAME>` is the same address with its scheme, `SERVICE_HTTPS_<NAME>` is `true` or `false`.
+- `SERVICE_PASSWORD_<ID>`, `SERVICE_USER_<ID>`, `SERVICE_BASE64_<ID>` and `SERVICE_HEX_<ID>` are filled with values generated once per service. They are listed on the service's Overview page.
+- Any other `${NAME}` in the file is yours to set, in the Variables box.
+
+These names follow Coolify's convention, so a template written for it can be pasted.
+
+A stack is held to the same limits as an app. Its file is read inside a container that has no network and sees nothing of the server, then checked: privileged mode, the host's network or process namespaces, devices, extra capabilities, mounts of system directories or the Docker socket, and volumes or networks that belong to something else are refused, with a message naming the line. Files the Compose file names (`env_file`, `include`, `extends`) are not read: a stack is one file plus its variables. The first deployment on a server downloads the `docker:<version>-cli` image used for that check.
+
+A stack runs on its own network. Tick "Connect to the environment's network" if its containers and the apps and databases of the environment need to reach each other by name; names must then be unique across them.
+
+To publish a port that is not HTTP (a mail server, a game server), use an ordinary `ports:` entry with a host port from 1024 to 65535, outside 20000 to 29999.
+
 ## Tests
 
 ```bash
@@ -173,6 +190,18 @@ MUSDASH_DOCKER_TEST_ENGINES=1 go test ./internal/deploy -run TestEveryEngineStar
 ```
 
 Starts each of the eight engines in turn and waits for its health check. It downloads several gigabytes of images and removes the ones that were not there before.
+
+```bash
+MUSDASH_DOCKER_TEST=1 go test ./internal/compose ./internal/deploy -run 'Sandbox|Catalogue|TestServiceWithDocker' -v
+```
+
+Loads Compose files in the sandbox (including ones that try to read files of the server, and every catalogue template), then runs a two-container stack through deploy, redeploy, stop and delete.
+
+```bash
+MUSDASH_DOCKER_TEST_SERVICES=1 go test ./internal/deploy -run TestCatalogueWithDocker -v -timeout 90m
+```
+
+Installs the catalogue's templates for real, fetches each web address, redeploys and deletes. `MUSDASH_SERVICES=wordpress,minio` limits it to those.
 
 ## Memory
 

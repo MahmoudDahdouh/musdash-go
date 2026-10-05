@@ -1,0 +1,507 @@
+package pages
+
+import (
+	"strconv"
+	"strings"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// ServiceView is what every service page needs for its frame.
+type ServiceView struct {
+	Service   db.Service
+	Project   db.Project
+	Env       db.Environment
+	Endpoints []db.Endpoint
+}
+
+func (v ServiceView) base() string { return "/services/" + v.Service.ID }
+
+func serviceTabs(v ServiceView) []ui.Tab {
+	b := v.base()
+	return []ui.Tab{
+		{Key: "overview", Label: "Overview", Href: b},
+		{Key: "logs", Label: "Logs", Href: b + "/logs"},
+		{Key: "compose", Label: "Compose file", Href: b + "/compose"},
+		{Key: "settings", Label: "Settings", Href: b + "/settings"},
+	}
+}
+
+// templateName is what a service was made from, in words.
+func templateName(key string) string {
+	if t, ok := catalog.Service(key); ok {
+		return t.Name
+	}
+	return "Your own Compose file"
+}
+
+// serviceState is the state a service's pill and rail show.
+func serviceState(s db.Service) string {
+	if s.Status == db.AppCreated {
+		return "created"
+	}
+	return s.Status
+}
+
+func servicePoll(s db.Service) string {
+	if s.Status == db.AppDeploying {
+		return "every 2s"
+	}
+	return "every 15s"
+}
+
+// serviceDeployed reports whether a service has containers on the server.
+func serviceDeployed(s db.Service) bool {
+	return s.Members != "" && s.Status != db.AppStopped
+}
+
+// ServiceHeader is the service's name, status and actions. It refreshes
+// itself like an app's header.
+templ ServiceHeader(csrf string, s db.Service) {
+	<header
+		id="service-header"
+		class="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3"
+		hx-get={ "/services/" + s.ID + "/status?was=" + s.Status }
+		hx-trigger={ servicePoll(s) }
+		hx-swap="outerHTML"
+	>
+		<div class="min-w-0">
+			<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+				<h1 class="text-xl font-semibold tracking-tight">{ s.Name }</h1>
+				@ui.StatusPill(serviceState(s))
+			</div>
+			<p class="mt-0.5 truncate text-ink-mute">{ templateName(s.Template) }</p>
+		</div>
+		if s.Status != db.AppDeploying {
+			<div class="flex flex-wrap items-center gap-2">
+				if serviceDeployed(s) {
+					<form method="post" action={ templ.SafeURL("/services/" + s.ID + "/stop") }>
+						@ui.CSRF(csrf)
+						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop"}) {
+							Stop
+						}
+					</form>
+				}
+				<form method="post" action={ templ.SafeURL("/services/" + s.ID + "/deploy") }>
+					@ui.CSRF(csrf)
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy"}) {
+						if serviceDeployed(s) {
+							Redeploy
+						} else {
+							Deploy
+						}
+					}
+				</form>
+			</div>
+		}
+	</header>
+}
+
+templ serviceFrame(s ui.Shell, v ServiceView, tab string) {
+	@ui.Layout(s) {
+		@ServiceHeader(s.CSRF, v.Service)
+		@ui.Tabs(serviceTabs(v), tab)
+		{ children... }
+	}
+}
+
+// ServiceRows lists an environment's services on the project page.
+templ ServiceRows(list []db.Service) {
+	<div class="card rows">
+		for _, s := range list {
+			<a class="row rail" data-state={ serviceState(s) } href={ templ.SafeURL("/services/" + s.ID) }>
+				@ui.Icon("layers", "text-ink-mute")
+				<div class="min-w-0 flex-1">
+					<p class="truncate font-semibold">{ s.Name }</p>
+					<p class="truncate text-ink-mute">{ templateName(s.Template) }</p>
+				</div>
+				@ui.StatusPill(serviceState(s))
+				@ui.Icon("chevron-right", "text-ink-mute")
+			</a>
+		}
+	</div>
+}
+
+func newServiceURL(p db.Project, env db.Environment, template string) string {
+	return "/projects/" + p.ID + "/services/new?env=" + env.ID + "&template=" + template
+}
+
+// ServiceCatalogue is the first step of creating a service: what to run.
+templ ServiceCatalogue(s ui.Shell, p db.Project, env db.Environment, templates []catalog.ServiceTemplate) {
+	@ui.Layout(s) {
+		@ui.PageHeader("New service", "Runs in "+env.Name+". A service is one or more containers described by a Docker Compose file.")
+		<div class="grid max-w-3xl gap-6">
+			<section class="grid gap-2">
+				<h2 class="section-title">Ready to install</h2>
+				<div class="grid gap-3 sm:grid-cols-2">
+					for _, t := range templates {
+						<a class="card row" href={ templ.SafeURL(newServiceURL(p, env, t.Key)) }>
+							@ui.Icon("layers", "text-ink-mute")
+							<div class="min-w-0 flex-1">
+								<p class="font-semibold">{ t.Name }</p>
+								<p class="muted text-sm">{ t.About }</p>
+							</div>
+							@ui.Icon("chevron-right", "text-ink-mute")
+						</a>
+					}
+				</div>
+			</section>
+			<section class="grid gap-2">
+				<h2 class="section-title">Something else</h2>
+				<a class="card row" href={ templ.SafeURL(newServiceURL(p, env, db.TemplateCustom)) }>
+					@ui.Icon("pencil", "text-ink-mute")
+					<div class="min-w-0 flex-1">
+						<p class="font-semibold">Your own Compose file</p>
+						<p class="muted text-sm">Paste a docker-compose.yml. Templates written for Coolify work as they are.</p>
+					</div>
+					@ui.Icon("chevron-right", "text-ink-mute")
+				</a>
+			</section>
+		</div>
+	}
+}
+
+const composePlaceholder = `services:
+  app:
+    image: ghcr.io/you/app:1.4
+    environment:
+      - SERVICE_FQDN_APP_3000
+      - DATABASE_PASSWORD=${SERVICE_PASSWORD_DB}`
+
+const composeHint = "Give a service a web address by adding SERVICE_FQDN_<NAME>_<PORT> to its environment, where NAME is the service and PORT is the port it listens on. SERVICE_PASSWORD_<ID> and SERVICE_USER_<ID> are filled with generated values."
+
+// varFieldID is the form field for a variable the person must supply.
+func varFieldID(name string) string { return "var_" + name }
+
+// ServiceNew is the second step: a name, and what the file needs to know.
+templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, t catalog.ServiceTemplate, required []catalog.VarRef, f ui.Form) {
+	@ui.Layout(s) {
+		if template == db.TemplateCustom {
+			@ui.PageHeader("New service from your own Compose file", "Runs in "+env.Name+".")
+		} else {
+			@ui.PageHeader("New "+t.Name+" service", t.About)
+		}
+		<div class="max-w-2xl">
+			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/services") }>
+				@ui.CSRF(s.CSRF)
+				<input type="hidden" name="env" value={ env.ID }/>
+				<input type="hidden" name="template" value={ template }/>
+				<div class="card-body grid gap-4">
+					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: true, Value: t.Key, Attrs: templ.Attributes{"maxlength": "32"}})
+					if template == db.TemplateCustom {
+						@ui.Field(ui.FieldProps{Label: "Compose file", For: "compose", Hint: composeHint, Error: f.E("compose")}) {
+							@ui.Textarea(ui.InputProps{ID: "compose", Mono: true, Rows: 16, Required: true, Value: f.V("compose"), Invalid: f.E("compose") != "", Described: true, Placeholder: composePlaceholder, Attrs: templ.Attributes{"wrap": "off"}})
+						}
+						@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the other ${NAME} references in the file. One NAME=value per line. Stored encrypted.", Error: f.E("variables")}) {
+							@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 4, Value: f.V("variables"), Invalid: f.E("variables") != "", Described: true})
+						}
+					} else {
+						for _, v := range required {
+							@ui.TextField(f, v.Name, "This template needs it. Stored encrypted.", ui.InputProps{ID: varFieldID(v.Name), Mono: true, Required: true, Autocomplete: "off"})
+						}
+						<p class="muted text-sm">
+							Passwords and keys are generated, and each web address gets a domain you can change afterwards.
+							if t.Docs != "" {
+								<a class="link" href={ templ.SafeURL(t.Docs) } target="_blank" rel="noopener">Documentation</a>
+							}
+						</p>
+					}
+					<div>
+						@ui.Checkbox("connect_env", checked(f, "connect_env", t.ConnectEnv), nil) {
+							Connect to the environment's network, so its containers and the apps and databases in { env.Name } reach each other by name
+						}
+						if f.E("connect_env") != "" {
+							<p class="field-error mt-1" role="alert">{ f.E("connect_env") }</p>
+						}
+					</div>
+					@ui.Checkbox("deploy", checked(f, "deploy", true), nil) {
+						Deploy as soon as the service is created
+					}
+				</div>
+				<div class="card-foot">
+					@ui.LinkButton("/projects/"+p.ID+"/services/new?env="+env.ID, ui.ButtonProps{}) {
+						Back
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
+						Create service
+					}
+				</div>
+			</form>
+		</div>
+	}
+}
+
+func endpointURL(e db.Endpoint) string {
+	if e.TLS {
+		return "https://" + e.Host
+	}
+	return "http://" + e.Host
+}
+
+func endpointTarget(e db.Endpoint) string {
+	if e.ComposeService == "" {
+		return strings.ToLower(e.Name)
+	}
+	return e.ComposeService + ":" + strconv.Itoa(e.Port)
+}
+
+// Generated is a value musdash generated for a service.
+type Generated struct {
+	Name  string
+	Value string
+}
+
+templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing []string) {
+	@serviceFrame(s, v, "overview") {
+		<div class="grid gap-6 lg:grid-cols-2">
+			if v.Service.Status == db.AppFailed && v.Service.LastError != "" {
+				<div class="lg:col-span-2">
+					@ui.Notice(ui.ToneDanger) {
+						<p class="font-semibold">The last deployment failed</p>
+						<p class="whitespace-pre-wrap break-words">{ v.Service.LastError }</p>
+					}
+				</div>
+			}
+			if len(missing) > 0 {
+				<div class="lg:col-span-2">
+					@ui.Notice(ui.ToneWarn) {
+						<p>The Compose file reads { strings.Join(missing, ", ") }, which has no value yet. Enter it under <a class="link" href={ templ.SafeURL(v.base() + "/compose") }>Compose file</a> before deploying.</p>
+					}
+				</div>
+			}
+			<section class="card">
+				<div class="card-head">
+					<h2 class="card-title">Addresses</h2>
+					@ui.LinkButton(v.base()+"/settings", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+						Change
+					}
+				</div>
+				if len(v.Endpoints) == 0 {
+					<p class="card-body muted">This stack has no web address. To give a service one, add <span class="code">SERVICE_FQDN_NAME_PORT</span> to its environment in the Compose file.</p>
+				} else {
+					<div class="rows">
+						for _, e := range v.Endpoints {
+							if e.Host == "" {
+								<div class="row">
+									@ui.Icon("globe", "text-ink-mute")
+									<span class="muted min-w-0 flex-1">{ endpointTarget(e) } has no domain yet</span>
+								</div>
+							} else {
+								<a class="row" href={ templ.SafeURL(endpointURL(e)) } target="_blank" rel="noopener">
+									@ui.Icon("globe", "text-ink-mute")
+									<div class="min-w-0 flex-1">
+										<p class="fact truncate">{ e.Host }</p>
+										<p class="muted text-sm">to { endpointTarget(e) }</p>
+									</div>
+									if e.TLS {
+										@ui.Badge("HTTPS", ui.ToneOK)
+									} else {
+										@ui.Badge("HTTP", ui.ToneNeutral)
+									}
+									@ui.Icon("external", "text-ink-mute")
+								</a>
+							}
+						}
+					</div>
+				}
+			</section>
+			<section class="card">
+				<div class="card-head">
+					<h2 class="card-title">Containers</h2>
+				</div>
+				if v.Service.Members == "" && v.Service.Status == db.AppDeploying {
+					<p class="card-body muted">The first deployment is under way.</p>
+				} else if v.Service.Members == "" {
+					<p class="card-body muted">Not deployed yet. Choose Deploy to start the stack.</p>
+				} else {
+					<div class="card-body">
+						@ui.KeyValue([]ui.KVItem{
+							{Key: "Services", Value: strings.Join(v.Service.MemberNames(), ", "), Mono: true},
+							{Key: "Network", Value: serviceNetwork(v)},
+						})
+					</div>
+				}
+			</section>
+			if len(generated) > 0 {
+				<section class="card lg:col-span-2">
+					<div class="card-head">
+						<div>
+							<h2 class="card-title">Generated values</h2>
+							<p class="muted text-sm">Created once for this service and kept across deployments. The Compose file refers to them by name.</p>
+						</div>
+					</div>
+					<div class="card-body min-w-0">
+						<dl class="kv">
+							for _, g := range generated {
+								<dt class="fact">{ g.Name }</dt>
+								<dd>
+									@ui.Secret(g.Value, g.Value)
+								</dd>
+							}
+						</dl>
+					</div>
+				</section>
+			}
+			<section class="card lg:col-span-2">
+				<div class="card-head">
+					<h2 class="card-title">Latest deployment</h2>
+				</div>
+				if v.Service.Status == db.AppCreated {
+					<p class="card-body muted">Nothing has been deployed yet.</p>
+				} else {
+					<div class="card-body">
+						@ui.LogView("deploy-log", templ.Attributes{
+							"hx-ext":      "sse",
+							"sse-connect": v.base() + "/deploy-log/stream",
+							"sse-swap":    "line",
+							"sse-close":   "done",
+							"hx-swap":     "beforeend",
+						})
+					</div>
+				}
+			</section>
+		</div>
+	}
+}
+
+func serviceNetwork(v ServiceView) string {
+	if v.Service.ConnectEnv {
+		return "Its own, and the network of " + v.Env.Name
+	}
+	return "Its own"
+}
+
+templ ServiceLogs(s ui.Shell, v ServiceView) {
+	@serviceFrame(s, v, "logs") {
+		if !serviceDeployed(v.Service) {
+			@ui.EmptyState("terminal", "Nothing is running", "The containers' output appears here once the service is deployed.")
+		} else {
+			<div class="grid gap-2">
+				<p class="muted text-sm">The last 200 lines of every container, then new output as it arrives.</p>
+				@ui.LogView("runtime-log", templ.Attributes{
+					"hx-ext":      "sse",
+					"sse-connect": v.base() + "/logs/stream",
+					"sse-swap":    "line",
+					"sse-close":   "done",
+					"hx-swap":     "beforeend",
+				})
+			</div>
+		}
+	}
+}
+
+templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables string) {
+	@serviceFrame(s, v, "compose") {
+		<div class="max-w-3xl">
+			<form class="card" method="post" action={ templ.SafeURL(v.base() + "/compose") }>
+				@ui.CSRF(s.CSRF)
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Compose file</h2>
+						<p class="muted text-sm">Changes apply on the next deployment. Files it names (env_file, include, extends) are not read: everything a stack needs is in this file and its variables.</p>
+					</div>
+				</div>
+				<div class="card-body grid gap-4">
+					@ui.Field(ui.FieldProps{Label: "docker-compose.yml", For: "compose", Hint: composeHint, Error: f.E("compose")}) {
+						@ui.Textarea(ui.InputProps{ID: "compose", Mono: true, Rows: 22, Required: true, Value: composeText, Invalid: f.E("compose") != "", Described: true, Attrs: templ.Attributes{"wrap": "off"}})
+					}
+					@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the ${NAME} references in the file, other than the generated ones. One NAME=value per line. Stored encrypted.", Error: f.E("variables")}) {
+						@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 5, Value: variables, Invalid: f.E("variables") != "", Described: true})
+					}
+					<div>
+						@ui.Checkbox("connect_env", checked(f, "connect_env", v.Service.ConnectEnv), nil) {
+							Connect to the environment's network, so its containers and the apps and databases in { v.Env.Name } reach each other by name
+						}
+					</div>
+				</div>
+				<div class="card-foot">
+					@ui.Button(ui.ButtonProps{Type: "submit"}) {
+						Save
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Attrs: templ.Attributes{"name": "deploy", "value": "1"}}) {
+						Save and deploy
+					}
+				</div>
+			</form>
+		</div>
+	}
+}
+
+func endpointFormID(e db.Endpoint) string { return "host-" + e.ID }
+
+templ ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) {
+	@serviceFrame(s, v, "settings") {
+		<div class="grid max-w-2xl gap-6">
+			<section class="card" id="addresses">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Addresses</h2>
+						<p class="muted text-sm">Point a domain's DNS at this server first, so its certificate can be issued. A change takes effect on the next deployment: the service is told its own address when it starts.</p>
+					</div>
+				</div>
+				if len(v.Endpoints) == 0 {
+					<p class="card-body muted">This stack has no web address. To give a service one, add <span class="code">SERVICE_FQDN_NAME_PORT</span> to its environment in the Compose file.</p>
+				}
+				for _, e := range v.Endpoints {
+					<form class="card-body grid gap-3 border-t border-line" method="post" action={ templ.SafeURL(v.base() + "/endpoints/" + e.ID) }>
+						@ui.CSRF(s.CSRF)
+						@ui.Field(ui.FieldProps{Label: "Domain for " + endpointTarget(e), For: endpointFormID(e), Error: endpointError(e, failed, f)}) {
+							@ui.Input(ui.InputProps{ID: endpointFormID(e), Name: "host", Mono: true, Required: true, Value: endpointValue(e, failed, f), Invalid: endpointError(e, failed, f) != "", Placeholder: "app.example.com"})
+						}
+						@ui.Checkbox("tls-"+e.ID, e.TLS, templ.Attributes{"name": "tls"}) {
+							Serve over HTTPS with an automatic certificate
+						}
+						<div>
+							@ui.Button(ui.ButtonProps{Type: "submit"}) {
+								Save domain
+							}
+						</div>
+					</form>
+				}
+			</section>
+			<section class="card card-danger">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Delete service</h2>
+						<p class="muted text-sm">Stops and removes its containers. Its data is kept unless you choose otherwise.</p>
+					</div>
+					@ui.Confirm(ui.ConfirmProps{
+						ID:      "delete-service",
+						Title:   "Delete service",
+						Action:  v.base() + "/delete",
+						CSRF:    s.CSRF,
+						Match:   v.Service.Name,
+						Submit:  "Delete service",
+						Trigger: "Delete service",
+					}) {
+						<div class="grid gap-3">
+							<p><strong>{ v.Service.Name }</strong> is stopped and removed, with its generated passwords and its domains.</p>
+							<p>The Docker volumes its containers kept their data in stay on the server unless you tick the box.</p>
+							@ui.Checkbox("delete_data", false, nil) {
+								Also delete the volumes. This cannot be undone.
+							}
+						</div>
+					}
+				</div>
+			</section>
+		</div>
+	}
+}
+
+// endpointError and endpointValue show a rejected domain on the form of the
+// endpoint it was entered for.
+func endpointError(e db.Endpoint, failed string, f ui.Form) string {
+	if e.ID == failed {
+		return f.E("host")
+	}
+	return ""
+}
+
+func endpointValue(e db.Endpoint, failed string, f ui.Form) string {
+	if e.ID == failed {
+		return f.V("host")
+	}
+	return e.Host
+}

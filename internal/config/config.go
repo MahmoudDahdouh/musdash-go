@@ -49,10 +49,16 @@ func (c Config) DeployLogPath(id string) string {
 	return filepath.Join(c.LogDir(), "deployments", id+".log")
 }
 
+// ServiceLogPath is where the output of a service's latest deployment is
+// kept.
+func (c Config) ServiceLogPath(id string) string {
+	return filepath.Join(c.LogDir(), "services", id+".log")
+}
+
 // EnsureDirs creates the data directory tree. Directories are private to the
 // musdash user because they hold the database, keys and env files.
 func (c Config) EnsureDirs() error {
-	for _, d := range []string{c.DataDir, c.LogDir(), filepath.Join(c.LogDir(), "deployments"), c.ProxyDir(), c.CertDir(), c.WorkDir(), c.BackupDir(), c.AppsDir()} {
+	for _, d := range []string{c.DataDir, c.LogDir(), filepath.Join(c.LogDir(), "deployments"), filepath.Join(c.LogDir(), "services"), c.ProxyDir(), c.CertDir(), c.WorkDir(), c.BackupDir(), c.AppsDir()} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return fmt.Errorf("create %s: %w", d, err)
 		}

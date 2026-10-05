@@ -34,7 +34,7 @@ func statusFor(action string) string {
 // applyEvent updates the app a container event belongs to. Only the app's
 // serving container counts: events from a container that is being replaced
 // or was stopped on purpose are ignored by SetAppStatusIf.
-func (d *Deployer) applyEvent(ctx context.Context, line []byte) {
+func (d *Deployer) applyEvent(ctx context.Context, dk docker.Client, line []byte) {
 	var ev event
 	if err := json.Unmarshal(line, &ev); err != nil {
 		return
@@ -50,6 +50,10 @@ func (d *Deployer) applyEvent(ctx context.Context, line []byte) {
 		err = d.DB.SetAppStatusIf(ctx, attrs[docker.LabelResource], attrs["name"], status)
 	case db.KindDatabase:
 		err = d.DB.SetDatabaseStatusIf(ctx, attrs[docker.LabelResource], attrs["name"], status)
+	case db.KindService:
+		// A stack's status depends on all of its containers, so they are
+		// looked at together rather than taken from this one event.
+		err = d.refreshService(ctx, dk, attrs[docker.LabelResource])
 	}
 	if err != nil {
 		d.Log.Error("record container event", "err", err)
@@ -97,7 +101,7 @@ func (d *Deployer) monitorOnce(ctx context.Context, server db.Server) error {
 		sc := bufio.NewScanner(pr)
 		sc.Buffer(make([]byte, 0, 16<<10), 256<<10)
 		for sc.Scan() {
-			d.applyEvent(ctx, sc.Bytes())
+			d.applyEvent(ctx, dk, sc.Bytes())
 		}
 		// Keep draining so the docker process never blocks on a full pipe.
 		io.Copy(io.Discard, pr)
@@ -154,6 +158,15 @@ func (d *Deployer) Reconcile(ctx context.Context, server db.Server, dk docker.Cl
 			status = db.AppRunning
 		}
 		if err := d.DB.SetDatabaseStatusIf(ctx, m.ID, m.Container, status); err != nil {
+			return err
+		}
+	}
+	services, err := d.DB.ServicesOnServer(ctx, server.ID)
+	if err != nil {
+		return err
+	}
+	for _, s := range services {
+		if err := d.DB.SetServiceStatusIf(ctx, s.ID, serviceStatus(listed, s.ID)); err != nil {
 			return err
 		}
 	}

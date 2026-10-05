@@ -1,0 +1,40 @@
+# name: WordPress
+# about: The publishing platform, with its own MariaDB database.
+# docs: https://wordpress.org/documentation/
+services:
+  wordpress:
+    image: wordpress:6-apache
+    environment:
+      - SERVICE_FQDN_WORDPRESS_80
+      - WORDPRESS_DB_HOST=mariadb
+      - WORDPRESS_DB_NAME=wordpress
+      - WORDPRESS_DB_USER=${SERVICE_USER_WORDPRESS}
+      - WORDPRESS_DB_PASSWORD=${SERVICE_PASSWORD_WORDPRESS}
+    volumes:
+      - wordpress-files:/var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1/wp-login.php || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  mariadb:
+    image: mariadb:11
+    environment:
+      - MARIADB_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MARIADB_ROOT_HOST=localhost
+      - MARIADB_DATABASE=wordpress
+      - MARIADB_USER=${SERVICE_USER_WORDPRESS}
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_WORDPRESS}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  wordpress-files:
+  mariadb-data:

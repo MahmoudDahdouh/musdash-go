@@ -263,7 +263,7 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 
 	app, err := s.DB.CreateApp(ctx, teamID, newApp)
 	if db.IsUnique(err) || errors.Is(err, db.ErrNameTaken) {
-		f.Fail("name", "This environment already has an app or database called "+newApp.Name+".")
+		f.Fail("name", "This environment already has an app, database or service called "+newApp.Name+".")
 		rerender(http.StatusUnprocessableEntity)
 		return
 	}
@@ -761,7 +761,7 @@ func (s *Server) appSettingsSave(w http.ResponseWriter, r *http.Request) {
 		err := s.DB.UpdateAppSettings(r.Context(), sessionFrom(r).TeamID, app)
 		switch {
 		case db.IsUnique(err), errors.Is(err, db.ErrNameTaken):
-			f.Fail("name", "This environment already has an app or database called "+app.Name+".")
+			f.Fail("name", "This environment already has an app, database or service called "+app.Name+".")
 		case err != nil:
 			s.fail(w, r, err)
 			return

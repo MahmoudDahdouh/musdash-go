@@ -1,0 +1,42 @@
+# name: Ghost
+# about: A publishing platform for blogs and newsletters, with its own MySQL database.
+# docs: https://ghost.org/docs/
+services:
+  ghost:
+    image: ghost:5-alpine
+    environment:
+      - SERVICE_FQDN_GHOST_2368
+      - url=${SERVICE_URL_GHOST}
+      - database__client=mysql
+      - database__connection__host=mysql
+      - database__connection__database=ghost
+      - database__connection__user=${SERVICE_USER_GHOST}
+      - database__connection__password=${SERVICE_PASSWORD_GHOST}
+    volumes:
+      - ghost-content:/var/lib/ghost/content
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null --header 'X-Forwarded-Proto: https' http://127.0.0.1:2368/ghost/api/admin/site/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+  mysql:
+    image: mysql:8.4
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_ROOT_HOST=localhost
+      - MYSQL_DATABASE=ghost
+      - MYSQL_USER=${SERVICE_USER_GHOST}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_GHOST}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+volumes:
+  ghost-content:
+  mysql-data:

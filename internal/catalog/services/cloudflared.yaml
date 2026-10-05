@@ -1,0 +1,15 @@
+# name: Cloudflare Tunnel
+# about: Publishes your apps through Cloudflare without opening ports on the server.
+# docs: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+# connect: true
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      # Create a tunnel in the Cloudflare dashboard (Zero Trust, Networks,
+      # Tunnels) and paste its token into this service's variables. Point
+      # each public hostname of the tunnel at an app by its name and port,
+      # such as http://web:80.
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:?Set TUNNEL_TOKEN to the token of your Cloudflare tunnel}
+volumes: {}

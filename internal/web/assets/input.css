@@ -384,6 +384,10 @@
     font-size: var(--text-base);
     font-weight: 600;
   }
+  /* A link inside a sentence: underlined, so it does not rely on colour. */
+  .link {
+    text-decoration: underline;
+  }
   /* The heading of a list that sits directly on the canvas. */
   .section-title {
     font-size: var(--text-sm);
