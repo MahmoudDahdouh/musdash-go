@@ -153,3 +153,32 @@ func (d *DB) DeleteEnvironment(ctx context.Context, teamID, id string) error {
 		return err
 	})
 }
+
+// Place says where an environment is: its project and its own name.
+type Place struct {
+	ProjectID string
+	Project   string
+	Env       string
+}
+
+// Places returns where each of the team's environments is, by environment
+// id: what a list of resources from several projects needs to say where
+// each one lives. A team has few environments; this is one small query.
+func (d *DB) Places(ctx context.Context, teamID string) (map[string]Place, error) {
+	rows, err := d.QueryContext(ctx, `SELECT e.id, p.id, p.name, e.name FROM environments e
+		JOIN projects p ON p.id = e.project_id WHERE p.team_id = ?`, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]Place{}
+	for rows.Next() {
+		var id string
+		var pl Place
+		if err := rows.Scan(&id, &pl.ProjectID, &pl.Project, &pl.Env); err != nil {
+			return nil, err
+		}
+		out[id] = pl
+	}
+	return out, rows.Err()
+}

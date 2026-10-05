@@ -13,12 +13,6 @@ import (
 type AccountView struct {
 	TwoStep       bool
 	RecoveryCodes int // how many are left
-	// Tokens are the person's API tokens. NewToken is one that was just
-	// made, shown this once; Base is the dashboard's address, for the
-	// example that goes with it.
-	Tokens   []db.APIToken
-	NewToken string
-	Base     string
 }
 
 func abilityLabel(ability string) string {
@@ -259,69 +253,4 @@ templ LoginCode(f ui.Form, csrf string) {
 			<a href="/login">Sign in as somebody else</a>
 		</p>
 	}
-}
-
-// tokensCard is the Account page's part about API tokens.
-templ tokensCard(s ui.Shell, v AccountView, f ui.Form) {
-	<section class="card" id="tokens">
-		<div class="card-head">
-			<div>
-				<h2 class="card-title">API tokens</h2>
-				<p class="muted text-sm">For scripts and pipelines. A token acts as you: it sees what you see, and stops working when you leave the team, change your password, turn on two-step sign-in or are given a higher role.</p>
-			</div>
-		</div>
-		if v.NewToken != "" {
-			<div class="card-body border-b border-line">
-				@ui.Notice(ui.ToneOK) {
-					<p class="font-semibold">Token created. Copy it now: it is not shown again.</p>
-					<p class="code mt-2 block break-all" id="new-token">{ v.NewToken }</p>
-					<p class="mt-2">
-						<button type="button" class="btn btn-secondary btn-sm" data-copy={ v.NewToken }>
-							@ui.Icon("copy")
-							<span data-copy-label>Copy token</span>
-						</button>
-					</p>
-					<p class="mt-3">Try it:</p>
-					<p class="code mt-1 block break-all">curl -H "Authorization: Bearer $MUSDASH_TOKEN" { v.Base }/api/v1/me</p>
-				}
-			</div>
-		}
-		if len(v.Tokens) > 0 {
-			<div class="rows">
-				for _, t := range v.Tokens {
-					<div class="row">
-						@ui.Icon("key", "text-ink-mute")
-						<div class="min-w-0 flex-1">
-							<p class="truncate font-semibold">{ t.Name }</p>
-							<p class="muted text-sm">{ abilityLabel(t.Ability) } · { tokenUsed(t) } · { tokenExpiry(t) }</p>
-						</div>
-						<form method="post" action={ templ.SafeURL("/account/tokens/" + t.ID + "/delete") }>
-							@ui.CSRF(s.CSRF)
-							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit"}) {
-								Revoke
-							}
-						</form>
-					</div>
-				}
-			</div>
-		}
-		<form class={ "card-body grid gap-4", templ.KV("border-t border-line", len(v.Tokens) > 0) } method="post" action="/account/tokens">
-			@ui.CSRF(s.CSRF)
-			@ui.TextField(f, "Name", "What it is for, such as the name of the pipeline that uses it.", ui.InputProps{ID: "token_name", Required: true, Autocomplete: "off", Attrs: templ.Attributes{"maxlength": "60"}})
-			<div class="grid gap-4 sm:grid-cols-2">
-				@ui.Field(ui.FieldProps{Label: "May", For: "token_ability", Error: f.E("token_ability")}) {
-					@ui.Select("token_ability", abilityOptions, orDefault(f.V("token_ability"), db.AbilityRead), nil)
-				}
-				@ui.Field(ui.FieldProps{Label: "Expires", For: "token_expires", Error: f.E("token_expires")}) {
-					@ui.Select("token_expires", expiryOptions, orDefault(f.V("token_expires"), "90"), nil)
-				}
-			</div>
-			@ui.TextField(f, "Current password", "A token is a way in that lasts: making one asks for your password.", ui.InputProps{ID: "token_password", Type: "password", Autocomplete: "current-password", Required: true})
-			<div>
-				@ui.Button(ui.ButtonProps{Type: "submit", Icon: "plus"}) {
-					Create token
-				}
-			</div>
-		</form>
-	</section>
 }

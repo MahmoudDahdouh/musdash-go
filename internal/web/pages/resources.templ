@@ -115,6 +115,9 @@ func (v NewResource) privateRepo(access string, has bool) string {
 	if has {
 		return v.base() + "/apps/new?source=git&access=" + access
 	}
+	if access == "key" {
+		return "/keys#ssh-keys"
+	}
 	return "/sources"
 }
 
@@ -129,7 +132,7 @@ func deployKeyText(has bool) string {
 	if has {
 		return "Any Git host over SSH: GitLab, Bitbucket, Gitea or GitHub. The repository gets a read-only deploy key."
 	}
-	return "Add a deploy key under Sources first. It reads a private repository on any Git host over SSH."
+	return "Add an SSH key under Keys & tokens first. It reads a private repository on any Git host over SSH."
 }
 
 func searchText(parts ...string) string { return strings.ToLower(strings.Join(parts, " ")) }

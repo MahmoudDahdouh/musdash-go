@@ -47,7 +47,7 @@ func (s *Server) tokenCreate(w http.ResponseWriter, r *http.Request) {
 		s.passwordAgain(r, &f, "token_password")
 	}
 	if !f.OK() {
-		s.renderAccountWith(w, r, http.StatusUnprocessableEntity, ui.Form{}, ui.Form{}, ui.Form{}, f, "")
+		s.renderKeys(w, r, http.StatusUnprocessableEntity, keysState{tokenForm: f})
 		return
 	}
 	raw := apiTokenPrefix + secret.RandomToken(32)
@@ -58,7 +58,7 @@ func (s *Server) tokenCreate(w http.ResponseWriter, r *http.Request) {
 	_, err := s.DB.CreateAPIToken(r.Context(), t)
 	if errors.Is(err, db.ErrTooMany) {
 		f.Fail("token_name", "You have "+itoa(db.MaxAPITokens)+" tokens. Revoke one first.")
-		s.renderAccountWith(w, r, http.StatusUnprocessableEntity, ui.Form{}, ui.Form{}, ui.Form{}, f, "")
+		s.renderKeys(w, r, http.StatusUnprocessableEntity, keysState{tokenForm: f})
 		return
 	}
 	if err != nil {
@@ -67,7 +67,7 @@ func (s *Server) tokenCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	s.Log.Info("api token made", "user", sess.UserID, "ability", ability)
 	// The token is in this response and nowhere else.
-	s.renderAccountWith(w, r, http.StatusOK, ui.Form{}, ui.Form{}, ui.Form{}, ui.Form{}, raw)
+	s.renderKeys(w, r, http.StatusOK, keysState{newToken: raw})
 }
 
 func (s *Server) tokenDelete(w http.ResponseWriter, r *http.Request) {
@@ -81,5 +81,5 @@ func (s *Server) tokenDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Token revoked. Calls that use it are refused from now on.")
-	redirect(w, r, "/account#tokens")
+	redirect(w, r, "/keys#tokens")
 }

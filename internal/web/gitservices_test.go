@@ -77,9 +77,16 @@ func TestServiceFromGitPages(t *testing.T) {
 	// The Compose tab: nothing fetched yet, the source, the ways in.
 	res, page := a.get(base + "/compose")
 	wantStatus(t, res, http.StatusOK)
-	for _, want := range []string{"has not been fetched yet", "Save source", `value="https://github.com/Acme/Stack"`, "/webhooks/git/" + id, "/api/v1/deploy?uuid=" + id, "Create webhook secret", "Create deploy token"} {
+	for _, want := range []string{"has not been fetched yet", "Save source", `value="https://github.com/Acme/Stack"`, `href="/keys#deploy-tokens"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the Compose tab is missing %q", want)
+		}
+	}
+	// The ways in from outside are on the Keys page, with every other one.
+	_, keys := a.get("/keys")
+	for _, want := range []string{"/webhooks/git/" + id, "/api/v1/deploy?uuid=" + id, "Create secret", "Create token", `action="` + base + `/deploy-token"`} {
+		if !strings.Contains(keys, want) {
+			t.Errorf("the Keys page is missing %q", want)
 		}
 	}
 	if strings.Contains(page, `<textarea id="compose"`) {
@@ -137,14 +144,18 @@ func TestServiceFromGitPages(t *testing.T) {
 	res, _ = a.hook(hookPath, []byte("guess"), "push", "d0", pushBody("acme/stack", "refs/heads/main"))
 	wantStatus(t, res, http.StatusUnauthorized)
 	res, _ = a.post(base+"/compose", base+"/webhook-secret", url.Values{})
-	wantRedirect(t, res, base+"/compose#triggers")
+	wantRedirect(t, res, "/keys#webhooks")
 	svc, _ = a.db.ServiceByID(ctx, id)
 	key, err := a.server.Box.Open(svc.WebhookSecret)
 	if err != nil || len(key) < 20 {
 		t.Fatalf("webhook secret: %v", err)
 	}
-	if _, page = a.get(base + "/compose"); !strings.Contains(page, string(key)) {
-		t.Fatal("the secret is not shown to the person who has to enter it at the Git host")
+	// Shown to the person who has to enter it at the Git host, when asked.
+	if _, page = a.get("/keys"); strings.Contains(page, string(key)) {
+		t.Fatal("the Keys page holds the secret before it is asked for")
+	}
+	if _, cell := a.get(base + "/webhook-secret"); !strings.Contains(cell, string(key)) {
+		t.Fatal("the secret is not shown to the person who asks for it")
 	}
 	clones := func() int { return countLines(a.fake.Calls(), "git clone") }
 	res, body = a.hook(hookPath, key, "push", "d1", pushBody("acme/stack", "refs/heads/develop"))
@@ -170,8 +181,8 @@ func TestServiceFromGitPages(t *testing.T) {
 	if token == "" {
 		t.Fatal("the new token is not shown")
 	}
-	if _, page = a.get(base + "/compose"); strings.Contains(page, token) || !strings.Contains(page, "Replace deploy token") {
-		t.Fatal("the token is shown again, or the page does not know there is one")
+	if _, page = a.get("/keys"); strings.Contains(page, token) || !strings.Contains(page, "Has a token") {
+		t.Fatal("the token is shown again, or the Keys page does not know there is one")
 	}
 	call := func(tok string) (*http.Response, string) {
 		req, _ := http.NewRequest(http.MethodPost, a.url+"/api/v1/deploy?uuid="+id, nil)
@@ -188,7 +199,7 @@ func TestServiceFromGitPages(t *testing.T) {
 	until(t, "the deployment the token started", func() bool { return clones() == before+1 })
 	a.waitService(id)
 	res, _ = a.post(base+"/compose", base+"/deploy-token", url.Values{"revoke": {"1"}})
-	wantRedirect(t, res, base+"/compose#triggers")
+	wantRedirect(t, res, "/keys#deploy-tokens")
 	res, _ = call(token)
 	wantStatus(t, res, http.StatusUnauthorized)
 

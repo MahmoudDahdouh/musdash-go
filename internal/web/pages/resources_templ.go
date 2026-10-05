@@ -337,6 +337,9 @@ func (v NewResource) privateRepo(access string, has bool) string {
 	if has {
 		return v.base() + "/apps/new?source=git&access=" + access
 	}
+	if access == "key" {
+		return "/keys#ssh-keys"
+	}
 	return "/sources"
 }
 
@@ -351,7 +354,7 @@ func deployKeyText(has bool) string {
 	if has {
 		return "Any Git host over SSH: GitLab, Bitbucket, Gitea or GitHub. The repository gets a read-only deploy key."
 	}
-	return "Add a deploy key under Sources first. It reads a private repository on any Git host over SSH."
+	return "Add an SSH key under Keys & tokens first. It reads a private repository on any Git host over SSH."
 }
 
 func searchText(parts ...string) string { return strings.ToLower(strings.Join(parts, " ")) }
@@ -384,7 +387,7 @@ func kindGroup(title, about string) templ.Component {
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 140, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 143, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -397,7 +400,7 @@ func kindGroup(title, about string) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(about)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 141, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 144, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {

@@ -442,12 +442,12 @@ func (s *Server) renderServiceCompose(w http.ResponseWriter, r *http.Request, st
 	} else if _, entered, _, err := s.serviceValues(v.Service); err == nil {
 		variables = deploy.FormatEnv(entered)
 	}
-	s.renderServiceComposeGit(w, r, status, v, f, composeText, variables, ui.Form{}, "")
+	s.renderServiceComposeGit(w, r, status, v, f, composeText, variables, ui.Form{})
 }
 
 // renderServiceComposeGit is renderServiceCompose with the state of the
 // forms only a service from Git has.
-func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, f ui.Form, composeText, variables string, src ui.Form, newToken string) {
+func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, f ui.Form, composeText, variables string, src ui.Form) {
 	var git *pages.ServiceGit
 	if v.Service.FromGit() {
 		choices, err := s.gitChoices(r)
@@ -455,22 +455,7 @@ func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request,
 			s.fail(w, r, err)
 			return
 		}
-		base := s.publicBase(r)
-		git = &pages.ServiceGit{Choices: choices, Source: src, Tr: pages.Triggers{
-			WebhookURL:   base + "/webhooks/git/" + v.Service.ID,
-			DeployURL:    base + "/api/v1/deploy?uuid=" + v.Service.ID,
-			HasToken:     v.Service.DeployTokenHash != "",
-			NewToken:     newToken,
-			ViaGitHubApp: v.Service.GitSourceID != "",
-		}}
-		if v.Service.WebhookSecret != "" {
-			plain, err := s.Box.OpenString(v.Service.WebhookSecret)
-			if err != nil {
-				s.fail(w, r, errors.New("the webhook secret cannot be decrypted"))
-				return
-			}
-			git.Tr.WebhookSecret = plain
-		}
+		git = &pages.ServiceGit{Choices: choices, Source: src}
 	}
 	s.render(w, r, status, pages.ServiceCompose(s.serviceShell(w, r, v), v, f, composeText, variables, git))
 }
@@ -505,7 +490,7 @@ func (s *Server) serviceSourceSave(w http.ResponseWriter, r *http.Request) {
 	}
 	if !f.OK() {
 		_, entered, _, _ := s.serviceValues(v.Service)
-		s.renderServiceComposeGit(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, v.Service.Compose, deploy.FormatEnv(entered), f, "")
+		s.renderServiceComposeGit(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, v.Service.Compose, deploy.FormatEnv(entered), f)
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Source saved. Deploy to read the file from there.")
@@ -530,7 +515,7 @@ func (s *Server) serviceWebhookSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Webhook secret saved. Enter it in the repository's webhook settings.")
-	redirect(w, r, "/services/"+v.Service.ID+"/compose#triggers")
+	redirect(w, r, "/keys#webhooks")
 }
 
 // serviceDeployToken creates, replaces or revokes the service's deploy
@@ -551,7 +536,7 @@ func (s *Server) serviceDeployToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		setFlash(w, r, ui.ToneOK, "Deploy token revoked.")
-		redirect(w, r, "/services/"+v.Service.ID+"/compose#triggers")
+		redirect(w, r, "/keys#deploy-tokens")
 		return
 	}
 	token := "mdt_" + secret.RandomToken(32)
@@ -560,11 +545,10 @@ func (s *Server) serviceDeployToken(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	v.Service.DeployTokenHash = hash
-	_, entered, _, _ := s.serviceValues(v.Service)
 	// Rendered directly rather than after a redirect, so the token is never
 	// placed in a cookie or a URL.
-	s.renderServiceComposeGit(w, r, http.StatusOK, v, ui.Form{}, v.Service.Compose, deploy.FormatEnv(entered), ui.Form{}, token)
+	s.renderKeys(w, r, http.StatusOK, keysState{newDeploy: &pages.NewDeployToken{
+		Owner: v.Service.Name, Token: token, URL: s.publicBase(r) + "/api/v1/deploy?uuid=" + v.Service.ID}})
 }
 
 func (s *Server) serviceCompose(w http.ResponseWriter, r *http.Request) {

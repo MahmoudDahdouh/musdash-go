@@ -130,7 +130,6 @@ func varFieldID(name string) string { return "var_" + name }
 type ServiceGit struct {
 	Choices GitChoices
 	Source  ui.Form  // the Source form's state
-	Tr      Triggers // webhook and deploy token
 }
 
 // serviceRepo is a service's repository settings in the shape the shared
@@ -391,12 +390,6 @@ func shortCommit(c string) string {
 templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables string, git *ServiceGit) {
 	@serviceFrame(s, v, "compose") {
 		<div class="grid max-w-3xl gap-6">
-			if git != nil && git.Tr.NewToken != "" {
-				@ui.Notice(ui.ToneOK) {
-					<p class="font-semibold">Deploy token created. Copy it now: it is not shown again.</p>
-					@ui.Copyable(git.Tr.NewToken)
-				}
-			}
 			<form class="card" method="post" action={ templ.SafeURL(v.base() + "/compose") }>
 				@ui.CSRF(s.CSRF)
 				<div class="card-head">
@@ -451,7 +444,7 @@ templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variable
 				@ui.FormCard("Source", "The repository the Compose file is read from.", v.base()+"/source", s.CSRF, "Save source") {
 					@serviceGitFields(git.Source, git.Choices, v.Service, false)
 				}
-				@triggersCard(s.CSRF, v.base(), "service", true, git.Tr)
+				@keysLink("service")
 			}
 		</div>
 	}

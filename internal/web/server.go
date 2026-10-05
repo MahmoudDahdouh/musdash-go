@@ -196,6 +196,7 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /apps/{id}/tasks/{tid}/run", member, s.ownSettings(s.appTaskRun))
 	handle("POST /apps/{id}/tasks/{tid}/delete", member, s.ownSettings(s.appTaskDelete))
 	handle("POST /apps/{id}/source", member, s.ownSettings(s.appSourceSave))
+	handle("GET /apps/{id}/webhook-secret", member, s.ownSettings(s.appWebhookShow))
 	handle("POST /apps/{id}/webhook-secret", member, s.ownSettings(s.appWebhookSecret))
 	handle("POST /apps/{id}/deploy-token", member, s.ownSettings(s.appDeployToken))
 	handle("POST /apps/{id}/build-server", member, s.ownSettings(s.appBuildServer))
@@ -235,6 +236,7 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /services/{id}/compose", member, s.serviceComposeSave)
 	handle("GET /services/{id}/settings", member, s.serviceSettings)
 	handle("POST /services/{id}/source", member, s.serviceSourceSave)
+	handle("GET /services/{id}/webhook-secret", member, s.serviceWebhookShow)
 	handle("POST /services/{id}/webhook-secret", member, s.serviceWebhookSecret)
 	handle("POST /services/{id}/deploy-token", member, s.serviceDeployToken)
 	handle("POST /services/{id}/endpoints/{eid}", member, s.serviceEndpointSave)
@@ -248,6 +250,7 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /tags/{tag}/delete", member, s.tagDelete)
 	handle("POST /tags/{tag}/deploy", member, s.tagDeploy)
 
+	handle("GET /keys", member, s.keysPage)
 	handle("GET /sources", member, s.sourcesPage)
 	handle("POST /sources/github", admin, s.githubStart)
 	handle("GET /sources/github/callback", admin, s.githubCallback)

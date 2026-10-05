@@ -204,7 +204,7 @@ templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, 
 	}
 }
 
-templ Account(s ui.Shell, profile, password, twoStep, token ui.Form, v AccountView) {
+templ Account(s ui.Shell, profile, password, twoStep ui.Form, v AccountView) {
 	@ui.Layout(s) {
 		@ui.PageHeader("Account", "")
 		<div class="grid max-w-2xl gap-6">
@@ -217,7 +217,17 @@ templ Account(s ui.Shell, profile, password, twoStep, token ui.Form, v AccountVi
 				@ui.TextField(password, "New password", "10 to 72 characters.", ui.InputProps{ID: "password", Type: "password", Autocomplete: "new-password", Required: true})
 			}
 			@twoStepCard(s, v, twoStep)
-			@tokensCard(s, v, token)
+			<section class="card" id="tokens">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">API tokens</h2>
+						<p class="muted text-sm">Your tokens for scripts and pipelines are kept with every other key and token.</p>
+					</div>
+					@ui.LinkButton("/keys#tokens", ui.ButtonProps{Small: true, Icon: "key"}) {
+						Keys & tokens
+					}
+				</div>
+			</section>
 		</div>
 	}
 }

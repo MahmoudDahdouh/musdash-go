@@ -801,7 +801,7 @@ func (s *Server) appStorageDelete(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) appSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadApp(w, r); ok {
-		s.renderAppSettings(w, r, http.StatusOK, v, ui.Form{}, ui.Form{}, ui.Form{}, "")
+		s.renderAppSettings(w, r, http.StatusOK, v, ui.Form{}, ui.Form{}, ui.Form{})
 	}
 }
 
@@ -864,7 +864,7 @@ func (s *Server) appSettingsSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, f, ui.Form{}, ui.Form{}, "")
+		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, f, ui.Form{}, ui.Form{})
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Settings saved. Redeploy to apply them.")
@@ -938,7 +938,7 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, f, ui.Form{}, "")
+		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, f, ui.Form{})
 		return
 	}
 	s.syncRoutes(r, v.App.ServerID)

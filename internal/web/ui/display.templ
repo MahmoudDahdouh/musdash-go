@@ -415,6 +415,18 @@ func Ask(title, question, submit string, danger bool) templ.Attributes {
 	return a
 }
 
+// Merge joins attribute sets into one, for a control that needs several:
+// a later set wins where two name the same attribute.
+func Merge(sets ...templ.Attributes) templ.Attributes {
+	out := templ.Attributes{}
+	for _, set := range sets {
+		for k, v := range set {
+			out[k] = v
+		}
+	}
+	return out
+}
+
 // Masked stands where a secret value is not shown.
 const Masked = "••••••••"
 

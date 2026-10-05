@@ -187,7 +187,7 @@ templ gitSourceFields(f ui.Form, c GitChoices, app db.App) {
 // gitRepoFields say which repository and branch to read, and how. Apps
 // and services deployed from Git share them; app carries the stored values.
 templ gitRepoFields(f ui.Form, c GitChoices, app db.App) {
-	@ui.Field(ui.FieldProps{Label: "Read the repository through", For: "access", Hint: "Private repositories need a GitHub App or, on any host (GitLab, Bitbucket, Gitea), a deploy key. Add them under Sources.", Error: f.E("access")}) {
+	@ui.Field(ui.FieldProps{Label: "Read the repository through", For: "access", Hint: "Private repositories need a GitHub App or, on any host (GitLab, Bitbucket, Gitea), a deploy key. A GitHub App is added under Sources, a key under Keys & tokens.", Error: f.E("access")}) {
 		@ui.Select("access", accessOptions(c), orDefault(f.V("access"), appAccess(app)), templ.Attributes{"aria-describedby": "access-hint"})
 	}
 	@ui.TextField(f, "Repository", "For example https://github.com/acme/shop, or with a deploy key git@github.com:acme/shop.git or git@gitlab.com:group/shop.git.", ui.InputProps{ID: "repo", Mono: true, Required: true, Value: app.RepoURL, Placeholder: "https://github.com/acme/shop"})
@@ -620,82 +620,12 @@ func cpusValue(c float64) string {
 	return strconv.FormatFloat(c, 'f', -1, 64)
 }
 
-// Triggers is what the Settings page shows about starting deployments from
-// outside.
-type Triggers struct {
-	WebhookURL    string
-	WebhookSecret string // "" until generated
-	DeployURL     string
-	HasToken      bool
-	NewToken      string // shown once, right after it was generated
-	ViaGitHubApp  bool
-}
-
 // webhookHosts says where each Git host wants the address and the secret,
 // and what it calls the events.
 var webhookHosts = []ui.KVItem{
 	{Key: "GitHub, Gitea, Forgejo", Value: "Settings → Webhooks. Content type application/json, the secret as Secret, the push event (and pull requests)."},
 	{Key: "GitLab", Value: "Settings → Webhooks. The secret as Secret token, with Push events (and Merge request events). A signing token is GitLab's own and cannot be used here."},
 	{Key: "Bitbucket", Value: "Repository settings → Webhooks. The secret as Secret, with Repository push (and Pull request created, updated, merged and declined)."},
-}
-
-// triggersCard is the "Deploy from outside" card: the push webhook of a
-// resource deployed from Git, and its deploy token. An app's settings and a
-// Git service's share it; base is the resource's own address.
-templ triggersCard(csrf, base, what string, git bool, tr Triggers) {
-	<section class="card" id="triggers">
-		<div class="card-head">
-			<div>
-				<h2 class="card-title">Deploy from outside</h2>
-				<p class="muted text-sm">Ways for other systems to start a deployment of this { what }.</p>
-			</div>
-		</div>
-		if git {
-			<div class="card-body grid gap-3 border-b border-line">
-				<h3 class="font-semibold">Push webhook</h3>
-				if tr.ViaGitHubApp {
-					<p class="muted text-sm">This { what } deploys through a GitHub App, which already tells musdash about pushes. Nothing to set up.</p>
-				} else {
-					<p class="muted text-sm">Add a webhook to the repository with this address and the secret below, sending push events. To get previews, send pull request events as well.</p>
-					@ui.Copyable(tr.WebhookURL)
-					if tr.WebhookSecret != "" {
-						@ui.Copyable(tr.WebhookSecret)
-					}
-					@ui.KeyValue(webhookHosts)
-					<form method="post" action={ templ.SafeURL(base + "/webhook-secret") }>
-						@ui.CSRF(csrf)
-						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh"}) {
-							if tr.WebhookSecret == "" {
-								Create webhook secret
-							} else {
-								Replace webhook secret
-							}
-						}
-					</form>
-				}
-			</div>
-		}
-		<div class="card-body grid gap-3">
-			<h3 class="font-semibold">Deploy token</h3>
-			<p class="muted text-sm">For a CI pipeline: send a POST request with the token to start a deployment.</p>
-			<p class="code block break-all">curl -X POST -H "Authorization: Bearer TOKEN" "{ tr.DeployURL }"</p>
-			<form class="flex flex-wrap items-center gap-2" method="post" action={ templ.SafeURL(base + "/deploy-token") }>
-				@ui.CSRF(csrf)
-				@ui.Button(ui.ButtonProps{Type: "submit", Icon: "key"}) {
-					if tr.HasToken {
-						Replace deploy token
-					} else {
-						Create deploy token
-					}
-				}
-				if tr.HasToken {
-					@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Type: "submit", Attrs: templ.Attributes{"name": "revoke", "value": "1"}}) {
-						Revoke
-					}
-				}
-			</form>
-		</div>
-	</section>
 }
 
 // PreviewSettings is the Settings page of a preview: it has nothing of its
@@ -783,17 +713,9 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 	</section>
 }
 
-templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, choices GitChoices, tr Triggers) {
+templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form, choices GitChoices) {
 	@appFrame(s, v, "settings") {
 		<div class="grid max-w-3xl gap-6">
-			if tr.NewToken != "" {
-				@ui.Notice(ui.ToneOK) {
-					<p class="font-semibold">Deploy token created. Copy it now: it is not shown again.</p>
-					<p class="mt-2">
-						@ui.Copyable(tr.NewToken)
-					</p>
-				}
-			}
 			@ui.FormCard("General", "Changes apply on the next deploy.", v.base()+"/settings", s.CSRF, "Save changes") {
 				@ui.TextField(general, "Name", "", ui.InputProps{ID: "name", Mono: true, Value: v.App.Name, Required: true, Attrs: templ.Attributes{"maxlength": "32"}})
 				if v.App.Source != db.SourceGit {
@@ -823,7 +745,7 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form,
 					}
 				}
 			}
-			@triggersCard(s.CSRF, v.base(), "app", v.App.Source == db.SourceGit, tr)
+			@keysLink("app")
 			if v.App.Source == db.SourceGit {
 				@previewsCard(s.CSRF, v, previews)
 			}

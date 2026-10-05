@@ -1,0 +1,384 @@
+package pages
+
+import (
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// KeyOwner is a resource that can have a deploy token or a webhook secret,
+// as the Keys page lists it.
+type KeyOwner struct {
+	Kind  string // db.KindApp or db.KindService
+	ID    string
+	Name  string
+	Where string // "Shop / production"
+	// HasToken says a deploy token exists. Git says the resource is
+	// deployed from a repository and so can have a push webhook; ViaApp
+	// that a GitHub App already delivers its pushes; HasSecret that its own
+	// webhook has a secret.
+	HasToken  bool
+	Git       bool
+	ViaApp    bool
+	HasSecret bool
+}
+
+// base is the resource's own address, where its forms post.
+func (o KeyOwner) base() string {
+	if o.Kind == db.KindService {
+		return "/services/" + o.ID
+	}
+	return "/apps/" + o.ID
+}
+
+// NewDeployToken is a deploy token that was just made: shown in the
+// response to the POST that made it and nowhere else.
+type NewDeployToken struct {
+	Owner string // the resource's name
+	Token string
+	URL   string // the address a pipeline calls with it
+}
+
+// KeysView is the Keys & tokens page.
+type KeysView struct {
+	Base string // the dashboard's address, for the examples
+
+	Tokens    []db.APIToken
+	NewToken  string
+	TokenForm ui.Form
+
+	Owners    []KeyOwner
+	NewDeploy *NewDeployToken
+
+	Keys    []db.SSHKey
+	NewKey  *db.SSHKey
+	KeyForm ui.Form
+}
+
+func (v KeysView) hooks() []KeyOwner {
+	var out []KeyOwner
+	for _, o := range v.Owners {
+		if o.Git {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+func (v KeysView) deployURL(o KeyOwner) string { return v.Base + "/api/v1/deploy?uuid=" + o.ID }
+func (v KeysView) hookURL(o KeyOwner) string   { return v.Base + "/webhooks/git/" + o.ID }
+
+templ keyOwnerCell(o KeyOwner) {
+	<div class="flex min-w-0 items-center gap-2">
+		@ui.Icon(KindIcon(o.Kind), "text-ink-mute")
+		<div class="min-w-0">
+			<a class="block truncate font-semibold text-ink" href={ templ.SafeURL(o.base()) }>{ o.Name }</a>
+			<p class="muted truncate text-xs">{ o.Where }</p>
+		</div>
+	</div>
+}
+
+// HookSecret is the cell that holds a webhook secret. The secret is not in
+// the page until it is asked for: secret is "" for the hidden state, and
+// Show fetches this cell again with it.
+templ HookSecret(o KeyOwner, secret string) {
+	<span class="inline-flex max-w-full min-w-0 items-center gap-1.5" id={ "hook-" + o.ID }>
+		if secret == "" {
+			<span class="code">{ ui.Masked }</span>
+			<button type="button" class="btn btn-ghost btn-sm" hx-get={ o.base() + "/webhook-secret" } hx-target={ "#hook-" + o.ID } hx-swap="outerHTML">
+				@ui.Icon("eye")
+				Show
+			</button>
+		} else {
+			<span class="code truncate">{ secret }</span>
+			<button type="button" class="btn btn-ghost btn-sm" data-copy={ secret }>
+				@ui.Icon("copy")
+				<span data-copy-label>Copy</span>
+			</button>
+			<button type="button" class="btn btn-ghost btn-sm" hx-get={ o.base() + "/webhook-secret?hide=1" } hx-target={ "#hook-" + o.ID } hx-swap="outerHTML">
+				@ui.Icon("eye-off")
+				Hide
+			</button>
+		}
+	</span>
+}
+
+templ apiTokensCard(s ui.Shell, v KeysView) {
+	<section class="card" id="tokens">
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">API tokens</h2>
+				<p class="muted text-sm">Yours, for scripts and pipelines that call the API. A token acts as you: it sees what you see, and stops working when you leave the team, change your password, turn on two-step sign-in or are given a higher role.</p>
+			</div>
+			@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "new-token"}) {
+				New token
+			}
+		</div>
+		if v.NewToken != "" {
+			<div class="card-body border-b border-line">
+				@ui.Notice(ui.ToneOK) {
+					<p class="font-semibold">Token created. Copy it now: it is not shown again.</p>
+					<p class="code mt-2 block break-all" id="new-token">{ v.NewToken }</p>
+					<p class="mt-2">
+						<button type="button" class="btn btn-secondary btn-sm" data-copy={ v.NewToken }>
+							@ui.Icon("copy")
+							<span data-copy-label>Copy token</span>
+						</button>
+					</p>
+					<p class="mt-3">Try it:</p>
+					<p class="code mt-1 block break-all">curl -H "Authorization: Bearer $MUSDASH_TOKEN" { v.Base }/api/v1/me</p>
+				}
+			</div>
+		}
+		if len(v.Tokens) == 0 {
+			<p class="card-body muted">You have no API token.</p>
+		} else {
+			<div class="rows">
+				for _, t := range v.Tokens {
+					<div class="row">
+						@ui.Icon("key", "text-ink-mute")
+						<div class="min-w-0 flex-1">
+							<p class="truncate font-semibold">{ t.Name }</p>
+							<p class="muted text-sm">{ abilityLabel(t.Ability) } · { tokenUsed(t) } · { tokenExpiry(t) }</p>
+						</div>
+						<form method="post" action={ templ.SafeURL("/account/tokens/" + t.ID + "/delete") }>
+							@ui.CSRF(s.CSRF)
+							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Revoke the token "+t.Name+"?", "Calls that use it are refused from now on. This cannot be undone.", "Revoke token", true)}) {
+								Revoke
+							}
+						</form>
+					</div>
+				}
+			</div>
+		}
+	</section>
+	@ui.FormDialog(ui.DialogProps{ID: "new-token", Title: "New API token", Description: "The token is shown once, right after it is made.", Action: "/account/tokens", CSRF: s.CSRF, Submit: "Create token", Open: !v.TokenForm.OK()}) {
+		@ui.TextField(v.TokenForm, "Name", "What it is for, such as the name of the pipeline that uses it.", ui.InputProps{ID: "token_name", Required: true, Autocomplete: "off", Attrs: templ.Attributes{"maxlength": "60"}})
+		<div class="grid gap-4 sm:grid-cols-2">
+			@ui.Field(ui.FieldProps{Label: "May", For: "token_ability", Error: v.TokenForm.E("token_ability")}) {
+				@ui.Select("token_ability", abilityOptions, orDefault(v.TokenForm.V("token_ability"), db.AbilityRead), nil)
+			}
+			@ui.Field(ui.FieldProps{Label: "Expires", For: "token_expires", Error: v.TokenForm.E("token_expires")}) {
+				@ui.Select("token_expires", expiryOptions, orDefault(v.TokenForm.V("token_expires"), "90"), nil)
+			}
+		</div>
+		@ui.TextField(v.TokenForm, "Current password", "A token is a way in that lasts: making one asks for your password.", ui.InputProps{ID: "token_password", Type: "password", Autocomplete: "current-password", Required: true})
+	}
+}
+
+templ deployTokensCard(s ui.Shell, v KeysView) {
+	<section class="card" id="deploy-tokens">
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">Deploy tokens</h2>
+				<p class="muted text-sm">One for an app or a service, for a CI pipeline: a POST request with the token starts a deployment of that one resource and can do nothing else.</p>
+			</div>
+		</div>
+		if v.NewDeploy != nil {
+			<div class="card-body border-b border-line">
+				@ui.Notice(ui.ToneOK) {
+					<p class="font-semibold">Deploy token for { v.NewDeploy.Owner } created. Copy it now: it is not shown again.</p>
+					<p class="mt-2">
+						@ui.Copyable(v.NewDeploy.Token)
+					</p>
+					<p class="mt-3">Use it:</p>
+					<p class="code mt-1 block break-all">curl -X POST -H "Authorization: Bearer TOKEN" "{ v.NewDeploy.URL }"</p>
+				}
+			</div>
+		}
+		if len(v.Owners) == 0 {
+			<p class="card-body muted">There is no app or service yet to make a token for.</p>
+		} else {
+			@ui.Table("Resource", "Token", "") {
+				for _, o := range v.Owners {
+					<tr>
+						<td>
+							@keyOwnerCell(o)
+						</td>
+						<td>
+							if o.HasToken {
+								@ui.Badge("Has a token", ui.ToneOK)
+							} else {
+								<span class="muted">None</span>
+							}
+						</td>
+						<td>
+							<form class="flex flex-wrap items-center justify-end gap-2" method="post" action={ templ.SafeURL(o.base() + "/deploy-token") }>
+								@ui.CSRF(s.CSRF)
+								<button type="button" class="btn btn-ghost btn-sm" data-copy={ v.deployURL(o) }>
+									@ui.Icon("copy")
+									<span data-copy-label>Copy address</span>
+								</button>
+								if o.HasToken {
+									@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh", Attrs: ui.Ask("Replace the deploy token of "+o.Name+"?", "The token in use now stops working at once. A pipeline that has it must be given the new one.", "Replace token", false)}) {
+										Replace
+									}
+									@ui.Button(ui.ButtonProps{Small: true, Variant: ui.DangerQuiet, Type: "submit", Attrs: ui.Merge(ui.Ask("Revoke the deploy token of "+o.Name+"?", "A pipeline that uses it can no longer deploy.", "Revoke token", true), templ.Attributes{"name": "revoke", "value": "1"})}) {
+										Revoke
+									}
+								} else {
+									@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "key"}) {
+										Create token
+									}
+								}
+							</form>
+						</td>
+					</tr>
+				}
+			}
+		}
+	</section>
+}
+
+templ webhookSecretsCard(s ui.Shell, v KeysView) {
+	<section class="card" id="webhooks">
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">Webhook secrets</h2>
+				<p class="muted text-sm">For what is deployed from a Git repository without a GitHub App: add a webhook to the repository with the address and the secret, sending push events. To get previews, send pull request events as well.</p>
+			</div>
+		</div>
+		if len(v.hooks()) == 0 {
+			<p class="card-body muted">Nothing is deployed from a Git repository yet.</p>
+		} else {
+			@ui.Table("Resource", "Webhook address", "Secret", "") {
+				for _, o := range v.hooks() {
+					<tr>
+						<td>
+							@keyOwnerCell(o)
+						</td>
+						if o.ViaApp {
+							<td colspan="3" class="muted">Deploys through a GitHub App, which already tells musdash about pushes. Nothing to set up.</td>
+						} else {
+							<td>
+								<button type="button" class="btn btn-ghost btn-sm" data-copy={ v.hookURL(o) }>
+									@ui.Icon("copy")
+									<span data-copy-label>Copy address</span>
+								</button>
+							</td>
+							<td>
+								if o.HasSecret {
+									@HookSecret(o, "")
+								} else {
+									<span class="muted">None</span>
+								}
+							</td>
+							<td>
+								<form class="flex justify-end" method="post" action={ templ.SafeURL(o.base() + "/webhook-secret") }>
+									@ui.CSRF(s.CSRF)
+									if o.HasSecret {
+										@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh", Attrs: ui.Ask("Replace the webhook secret of "+o.Name+"?", "Pushes are refused until the repository's webhook is given the new secret.", "Replace secret", false)}) {
+											Replace
+										}
+									} else {
+										@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "key"}) {
+											Create secret
+										}
+									}
+								</form>
+							</td>
+						}
+					</tr>
+				}
+			}
+			<div class="card-body border-t border-line">
+				@ui.KeyValue(webhookHosts)
+			</div>
+		}
+	</section>
+}
+
+templ sshKeysCard(s ui.Shell, v KeysView) {
+	<section class="card" id="ssh-keys">
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">SSH keys</h2>
+				<p class="muted text-sm">Deploy keys for private repositories on any Git host, and the keys musdash reaches remote servers with. Add the public key to the repository as a read-only key (GitHub, GitLab and Gitea call it a deploy key, Bitbucket an access key) or to the server's authorized keys. The private half never leaves this install.</p>
+			</div>
+			if s.Admin {
+				@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "new-key"}) {
+					New key
+				}
+			}
+		</div>
+		if v.NewKey != nil {
+			<div class="card-body border-b border-line">
+				@ui.Notice(ui.ToneOK) {
+					<p class="font-semibold">Key created. Add this public key to the repository's deploy keys:</p>
+					<p class="code mt-2 block break-all">{ v.NewKey.PublicKey }</p>
+					<p class="mt-2">
+						<button type="button" class="btn btn-secondary btn-sm" data-copy={ v.NewKey.PublicKey }>
+							@ui.Icon("copy")
+							<span data-copy-label>Copy public key</span>
+						</button>
+					</p>
+				}
+			</div>
+		}
+		if len(v.Keys) == 0 {
+			if s.Admin {
+				<p class="card-body muted">No key yet.</p>
+			} else {
+				<p class="card-body muted">No key yet. An Admin can create one.</p>
+			}
+		} else {
+			<div class="rows">
+				for _, k := range v.Keys {
+					<div class="row">
+						@ui.Icon("key", "text-ink-mute")
+						<div class="min-w-0 flex-1">
+							<p class="truncate font-semibold">{ k.Name }</p>
+							<p class="fact truncate text-ink-mute">{ k.PublicKey }</p>
+						</div>
+						<button type="button" class="btn btn-ghost btn-sm" data-copy={ k.PublicKey }>
+							@ui.Icon("copy")
+							<span data-copy-label>Copy</span>
+						</button>
+						if s.Admin {
+							<form method="post" action={ templ.SafeURL("/sources/keys/" + k.ID + "/delete") }>
+								@ui.CSRF(s.CSRF)
+								@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Delete the key "+k.Name+"?", "A repository or a server that trusts it can no longer be reached with it. A key that is still in use is not deleted.", "Delete key", true)}) {
+									Delete
+								}
+							</form>
+						}
+					</div>
+				}
+			</div>
+		}
+	</section>
+	if s.Admin {
+		@ui.FormDialog(ui.DialogProps{ID: "new-key", Title: "New SSH key", Description: "musdash makes the key pair and shows you the public half.", Action: "/sources/keys", CSRF: s.CSRF, Submit: "Create key", Open: !v.KeyForm.OK()}) {
+			@ui.TextField(v.KeyForm, "Name", "What it is for, such as the repository or the server.", ui.InputProps{ID: "key_name", Placeholder: "shop repository", Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
+		}
+	}
+}
+
+// Keys is the one page for everything that lets something outside act on
+// this install: API tokens, deploy tokens, webhook secrets and SSH keys.
+templ Keys(s ui.Shell, v KeysView) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Keys & tokens", "Everything that lets a script, a pipeline or a Git host act on this install, in one place.")
+		<div class="grid max-w-4xl gap-6">
+			@apiTokensCard(s, v)
+			@deployTokensCard(s, v)
+			@webhookSecretsCard(s, v)
+			@sshKeysCard(s, v)
+		</div>
+	}
+}
+
+// keysLink is what a resource's own page says about its token and secret:
+// they are on the Keys page with all the others.
+templ keysLink(what string) {
+	<section class="card" id="triggers">
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">Deploy from outside</h2>
+				<p class="muted text-sm">This { what }'s deploy token and push webhook are kept with every other key and token.</p>
+			</div>
+			@ui.LinkButton("/keys#deploy-tokens", ui.ButtonProps{Small: true, Icon: "key"}) {
+				Keys & tokens
+			}
+		</div>
+	</section>
+}
