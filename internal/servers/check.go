@@ -57,7 +57,10 @@ func (r Report) Problem() string {
 	return ""
 }
 
-// archOf maps what `uname -m` prints to Go's names.
+// archOf maps what `uname -m` prints to Go's names, and anything it does
+// not know to "". The answer comes from the server, and the name it gives
+// becomes part of a file name on this machine: it is one of these words or
+// it is nothing.
 func archOf(machine string) string {
 	switch strings.TrimSpace(machine) {
 	case "x86_64", "amd64":
@@ -66,9 +69,14 @@ func archOf(machine string) string {
 		return "arm64"
 	case "armv7l", "armv6l":
 		return "arm"
+	case "riscv64":
+		return "riscv64"
 	}
-	return strings.TrimSpace(machine)
+	return ""
 }
+
+// knownArch are the architectures a proxy binary is looked up for.
+var knownArch = map[string]bool{"amd64": true, "arm64": true, "arm": true, "riscv64": true}
 
 // subDirs are the directories musdash uses under a server's data directory.
 var subDirs = []string{"", "apps", "work", "backups", "proxy", "bin"}
@@ -115,7 +123,9 @@ func (p *Pool) Check(ctx context.Context, s db.Server) (Report, error) {
 		rep.Items = append(rep.Items, Item{Name: "System", Needed: true, Detail: "musdash deploys to Linux servers; this one reports " + orUnknown(system)})
 	}
 	machine, _ := say("uname", "-m")
-	s.Arch = archOf(machine)
+	if s.Arch = archOf(machine); s.Arch == "" {
+		rep.Items = append(rep.Items, Item{Name: "Architecture", Detail: "the server reports an architecture musdash has no proxy for; apps can be deployed, but the proxy cannot be installed"})
+	}
 
 	// Docker: there, and usable by this account.
 	version, err := say("docker", "version", "--format", "{{.Server.Version}}")
@@ -287,6 +297,12 @@ func safeForUnit(s string) bool {
 // architecture: this process's own when it matches, otherwise one the
 // operator put in the dist directory.
 func ProxyBinary(distDir, arch string) (string, error) {
+	// The value was stored from a server's answer. Only a known word may
+	// become part of a path here: anything else could name another file
+	// of this machine, which would then be copied to that server.
+	if !knownArch[arch] {
+		return "", fmt.Errorf("musdash has no proxy for the architecture %q", arch)
+	}
 	if runtime.GOOS == "linux" && runtime.GOARCH == arch {
 		if self, err := os.Executable(); err == nil {
 			return self, nil

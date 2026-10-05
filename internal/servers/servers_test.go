@@ -437,6 +437,28 @@ func TestInstallProxy(t *testing.T) {
 			t.Errorf("accepted %+v", bad)
 		}
 	}
+	// What a server says its architecture is ends up in a file name on
+	// this machine. A server that answers with a path gets nothing.
+	secretFile := filepath.Join(t.TempDir(), "master.key")
+	os.WriteFile(secretFile, []byte("the master key"), 0o600)
+	for _, answer := range []string{"../../../../../../.." + secretFile, "/../.." + secretFile, "amd64/../../x", "x86_64\nsomething", ""} {
+		if got := archOf(answer); got != "" {
+			t.Errorf("archOf(%q) = %q", answer, got)
+		}
+		if path, err := ProxyBinary(filepath.Dir(secretFile), answer); err == nil {
+			t.Errorf("ProxyBinary accepted the architecture %q and would copy %s", answer, path)
+		}
+	}
+	os.WriteFile(filepath.Join(filepath.Dir(secretFile), "musdash-linux-"), []byte("x"), 0o600)
+	if _, err := ProxyBinary(filepath.Dir(secretFile), ""); err == nil {
+		t.Error("an empty architecture found a file")
+	}
+	for machine, want := range map[string]string{"x86_64": "amd64", "aarch64\n": "arm64", "aarch64": "arm64", " arm64 ": "arm64", "armv7l": "arm", "riscv64": "riscv64", "sparc64": ""} {
+		if got := archOf(machine); got != want {
+			t.Errorf("archOf(%q) = %q, want %q", machine, got, want)
+		}
+	}
+
 	// A server of another architecture needs its own binary, and the
 	// message says where to put it.
 	if _, err := ProxyBinary(t.TempDir(), "riscv64"); err == nil || !strings.Contains(err.Error(), "musdash-linux-riscv64") {
