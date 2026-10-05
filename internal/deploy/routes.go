@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
@@ -68,8 +69,11 @@ func (d *Deployer) SyncRoutes(ctx context.Context, server db.Server) error {
 	// One publication at a time: the database read, the file write and the
 	// signal form one step, so an older snapshot is never written over a
 	// newer one.
-	d.routesMu.Lock()
-	defer d.routesMu.Unlock()
+	// The lock is the server's own: one that does not answer must not hold
+	// up the routes of the others.
+	mu := d.routesLock(server.ID)
+	mu.Lock()
+	defer mu.Unlock()
 
 	rows, err := d.DB.RoutesForServer(ctx, server.ID)
 	if err != nil {
@@ -112,6 +116,20 @@ func (d *Deployer) SyncRoutes(ctx context.Context, server db.Server) error {
 		return err
 	}
 	return d.signalProxy(ctx, r)
+}
+
+func (d *Deployer) routesLock(serverID string) *sync.Mutex {
+	d.routesMu.Lock()
+	defer d.routesMu.Unlock()
+	if d.routesOf == nil {
+		d.routesOf = map[string]*sync.Mutex{}
+	}
+	mu := d.routesOf[serverID]
+	if mu == nil {
+		mu = &sync.Mutex{}
+		d.routesOf[serverID] = mu
+	}
+	return mu
 }
 
 // signalProxy asks the proxy to reload now. The proxy also re-reads its

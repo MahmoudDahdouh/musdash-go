@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -51,28 +52,89 @@ type SSHConfig struct {
 // Every value is quoted for the remote shell with Quote; a command line is
 // never built any other way.
 type SSHRunner struct {
-	cfg    SSHConfig
+	cfg SSHConfig
+	// client is the first connection. Alive and Dial use it.
 	client *ssh.Client
+	// hostKey is the key the server presented on the first connection.
+	// Further connections accept only that one.
+	hostKey []byte
+
+	mu sync.Mutex
+	// lanes are the connections commands run on: lanes[0] is client, and
+	// more are opened when one is full. sshd allows a connection only so
+	// many sessions (MaxSessions, 10 unless changed), and a server with a
+	// few log streams open must still take a deploy's commands.
+	lanes  []*lane
+	closed chan struct{}
+	once   sync.Once
 }
+
+// lane is one connection and the number of sessions open on it.
+type lane struct {
+	client *ssh.Client
+	open   int
+}
+
+const (
+	// laneSessions is how many sessions one connection carries: below
+	// sshd's default limit of ten.
+	laneSessions = 8
+	// maxLanes bounds the connections to one server.
+	maxLanes = 3
+	// keepaliveEvery and replyWithin find a server that went away without
+	// closing the connection: without them a command on it would wait for
+	// ever.
+	keepaliveEvery = 30 * time.Second
+)
+
+// replyWithin is how long a server has to answer a keepalive.
+var replyWithin = 15 * time.Second
+
+// SetReplyWithinForTest shortens the wait for a keepalive's answer. It is
+// for tests, which cannot wait a quarter of a minute for a server to count
+// as gone.
+func SetReplyWithinForTest(d time.Duration) (restore func()) {
+	old := replyWithin
+	replyWithin = d
+	return func() { replyWithin = old }
+}
+
+// ErrBusy is returned when a server already runs as many commands as its
+// connections can carry.
+var ErrBusy = errors.New("ssh: too many commands are running on this server at once")
 
 // DialSSH connects and signs in.
 func DialSSH(ctx context.Context, cfg SSHConfig) (*SSHRunner, error) {
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 15 * time.Second
+	}
+	client, presented, err := dialClient(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	r := &SSHRunner{cfg: cfg, client: client, hostKey: presented, lanes: []*lane{{client: client}}, closed: make(chan struct{})}
+	go r.keepalive()
+	return r, nil
+}
+
+// dialClient makes one connection. It returns the host key the server
+// presented.
+func dialClient(ctx context.Context, cfg SSHConfig) (*ssh.Client, []byte, error) {
+	var presented []byte
 	if cfg.Signer == nil {
-		return nil, errors.New("ssh: no key to sign in with")
+		return nil, nil, errors.New("ssh: no key to sign in with")
 	}
 	// With no key to compare with and nobody to show a new one to, any
 	// server would do. That is never what a caller means.
 	if len(cfg.HostKey) == 0 && cfg.Seen == nil {
-		return nil, errors.New("ssh: no host key is recorded for this server and there is no way to record one")
-	}
-	if cfg.Timeout == 0 {
-		cfg.Timeout = 15 * time.Second
+		return nil, nil, errors.New("ssh: no host key is recorded for this server and there is no way to record one")
 	}
 	clientCfg := &ssh.ClientConfig{
 		User:    cfg.User,
 		Auth:    []ssh.AuthMethod{ssh.PublicKeys(cfg.Signer)},
 		Timeout: cfg.Timeout,
 		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
+			presented = key.Marshal()
 			if len(cfg.HostKey) > 0 {
 				if !bytes.Equal(key.Marshal(), cfg.HostKey) {
 					return ErrHostKeyChanged
@@ -86,7 +148,7 @@ func DialSSH(ctx context.Context, cfg SSHConfig) (*SSHRunner, error) {
 	dialer := net.Dialer{Timeout: cfg.Timeout}
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("connect to %s: %w", addr, err)
+		return nil, nil, fmt.Errorf("connect to %s: %w", addr, err)
 	}
 	// The handshake has no context of its own; a deadline on the
 	// connection bounds it.
@@ -95,25 +157,187 @@ func DialSSH(ctx context.Context, cfg SSHConfig) (*SSHRunner, error) {
 	if err != nil {
 		conn.Close()
 		if errors.Is(err, ErrHostKeyChanged) {
-			return nil, ErrHostKeyChanged
+			return nil, nil, ErrHostKeyChanged
 		}
-		return nil, fmt.Errorf("sign in to %s as %s: %w", addr, cfg.User, err)
+		return nil, nil, fmt.Errorf("sign in to %s as %s: %w", addr, cfg.User, err)
 	}
 	conn.SetDeadline(time.Time{})
-	return &SSHRunner{cfg: cfg, client: ssh.NewClient(sc, chans, reqs)}, nil
+	return ssh.NewClient(sc, chans, reqs), presented, nil
+}
+
+// keepalive closes the connections of a server that stopped answering, so
+// that the commands waiting on them fail instead of waiting for ever.
+func (r *SSHRunner) keepalive() {
+	t := time.NewTicker(keepaliveEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-r.closed:
+			return
+		case <-t.C:
+			if !r.Alive() {
+				r.Close()
+				return
+			}
+		}
+	}
+}
+
+// within runs f, giving up when ctx ends or, with a limit above zero, when
+// that long has passed. f goes on in the background until the connection
+// answers or is closed; undo is then given what it returned.
+func within[T any](ctx context.Context, limit time.Duration, f func() (T, error), undo func(T)) (T, error) {
+	type result struct {
+		v   T
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		v, err := f()
+		done <- result{v, err}
+	}()
+	var timeout <-chan time.Time
+	if limit > 0 {
+		t := time.NewTimer(limit)
+		defer t.Stop()
+		timeout = t.C
+	}
+	var zero T
+	late := func() {
+		if res := <-done; res.err == nil && undo != nil {
+			undo(res.v)
+		}
+	}
+	select {
+	case res := <-done:
+		return res.v, res.err
+	case <-ctx.Done():
+		go late()
+		return zero, ctx.Err()
+	case <-timeout:
+		go late()
+		return zero, errors.New("ssh: the server did not answer")
+	}
+}
+
+// session opens a session on a connection that has room, connecting once
+// more when none has. The returned function gives the place back and must
+// be called when the session has ended.
+func (r *SSHRunner) session(ctx context.Context) (*ssh.Session, func(), error) {
+	r.mu.Lock()
+	var l *lane
+	for _, have := range r.lanes {
+		if have.open < laneSessions {
+			l = have
+			break
+		}
+	}
+	if l == nil && len(r.lanes) >= maxLanes {
+		r.mu.Unlock()
+		return nil, nil, ErrBusy
+	}
+	if l == nil {
+		// Connected under the lock: commands that arrive meanwhile wait
+		// for this connection rather than each making one.
+		cfg := r.cfg
+		cfg.HostKey, cfg.Seen = r.hostKey, nil
+		client, _, err := dialClient(ctx, cfg)
+		if err != nil {
+			r.mu.Unlock()
+			return nil, nil, err
+		}
+		select {
+		case <-r.closed:
+			r.mu.Unlock()
+			client.Close()
+			return nil, nil, net.ErrClosed
+		default:
+		}
+		l = &lane{client: client}
+		r.lanes = append(r.lanes, l)
+	}
+	l.open++
+	r.mu.Unlock()
+
+	var once sync.Once
+	release := func() {
+		once.Do(func() {
+			r.mu.Lock()
+			l.open--
+			r.mu.Unlock()
+		})
+	}
+	s, err := within(ctx, 0, l.client.NewSession, func(s *ssh.Session) { s.Close() })
+	if err != nil {
+		release()
+		r.drop(l)
+		return nil, nil, fmt.Errorf("ssh: open a session: %w", err)
+	}
+	return s, release, nil
+}
+
+// drop closes an extra connection that failed and has nothing left on it.
+// The first connection is not dropped here: when it is dead the Runner as
+// a whole is, and whoever holds it finds out through Alive.
+func (r *SSHRunner) drop(l *lane) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if l.client == r.client || l.open > 0 {
+		return
+	}
+	for i, have := range r.lanes {
+		if have == l {
+			r.lanes = append(r.lanes[:i], r.lanes[i+1:]...)
+			l.client.Close()
+			return
+		}
+	}
 }
 
 // DataDir is where musdash keeps its files on this server.
 func (r *SSHRunner) DataDir() string { return r.cfg.DataDir }
 
-// Alive reports whether the connection still answers.
+// Alive reports whether the connection still answers. A server that says
+// nothing for a while counts as gone.
 func (r *SSHRunner) Alive() bool {
-	_, _, err := r.client.SendRequest("keepalive@openssh.com", true, nil)
+	_, err := within(context.Background(), replyWithin, func() (struct{}, error) {
+		_, _, err := r.client.SendRequest("keepalive@openssh.com", true, nil)
+		return struct{}{}, err
+	}, nil)
 	return err == nil
 }
 
-// Close ends the connection and every command running on it.
-func (r *SSHRunner) Close() error { return r.client.Close() }
+// Close ends the connections and every command running on them.
+func (r *SSHRunner) Close() error {
+	var err error
+	r.once.Do(func() {
+		close(r.closed)
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		for _, l := range r.lanes {
+			if cerr := l.client.Close(); cerr != nil && err == nil && l.client == r.client {
+				err = cerr
+			}
+		}
+	})
+	return err
+}
+
+// stopOnError ends a command whose output has nowhere to go. Without it
+// the command would sit blocked on a full pipe until its context ended:
+// `docker save` into a `docker load` that failed, for one.
+type stopOnError struct {
+	w    io.Writer
+	stop func()
+}
+
+func (s *stopOnError) Write(p []byte) (int, error) {
+	n, err := s.w.Write(p)
+	if err != nil {
+		s.stop()
+	}
+	return n, err
+}
 
 var envNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
@@ -182,19 +406,33 @@ func (r *SSHRunner) start(ctx context.Context, c Cmd) (*ssh.Session, func(), err
 			r.remove(clean, file)
 		}
 	}
-	session, err := r.client.NewSession()
+	session, release, err := r.session(ctx)
 	if err != nil {
-		return nil, cleanup, fmt.Errorf("ssh: open a session: %w", err)
+		return nil, cleanup, err
 	}
+	removeEnv := cleanup
+	cleanup = func() { release(); removeEnv() }
 	session.Stdin = c.Stdin
-	session.Stdout = c.Stdout
+	if c.Stdout != nil {
+		session.Stdout = &stopOnError{w: c.Stdout, stop: func() {
+			session.Signal(ssh.SIGKILL)
+			session.Close()
+		}}
+	}
 	session.Stderr = c.Stderr
 	// Through sh, whatever the account's own shell is.
-	if err := session.Start("exec sh -c " + Quote(text)); err != nil {
+	if err := begin(ctx, session, "exec sh -c "+Quote(text)); err != nil {
 		session.Close()
 		return nil, cleanup, fmt.Errorf("ssh: start %s: %w", c.Name, err)
 	}
 	return session, cleanup, nil
+}
+
+// begin starts a command, giving up when ctx ends: a server that accepts
+// the session and then never answers must not hold the caller.
+func begin(ctx context.Context, session *ssh.Session, text string) error {
+	_, err := within(ctx, 0, func() (struct{}, error) { return struct{}{}, session.Start(text) }, nil)
+	return err
 }
 
 // wait waits for a started command. When ctx ends first, the command is
@@ -293,9 +531,11 @@ func (r *SSHRunner) WriteFile(ctx context.Context, p string, mode fs.FileMode, s
 type sessionReader struct {
 	io.Reader
 	session *ssh.Session
+	release func()
 }
 
 func (s sessionReader) Close() error {
+	defer s.release()
 	s.session.Signal(ssh.SIGKILL)
 	return s.session.Close()
 }
@@ -313,20 +553,20 @@ func (r *SSHRunner) ReadFile(ctx context.Context, p string) (io.ReadCloser, erro
 		}
 		return nil, err
 	}
-	session, err := r.client.NewSession()
+	session, release, err := r.session(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("ssh: open a session: %w", err)
+		return nil, err
 	}
 	out, err := session.StdoutPipe()
+	if err == nil {
+		err = begin(ctx, session, "exec cat -- "+Quote(p))
+	}
 	if err != nil {
 		session.Close()
+		release()
 		return nil, err
 	}
-	if err := session.Start("exec cat -- " + Quote(p)); err != nil {
-		session.Close()
-		return nil, err
-	}
-	return sessionReader{Reader: out, session: session}, nil
+	return sessionReader{Reader: out, session: session, release: release}, nil
 }
 
 func (r *SSHRunner) MkdirAll(ctx context.Context, p string, mode fs.FileMode) error {

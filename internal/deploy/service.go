@@ -758,12 +758,12 @@ func (d *Deployer) ServiceLogs(ctx context.Context, r runner.Runner, id string, 
 
 // refreshService sets a service's status from the state of its containers:
 // running when all are, degraded when only some are, exited when none is.
-func (d *Deployer) refreshService(ctx context.Context, dk docker.Client, id string) error {
+func (d *Deployer) refreshService(ctx context.Context, serverID string, dk docker.Client, id string) error {
 	listed, err := dk.List(ctx)
 	if err != nil {
 		return err
 	}
-	return d.DB.SetServiceStatusIf(ctx, id, serviceStatus(listed, id))
+	return d.DB.SetServiceStatusIf(ctx, serverID, id, serviceStatus(listed, id))
 }
 
 func serviceStatus(listed []docker.Listed, id string) string {

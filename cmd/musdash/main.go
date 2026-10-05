@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -210,6 +211,10 @@ func runServer(args []string) error {
 	pool := servers.New()
 	// The pool reads a remote server's key and host key from the database.
 	pool.DB, pool.Box = d, box
+	// Closed when this function returns, which is after the queue has
+	// stopped: a deployment that is finishing its switch still needs its
+	// server.
+	defer pool.Close()
 	go pool.Run(ctx)
 	queue := jobs.New(d.DB, log, *workers)
 	deployer := deploy.New(d, box, queue, pool, cfg, log, net.JoinHostPort("127.0.0.1", port))
@@ -300,6 +305,7 @@ func republishRoutes(ctx context.Context, d *db.DB, deployer *deploy.Deployer, l
 // monitorServers runs one container monitor per server, starting monitors for
 // servers added while the process runs.
 func monitorServers(ctx context.Context, d *db.DB, deployer *deploy.Deployer, log *slog.Logger) {
+	var mu sync.Mutex
 	watching := make(map[string]bool)
 	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
@@ -309,10 +315,24 @@ func monitorServers(ctx context.Context, d *db.DB, deployer *deploy.Deployer, lo
 			log.Error("list servers", "err", err)
 		}
 		for _, server := range list {
+			// A remote server is watched from its first check on.
+			if !servers.IsLocal(server) && server.HostKey == "" {
+				continue
+			}
+			mu.Lock()
 			if !watching[server.ID] {
 				watching[server.ID] = true
-				go deployer.Monitor(ctx, server)
+				go func() {
+					// Returns when the server was removed or its host key
+					// forgotten; the next round starts it again if it is
+					// back.
+					deployer.Monitor(ctx, server)
+					mu.Lock()
+					delete(watching, server.ID)
+					mu.Unlock()
+				}()
 			}
+			mu.Unlock()
 		}
 		select {
 		case <-ctx.Done():

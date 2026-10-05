@@ -407,7 +407,7 @@ func TestResetStuckDeployingAndPrune(t *testing.T) {
 	if rows, _ := d.RoutesForServer(ctx, server.ID); len(rows) != 0 {
 		t.Fatal("a stopped app is still routed")
 	}
-	d.SetAppStatusIf(ctx, hadContainer.ID, "musdash-had-1", AppExited)
+	d.SetAppStatusIf(ctx, server.ID, hadContainer.ID, "musdash-had-1", AppExited)
 	if got, _ := d.AppByID(ctx, hadContainer.ID); got.Status != AppStopped || got.Container != "musdash-had-1" {
 		t.Fatalf("after stop: %+v", got)
 	}

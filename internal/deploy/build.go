@@ -7,7 +7,9 @@ import (
 	"io"
 	"path"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
@@ -148,8 +150,10 @@ func (d *Deployer) clone(ctx context.Context, r runner.Runner, access db.App, re
 		return "", fmt.Errorf("read the checked-out commit: %w", err)
 	}
 	commit := strings.TrimSpace(string(head))
-	if len(commit) < 12 || strings.Trim(commit, "0123456789abcdef") != "" {
-		return "", fmt.Errorf("git reported an unexpected commit id %q", commit)
+	// A SHA-1 or SHA-256 id and nothing else: the answer comes from the
+	// server and is stored.
+	if (len(commit) != 40 && len(commit) != 64) || strings.Trim(commit, "0123456789abcdef") != "" {
+		return "", fmt.Errorf("git reported an unexpected commit id %q", clip(commit, 80))
 	}
 	log.Step("Checked out %s", commit[:12])
 	return commit, nil
@@ -161,7 +165,9 @@ func (d *Deployer) clone(ctx context.Context, r runner.Runner, access db.App, re
 //
 // The image travels as `docker save` piped into `docker load`, through
 // this process as a stream. No registry is involved, and nothing is held
-// in memory or written to a disk on the way.
+// in memory or written to a disk on the way. On the way the archive is
+// checked to name the built image and no other (docker.FilterSaved): the
+// build server decides what this app runs, not what anything else does.
 func (d *Deployer) buildFor(ctx context.Context, r runner.Runner, server db.Server, app db.App, dep db.Deployment, log *Log) (image, commit string, err error) {
 	if app.BuildServerID == "" || app.BuildServerID == server.ID {
 		return d.build(ctx, r, app, dep, log)
@@ -191,23 +197,50 @@ func (d *Deployer) buildFor(ctx context.Context, r runner.Runner, server db.Serv
 	log.Step("Moving the image to %s", server.Name)
 	moveCtx, cancel := context.WithTimeout(ctx, d.buildTimeout)
 	defer cancel()
+	// Three parts in a row: save, check, load. When one fails the other
+	// two fail after it, so the failure that came first is the one told.
+	var once sync.Once
+	var cause error
+	failed := func(what string, err error) {
+		if err != nil {
+			once.Do(func() { cause = fmt.Errorf("%s: %w", what, err) })
+		}
+	}
 	pr, pw := io.Pipe()
-	saved := make(chan error, 1)
+	fr, fw := io.Pipe()
+	parts := make(chan struct{}, 2)
 	go func() {
 		serr := br.Run(moveCtx, runner.Cmd{Name: "docker", Args: []string{"save", "--", image}, Stdout: pw, Stderr: log})
+		failed("read the image from "+builder.Name, serr)
 		// With an error the reading side fails too, so a cut-off stream
 		// is never taken for a whole image.
 		pw.CloseWithError(serr)
-		saved <- serr
+		parts <- struct{}{}
 	}()
-	loadErr := r.Run(moveCtx, runner.Cmd{Name: "docker", Args: []string{"load"}, Stdin: pr, Stdout: log, Stderr: log})
-	// Unblocks the saving side if the loading side gave up first.
-	pr.CloseWithError(loadErr)
-	if serr := <-saved; serr != nil {
-		return "", "", fmt.Errorf("read the image from %s: %w", builder.Name, serr)
-	}
+	go func() {
+		ferr := docker.FilterSaved(fw, pr, image)
+		if errors.Is(ferr, docker.ErrForeignImage) {
+			failed("the image from "+builder.Name+" was refused", ferr)
+		} else {
+			failed("move the image from "+builder.Name, ferr)
+		}
+		// A refused archive ends here, cut short: nothing of it is loaded.
+		fw.CloseWithError(ferr)
+		pr.CloseWithError(ferr)
+		parts <- struct{}{}
+	}()
+	loadErr := r.Run(moveCtx, runner.Cmd{Name: "docker", Args: []string{"load"}, Stdin: fr, Stdout: log, Stderr: log})
+	failed("load the image on "+server.Name, loadErr)
+	// Unblocks the other two if the loading side gave up first, and ends
+	// the save rather than leaving it to its time limit.
+	fr.CloseWithError(loadErr)
 	if loadErr != nil {
-		return "", "", fmt.Errorf("load the image on %s: %w", server.Name, loadErr)
+		cancel()
+	}
+	<-parts
+	<-parts
+	if cause != nil {
+		return "", "", cause
 	}
 	// What arrived must be what was built.
 	if have, herr := (docker.Client{R: r}).HasImage(ctx, image); herr != nil || !have {
@@ -404,4 +437,22 @@ func orRoot(p string) string {
 		return "the repository root"
 	}
 	return p
+}
+
+// clip shortens what a server answered to at most n printable characters,
+// for a message or a column: the answer is the server's and is not trusted
+// to be short or to be text.
+func clip(s string, n int) string {
+	var b strings.Builder
+	for _, c := range s {
+		if b.Len() >= n {
+			b.WriteString("…")
+			break
+		}
+		if c < ' ' || c == 0x7f || c == utf8.RuneError {
+			c = ' '
+		}
+		b.WriteRune(c)
+	}
+	return strings.TrimSpace(b.String())
 }

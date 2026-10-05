@@ -1,6 +1,8 @@
 package deploy
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -41,6 +43,8 @@ func (s *stubTokens) InstallationToken(_ context.Context, appID int64, _ []byte,
 // gitEnvRecorder scripts a server for Git deployments and records the
 // environment each command ran with.
 type gitEnvRecorder struct {
+	// commit, when set, is what git answers for the checked-out commit.
+	commit   string
 	mu       sync.Mutex
 	envs     map[string][]string // first word of the command → environment
 	links    map[string]bool
@@ -64,6 +68,8 @@ func (g *gitEnvRecorder) handle(line string, c runner.Cmd) (string, error) {
 		}
 	}
 	switch {
+	case strings.Contains(line, "rev-parse HEAD") && g.commit != "":
+		return g.commit, nil
 	case strings.Contains(line, "rev-parse HEAD"):
 		return testCommit + "\n", nil
 	case strings.Contains(line, "ls-tree HEAD -- "):
@@ -767,23 +773,41 @@ func TestBuildOnAnotherServer(t *testing.T) {
 	// takes it in.
 	rec := &gitEnvRecorder{}
 	builder := &runnertest.Fake{}
-	failSave := false
+	// What `docker save` writes: an archive that says which image it holds.
+	saved := func(names ...string) string {
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+		for name, body := range map[string]string{
+			"blobs/sha256/aa": "LAYER",
+			"manifest.json":   `[{"RepoTags":["` + strings.Join(names, `","`) + `"]}]`,
+		} {
+			tw.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(body))})
+			tw.Write([]byte(body))
+		}
+		tw.Close()
+		return buf.String()
+	}
+	failSave, alsoNames := false, ""
 	builder.Handle = func(line string, c runner.Cmd) (string, error) {
 		if strings.HasPrefix(line, "docker save") {
 			if failSave {
-				return "half an ima", runnertest.Exit("docker", 1, "")
+				return saved(image)[:700], runnertest.Exit("docker", 1, "")
 			}
-			return "IMAGE-TARBALL", nil
+			if alsoNames != "" {
+				return saved(image, alsoNames), nil
+			}
+			return saved(image), nil
 		}
 		return rec.handle(line, c)
 	}
-	loaded := ""
+	loaded, received := "", ""
 	target := e.fake
 	inner := target.Handle
 	target.Handle = func(line string, c runner.Cmd) (string, error) {
 		switch {
 		case line == "docker load":
 			raw, rerr := io.ReadAll(c.Stdin)
+			received = string(raw)
 			if rerr != nil {
 				return "", runnertest.Exit("docker", 1, "unexpected EOF")
 			}
@@ -803,7 +827,7 @@ func TestBuildOnAnotherServer(t *testing.T) {
 	if dep.Status != db.DeploySuccess {
 		t.Fatalf("%s %q\n%s", dep.Status, dep.Error, e.log(dep))
 	}
-	if loaded != "IMAGE-TARBALL" {
+	if !strings.Contains(loaded, "LAYER") || !strings.Contains(loaded, `"RepoTags":["`+image+`"]`) {
 		t.Fatalf("the app's server was given %q", loaded)
 	}
 	// Each server did its own part and nothing of the other's.
@@ -854,6 +878,31 @@ func TestBuildOnAnotherServer(t *testing.T) {
 		t.Fatalf("after a failed transfer: %+v", app)
 	}
 
+	// The build server decides what this app runs and nothing else: an
+	// archive that would also give its image another name (the image
+	// another app runs, say) is refused before that name reaches Docker.
+	for _, other := range []string{"nginx:alpine", ImageRepository("otherapp0000") + ":" + testCommit[:12]} {
+		failSave, alsoNames = false, other
+		loaded, received = "", ""
+		before = len(target.Calls())
+		dep = e.deploy()
+		if dep.Status != db.DeployFailed || !strings.Contains(dep.Error, "the image from builder was refused") {
+			t.Fatalf("%s: %s %q", other, dep.Status, dep.Error)
+		}
+		if loaded != "" || strings.Contains(received, other) {
+			t.Fatalf("%s: the app's server was given the other name: %q", other, received)
+		}
+		for _, c := range target.Calls()[before:] {
+			if strings.HasPrefix(c, "docker run") {
+				t.Fatalf("%s: a container was started from a refused image: %s", other, c)
+			}
+		}
+		if app := e.reload(); app.Container != previous {
+			t.Fatalf("%s: the app was switched: %+v", other, app)
+		}
+	}
+	alsoNames = ""
+
 	// Choosing the app's own server is the same as choosing none, and a
 	// server of another team cannot be chosen.
 	if err := e.db.SetAppBuildServer(ctx, e.team, e.app.ID, e.server.ID); err != nil {
@@ -866,5 +915,37 @@ func TestBuildOnAnotherServer(t *testing.T) {
 	e.db.Exec(`INSERT INTO servers (id, team_id, name, kind, created_at) VALUES ('theirs', 'otherteam', 'theirs', 'ssh', 1)`)
 	if err := e.db.SetAppBuildServer(ctx, e.team, e.app.ID, "theirs"); err != db.ErrNotFound {
 		t.Fatalf("another team's server as build server: %v", err)
+	}
+}
+
+// The commit id is the server's answer and is stored with the deployment
+// and shown. Only something that is a commit id is taken.
+func TestCloneRefusesWhatIsNotACommitID(t *testing.T) {
+	for name, answer := range map[string]string{
+		"short":     "a1b2c3d4e5f6\n",
+		"long":      strings.Repeat("a", 4096) + "\n",
+		"not hex":   strings.Repeat("z", 40) + "\n",
+		"two lines": testCommit + "\n" + testCommit + "\n",
+		"nothing":   "\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newEnv(t)
+			e.gitApp(nil)
+			e.fake.Handle = (&gitEnvRecorder{commit: answer}).handle
+			dep := e.deploy()
+			if dep.Status != db.DeployFailed || !strings.Contains(dep.Error, "unexpected commit id") {
+				t.Fatalf("%s %q", dep.Status, dep.Error)
+			}
+			if len(dep.Error) > 300 || dep.CommitSHA != "" {
+				t.Fatalf("the answer was stored: commit %q, error of %d bytes", dep.CommitSHA, len(dep.Error))
+			}
+		})
+	}
+	// A SHA-256 repository's id is one.
+	e := newEnv(t)
+	e.gitApp(nil)
+	e.fake.Handle = (&gitEnvRecorder{commit: strings.Repeat("ab", 32) + "\n"}).handle
+	if dep := e.deploy(); dep.Status != db.DeploySuccess {
+		t.Fatalf("a 64-character commit id: %s %q", dep.Status, dep.Error)
 	}
 }

@@ -470,3 +470,116 @@ func TestInstallProxy(t *testing.T) {
 		t.Fatalf("%q %v", got, err)
 	}
 }
+
+// Checking a server must not cut what is running on it: a deployment, a
+// backup, a restore that is half applied.
+func TestCheckLeavesRunningCommandsAlone(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	if _, err := e.pool.Check(ctx, e.server); err != nil {
+		t.Fatal(err)
+	}
+	r := e.runner()
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.Output(ctx, runner.Cmd{Name: "sh", Args: []string{"-c", "sleep 1; echo finished"}})
+		done <- err
+	}()
+	time.Sleep(200 * time.Millisecond)
+	s, _ := e.db.ServerByID(ctx, e.server.ID)
+	if _, err := e.pool.Check(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("a check ended a running command: %v", err)
+	}
+}
+
+// What a dead process left on a server is removed by the first connection
+// the next one makes: a checkout may hold a deploy key, and the files with
+// a command's environment or a storage's keys hold secrets.
+func TestFirstConnectionClearsLeftovers(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	data := e.server.DataDir
+	write := func(rel string) string {
+		p := filepath.Join(data, rel)
+		os.MkdirAll(filepath.Dir(p), 0o700)
+		if err := os.WriteFile(p, []byte("secret"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	gone := []string{write("work/dep123/checkout/deploy-key"), write("work/.env-abcdef"), write("backups/db1/.rclone-123.env")}
+	kept := []string{write("backups/db1/2026-01-01.sql.gz"), write("apps/app1/.env"), write("proxy/routes.json")}
+
+	if _, err := e.pool.Check(ctx, e.server); err != nil {
+		t.Fatal(err)
+	}
+	r := e.runner()
+	if _, err := r.Output(ctx, runner.Cmd{Name: "true"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range gone {
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("%s was left on the server", p)
+		}
+	}
+	for _, p := range kept {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s was removed", p)
+		}
+	}
+	// Only once: later connections must not remove what this process put
+	// there for work that is going on.
+	mine := write("work/dep456/checkout/file")
+	e.srv.DropConnections()
+	r.Output(ctx, runner.Cmd{Name: "true"})
+	if _, err := r.Output(ctx, runner.Cmd{Name: "true"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(mine); err != nil {
+		t.Error("a reconnection removed a build directory in use")
+	}
+}
+
+// A server that hangs must not hold up anything but its own commands:
+// forgetting it, and closing idle connections of the others, still work.
+func TestAHungServerHoldsNothingElse(t *testing.T) {
+	defer runner.SetReplyWithinForTest(300 * time.Millisecond)()
+	e := newEnv(t)
+	ctx := context.Background()
+	if _, err := e.pool.Check(ctx, e.server); err != nil {
+		t.Fatal(err)
+	}
+	r := e.runner()
+	if _, err := r.Output(ctx, runner.Cmd{Name: "true"}); err != nil {
+		t.Fatal(err)
+	}
+	e.srv.Silence(sshtest.Sessions, sshtest.Keepalive)
+	short, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel()
+	finished := make(chan struct{})
+	go func() {
+		r.Output(short, runner.Cmd{Name: "true"})
+		close(finished)
+	}()
+	// While that command is finding out that the server is gone:
+	time.Sleep(250 * time.Millisecond)
+	ok := make(chan struct{})
+	go func() {
+		e.pool.CloseIdle()
+		e.pool.Forget(e.server.ID)
+		close(ok)
+	}()
+	select {
+	case <-ok:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the pool was held by a server that does not answer")
+	}
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a command on a hung server never ended")
+	}
+}

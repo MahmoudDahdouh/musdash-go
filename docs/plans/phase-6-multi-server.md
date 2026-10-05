@@ -125,6 +125,26 @@ func (c Config) On(s db.Server) Config // the same layout under the server's dat
 - Not verifiable here, to check with a real second machine: a different architecture (the `dist` binary path), a firewall in between, the systemd unit actually starting and binding 80 and 443, certificates issued on the remote proxy, real OpenSSH's handling of the kill signal for a cancelled command (the test server kills the whole process group; OpenSSH signals the command itself), and the build server with two separate Docker daemons (on one machine both ends are the same daemon, so the move cannot be tried end to end).
 - Not done in this phase: installing Docker on a server for the person (the check shows the command), and a registry as a way to move images (the pipe covers it without one).
 
+## Independent review
+
+A second reader went through the phase with one question for each part: what can a server that hangs, lies or was taken over do to the control plane and to the other servers? It found nothing in the quoting, the secrets on command lines, the host keys, the paths or the team checks. What it did find, all fixed:
+
+| Finding | Fix |
+|---|---|
+| The default health check (no path, no command) never ended on a remote server: a connection forwarded over SSH has no read deadline, so the probe waited for as long as the app said nothing | The probe waits with a timer and closes the connection itself. The probe's test now runs locally and over SSH |
+| A server that stopped answering held every command on it for ever (opening a session and starting a command had no context), and through one shared lock it held up the routes of every other server | Sessions are opened and started with the caller's context; a keepalive every 30 seconds closes a connection that does not answer within 15; `Alive` has that limit too and is asked outside the pool's locks; the routes lock is per server |
+| A build server could send an archive that also names other images (`nginx:alpine`, another app's image), and `docker load` on the app's server would tag them | `docker.FilterSaved` reads the archive on its way through and refuses any name but the built image's before the file that holds it is passed on; links and odd entries are refused. Tried against the real `docker save` and `docker load` |
+| Checking a server closed its pooled connection, cutting a deployment, backup or restore in flight | The check no longer touches the pool |
+| The commit id and the answers of `uname` and `docker version` were stored as the server sent them, up to a megabyte | A commit id is 40 or 64 hex characters; the check's answers are cut to 100 printable characters |
+| A server's `docker events` could change the status of an app, database or service on another server (a build server knows the ids) | The three status updates take the reporting server's id and match it |
+| A command whose output could not be written (the save half of a move whose load half failed) sat on a full window until its time limit | The command is killed at the first failed write, and a failed load cancels the save |
+| Files with secrets stayed on a server when the process died or the connection dropped at the wrong moment: build directories with a deploy key, environment files, files with a storage's keys | The first connection a process makes to a server clears the work directory and those files, before anything of its own is there |
+| The monitor of a deleted server retried every minute for ever | It ends when the server is gone or has no host key; the next round starts one again when that changes |
+| Two races in the pool: an idle sweep closing a connection between its being found and counted, and a connection made while the server was being forgotten never closed | Found and counted in one step; after connecting, the entry must still be the server's or the connection is closed |
+| More than ten sessions on one connection are refused by sshd, so a few live log streams could make a deployment's commands fail | A connection carries eight; a second and third are opened when needed, and beyond that the answer is "too many commands at once" rather than a hang |
+| Shutdown closed the connections at once, cutting the traffic switch a deployment is allowed to finish | The pool is closed after the queue has stopped |
+| A failing `systemctl` under sudo was reported as "cannot use sudo without a password" | Only sudo's own message about a password is taken for that |
+
 ## Review focus
 
 1. **A value a person typed reaching the remote shell unquoted** — host names, users, paths, branch names, container names; the SSH tests use hostile strings for every argument position.

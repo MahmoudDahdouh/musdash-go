@@ -497,9 +497,12 @@ func (d *DB) SetAppStatus(ctx context.Context, id, status string) error {
 // also leaves alone an app that is being deployed or was stopped on purpose:
 // those statuses are set by the code doing the work, not by Docker events.
 // It reports whether the status changed.
-func (d *DB) SetAppStatusIf(ctx context.Context, id, container, status string) (bool, error) {
-	res, err := d.ExecContext(ctx, `UPDATE apps SET status = ?, updated_at = ? WHERE id = ? AND container = ? AND status NOT IN (?, ?, ?)`,
-		status, now(), id, container, AppDeploying, AppStopped, status)
+//
+// serverID is the server that reported the container: what one server says
+// never changes the status of an app on another.
+func (d *DB) SetAppStatusIf(ctx context.Context, serverID, id, container, status string) (bool, error) {
+	res, err := d.ExecContext(ctx, `UPDATE apps SET status = ?, updated_at = ? WHERE id = ? AND server_id = ? AND container = ? AND status NOT IN (?, ?, ?)`,
+		status, now(), id, serverID, container, AppDeploying, AppStopped, status)
 	if err != nil {
 		return false, err
 	}

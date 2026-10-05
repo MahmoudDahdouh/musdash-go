@@ -4,13 +4,15 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
+	"errors"
 	"io"
 	"strings"
 	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
+	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
+	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
 )
 
 // event is the part of a `docker events` line the monitor reads.
@@ -46,7 +48,7 @@ func statusFor(action string) string {
 // applyEvent updates the app a container event belongs to. Only the app's
 // serving container counts: events from a container that is being replaced
 // or was stopped on purpose are ignored by SetAppStatusIf.
-func (d *Deployer) applyEvent(ctx context.Context, dk docker.Client, line []byte) {
+func (d *Deployer) applyEvent(ctx context.Context, serverID string, dk docker.Client, line []byte) {
 	var ev event
 	if err := json.Unmarshal(line, &ev); err != nil {
 		return
@@ -60,7 +62,7 @@ func (d *Deployer) applyEvent(ctx context.Context, dk docker.Client, line []byte
 	var changed bool
 	switch attrs[docker.LabelKind] {
 	case db.KindApp:
-		changed, err = d.DB.SetAppStatusIf(ctx, attrs[docker.LabelResource], attrs["name"], status)
+		changed, err = d.DB.SetAppStatusIf(ctx, serverID, attrs[docker.LabelResource], attrs["name"], status)
 		if changed && status == db.AppExited {
 			// Not a stop or a deployment: those set a status this event
 			// does not replace.
@@ -69,7 +71,7 @@ func (d *Deployer) applyEvent(ctx context.Context, dk docker.Client, line []byte
 			}
 		}
 	case db.KindDatabase:
-		changed, err = d.DB.SetDatabaseStatusIf(ctx, attrs[docker.LabelResource], attrs["name"], status)
+		changed, err = d.DB.SetDatabaseStatusIf(ctx, serverID, attrs[docker.LabelResource], attrs["name"], status)
 		if changed && status == db.AppExited {
 			if m, merr := d.DB.DatabaseByID(ctx, attrs[docker.LabelResource]); merr == nil {
 				d.tell(m.EnvironmentID, stoppedEvent("The database "+m.Name, "/databases/"+m.ID, attrs["exitCode"]))
@@ -78,7 +80,7 @@ func (d *Deployer) applyEvent(ctx context.Context, dk docker.Client, line []byte
 	case db.KindService:
 		// A stack's status depends on all of its containers, so they are
 		// looked at together rather than taken from this one event.
-		err = d.refreshService(ctx, dk, attrs[docker.LabelResource])
+		err = d.refreshService(ctx, serverID, dk, attrs[docker.LabelResource])
 	}
 	if err != nil {
 		d.Log.Error("record container event", "err", err)
@@ -89,9 +91,19 @@ func (d *Deployer) applyEvent(ctx context.Context, dk docker.Client, line []byte
 // single `docker events` stream rather than polling or keeping a goroutine
 // per container, reconnecting with back-off when the stream ends. It
 // returns when ctx is cancelled.
+//
+// It also returns when the server was removed, or is one that has not been
+// checked yet: whoever started it starts another when that changes.
 func (d *Deployer) Monitor(ctx context.Context, server db.Server) {
 	backoff := time.Second
 	for ctx.Err() == nil {
+		current, err := d.DB.ServerByID(ctx, server.ID)
+		if errors.Is(err, db.ErrNotFound) || (err == nil && !servers.IsLocal(current) && current.HostKey == "") {
+			return
+		}
+		if err == nil {
+			server = current
+		}
 		started := time.Now()
 		if err := d.monitorOnce(ctx, server); err != nil && ctx.Err() == nil {
 			d.Log.Warn("container monitor stopped; will retry", "server", server.Name, "err", err)
@@ -126,7 +138,7 @@ func (d *Deployer) monitorOnce(ctx context.Context, server db.Server) error {
 		sc := bufio.NewScanner(pr)
 		sc.Buffer(make([]byte, 0, 16<<10), 256<<10)
 		for sc.Scan() {
-			d.applyEvent(ctx, dk, sc.Bytes())
+			d.applyEvent(ctx, server.ID, dk, sc.Bytes())
 		}
 		// Keep draining so the docker process never blocks on a full pipe.
 		io.Copy(io.Discard, pr)
@@ -166,7 +178,7 @@ func (d *Deployer) Reconcile(ctx context.Context, server db.Server, dk docker.Cl
 		if state[app.Container] == "running" {
 			status = db.AppRunning
 		}
-		if _, err := d.DB.SetAppStatusIf(ctx, app.ID, app.Container, status); err != nil {
+		if _, err := d.DB.SetAppStatusIf(ctx, server.ID, app.ID, app.Container, status); err != nil {
 			return err
 		}
 	}
@@ -182,7 +194,7 @@ func (d *Deployer) Reconcile(ctx context.Context, server db.Server, dk docker.Cl
 		if state[m.Container] == "running" {
 			status = db.AppRunning
 		}
-		if _, err := d.DB.SetDatabaseStatusIf(ctx, m.ID, m.Container, status); err != nil {
+		if _, err := d.DB.SetDatabaseStatusIf(ctx, server.ID, m.ID, m.Container, status); err != nil {
 			return err
 		}
 	}
@@ -191,7 +203,7 @@ func (d *Deployer) Reconcile(ctx context.Context, server db.Server, dk docker.Cl
 		return err
 	}
 	for _, s := range services {
-		if err := d.DB.SetServiceStatusIf(ctx, s.ID, serviceStatus(listed, s.ID)); err != nil {
+		if err := d.DB.SetServiceStatusIf(ctx, server.ID, s.ID, serviceStatus(listed, s.ID)); err != nil {
 			return err
 		}
 	}

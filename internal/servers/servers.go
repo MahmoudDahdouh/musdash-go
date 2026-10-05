@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/MahmoudDahdouh/musdash-go/internal/backup"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
@@ -43,6 +44,9 @@ type Pool struct {
 
 	mu    sync.Mutex
 	conns map[string]*conn
+	// swept holds the servers whose leftovers were cleared: once per
+	// server, on the first connection this process makes to it.
+	swept map[string]bool
 }
 
 // conn is one server's connection and who is using it.
@@ -200,36 +204,82 @@ func (p *Pool) acquire(ctx context.Context, id string) (*conn, *runner.SSHRunner
 
 	c.dial.Lock()
 	defer c.dial.Unlock()
+	// Found and counted in one step: between the two, the idle sweep could
+	// close it.
 	c.mu.Lock()
-	r := c.r
+	if r := c.r; r != nil {
+		c.inUse++
+		c.lastUsed = time.Now()
+		c.mu.Unlock()
+		return c, r, nil
+	}
 	c.mu.Unlock()
-	if r == nil {
-		// The server as it is now: its address or host key may have changed
-		// since the caller loaded it.
-		s, err := p.DB.ServerByID(ctx, id)
-		if err != nil {
-			return nil, nil, err
+
+	// The server as it is now: its address or host key may have changed
+	// since the caller loaded it.
+	s, err := p.DB.ServerByID(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if s.HostKey == "" {
+		return nil, nil, ErrNotChecked
+	}
+	cfg, err := p.config(ctx, s)
+	if err != nil {
+		return nil, nil, err
+	}
+	r, err := runner.DialSSH(ctx, cfg)
+	if err != nil {
+		if errors.Is(err, runner.ErrHostKeyChanged) {
+			return nil, nil, fmt.Errorf("server %s: %w. If the server was reinstalled, choose Forget host key on its page and check it again", s.Name, err)
 		}
-		if s.HostKey == "" {
-			return nil, nil, ErrNotChecked
+		return nil, nil, fmt.Errorf("server %s: %w", s.Name, err)
+	}
+
+	p.mu.Lock()
+	// Forgotten while connecting: the server's settings changed or it was
+	// removed, and this connection was made with the old ones.
+	if p.conns[id] != c {
+		p.mu.Unlock()
+		r.Close()
+		return nil, nil, fmt.Errorf("server %s: its settings changed while connecting; try again", s.Name)
+	}
+	first := !p.swept[id]
+	if first {
+		if p.swept == nil {
+			p.swept = map[string]bool{}
 		}
-		cfg, err := p.config(ctx, s)
-		if err != nil {
-			return nil, nil, err
-		}
-		if r, err = runner.DialSSH(ctx, cfg); err != nil {
-			if errors.Is(err, runner.ErrHostKeyChanged) {
-				return nil, nil, fmt.Errorf("server %s: %w. If the server was reinstalled, choose Forget host key on its page and check it again", s.Name, err)
-			}
-			return nil, nil, fmt.Errorf("server %s: %w", s.Name, err)
-		}
+		p.swept[id] = true
 	}
 	c.mu.Lock()
 	c.r = r
 	c.inUse++
 	c.lastUsed = time.Now()
 	c.mu.Unlock()
+	p.mu.Unlock()
+	if first {
+		// Still under c.dial: nothing of this process runs on the server
+		// before its leftovers are gone.
+		sweep(ctx, r, s.DataDir)
+	}
 	return c, r, nil
+}
+
+// sweep removes what a process that died, or a connection that dropped,
+// left on a server: build directories (a checkout may hold a deploy key),
+// files with a command's environment, files with a storage's keys. It runs
+// before this process has put anything there, so everything it finds is
+// left over. Best effort: a server where it fails is no worse off.
+func sweep(ctx context.Context, r *runner.SSHRunner, dataDir string) {
+	if dataDir == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	const clear = `if [ -d "$1" ]; then find "$1" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; fi
+if [ -d "$2" ]; then find "$2" -mindepth 2 -maxdepth 2 -type f -name "$3" -exec rm -f -- {} +; fi`
+	r.Output(ctx, runner.Cmd{Name: "sh", Args: []string{"-c", clear, "sh",
+		path.Join(dataDir, "work"), path.Join(dataDir, "backups"), backup.EnvFilePrefix + "*"}})
 }
 
 // release ends one use. A connection that turned out dead is dropped, so
@@ -238,7 +288,15 @@ func (p *Pool) release(c *conn, r *runner.SSHRunner, failed bool) {
 	c.mu.Lock()
 	c.inUse--
 	c.lastUsed = time.Now()
-	dead := failed && c.r == r && !r.Alive()
+	suspect := failed && c.r == r
+	c.mu.Unlock()
+	// Asked without the lock: a server that hung answers after a while or
+	// not at all, and nothing else may wait on that.
+	if !suspect || r.Alive() {
+		return
+	}
+	c.mu.Lock()
+	dead := c.r == r
 	if dead {
 		c.r = nil
 	}
@@ -289,26 +347,32 @@ func (p *Pool) CloseIdle() {
 	}
 }
 
-// Run closes idle connections until ctx ends, then all of them.
+// Run closes idle connections until ctx ends. The ones still open then are
+// left for Close: work that is finishing may need them.
 func (p *Pool) Run(ctx context.Context) {
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			p.mu.Lock()
-			ids := make([]string, 0, len(p.conns))
-			for id := range p.conns {
-				ids = append(ids, id)
-			}
-			p.mu.Unlock()
-			for _, id := range ids {
-				p.Forget(id)
-			}
 			return
 		case <-t.C:
 			p.CloseIdle()
 		}
+	}
+}
+
+// Close closes every connection. It is called once nothing uses the pool
+// any more.
+func (p *Pool) Close() {
+	p.mu.Lock()
+	ids := make([]string, 0, len(p.conns))
+	for id := range p.conns {
+		ids = append(ids, id)
+	}
+	p.mu.Unlock()
+	for _, id := range ids {
+		p.Forget(id)
 	}
 }
 

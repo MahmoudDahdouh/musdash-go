@@ -1,7 +1,6 @@
 package servers
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
@@ -109,14 +109,13 @@ func (p *Pool) Check(ctx context.Context, s db.Server) (Report, error) {
 		return fail(rep.Items[0].Detail)
 	}
 	defer r.Close()
-	// A connection made under the old settings is of no use any more.
-	p.Forget(s.ID)
 	rep.Fingerprint, rep.NewHostKey = Fingerprint(hostKey), first
 	rep.Items = append(rep.Items, Item{Name: "Connection", OK: true, Needed: true, Detail: "signed in as " + s.SSHUser})
 
+	// What the server answers is shown and stored: kept short and to text.
 	say := func(name string, args ...string) (string, error) {
 		out, err := r.Output(ctx, runner.Cmd{Name: name, Args: args})
-		return strings.TrimSpace(string(out)), err
+		return clip(string(out), 100), err
 	}
 
 	if system, _ := say("uname", "-s"); system != "Linux" {
@@ -380,8 +379,7 @@ func installProxy(ctx context.Context, r runner.Runner, s db.Server, binary stri
 	}
 	root := func(args ...string) error {
 		full := append(append([]string{}, sudo...), args...)
-		var stderr bytes.Buffer
-		if _, err := r.Output(ctx, runner.Cmd{Name: full[0], Args: full[1:], Stderr: &stderr}); err != nil {
+		if _, err := r.Output(ctx, runner.Cmd{Name: full[0], Args: full[1:]}); err != nil {
 			return fmt.Errorf("%s: %w", strings.Join(args, " "), err)
 		}
 		return nil
@@ -395,11 +393,28 @@ func installProxy(ctx context.Context, r runner.Runner, s db.Server, binary stri
 	}
 	for _, step := range steps {
 		if err := root(step...); err != nil {
-			if len(sudo) > 0 && strings.Contains(err.Error(), "sudo") {
+			// sudo -n says so itself when it would have had to ask.
+			var exit *runner.ExitError
+			if len(sudo) > 0 && errors.As(err, &exit) && strings.Contains(strings.ToLower(exit.Stderr), "password") {
 				return fmt.Errorf("installing the service needs root, and %s cannot use sudo without a password: %w", s.SSHUser, err)
 			}
 			return err
 		}
 	}
 	return nil
+}
+
+// clip shortens what a server answered to at most n printable characters.
+func clip(s string, n int) string {
+	var b strings.Builder
+	for _, c := range strings.TrimSpace(s) {
+		if b.Len() >= n {
+			break
+		}
+		if c < ' ' || c == 0x7f || c == utf8.RuneError {
+			c = ' '
+		}
+		b.WriteRune(c)
+	}
+	return strings.TrimSpace(b.String())
 }

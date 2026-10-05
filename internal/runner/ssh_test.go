@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -357,5 +358,140 @@ func TestSSHDroppedConnection(t *testing.T) {
 	}
 	if r.Alive() {
 		t.Fatal("a dropped connection reports alive")
+	}
+}
+
+// took fails the test when f needs longer than limit.
+func took(t *testing.T, what string, limit time.Duration, f func()) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() { f(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(limit):
+		t.Fatalf("%s was still waiting after %s", what, limit)
+	}
+}
+
+// A server that hangs keeps its connection open and never answers. A
+// command on it must end with its context, not wait for ever.
+func TestSSHAServerThatStopsAnsweringDoesNotHoldACommand(t *testing.T) {
+	for _, what := range []string{sshtest.Sessions, sshtest.Exec} {
+		t.Run(what, func(t *testing.T) {
+			srv := sshtest.Start(t)
+			r := mustDial(t, srv)
+			srv.Silence(what)
+			ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+			defer cancel()
+			took(t, "Run", 5*time.Second, func() {
+				if err := r.Run(ctx, runner.Cmd{Name: "true"}); err == nil {
+					t.Error("a command ran on a server that does not answer")
+				}
+			})
+			took(t, "ReadFile", 5*time.Second, func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+				defer cancel()
+				if f, err := r.ReadFile(ctx, "/etc/hosts"); err == nil {
+					f.Close()
+					t.Error("a file was read from a server that does not answer")
+				}
+			})
+		})
+	}
+}
+
+func TestSSHAliveGivesUpOnASilentServer(t *testing.T) {
+	defer runner.SetReplyWithinForTest(200 * time.Millisecond)()
+	srv := sshtest.Start(t)
+	r := mustDial(t, srv)
+	srv.Silence(sshtest.Keepalive)
+	took(t, "Alive", 5*time.Second, func() {
+		if r.Alive() {
+			t.Error("a server that says nothing counts as alive")
+		}
+	})
+}
+
+type failingWriter struct{ n int }
+
+func (f *failingWriter) Write(p []byte) (int, error) {
+	if f.n += len(p); f.n > 1000 {
+		return 0, errors.New("nowhere to put it")
+	}
+	return len(p), nil
+}
+
+// The sending half of a pipe between two servers: when the receiving half
+// fails, the sender must stop at once and not sit on a full window until
+// its context ends.
+func TestSSHACommandWhoseOutputHasNowhereToGoIsStopped(t *testing.T) {
+	srv := sshtest.Start(t)
+	r := mustDial(t, srv)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	start := time.Now()
+	err := r.Run(ctx, runner.Cmd{Name: "sh", Args: []string{"-c", "yes | head -c 50000000"}, Stdout: &failingWriter{}})
+	if err == nil {
+		t.Fatal("no error for output that could not be written")
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Fatalf("the command ended only after %s", took)
+	}
+}
+
+// sshd allows a connection ten sessions unless told otherwise. More
+// commands than one connection carries go over a second one, and beyond
+// the last connection they are refused rather than left hanging.
+func TestSSHMoreCommandsThanOneConnectionCarries(t *testing.T) {
+	srv := sshtest.Start(t)
+	r := mustDial(t, srv)
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	defer cancel()
+	hold := func(n int) {
+		for i := 0; i < n; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				r.Run(ctx, runner.Cmd{Name: "sleep", Args: []string{"30"}})
+			}()
+		}
+	}
+	running := func(n int) {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for len(srv.Commands()) < n {
+			if time.Now().After(deadline) {
+				t.Fatalf("%d commands running, want %d", len(srv.Commands()), n)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	hold(runner.LaneSessions)
+	running(runner.LaneSessions)
+	if got := srv.Accepted(); got != 1 {
+		t.Fatalf("%d connections for %d commands, want 1", got, runner.LaneSessions)
+	}
+	if out, err := r.Output(ctx, runner.Cmd{Name: "echo", Args: []string{"over"}}); err != nil || strings.TrimSpace(string(out)) != "over" {
+		t.Fatalf("a command beyond the first connection: %q %v", out, err)
+	}
+	if got := srv.Accepted(); got != 2 {
+		t.Fatalf("%d connections, want a second one", got)
+	}
+	all := runner.LaneSessions * runner.MaxLanes
+	hold(all - runner.LaneSessions)
+	running(all + 1) // the echo was one
+	if _, err := r.Output(ctx, runner.Cmd{Name: "true"}); !errors.Is(err, runner.ErrBusy) {
+		t.Fatalf("a command beyond every connection: %v, want ErrBusy", err)
+	}
+	if got := srv.Accepted(); got != runner.MaxLanes {
+		t.Fatalf("%d connections, want at most %d", got, runner.MaxLanes)
+	}
+	// Room again once commands end.
+	cancel()
+	wg.Wait()
+	if _, err := r.Output(context.Background(), runner.Cmd{Name: "true"}); err != nil {
+		t.Fatalf("after the commands ended: %v", err)
 	}
 }

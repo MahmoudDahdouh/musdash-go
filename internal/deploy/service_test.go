@@ -707,7 +707,7 @@ func TestStopAndDestroyService(t *testing.T) {
 		}
 	}
 	// Containers exiting because of the stop are not a failure.
-	e.d.applyEvent(ctx, docker.Client{R: e.fake}, []byte(`{"Action":"die","Actor":{"Attributes":{"musdash.kind":"service","musdash.resource":"`+s.ID+`","name":"`+project+`-front-1"}}}`))
+	e.d.applyEvent(ctx, e.server.ID, docker.Client{R: e.fake}, []byte(`{"Action":"die","Actor":{"Attributes":{"musdash.kind":"service","musdash.resource":"`+s.ID+`","name":"`+project+`-front-1"}}}`))
 	if got, _ := e.db.ServiceByID(ctx, s.ID); got.Status != db.AppStopped {
 		t.Fatalf("status %s after the containers of a stopped stack exited", got.Status)
 	}
@@ -781,7 +781,7 @@ func TestServiceStatusFollowsItsContainers(t *testing.T) {
 		return st.handle(line, c)
 	}
 	event := func(action, container string) {
-		e.d.applyEvent(ctx, docker.Client{R: e.fake}, []byte(`{"Action":"`+action+`","Actor":{"Attributes":{"musdash.kind":"service","musdash.resource":"`+s.ID+`","name":"`+container+`"}}}`))
+		e.d.applyEvent(ctx, e.server.ID, docker.Client{R: e.fake}, []byte(`{"Action":"`+action+`","Actor":{"Attributes":{"musdash.kind":"service","musdash.resource":"`+s.ID+`","name":"`+container+`"}}}`))
 	}
 	status := func() string {
 		got, _ := e.db.ServiceByID(ctx, s.ID)

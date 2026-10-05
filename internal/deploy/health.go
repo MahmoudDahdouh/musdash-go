@@ -130,14 +130,26 @@ func (p dialProbe) TCP(ctx context.Context, port int) error {
 	if err != nil {
 		return err
 	}
+	// Closing is also what ends the read below once the wait is over.
 	defer conn.Close()
-	conn.SetReadDeadline(time.Now().Add(tcpSettle))
-	_, err = conn.Read(make([]byte, 1))
-	var timeout net.Error
-	if err == nil || (errors.As(err, &timeout) && timeout.Timeout()) {
+	// Not a read deadline: a connection forwarded over SSH has none, and
+	// the read would then wait for as long as the app says nothing.
+	read := make(chan error, 1)
+	go func() {
+		_, err := conn.Read(make([]byte, 1))
+		read <- err
+	}()
+	select {
+	case err := <-read:
+		if err == nil {
+			return nil
+		}
+		return errors.New("the connection was closed at once: nothing is listening on the app's port inside the container")
+	case <-time.After(tcpSettle):
 		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	return errors.New("the connection was closed at once: nothing is listening on the app's port inside the container")
 }
 
 // tcpSettle is how long TCP waits to see whether a new connection is

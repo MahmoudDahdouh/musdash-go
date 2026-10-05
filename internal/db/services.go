@@ -272,9 +272,9 @@ func (d *DB) SetServiceState(ctx context.Context, id, status, lastError string) 
 // SetServiceStatusIf records a status the monitor observed. It leaves a
 // service alone while it is being deployed, after it was stopped on
 // purpose, and before it has ever been deployed.
-func (d *DB) SetServiceStatusIf(ctx context.Context, id, status string) error {
-	_, err := d.ExecContext(ctx, `UPDATE services SET status = ?, updated_at = ? WHERE id = ? AND status NOT IN (?, ?, ?, ?)`,
-		status, now(), id, AppDeploying, AppStopped, AppCreated, status)
+func (d *DB) SetServiceStatusIf(ctx context.Context, serverID, id, status string) error {
+	_, err := d.ExecContext(ctx, `UPDATE services SET status = ?, updated_at = ? WHERE id = ? AND server_id = ? AND status NOT IN (?, ?, ?, ?)`,
+		status, now(), id, serverID, AppDeploying, AppStopped, AppCreated, status)
 	return err
 }
 

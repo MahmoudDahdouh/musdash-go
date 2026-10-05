@@ -80,10 +80,12 @@ type Deployer struct {
 	// point a repository address at a local repository.
 	extraGitEnv []string
 
-	// routesMu makes each routes publication one step: read the database,
-	// write the file, signal. Without it a slower publication could write
-	// older data over a newer file.
+	// routesOf holds a lock per server that makes each publication of its
+	// routes one step: read the database, write the file, signal. Without
+	// it a slower publication could write older data over a newer file.
+	// routesMu guards the map.
 	routesMu sync.Mutex
+	routesOf map[string]*sync.Mutex
 	// appLocks serialise everything that changes one app's container: a
 	// deployment, a stop, a delete. They are striped by app id so the set
 	// never grows.

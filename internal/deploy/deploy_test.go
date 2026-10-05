@@ -28,6 +28,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
 	"github.com/MahmoudDahdouh/musdash-go/internal/jobs"
+	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
 	"github.com/MahmoudDahdouh/musdash-go/internal/proxy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner/runnertest"
@@ -746,7 +747,7 @@ func TestStopThatFailsCanBeRunAgain(t *testing.T) {
 		t.Fatal("the route must be withdrawn even though the container could not be stopped")
 	}
 	// A "die" event for a stopped app must not flip it to "exited".
-	e.d.applyEvent(context.Background(), docker.Client{R: e.fake}, []byte(`{"Action":"die","Actor":{"Attributes":{"musdash.kind":"app","musdash.resource":"`+e.app.ID+`","name":"`+container+`"}}}`))
+	e.d.applyEvent(context.Background(), e.server.ID, docker.Client{R: e.fake}, []byte(`{"Action":"die","Actor":{"Attributes":{"musdash.kind":"app","musdash.resource":"`+e.app.ID+`","name":"`+container+`"}}}`))
 	if got := e.reload().Status; got != db.AppStopped {
 		t.Fatalf("status %s", got)
 	}
@@ -902,7 +903,22 @@ func TestRestartingContainerFailsTheDeployAtOnce(t *testing.T) {
 }
 
 func TestTCPProbeNeedsARealListener(t *testing.T) {
-	probe := newLocalProbe()
+	t.Run("local", func(t *testing.T) { tcpProbe(t, newLocalProbe()) })
+	// Through a server's SSH connection, where a connection has no read
+	// deadline: the check must still end by itself.
+	t.Run("over ssh", func(t *testing.T) {
+		srv := sshtest.Start(t)
+		r, err := runner.DialSSH(context.Background(), runner.SSHConfig{Host: srv.Host, Port: srv.Port, User: "deploy",
+			Signer: srv.Signer, HostKey: srv.HostKey.Marshal(), WorkDir: t.TempDir()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Close()
+		tcpProbe(t, newDialProbe(r.Dial))
+	})
+}
+
+func tcpProbe(t *testing.T, probe Probe) {
 	ctx := context.Background()
 	serve := func(handle func(net.Conn)) int {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -932,8 +948,12 @@ func TestTCPProbeNeedsARealListener(t *testing.T) {
 	if err := probe.TCP(ctx, closesAtOnce); err == nil {
 		t.Error("a connection that is dropped at once passed the check")
 	}
+	started := time.Now()
 	if err := probe.TCP(ctx, waits); err != nil {
 		t.Errorf("a waiting server failed the check: %v", err)
+	}
+	if took := time.Since(started); took > 1500*time.Millisecond {
+		t.Errorf("the check waited %s for a server that says nothing first", took)
 	}
 	if err := probe.TCP(ctx, greets); err != nil {
 		t.Errorf("a greeting server failed the check: %v", err)
@@ -955,26 +975,26 @@ func TestMonitorEvents(t *testing.T) {
 		return []byte(`{"Action":"` + action + `","Actor":{"Attributes":{"musdash.kind":"app","musdash.resource":"` + e.app.ID + `","name":"` + name + `"}}}`)
 	}
 
-	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("die", "musdash-"+e.app.ID+"-olddeploy"))
+	e.d.applyEvent(ctx, e.server.ID, docker.Client{R: e.fake}, ev("die", "musdash-"+e.app.ID+"-olddeploy"))
 	if got := e.reload().Status; got != db.AppRunning {
 		t.Fatalf("an old container's exit changed the status to %s", got)
 	}
-	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("die", container))
+	e.d.applyEvent(ctx, e.server.ID, docker.Client{R: e.fake}, ev("die", container))
 	if got := e.reload().Status; got != db.AppExited {
 		t.Fatalf("status %s after the serving container died", got)
 	}
-	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("start", container))
+	e.d.applyEvent(ctx, e.server.ID, docker.Client{R: e.fake}, ev("start", container))
 	if got := e.reload().Status; got != db.AppRunning {
 		t.Fatalf("status %s after Docker restarted the container", got)
 	}
 
 	e.db.SetAppStatus(ctx, e.app.ID, db.AppDeploying)
-	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("die", container))
+	e.d.applyEvent(ctx, e.server.ID, docker.Client{R: e.fake}, ev("die", container))
 	if got := e.reload().Status; got != db.AppDeploying {
 		t.Fatalf("an event overwrote a deployment in progress: %s", got)
 	}
-	e.d.applyEvent(ctx, docker.Client{R: e.fake}, []byte("not json"))
-	e.d.applyEvent(ctx, docker.Client{R: e.fake}, ev("exec_create: sh", container))
+	e.d.applyEvent(ctx, e.server.ID, docker.Client{R: e.fake}, []byte("not json"))
+	e.d.applyEvent(ctx, e.server.ID, docker.Client{R: e.fake}, ev("exec_create: sh", container))
 }
 
 func TestReconcile(t *testing.T) {
@@ -1203,4 +1223,46 @@ func TestDeployToARemoteServerWithDocker(t *testing.T) {
 		t.Fatal("the app's directory on the server was left behind")
 	}
 	t.Logf("deployed over SSH: %d commands crossed, files under %s", len(srv.Commands()), server.DataDir)
+}
+
+// What a server reports is about its own containers. One that names an
+// app on another server (a build server knows the app's id and can guess
+// its container's name) changes nothing.
+func TestAServerCannotReportOnAnothersContainers(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.deploy()
+	app := e.reload()
+	told := 0
+	e.d.Notify = func(string, notify.Event) { told++ }
+	ev := []byte(`{"Action":"die","Actor":{"Attributes":{"musdash.kind":"app","musdash.resource":"` + app.ID + `","name":"` + app.Container + `","exitCode":"1"}}}`)
+	e.d.applyEvent(ctx, "another-server", docker.Client{R: e.fake}, ev)
+	if got := e.reload(); got.Status != db.AppRunning || told != 0 {
+		t.Fatalf("another server's event: status %s, %d notices", got.Status, told)
+	}
+	e.d.applyEvent(ctx, e.server.ID, docker.Client{R: e.fake}, ev)
+	if got := e.reload(); got.Status != db.AppExited || told != 1 {
+		t.Fatalf("the app's own server's event: status %s, %d notices", got.Status, told)
+	}
+}
+
+// A monitor for a server that was removed ends, instead of trying again
+// every minute for as long as the process runs.
+func TestMonitorEndsWhenItsServerIsGone(t *testing.T) {
+	e := newEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		e.d.Monitor(ctx, db.Server{ID: "removed", Name: "removed", Kind: db.ServerSSH})
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the monitor of a removed server kept going")
+	}
+	if ctx.Err() != nil {
+		t.Fatal("it ended only with its context")
+	}
 }

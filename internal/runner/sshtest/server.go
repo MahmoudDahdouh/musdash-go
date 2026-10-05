@@ -34,6 +34,34 @@ type Server struct {
 	commands []string
 	conns    []net.Conn
 	accepted int
+	silent   map[string]bool
+}
+
+// What a server can be made to stop answering, for Silence.
+const (
+	Sessions  = "sessions"  // a request to open a session
+	Exec      = "exec"      // a request to run a command
+	Keepalive = "keepalive" // a keepalive request
+)
+
+// Silence makes the server say nothing to the given kinds of request from
+// now on, as a machine that has hung would: the connection stays open and
+// the answer never comes.
+func (s *Server) Silence(what ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.silent == nil {
+		s.silent = map[string]bool{}
+	}
+	for _, w := range what {
+		s.silent[w] = true
+	}
+}
+
+func (s *Server) isSilent(what string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.silent[what]
 }
 
 // Accepted is how many connections the server has accepted so far.
@@ -132,7 +160,7 @@ func (s *Server) serve(conn net.Conn, cfg *ssh.ServerConfig) {
 	defer sc.Close()
 	go func() {
 		for req := range reqs {
-			if req.WantReply {
+			if req.WantReply && !s.isSilent(Keepalive) {
 				req.Reply(req.Type == "keepalive@openssh.com", nil)
 			}
 		}
@@ -140,6 +168,9 @@ func (s *Server) serve(conn net.Conn, cfg *ssh.ServerConfig) {
 	for ch := range chans {
 		switch ch.ChannelType() {
 		case "session":
+			if s.isSilent(Sessions) {
+				continue
+			}
 			channel, requests, err := ch.Accept()
 			if err == nil {
 				go s.session(channel, requests)
@@ -199,6 +230,9 @@ func (s *Server) session(channel ssh.Channel, requests <-chan *ssh.Request) {
 				var payload struct{ Command string }
 				if err := ssh.Unmarshal(req.Payload, &payload); err != nil || cmd != nil {
 					req.Reply(false, nil)
+					continue
+				}
+				if s.isSilent(Exec) {
 					continue
 				}
 				s.mu.Lock()
