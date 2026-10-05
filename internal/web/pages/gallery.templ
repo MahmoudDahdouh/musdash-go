@@ -215,8 +215,34 @@ templ Gallery(s ui.Shell) {
 					}
 				}
 			}
+			@gallerySection("Tiles") {
+				@ui.Tiles("Projects", false) {
+					@ui.Tile(ui.TileProps{Href: "#", Icon: "folder", Title: "Shop", Text: "The storefront, its API and what they keep their data in. A description longer than three lines is cut off where the third one ends, so every tile of a row keeps the same shape whatever was written about it."}) {
+						@ui.Meta("app-window", "3", "apps")
+						@ui.Meta("database", "1", "databases")
+						@ui.Meta("layers", "2", "services")
+						@ui.Meta("globe", "2 environments", "")
+					}
+					@ui.Tile(ui.TileProps{Href: "#", Icon: "app-window", Title: "storefront", Text: "acme/shop @ main", Mono: true, State: "running"}) {
+						@ui.Meta("globe", "shop.example.com", "domain")
+					}
+					@ui.Tile(ui.TileProps{Href: "#", Icon: "database", Title: "postgres", Text: "postgres:17-alpine", Mono: true, State: "degraded"}) {
+						@ui.Meta("database", "PostgreSQL", "engine")
+					}
+				}
+				@ui.Tiles("Kinds of resource", true) {
+					@ui.Tile(ui.TileProps{Href: "#", Icon: "github", Title: "Public repository", Text: "Any Git host, read without signing in.", Compact: true})
+					@ui.Tile(ui.TileProps{Href: "#", Icon: "box", Title: "Docker image", Text: "An image from a registry.", Compact: true})
+					@ui.Tile(ui.TileProps{Href: "#", Icon: "database", Title: "PostgreSQL", Text: "postgres:17-alpine", Mono: true, Compact: true})
+				}
+			}
+			@gallerySection("Trail and switcher") {
+				<div class="card card-body">
+					@ui.Trail([]ui.Crumb{{Label: "Projects", Href: "#"}, {Label: "Shop", Href: "#", Icon: "folder"}, {Label: "production", Menu: "/_ui/switch", Icon: "globe"}, {Label: "storefront", Menu: "/_ui/switch", Icon: "app-window", Filter: "Find a resource"}})
+				</div>
+			}
 			@gallerySection("Tabs") {
-				@ui.Tabs([]ui.Tab{{Key: "a", Label: "production", Href: "#"}, {Key: "b", Label: "staging", Href: "#"}, {Key: "c", Label: "Settings", Href: "#"}}, "a")
+				@ui.Tabs([]ui.Tab{{Key: "a", Label: "Overview", Href: "#", Icon: "dashboard"}, {Key: "b", Label: "Deployments", Href: "#", Icon: "rocket"}, {Key: "c", Label: "Logs", Href: "#", Icon: "file"}, {Key: "d", Label: "Settings", Href: "#", Icon: "settings"}}, "a")
 			}
 			@gallerySection("Notices") {
 				<div class="grid max-w-xl gap-2">
@@ -249,7 +275,26 @@ templ Gallery(s ui.Shell) {
 				}
 			}
 			@gallerySection("Dialog") {
-				<div>
+				<div class="flex flex-wrap gap-2">
+					@ui.Button(ui.ButtonProps{Icon: "plus", Opens: "g-form"}) {
+						New project
+					}
+					@ui.FormDialog(ui.DialogProps{ID: "g-form", Title: "New project", Description: "A short form is a dialog: up to five fields.", Action: "/_ui", CSRF: s.CSRF, Submit: "Create project"}) {
+						@ui.TextField(ui.Form{}, "Name", "", ui.InputProps{ID: "g-form-name", Name: "name", Required: true})
+						@ui.TextField(ui.Form{}, "Description", "Optional.", ui.InputProps{ID: "g-form-description", Name: "description"})
+					}
+					<form method="post" action="/_ui">
+						@ui.CSRF(s.CSRF)
+						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop storefront?", "The app stops answering until it is deployed again.", "Stop", false)}) {
+							Stop
+						}
+					</form>
+					<form method="post" action="/_ui">
+						@ui.CSRF(s.CSRF)
+						@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.DangerQuiet, Attrs: ui.Ask("Remove this domain?", "shop.example.com stops reaching the app at once.", "Remove domain", true)}) {
+							Remove
+						}
+					</form>
 					@ui.Confirm(ui.ConfirmProps{ID: "g-confirm", Title: "Delete project", Action: "/_ui", CSRF: s.CSRF, Match: "Shop", Submit: "Delete project", Trigger: "Delete project"}) {
 						<p><strong>Shop</strong> and everything in it is removed. This cannot be undone.</p>
 					}
@@ -279,4 +324,15 @@ var galleryLog = []struct{ at, text string }{
 	{"12:04:09", "Starting container"},
 	{"12:04:10", "Health check passed"},
 	{"12:04:10", "Switched traffic to the new container"},
+}
+
+// GallerySwitch is what the gallery's switchers answer with.
+templ GallerySwitch() {
+	for _, row := range galleryRows {
+		@ui.SwitchOption("#", row.icon, row.name, row.name == "storefront") {
+			@ui.StatusPill(row.state)
+		}
+	}
+	@ui.MenuSep()
+	@ui.MenuAction("#", "plus", "Add resource")
 }

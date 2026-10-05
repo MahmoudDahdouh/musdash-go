@@ -19,6 +19,54 @@
   document.addEventListener("mousedown", (e) => {
     if (e.target instanceof HTMLDialogElement && e.target.open) e.target.close();
   });
+  // A dialog marked data-autoopen is one the server sent back open: its form
+  // was refused, and the person is put at the first field that is wrong.
+  document.querySelectorAll("dialog[data-autoopen]").forEach((dialog) => {
+    dialog.showModal();
+    dialog.querySelector("[aria-invalid=true]")?.focus();
+  });
+
+  // Critical actions: a submit button carrying data-confirm does not send
+  // its form. It fills in the page's one confirm dialog and opens it, and
+  // that dialog's button sends the form, as if this one had been pressed.
+  let asking = null;
+  on("click", "[data-confirm]", (el, e) => {
+    const dialog = document.getElementById("confirm");
+    if (!dialog || !el.form) return;
+    e.preventDefault();
+    // What the browser would have said about the form, it says first.
+    if (!el.form.reportValidity()) return;
+    asking = el;
+    dialog.querySelector("#confirm-title").textContent = el.dataset.confirmTitle || "Are you sure?";
+    dialog.querySelector("#confirm-text").textContent = el.dataset.confirm;
+    const ok = dialog.querySelector("#confirm-ok");
+    ok.textContent = el.dataset.confirmSubmit || "Confirm";
+    ok.className = el.dataset.confirmTone === "danger" ? "btn btn-danger" : "btn btn-primary";
+    dialog.showModal();
+  });
+  on("click", "#confirm-ok", (ok) => {
+    const el = asking;
+    asking = null;
+    ok.closest("dialog").close();
+    if (el?.isConnected) el.form.requestSubmit(el);
+  });
+
+  // data-filter="<id>" on a field narrows what is inside that element to the
+  // items whose data-search holds the text. A data-filter-group with nothing
+  // left in it goes too, and data-filter-empty="<id>" shows when nothing is.
+  on("input", "[data-filter]", (el) => {
+    const box = document.getElementById(el.dataset.filter);
+    if (!box) return;
+    const text = el.value.trim().toLowerCase();
+    let shown = 0;
+    box.querySelectorAll("[data-search]").forEach((item) => {
+      item.hidden = !item.dataset.search.toLowerCase().includes(text);
+      if (!item.hidden) shown++;
+    });
+    box.querySelectorAll("[data-filter-group]").forEach((g) => (g.hidden = !g.querySelector("[data-search]:not([hidden])")));
+    const none = document.querySelector('[data-filter-empty="' + el.dataset.filter + '"]');
+    if (none) none.hidden = shown > 0;
+  });
 
   // Sidebar on small screens.
   const sidebar = () => document.getElementById("sidebar");
@@ -80,8 +128,9 @@
     input.focus();
   });
 
-  // Select, Combobox and Picker (ui): a button and a popover listing the
-  // options, with a hidden input for the value or a field to fill. The
+  // Select, Combobox, Picker and the trail's switchers (ui): a button and a
+  // popover listing the options, with a hidden input for the value, a field
+  // to fill or, in a switcher, options that are links. The
   // browser opens and closes the popover itself (the button's popovertarget,
   // Escape, a click elsewhere); what is left is to put it by its button, to
   // move through the options and to record the choice.
@@ -168,7 +217,9 @@
   document.addEventListener("htmx:afterSettle", (e) => {
     const list = e.target.closest?.("[data-select] [popover]");
     if (!list || list !== openList) return;
-    narrow(list);
+    // Without a filter field nothing had the focus yet: there were no options.
+    if (list.querySelector("[data-select-filter]")) narrow(list);
+    else (list.querySelector("[aria-selected=true]") || list.querySelector("[role=option]"))?.focus();
     place(list, list.closest("[data-select]").querySelector("[popovertarget]"));
   });
   // The list is fixed to the window, so it would be left behind when the page
@@ -188,8 +239,8 @@
     const list = el.closest("[popover]");
     shut(list);
     box.querySelector("[popovertarget]").focus();
-    // A Picker's option has filled its field already (data-fill) and there is
-    // no value here to keep.
+    // A Picker's option has filled its field already (data-fill), a
+    // switcher's is a link the browser now follows: no value here to keep.
     const input = box.querySelector("input[type=hidden]");
     if (!input) return;
     optionsOf(list).forEach((o) => o.setAttribute("aria-selected", String(o === el)));

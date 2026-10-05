@@ -20,7 +20,9 @@ type ButtonProps struct {
 	IconOnly bool   // square button; Label becomes the accessible name
 	Label    string // required when IconOnly
 	Disabled bool
-	Attrs    templ.Attributes
+	// Opens is the id of the dialog the button opens.
+	Opens string
+	Attrs templ.Attributes
 }
 
 func buttonClass(p ButtonProps) string {
@@ -50,6 +52,9 @@ templ Button(p ButtonProps) {
 		if p.IconOnly {
 			aria-label={ p.Label }
 			title={ p.Label }
+		}
+		if p.Opens != "" {
+			data-open={ p.Opens }
 		}
 		{ p.Attrs... }
 	>
@@ -382,20 +387,22 @@ templ CSRF(token string) {
 }
 
 // TextField is a labelled input bound to a Form: it shows the submitted value
-// and the field's error. p.ID names the field.
+// and the field's error. The field is p.Name, or p.ID when it has no name of
+// its own: a page with the same field in two forms gives each its own id.
 templ TextField(f Form, label, hint string, p InputProps) {
-	@Field(FieldProps{Label: label, For: p.ID, Hint: hint, Error: f.E(p.ID)}) {
+	@Field(FieldProps{Label: label, For: p.ID, Hint: hint, Error: f.E(orDefault(p.Name, p.ID))}) {
 		@Input(boundInput(f, hint, p))
 	}
 }
 
 func boundInput(f Form, hint string, p InputProps) InputProps {
+	key := orDefault(p.Name, p.ID)
 	// A submitted value wins over the stored one, so a rejected form shows
 	// what was typed. Passwords are never echoed back into the page.
-	if v, ok := f.Values[p.ID]; ok && p.Type != "password" {
+	if v, ok := f.Values[key]; ok && p.Type != "password" {
 		p.Value = v
 	}
-	p.Invalid = f.E(p.ID) != ""
+	p.Invalid = f.E(key) != ""
 	p.Described = hint != ""
 	return p
 }

@@ -1,6 +1,9 @@
 package ui
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // PageHeader is the title row at the top of a page. Its children are the
 // page's actions, shown on the right.
@@ -18,27 +21,110 @@ templ PageHeader(title, description string) {
 	</header>
 }
 
-// Crumb is one step in the breadcrumb trail. The last one has no Href.
+// Crumb is one step of the trail in the bar at the top. The last one has no
+// Href: it is where you are. A step with a Menu is a switcher: a button
+// naming the place, and a menu of the places beside it that is fetched from
+// Menu (SwitchOption, MenuSep, MenuNote) the first time it is opened.
 type Crumb struct {
 	Label string
 	Href  string
+	Icon  string
+	Menu  string
+	// Filter is the label of the menu's filter field, for a list that can
+	// be long. Empty for a menu without one.
+	Filter string
 }
 
-templ Crumbs(items []Crumb) {
+// Trail is the bar's content.
+templ Trail(items []Crumb) {
 	if len(items) > 0 {
-		<nav class="crumbs mb-3" aria-label="Breadcrumb">
+		<nav class="crumbs" aria-label="Breadcrumb">
 			for i, c := range items {
 				if i > 0 {
-					@Icon("chevron-right")
+					<span class="crumb-sep" aria-hidden="true">/</span>
 				}
-				if c.Href != "" {
-					<a href={ templ.SafeURL(c.Href) }>{ c.Label }</a>
+				if c.Menu != "" {
+					@switcher("crumb-"+strconv.Itoa(i), c)
+				} else if c.Href != "" {
+					<a class="crumb" href={ templ.SafeURL(c.Href) }>
+						if c.Icon != "" {
+							@Icon(c.Icon)
+						}
+						<span class="truncate">{ c.Label }</span>
+					</a>
 				} else {
-					<span class="text-ink" aria-current="page">{ c.Label }</span>
+					<span class="crumb" aria-current="page">
+						if c.Icon != "" {
+							@Icon(c.Icon)
+						}
+						<span class="truncate">{ c.Label }</span>
+					</span>
 				}
 			}
 		</nav>
 	}
+}
+
+// switcher is a step of the trail that opens a menu of links. It is built
+// like a Picker, so static/app.js places and steers it the same way; its
+// options are links, which is what choosing one does.
+templ switcher(id string, c Crumb) {
+	<div class="select" data-select>
+		<button
+			type="button"
+			id={ id }
+			class="crumb"
+			aria-haspopup="listbox"
+			aria-expanded="false"
+			aria-controls={ id + "-list" }
+			popovertarget={ id + "-menu" }
+		>
+			if c.Icon != "" {
+				@Icon(c.Icon)
+			}
+			<span class="truncate">{ c.Label }</span>
+			@Icon("unfold")
+		</button>
+		<div class="menu" id={ id + "-menu" } popover hx-get={ c.Menu } hx-trigger="select-load" hx-target="find [role=listbox]" hx-swap="innerHTML">
+			if c.Filter != "" {
+				@menuFilter(id+"-list", c.Filter)
+			}
+			<div class="menu-options" id={ id + "-list" } role="listbox" aria-labelledby={ id }>
+				@MenuNote("Loading…", false)
+			</div>
+			if c.Filter != "" {
+				@menuNoMatch()
+			}
+		</div>
+	</div>
+}
+
+// SwitchOption is one place a switcher's Menu answers with: a link. current
+// marks where the person is now. Its children come after the label, on the
+// right: a state, a count.
+templ SwitchOption(href, icon, label string, current bool) {
+	<a class="menu-item" role="option" href={ templ.SafeURL(href) } aria-selected={ strconv.FormatBool(current) } tabindex="-1" data-search={ label }>
+		@Icon("check", "menu-tick")
+		if icon != "" {
+			@Icon(icon, "text-ink-mute")
+		}
+		<span class="min-w-0 flex-1 truncate">{ label }</span>
+		{ children... }
+	</a>
+}
+
+// MenuAction is a link at the foot of a menu that goes somewhere else than
+// the places above it: to add one, to manage them.
+templ MenuAction(href, icon, label string) {
+	<a class="menu-item" role="option" href={ templ.SafeURL(href) } aria-selected="false" tabindex="-1" data-search={ label }>
+		@Icon(icon, "text-ink-mute")
+		<span class="min-w-0 flex-1 truncate">{ label }</span>
+	</a>
+}
+
+// MenuSep is the rule between a menu's places and its actions.
+templ MenuSep() {
+	<div class="menu-sep" role="separator"></div>
 }
 
 // Card is a bordered surface. Pass a title to get a header row.
@@ -51,6 +137,74 @@ templ Card(title string) {
 		}
 		{ children... }
 	</section>
+}
+
+// TileProps configures a Tile.
+type TileProps struct {
+	Href  string
+	Icon  string
+	Title string
+	// Text is the description, cut after three lines. Mono draws it as a
+	// machine's value: an image, a repository, a domain.
+	Text string
+	Mono bool
+	// State, when set, is written as a pill at the top right.
+	State string
+	// Compact is the small form, for a choice among many: no square behind
+	// the icon and no row of figures.
+	Compact bool
+	// Search is the text a filter field looks in. Empty leaves the tile
+	// out of filtering.
+	Search string
+}
+
+// Tiles is a grid of tiles. label says what they are, for a screen reader.
+templ Tiles(label string, compact bool) {
+	<ul class={ "tiles", templ.KV("tiles-compact", compact) } aria-label={ label }>
+		{ children... }
+	</ul>
+}
+
+// Tile is one thing among several of its kind, the whole of it a link:
+// a project, a resource, a kind of resource to add. Its children are the
+// figures in the row at its bottom (Meta).
+templ Tile(p TileProps) {
+	<li
+		class={ "tile", templ.KV("tile-compact", p.Compact) }
+		if p.Search != "" {
+			data-search={ p.Search }
+		}
+	>
+		<div class="tile-head">
+			<span class="tile-icon">
+				@Icon(p.Icon)
+			</span>
+			<h3 class="tile-title flex-1 truncate">
+				<a class="tile-link" href={ templ.SafeURL(p.Href) }>{ p.Title }</a>
+			</h3>
+			if p.State != "" {
+				@StatusPill(p.State)
+			}
+		</div>
+		if p.Text != "" {
+			<p class={ "tile-text", templ.KV("fact", p.Mono) }>{ p.Text }</p>
+		}
+		if !p.Compact {
+			<div class="tile-meta">
+				{ children... }
+			</div>
+		}
+	</li>
+}
+
+// Meta is one figure in a tile's bottom row: an icon and a short text.
+// title says what the figure counts, for a pointer and a screen reader.
+templ Meta(icon, text, title string) {
+	<span title={ title }>
+		@Icon(icon)
+		<span class="truncate">{ text }</span>
+		<span class="sr-only">{ title }</span>
+	</span>
 }
 
 // FormCard is a card that holds one form: fields in the body and the submit
@@ -150,6 +304,7 @@ type Tab struct {
 	Key   string
 	Label string
 	Href  string
+	Icon  string
 }
 
 templ Tabs(items []Tab, active string) {
@@ -161,7 +316,12 @@ templ Tabs(items []Tab, active string) {
 				if t.Key == active {
 					aria-current="page"
 				}
-			>{ t.Label }</a>
+			>
+				if t.Icon != "" {
+					@Icon(t.Icon)
+				}
+				{ t.Label }
+			</a>
 		}
 	</nav>
 }
@@ -176,6 +336,65 @@ templ Modal(id, title string) {
 		{ children... }
 	</dialog>
 }
+
+// DialogProps configures a FormDialog.
+type DialogProps struct {
+	ID          string // dialog id, unique on the page; a button with Opens: ID opens it
+	Title       string
+	Description string
+	Action      string
+	CSRF        string
+	Submit      string // label of the submit button
+	// Open shows the dialog as soon as the page is loaded: the form came
+	// back from the server with errors.
+	Open bool
+	Wide bool
+}
+
+// FormDialog is a short form in a dialog: what creating or changing
+// something of up to five fields looks like. Its children are the fields.
+// When the server refuses what was sent it renders the page again with
+// Open set, and the dialog is where the person left it, errors in place.
+templ FormDialog(p DialogProps) {
+	<dialog class={ "modal", templ.KV("modal-wide", p.Wide) } id={ p.ID } aria-labelledby={ p.ID + "-title" } data-autoopen?={ p.Open }>
+		<form method="post" action={ templ.SafeURL(p.Action) }>
+			@CSRF(p.CSRF)
+			<div class="card-head">
+				<h2 class="card-title" id={ p.ID + "-title" }>{ p.Title }</h2>
+				@Button(ButtonProps{Variant: Ghost, Small: true, IconOnly: true, Icon: "x", Label: "Close", Attrs: templ.Attributes{"data-close": true}})
+			</div>
+			<div class="card-body grid gap-4">
+				if p.Description != "" {
+					<p class="muted text-sm">{ p.Description }</p>
+				}
+				{ children... }
+			</div>
+			<div class="card-foot">
+				@Button(ButtonProps{Attrs: templ.Attributes{"data-close": true}}) {
+					Cancel
+				}
+				@Button(ButtonProps{Variant: Primary, Type: "submit"}) {
+					{ p.Submit }
+				}
+			</div>
+		</form>
+	</dialog>
+}
+
+// Ask marks a submit button as critical: pressing it opens the page's
+// confirm dialog with this question, and only its confirm button sends the
+// form. submit is the confirm button's label; danger draws it red. Without
+// script the form is sent as any other.
+func Ask(title, question, submit string, danger bool) templ.Attributes {
+	a := templ.Attributes{"data-confirm": question, "data-confirm-title": title, "data-confirm-submit": submit}
+	if danger {
+		a["data-confirm-tone"] = "danger"
+	}
+	return a
+}
+
+// Masked stands where a secret value is not shown.
+const Masked = "••••••••"
 
 // ConfirmProps configures a destructive action guarded by typed confirmation.
 type ConfirmProps struct {
@@ -318,7 +537,7 @@ func mask(value, hidden string) string {
 	if hidden == "" {
 		return value
 	}
-	return strings.ReplaceAll(value, hidden, "••••••••")
+	return strings.ReplaceAll(value, hidden, Masked)
 }
 
 // Secret is a Copyable that does not show all of its value: the hidden part

@@ -287,6 +287,8 @@ func (s *Server) Handler() http.Handler {
 
 	if s.Cfg.Dev {
 		handle("GET /_ui", member, s.gallery)
+		handle("POST /_ui", member, s.gallery)
+		handle("GET /_ui/switch", member, s.gallerySwitch)
 	}
 	if s.Pprof {
 		mux.Handle("/debug/pprof/", loopbackOnly(http.HandlerFunc(pprof.Index)))
@@ -340,6 +342,10 @@ func (s *Server) memReadout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) gallery(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, pages.Gallery(s.shell(w, r, "Components", "ui")))
+}
+
+func (s *Server) gallerySwitch(w http.ResponseWriter, r *http.Request) {
+	s.render(w, r, http.StatusOK, pages.GallerySwitch())
 }
 
 // notFound answers unknown paths: inside the app frame for a signed-in

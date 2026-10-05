@@ -83,6 +83,8 @@
 
 @layer base {
   html {
+    /* A place a link jumps to is not left under the bar at the top. */
+    scroll-padding-top: 64px;
     background: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
@@ -584,6 +586,127 @@
     border-color: var(--color-danger);
   }
 
+  /* Tile ---------------------------------------------------------------
+   * One thing among several of its kind: a project, a resource, a kind of
+   * resource to add. An icon in a grey square, a heading, a description of
+   * up to three lines and a row of figures at the bottom. The heading is
+   * the link and its ::after covers the tile, so the whole tile is the
+   * target while there is one link to tab to and one name read out.
+   */
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+    gap: 16px;
+  }
+  .tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding: 16px;
+    background: var(--color-paper);
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-lg);
+    transition:
+      border-color var(--duration-fast),
+      box-shadow var(--duration-fast);
+  }
+  .tile:has(.tile-link:hover) {
+    border-color: var(--color-ink-faint);
+    box-shadow: var(--shadow-raised);
+  }
+  .tile-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .tile-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: var(--size-control);
+    height: var(--size-control);
+    border-radius: var(--radius-md);
+    background: var(--color-sunk-strong);
+    color: var(--color-ink-mute);
+  }
+  .tile-title {
+    min-width: 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+  .tile-link {
+    color: inherit;
+  }
+  .tile-link:hover {
+    text-decoration: none;
+  }
+  .tile-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+  /* The ring goes around the tile, which is what the link stands for. */
+  .tile-link:focus-visible {
+    outline: none;
+  }
+  .tile-link:focus-visible::after {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+  }
+  .tile-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    color: var(--color-ink-mute);
+    overflow-wrap: anywhere;
+  }
+  .tile-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    margin-top: auto;
+    padding-top: 4px;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    color: var(--color-ink-mute);
+  }
+  .tile-meta > * {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+  /* A control on a tile stands above the link that covers it. */
+  .tile-action {
+    position: relative;
+    z-index: 1;
+    margin-left: auto;
+  }
+  /* Compact: a choice in a long list of them. No square behind the icon
+     and less room around it. */
+  .tiles-compact {
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 8px;
+  }
+  .tile-compact {
+    padding: 12px;
+    border-radius: var(--radius-md);
+  }
+  .tile-compact .tile-icon {
+    width: 20px;
+    height: 20px;
+    background: none;
+  }
+
   /* State rail: a coloured left edge that says what a resource is doing.
      The state is always also written as text in a .pill. */
   .rail {
@@ -804,6 +927,7 @@
     position: relative;
     display: inline-flex;
     align-items: center;
+    gap: 6px;
     height: var(--size-control);
     padding: 0 8px;
     border-radius: var(--radius-md);
@@ -815,8 +939,14 @@
     background: var(--color-veil);
     text-decoration: none;
   }
+  .tab .icon {
+    color: var(--color-ink-mute);
+  }
   .tab[aria-current="page"] {
     font-weight: 600;
+  }
+  .tab[aria-current="page"] .icon {
+    color: var(--color-ink);
   }
   .tab[aria-current="page"]::after {
     content: "";
@@ -830,8 +960,10 @@
   /* Modal (native <dialog>) ------------------------------------------- */
   .modal {
     width: min(30rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
     margin: auto;
     padding: 0;
+    overflow: hidden;
     background: var(--color-paper);
     border: 1px solid var(--color-line-strong);
     border-radius: var(--radius-lg);
@@ -851,6 +983,28 @@
   }
   .modal .card-foot {
     border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
+  }
+  /* Head and foot stay put and the fields between them scroll. Only while
+     open: a display of its own would show a closed dialog. */
+  .modal[open],
+  .modal[open] > form {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .modal > form {
+    flex: 1;
+  }
+  .modal .card-head,
+  .modal .card-foot {
+    flex: none;
+  }
+  .modal .card-body {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .modal-wide {
+    width: min(40rem, calc(100vw - 2rem));
   }
   .modal::backdrop {
     background: color-mix(in srgb, var(--color-ink) 40%, transparent);
@@ -1284,17 +1438,27 @@
   .main {
     min-width: 0;
   }
+  /* The bar at the top of every page says where you are: the trail of
+     places above this one, some of them switchers to the places beside it.
+     On a small screen it also opens the sidebar. Its inner box has the
+     page's width, so the trail starts where the page's content does. */
   .topbar {
     position: sticky;
     top: 0;
     z-index: 30;
+    height: 48px;
+    background: var(--color-sunk);
+    border-bottom: 1px solid var(--color-line-strong);
+  }
+  .topbar-inner {
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 48px;
+    width: 100%;
+    max-width: 68rem;
+    height: 100%;
+    margin: 0 auto;
     padding: 0 12px;
-    background: var(--color-sunk);
-    border-bottom: 1px solid var(--color-line-strong);
   }
   .page {
     width: 100%;
@@ -1310,11 +1474,14 @@
     .main {
       margin-left: var(--size-sidebar);
     }
-    .topbar {
+    .topbar-inner {
+      padding: 0 26px;
+    }
+    .topbar-menu {
       display: none;
     }
     .page {
-      padding: 28px 32px 64px;
+      padding: 24px 32px 64px;
     }
   }
   /* The sidebar's entries in groups: a gap and a heading tell one purpose
@@ -1370,16 +1537,70 @@
     border-radius: var(--radius-md);
     background: var(--color-brand-600);
   }
+  /* A long trail scrolls sideways inside the bar; it never wraps. */
   .crumbs {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
-    font-size: var(--text-sm);
+    gap: 2px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    font-size: var(--text-base);
     color: var(--color-ink-mute);
   }
-  .crumbs a {
-    color: var(--color-brand-600);
+  .crumbs > .crumb-sep {
+    flex: none;
+    color: var(--color-ink-faint);
+  }
+  .crumb {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 16rem;
+    height: var(--size-control-sm);
+    padding: 0 6px;
+    border-radius: var(--radius-md);
+    color: var(--color-ink-mute);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  a.crumb:hover,
+  button.crumb:hover,
+  button.crumb[aria-expanded="true"] {
+    background: var(--color-veil);
+    color: var(--color-ink);
+    text-decoration: none;
+  }
+  .crumb[aria-current="page"] {
+    color: var(--color-ink);
+    font-weight: 600;
+    cursor: default;
+  }
+  /* A switcher names where you are, so it reads as the current place. */
+  button.crumb {
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+  button.crumb .icon:last-child {
+    color: var(--color-ink-mute);
+  }
+  /* A rule between the places a menu lists and what else it offers. */
+  .menu-sep {
+    height: 1px;
+    margin: 8px -8px;
+    background: var(--color-line);
+  }
+  .menu-item .pill,
+  .menu-item .badge {
+    flex: none;
+    margin-left: auto;
+  }
+  a.menu-item {
+    color: inherit;
+  }
+  a.menu-item:hover {
+    text-decoration: none;
   }
   .icon {
     flex: none;
