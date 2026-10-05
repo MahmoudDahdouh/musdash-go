@@ -19,7 +19,8 @@ The full design is in [docs/spec.md](docs/spec.md). Each phase has an implementa
 | 3 | Databases: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, KeyDB, Dragonfly, ClickHouse | Done |
 | 4 | Services: Docker Compose stacks from a catalogue (n8n, WordPress, Ghost, Uptime Kuma, MinIO, Cloudflare Tunnel), your own file, or a Git repository | Done |
 | 5 | Operations: scheduled database backups with S3 copies, retention and restore; scheduled commands; notifications; Docker clean-up | Done |
-| 6–9 | Multi-server, previews, teams, extras | Planned |
+| 6 | More servers: deploy to machines reached over SSH, each with its own proxy; build on one server and run on another | Done |
+| 7–9 | Previews, teams, extras | Planned |
 
 ## Build
 
@@ -171,6 +172,23 @@ To publish a port that is not HTTP (a mail server, a game server), use an ordina
 - `include`, `extends` and `env_file` may name files of the repository.
 - A push to the branch redeploys it, through the GitHub App or through a webhook you add to the repository; a deploy token does the same for a CI pipeline. Both are on the service's Compose tab.
 - Only the Compose file itself is scanned for `SERVICE_…` variables, not files it includes.
+
+## More servers
+
+Servers, "Add a server" takes another machine that has Docker and is reached over SSH. Nothing of musdash runs on it except its containers and, if you install it, the proxy that serves their domains.
+
+1. Add the server: its address, SSH port and account, and a key (a new one is made for it unless you pick an existing one). The account must be able to run `docker`: root, or a member of the `docker` group.
+2. Put the public key the page shows into that account's `~/.ssh/authorized_keys` on the server.
+3. Choose **Check**. The first check records the server's host key and shows its fingerprint to compare with the server's own (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`). From then on musdash talks only to a machine that presents this key; if the server is reinstalled, "Forget host key" and check again. The check also reports Docker, the Compose plugin, git, memory, and whether the proxy can be installed.
+4. Choose **Install proxy** to serve domains from that server. It copies the musdash binary into the server's data directory and starts it as the systemd service `musdash-proxy`, which needs root or `sudo` without a password. For a server of another architecture than the dashboard's, put that architecture's binary at `<data>/dist/musdash-linux-<arch>` first (`make build-linux` produces both).
+
+With more than one server, New app, New database and New service ask which one. Point an app's domain at the server it runs on.
+
+- A remote server keeps musdash's files (env files, Compose stacks, backups, routes, certificates) in its own data directory: `/var/lib/musdash` for root, `~/.musdash` otherwise, or what you entered.
+- A command's secrets never appear in the server's process list: they travel in a private file that the command's shell reads and removes.
+- One SSH connection per server is opened when first needed and closed after five idle minutes. A server with running containers is watched for their state, so its connection stays open.
+- **Build server.** A Git app's Settings can name another server to build on. The image is built there and moved with `docker save` piped into `docker load` on the app's server: no registry is needed. Use it to keep builds off a small server.
+- Removing a server from the dashboard changes nothing on the machine: its proxy service and data directory stay until you remove them.
 
 ## Backups, scheduled tasks and notifications
 

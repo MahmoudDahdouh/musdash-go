@@ -109,8 +109,21 @@ func (c Config) On(s db.Server) Config // the same layout under the server's dat
 - [x] Tests: order of commands on the two servers; a failed transfer leaves the old version serving.
 
 ### Task 6 — End to end
-- [ ] With `MUSDASH_DOCKER_TEST=1`: this machine added as a "remote" server through an SSH server started by the test, an app deployed to it and answering, its routes written under the remote data directory.
-- [ ] Independent review; README; RSS on Linux with one remote server connected.
+- [x] With `MUSDASH_DOCKER_TEST=1`: this machine added as a "remote" server through an SSH server started by the test, an app deployed to it and answering, its routes written under the remote data directory.
+- [x] Independent review; README; RSS on Linux.
+
+## Outcome
+
+- `TestDeployToARemoteServerWithDocker`: an app is deployed over a real SSH connection to this machine with real Docker. It answers; its secret variable is in the container and in none of the command lines that crossed; its files and routes are under the server's data directory and none under the control plane's; the health check went through the forwarded connection; stop and delete work.
+- The SSH runner, the pool, the check and the proxy install are tested against `sshtest`, an SSH server inside the tests that speaks the real protocol and runs commands with this machine's shell.
+- Idle memory on Linux: server 22 to 24 MB, proxy 13 to 18 MB across runs, as before this phase. The SSH code costs nothing until a remote server is used.
+- `PathsOn` replaced every use of the control plane's data directory for a file written through a Runner.
+- Found while building it:
+  - A health check connected from the control plane to its own loopback; it now goes through the server's Runner.
+  - Stop pressed in the instant after a deployment recorded its result was refused as "in progress". Stop and Delete now wait up to 750 ms for the lock. This had also made one test fail now and then.
+  - The automated review of each commit caught two things before they went further: a connection with neither a recorded host key nor a way to record one was accepted (now refused), and the architecture a server reports was used in a file name on the control plane, so a hostile server could have been sent a file of the dashboard's (now one of a known set of names or nothing).
+- Not verifiable here, to check with a real second machine: a different architecture (the `dist` binary path), a firewall in between, the systemd unit actually starting and binding 80 and 443, certificates issued on the remote proxy, real OpenSSH's handling of the kill signal for a cancelled command (the test server kills the whole process group; OpenSSH signals the command itself), and the build server with two separate Docker daemons (on one machine both ends are the same daemon, so the move cannot be tried end to end).
+- Not done in this phase: installing Docker on a server for the person (the check shows the command), and a registry as a way to move images (the pipe covers it without one).
 
 ## Review focus
 
