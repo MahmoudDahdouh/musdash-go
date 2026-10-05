@@ -70,6 +70,18 @@ func control(f *os.File, request uintptr, arg unsafe.Pointer) error {
 	return nil
 }
 
+// closeWith arranges for a terminal to be closed when ctx ends. Closing
+// calls *stop, so a context that ends at once must not get there before
+// *stop is set: the channel is what makes it wait.
+func closeWith(ctx context.Context, t Terminal, stop *func() bool) {
+	ready := make(chan struct{})
+	*stop = context.AfterFunc(ctx, func() {
+		<-ready
+		t.Close()
+	})
+	close(ready)
+}
+
 // localTerminal is a command on a pseudo-terminal of this machine. The
 // command holds one end; this holds the other.
 type localTerminal struct {
@@ -113,7 +125,7 @@ func (LocalRunner) Terminal(ctx context.Context, c Cmd, cols, rows int) (Termina
 		cmd.Wait()
 		close(t.done)
 	}()
-	t.stop = context.AfterFunc(ctx, func() { t.Close() })
+	closeWith(ctx, t, &t.stop)
 	return t, nil
 }
 
@@ -139,9 +151,7 @@ func (t *localTerminal) Resize(cols, rows int) error {
 // later, killed.
 func (t *localTerminal) Close() error {
 	t.once.Do(func() {
-		if t.stop != nil {
-			t.stop()
-		}
+		t.stop()
 		pid := t.cmd.Process.Pid
 		syscall.Kill(-pid, syscall.SIGHUP)
 		t.master.Close()

@@ -44,10 +44,20 @@
   const attr = (fg, bg, flags) => {
     const key = fg + "|" + bg + "|" + flags;
     let a = attrs.get(key);
-    if (!a) attrs.set(key, (a = Object.freeze({ fg, bg, flags })));
+    if (!a) {
+      // A program can ask for sixteen million colours. The table forgets
+      // when it grows large; cells keep the objects they have, and only
+      // lose being grouped with later cells of the same look.
+      if (attrs.size > 4096) {
+        attrs.clear();
+        attrs.set("-1|-1|0", PLAIN);
+      }
+      attrs.set(key, (a = Object.freeze({ fg, bg, flags })));
+    }
     return a;
   };
-  const PLAIN = attr(-1, -1, 0);
+  const PLAIN = Object.freeze({ fg: -1, bg: -1, flags: 0 });
+  attrs.set("-1|-1|0", PLAIN);
 
   // DEC special graphics: what programs draw boxes with.
   const GRAPHICS = {
@@ -377,7 +387,7 @@
       case "T": if (!priv) scrollDown(Math.min(n, rows)); break;
       case "b": { // repeat the character before the cursor
         const before = x > 0 ? line.ch[wrapNext ? x : x - 1] : " ";
-        for (let i = Math.min(n, cols * rows); i > 0; i--) put(before);
+        for (let i = Math.min(n, cols); i > 0; i--) put(before);
         break;
       }
       case "m": if (!priv) sgr(list); break;
@@ -458,7 +468,7 @@
           if (code >= 0x30 && code <= 0x3f) {
             if (params.length < 64) params += c;
           } else if (code >= 0x20 && code <= 0x2f) {
-            inter += c;
+            if (inter.length < 4) inter += c;
           } else {
             state = 0;
             csi(c);
@@ -475,7 +485,7 @@
           if (code >= 0x300 && /\p{M}/u.test(c)) {
             // A combining mark joins the character before it.
             const at = wrapNext ? x : x - 1;
-            if (at >= 0) {
+            if (at >= 0 && lines[y].ch[at].length < 8) {
               lines[y].ch[at] += c;
               lines[y].dirty = true;
             }
@@ -660,8 +670,13 @@
   const status = (text) => {
     statusEl.textContent = text;
   };
+  // The server takes messages of at most 64 KB; a large paste goes in
+  // pieces.
+  const CHUNK = 32 << 10;
   function send(text) {
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(encoder.encode(text));
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const bytes = encoder.encode(text);
+    for (let i = 0; i < bytes.length; i += CHUNK) ws.send(bytes.subarray(i, i + CHUNK));
   }
   function sendSize() {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ cols, rows }));
@@ -731,6 +746,9 @@
     if (e.key === "Tab" && e.shiftKey) return "\x1b[Z";
     if (NAMED[e.key]) return (e.altKey && e.key !== "Escape" ? "\x1b" : "") + NAMED[e.key];
     if (e.key.length !== 1) return null;
+    // AltGr types characters (@, [, ] and the backslash on many layouts) and is reported as
+    // Ctrl+Alt on Windows: that is text, not a control character.
+    if ((e.getModifierState && e.getModifierState("AltGraph")) || (e.ctrlKey && e.altKey)) return null;
     if (e.ctrlKey) {
       const k = e.key.toLowerCase();
       if (k >= "a" && k <= "z") return String.fromCharCode(k.charCodeAt(0) - 96);

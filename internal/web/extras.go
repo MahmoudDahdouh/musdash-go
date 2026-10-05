@@ -1,6 +1,9 @@
 package web
 
-import "net/http"
+import (
+	"net/http"
+	"time"
+)
 
 // extras is what the Server holds for metrics and terminals.
 type extras struct {
@@ -8,6 +11,9 @@ type extras struct {
 	readings chan struct{}
 	// terminals bounds the terminals open at once.
 	terminals chan struct{}
+	// pingEvery is how often a terminal's connection is pinged. Tests
+	// shorten it.
+	pingEvery time.Duration
 }
 
 // extraRoutes registers the routes of metrics and terminals. What a
@@ -16,6 +22,7 @@ type extras struct {
 func (s *Server) extraRoutes(handle func(pattern string, who access, h http.HandlerFunc)) {
 	s.readings = make(chan struct{}, maxReadings)
 	s.terminals = make(chan struct{}, maxTerminals)
+	s.pingEvery = terminalPing
 
 	handle("GET /apps/{id}/metrics", member, s.appMetrics)
 	handle("GET /apps/{id}/metrics/now", member, s.appMetricsNow)

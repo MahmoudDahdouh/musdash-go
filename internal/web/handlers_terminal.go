@@ -42,7 +42,8 @@ const (
 	// terminalHello is how long a browser has to send its first message.
 	terminalHello = 10 * time.Second
 	// terminalPing keeps a quiet connection from being cut by whatever
-	// stands between the browser and the dashboard.
+	// stands between the browser and the dashboard, and finds a browser
+	// that went away without saying so.
 	terminalPing = 30 * time.Second
 )
 
@@ -147,16 +148,28 @@ func (s *Server) serveTerminal(w http.ResponseWriter, r *http.Request, serverID,
 		say(ws, "error", "The terminal could not be opened on the server.")
 		return
 	}
-	defer term.Close()
 	s.Log.Info("terminal opened", "resource", what, "user", sess.User.Email)
 	defer s.Log.Info("terminal closed", "resource", what, "user", sess.User.Email)
+
+	// Whichever side ends first takes the other with it, from whichever
+	// goroutine notices. Hanging up the shell is also what frees this
+	// goroutine when it is stuck typing into a program that does not read:
+	// then it cannot see the browser leave, and somebody else must.
+	var once sync.Once
+	end := func() {
+		once.Do(func() {
+			term.Close()
+			ws.Close(wsNormal, "")
+		})
+	}
+	defer end()
 
 	// One that carries nothing for a while is closed. Both directions
 	// count: somebody may be watching output without typing.
 	var idleMu sync.Mutex
 	idle := time.AfterFunc(terminalIdle, func() {
 		say(ws, "error", "Closed after "+terminalIdle.String()+" without activity.")
-		ws.Close(wsNormal, "idle")
+		end()
 	})
 	defer idle.Stop()
 	active := func() {
@@ -165,8 +178,10 @@ func (s *Server) serveTerminal(w http.ResponseWriter, r *http.Request, serverID,
 		idleMu.Unlock()
 	}
 
+	// A ping that cannot be sent is how a browser that vanished is found
+	// when nothing else is being written to it.
 	go func() {
-		t := time.NewTicker(terminalPing)
+		t := time.NewTicker(s.pingEvery)
 		defer t.Stop()
 		for {
 			select {
@@ -174,6 +189,7 @@ func (s *Server) serveTerminal(w http.ResponseWriter, r *http.Request, serverID,
 				return
 			case <-t.C:
 				if ws.Write(wsPing, nil) != nil {
+					end()
 					return
 				}
 			}
@@ -184,21 +200,21 @@ func (s *Server) serveTerminal(w http.ResponseWriter, r *http.Request, serverID,
 	// kept: a browser that does not read holds the shell up, as a slow
 	// terminal would.
 	go func() {
+		defer end()
 		buf := make([]byte, 16<<10)
 		for {
 			n, err := term.Read(buf)
 			if n > 0 {
 				active()
 				if ws.Write(wsBinary, buf[:n]) != nil {
-					break
+					return
 				}
 			}
 			if err != nil {
 				say(ws, "exit", "The shell has ended.")
-				break
+				return
 			}
 		}
-		ws.Close(wsNormal, "")
 	}()
 
 	// What is typed goes to the shell; a text message is a new size.

@@ -146,6 +146,13 @@ func (p Project) Validate(opt ValidateOptions) error {
 		if svc["image"] == nil && svc["build"] == nil {
 			c.fail("it has no image")
 		}
+		if image, _ := svc["image"].(string); ownNamespace(image) {
+			// Images under musdash/ are what musdash built and keeps on the
+			// server: an app's builds, the builders' own images. A stack
+			// that could name one could run another app's image, or put
+			// its own build in a builder's place.
+			c.fail("its image is in musdash's own namespace (musdash/…), which a stack may neither run nor build into")
+		}
 		for _, key := range sortedKeys(svc) {
 			value := svc[key]
 			if value == nil {
@@ -432,4 +439,16 @@ func (c *checker) build(v any) {
 		}
 	}
 	c.labels(b["labels"])
+}
+
+// ownNamespace reports whether an image name is one of musdash's own on
+// the server, however the registry is written in front of it.
+func ownNamespace(image string) bool {
+	image = strings.ToLower(image)
+	for _, registry := range []string{"", "docker.io/", "index.docker.io/", "registry-1.docker.io/"} {
+		if strings.HasPrefix(image, registry+"musdash/") {
+			return true
+		}
+	}
+	return false
 }

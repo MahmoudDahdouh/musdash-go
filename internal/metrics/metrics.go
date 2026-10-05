@@ -126,9 +126,10 @@ func cpuCounters(line string) (busy, total uint64, ok bool) {
 	return busy, total, true
 }
 
-// maxBytes is the largest amount believed: a server does not have more
-// than a few petabytes of anything.
-const maxBytes = 1 << 55
+// maxBytes is the largest amount believed: a petabyte. A server has less
+// of anything, and the readings of every container of one answer can then
+// be added up without the sum running over.
+const maxBytes = 1 << 50
 
 func meminfoKB(line, key string) (int64, bool) {
 	f := strings.Fields(line)

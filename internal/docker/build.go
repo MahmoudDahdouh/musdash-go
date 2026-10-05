@@ -101,7 +101,9 @@ func (s BuildSpec) Cmd() (runner.Cmd, error) {
 		return runner.Cmd{}, fmt.Errorf("build paths must be absolute")
 	}
 	args := []string{"build", "--progress", "plain", "--tag", s.Tag, "--file", s.Dockerfile, "--label", ManagedLabel + "=true"}
-	env := []string{"DOCKER_BUILDKIT=1"}
+	// BUILDX_GIT_INFO=0: the build does not run git in the context to
+	// label the image with. What is built there is somebody's repository.
+	env := []string{"DOCKER_BUILDKIT=1", "BUILDX_GIT_INFO=0"}
 	if s.Frontend != "" {
 		if !ValidImage(s.Frontend) {
 			return runner.Cmd{}, fmt.Errorf("%q is not a valid frontend image", s.Frontend)

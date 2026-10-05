@@ -61,7 +61,7 @@ func (b *builderServer) handle(line string, c runner.Cmd) (string, error) {
 		b.stdin[line] = string(raw)
 		b.mu.Unlock()
 		return "", nil
-	case strings.HasPrefix(line, "docker run --rm --read-only"):
+	case strings.HasPrefix(line, "docker run --rm --name musdash-plan-"):
 		for i, a := range c.Args {
 			if a == "--env-file" {
 				body, _, _ := b.e.fake.File(c.Args[i+1])
@@ -136,10 +136,12 @@ func TestNixpacksBuild(t *testing.T) {
 	}
 
 	// Both runs of the builder are shut in.
-	sandbox := "docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges --memory 1g --pids-limit 256 --user 1000:1000 --workdir /tmp" +
-		" --env-file " + work + "/builder.env --env HOME=/tmp --network none --tmpfs /tmp --mount type=bind,source=" + src + ",target=/src"
-	plan := sandbox + ",readonly musdash/nixpacks:1.41.0 nixpacks plan /src --format json --env NPM_TOKEN"
-	write := sandbox + " musdash/nixpacks:1.41.0 nixpacks build /src --out /src --env NPM_TOKEN"
+	// The app is shown read-only both times; the run that writes gets one
+	// directory to write to, where its Dockerfile is expected.
+	sandbox := "docker run --rm --name musdash-plan-" + dep.ID + " --read-only --cap-drop ALL --security-opt no-new-privileges --memory 1g --pids-limit 256 --user 1000:1000 --workdir /tmp" +
+		" --env-file " + work + "/builder.env --env HOME=/tmp --network none --tmpfs /tmp --mount type=bind,source=" + src + ",target=/src,readonly"
+	plan := sandbox + " musdash/nixpacks:1.41.0 nixpacks plan /src --format json --env NPM_TOKEN"
+	write := sandbox + " --mount type=bind,source=" + src + "/.nixpacks,target=/src/.nixpacks musdash/nixpacks:1.41.0 nixpacks build /src --out /src --env NPM_TOKEN"
 	build := "docker build --progress plain --tag " + image + " --file " + src + "/.nixpacks/Dockerfile --label musdash.managed=true" +
 		" --build-arg NPM_TOKEN --build-arg CI=true --build-arg DOCKER_HOST=tcp://203.0.113.9:2375 --build-arg NODE_ENV=production -- " + src
 	last := -1
@@ -168,8 +170,12 @@ func TestNixpacksBuild(t *testing.T) {
 		t.Fatalf("the variables file was left on the server (mode %o)", mode)
 	}
 	env := b.envOf(build)
-	if !strings.Contains(env, "NPM_TOKEN=npm_s3cret") {
+	if !strings.Contains(env, "NPM_TOKEN=npm_s3cret") || !strings.Contains(env, "BUILDX_GIT_INFO=0") {
 		t.Fatalf("the build's environment: %q", env)
+	}
+	// A builder that ended well removed its own container.
+	if indexOf(calls, "docker rm --force musdash-plan-") >= 0 {
+		t.Error("the builder's container was removed by hand after a run that ended well")
 	}
 	// A variable the repository named is an argument of the build, never
 	// an environment variable of the docker command.
@@ -238,6 +244,10 @@ func TestBuilderFailures(t *testing.T) {
 		if i := indexOf(calls, "docker run --detach"); i >= 0 {
 			t.Errorf("%s: a container was started", name)
 		}
+		// A builder that failed may have left its container running.
+		if name == "a builder that gives up" && indexOf(calls, "docker rm --force musdash-plan-"+dep.ID) < 0 {
+			t.Errorf("%s: its container was not removed", name)
+		}
 		if indexOf(calls, "rm-all "+filepath.Join(e.cfg.WorkDir(), dep.ID)) < 0 {
 			t.Errorf("%s: the build directory was left on the server", name)
 		}
@@ -271,7 +281,7 @@ func TestRailpackBuild(t *testing.T) {
 	}
 	// Railpack asks the network which versions exist; everything else of
 	// its sandbox is as closed as Nixpacks's, and it only reads the app.
-	prepare := "docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges --memory 1g --pids-limit 256 --user 1000:1000 --workdir /tmp" +
+	prepare := "docker run --rm --name musdash-plan-" + dep.ID + " --read-only --cap-drop ALL --security-opt no-new-privileges --memory 1g --pids-limit 256 --user 1000:1000 --workdir /tmp" +
 		" --env-file " + work + "/builder.env --env HOME=/tmp --tmpfs /tmp:rw,exec,nosuid,size=512m --mount type=bind,source=" + src + ",target=/src,readonly" +
 		" musdash/railpack:0.40.1 sh -c " + railpackPrepare + " sh --env NPM_TOKEN"
 	if indexOf(calls, prepare) < 0 {
@@ -285,7 +295,7 @@ func TestRailpackBuild(t *testing.T) {
 		t.Fatalf("no secrets hash on the build:\n%s", all)
 	}
 	build := "docker build --progress plain --tag " + image + " --file " + work + "/railpack-plan.json --label musdash.managed=true" +
-		" --build-arg BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend:v0.40.1 --build-arg cache-key=" + e.app.ID +
+		" --build-arg BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend:v0.40.1@" + railpackFrontendDigest + " --build-arg cache-key=" + e.app.ID +
 		" --build-arg secrets-hash=" + hash[1] + " --secret id=NPM_TOKEN,env=NPM_TOKEN -- " + src
 	if indexOf(calls, build) < 0 {
 		t.Fatalf("the build was not started as expected:\n%s", all)

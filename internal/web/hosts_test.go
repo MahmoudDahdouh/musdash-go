@@ -202,6 +202,16 @@ func TestPreviewsFromGitLabAndBitbucket(t *testing.T) {
 	if list, _ := a.db.ListDeployments(ctx, previews[0].ID, 5); len(list) != 1 {
 		t.Fatalf("%d deployments after an event that brought no commit", len(list))
 	}
+	// Nor does a comment start again a build that failed, or pile a second
+	// build on one that is running.
+	for _, status := range []string{"failed", "running"} {
+		a.db.Exec(`UPDATE deployments SET status = ? WHERE app_id = ?`, status, previews[0].ID)
+		a.hookAs(hookPath, signed(opened), opened)
+		if list, _ := a.db.ListDeployments(ctx, previews[0].ID, 5); len(list) != 1 {
+			t.Fatalf("%d deployments after a comment on a build that is %s", len(list), status)
+		}
+	}
+	a.db.Exec(`UPDATE deployments SET status = 'success' WHERE app_id = ?`, previews[0].ID)
 	pushed := bitbucketPRBody("OPEN", "acme/shop", "ffff2fc0ca3d", "9")
 	a.hookAs(hookPath, signed(pushed), pushed)
 	if list, _ := a.db.ListDeployments(ctx, previews[0].ID, 5); len(list) != 2 {

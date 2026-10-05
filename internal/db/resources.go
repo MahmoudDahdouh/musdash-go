@@ -345,6 +345,13 @@ func (d *DB) SetDeploymentBuild(ctx context.Context, id, image, commit string) e
 	return err
 }
 
+// SetDeploymentCommit records the commit a deployment is building, as soon
+// as it is known: before the build, which can take minutes.
+func (d *DB) SetDeploymentCommit(ctx context.Context, id, commit string) error {
+	_, err := d.ExecContext(ctx, `UPDATE deployments SET commit_sha = ? WHERE id = ?`, commit, id)
+	return err
+}
+
 func (d *DB) StartDeployment(ctx context.Context, id string) error {
 	_, err := d.ExecContext(ctx, `UPDATE deployments SET status = ?, started_at = ? WHERE id = ?`, DeployRunning, now(), id)
 	return err

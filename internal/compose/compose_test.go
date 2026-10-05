@@ -146,6 +146,9 @@ func TestValidateRefuses(t *testing.T) {
 		{"gpus", `"all"`, `"gpus" is not allowed`},
 		{"post_start", `[{"command":["id"],"privileged":true}]`, `"post_start" is not allowed`},
 		// Other containers' data, and musdash's own.
+		{"image", `"musdash/app1:d-abc"`, `musdash's own namespace`},
+		{"image", `"musdash/nixpacks:1.41.0"`, `musdash's own namespace`},
+		{"image", `"docker.io/Musdash/railpack:0.40.1"`, `musdash's own namespace`},
 		{"volumes_from", `["other"]`, `"volumes_from" is not allowed`},
 		{"external_links", `["musdash-db-x:db"]`, `"external_links" is not allowed`},
 		{"container_name", `"musdash-db-x"`, `"container_name" is not allowed`},

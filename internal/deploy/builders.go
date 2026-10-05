@@ -84,10 +84,14 @@ var builders = map[string]builder{
 	},
 }
 
+// railpackFrontendDigest is the frontend image of the release above, as
+// its registry listed it on 2026-10-05. A tag can be moved; this cannot.
+const railpackFrontendDigest = "sha256:f1973377693af30c9b37a92c97c661c07b277ccdc6be909213c74c771f8d2d6d"
+
 // railpackFrontend is the BuildKit frontend that turns a Railpack plan
 // into an image. It is the same release as the command that wrote the plan.
 func railpackFrontend() string {
-	return "ghcr.io/railwayapp/railpack-frontend:v" + builders[PackRailpack].version
+	return "ghcr.io/railwayapp/railpack-frontend:v" + builders[PackRailpack].version + "@" + railpackFrontendDigest
 }
 
 // image is the local image the builder runs from.
@@ -142,13 +146,18 @@ func (d *Deployer) ensureBuilder(ctx context.Context, r runner.Runner, b builder
 
 // sandbox describes one run of a builder.
 type sandbox struct {
-	image   string
+	image string
+	// name is the container's name, so that one that did not end can be
+	// removed.
+	name    string
 	user    string // "uid:gid" of whoever owns the checkout
 	envFile string // the app's build variables, read by docker's command line
-	src     string // the directory to plan, shown at /src
-	// writable lets the builder write into src: Nixpacks leaves its
-	// Dockerfile next to the app, in a checkout that is thrown away.
-	writable bool
+	src     string // the directory to plan, shown read-only at /src
+	// scratch, when set, is a directory of the server shown at
+	// /src/.nixpacks, the one place the builder may write: Nixpacks leaves
+	// its Dockerfile there, next to the app. Nothing else of the checkout
+	// can be changed by it, its .git least of all.
+	scratch string
 	// network lets the builder reach the network. Railpack asks which
 	// versions of a language exist; Nixpacks asks nothing.
 	network bool
@@ -156,11 +165,12 @@ type sandbox struct {
 
 // cmd is `docker run` for a builder with the given command.
 func (s sandbox) cmd(argv ...string) (runner.Cmd, error) {
-	if !docker.ValidImage(s.image) || !docker.ValidMountPath(s.src) || !docker.ValidMountPath(s.envFile) || s.user == "" {
-		return runner.Cmd{}, fmt.Errorf("builder: bad image, directory or variables file")
+	if !docker.ValidImage(s.image) || !docker.ValidName(s.name) || !docker.ValidMountPath(s.src) || !docker.ValidMountPath(s.envFile) || s.user == "" ||
+		(s.scratch != "" && !docker.ValidMountPath(s.scratch)) {
+		return runner.Cmd{}, fmt.Errorf("builder: bad image, name, directory or variables file")
 	}
 	args := []string{
-		"run", "--rm",
+		"run", "--rm", "--name", s.name,
 		"--read-only",
 		"--cap-drop", "ALL",
 		"--security-opt", "no-new-privileges",
@@ -182,12 +192,49 @@ func (s sandbox) cmd(argv ...string) (runner.Cmd, error) {
 	} else {
 		args = append(args, "--network", "none", "--tmpfs", "/tmp")
 	}
-	mount := "type=bind,source=" + s.src + ",target=/src"
-	if !s.writable {
-		mount += ",readonly"
+	args = append(args, "--mount", "type=bind,source="+s.src+",target=/src,readonly")
+	if s.scratch != "" {
+		args = append(args, "--mount", "type=bind,source="+s.scratch+",target=/src/.nixpacks")
 	}
-	args = append(args, "--mount", mount, s.image)
+	args = append(args, s.image)
 	return runner.Cmd{Name: "docker", Args: append(args, argv...)}, nil
+}
+
+// output runs the builder for what it prints; run for what it does, its
+// own account going to the log. A builder that failed, or was still going
+// when its time was up, may have left its container: the command line was
+// stopped, which is not the container. It is removed by name.
+func (s sandbox) output(ctx context.Context, r runner.Runner, stderr *Log, argv ...string) ([]byte, error) {
+	cmd, err := s.cmd(argv...)
+	if err != nil {
+		return nil, err
+	}
+	if stderr != nil {
+		cmd.Stderr = stderr
+	}
+	out, err := r.Output(ctx, cmd)
+	s.sweep(ctx, r, err)
+	return out, err
+}
+
+func (s sandbox) run(ctx context.Context, r runner.Runner, log *Log, argv ...string) error {
+	cmd, err := s.cmd(argv...)
+	if err != nil {
+		return err
+	}
+	cmd.Stdout, cmd.Stderr = log, log
+	err = r.Run(ctx, cmd)
+	s.sweep(ctx, r, err)
+	return err
+}
+
+func (s sandbox) sweep(ctx context.Context, r runner.Runner, err error) {
+	if err == nil {
+		return
+	}
+	clean, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	docker.Client{R: r}.Remove(clean, s.name)
 }
 
 // envFlags names the app's build variables to a builder. Only the names
@@ -206,7 +253,7 @@ func envFlags(vars map[string]string) []string {
 }
 
 // prepareSandbox makes the builder's image and writes the variables file.
-func (d *Deployer) prepareSandbox(ctx context.Context, r runner.Runner, b builder, workDir, src string, vars map[string]string, log *Log) (sandbox, error) {
+func (d *Deployer) prepareSandbox(ctx context.Context, r runner.Runner, b builder, depID, workDir, src string, vars map[string]string, log *Log) (sandbox, error) {
 	if err := d.ensureBuilder(ctx, r, b, log); err != nil {
 		return sandbox{}, err
 	}
@@ -223,7 +270,7 @@ func (d *Deployer) prepareSandbox(ctx context.Context, r runner.Runner, b builde
 	if err := r.WriteFile(ctx, envFile, 0o600, strings.NewReader(body)); err != nil {
 		return sandbox{}, err
 	}
-	return sandbox{image: b.image(), user: sandboxUser(ctx, r), envFile: envFile, src: src}, nil
+	return sandbox{image: b.image(), name: "musdash-plan-" + depID, user: sandboxUser(ctx, r), envFile: envFile, src: src}, nil
 }
 
 // builderError words a builder's failure with what it printed.
@@ -249,7 +296,7 @@ const maxPlanVars = 200
 // once to write `.nixpacks/Dockerfile` next to the app. The Dockerfile
 // declares those variables as build arguments without values, so the
 // values have to come from here.
-func (d *Deployer) planNixpacks(ctx context.Context, r runner.Runner, app db.App, checkout, workDir string, spec *docker.BuildSpec, log *Log) error {
+func (d *Deployer) planNixpacks(ctx context.Context, r runner.Runner, app db.App, dep db.Deployment, checkout, workDir string, spec *docker.BuildSpec, log *Log) error {
 	b := builders[PackNixpacks]
 	// The Dockerfile is read from the checkout by path. A repository whose
 	// ".nixpacks" is a link would have it read from wherever that points.
@@ -258,7 +305,7 @@ func (d *Deployer) planNixpacks(ctx context.Context, r runner.Runner, app db.App
 			return err
 		}
 	}
-	box, err := d.prepareSandbox(ctx, r, b, workDir, spec.ContextDir, spec.BuildArgs, log)
+	box, err := d.prepareSandbox(ctx, r, b, dep.ID, workDir, spec.ContextDir, spec.BuildArgs, log)
 	if err != nil {
 		return err
 	}
@@ -267,11 +314,7 @@ func (d *Deployer) planNixpacks(ctx context.Context, r runner.Runner, app db.App
 
 	log.Step("Planning the build with %s %s", b.label, b.version)
 	flags := envFlags(spec.BuildArgs)
-	plan, err := box.cmd(append([]string{"nixpacks", "plan", "/src", "--format", "json"}, flags...)...)
-	if err != nil {
-		return err
-	}
-	out, err := r.Output(ctx, plan)
+	out, err := box.output(ctx, r, nil, append([]string{"nixpacks", "plan", "/src", "--format", "json"}, flags...)...)
 	if err != nil {
 		return builderError(b, err)
 	}
@@ -299,18 +342,18 @@ func (d *Deployer) planNixpacks(ctx context.Context, r runner.Runner, app db.App
 		}
 	}
 
-	box.writable = true
-	write, err := box.cmd(append([]string{"nixpacks", "build", "/src", "--out", "/src"}, flags...)...)
-	if err != nil {
+	// The second run writes. It sees the app read-only as before, and one
+	// directory it may write to where its Dockerfile is expected.
+	generated := path.Join(spec.ContextDir, ".nixpacks")
+	if err := r.MkdirAll(ctx, generated, 0o700); err != nil {
 		return err
 	}
-	write.Stdout, write.Stderr = log, log
-	if err := r.Run(ctx, write); err != nil {
+	box.scratch = generated
+	if err := box.run(ctx, r, log, append([]string{"nixpacks", "build", "/src", "--out", "/src"}, flags...)...); err != nil {
 		return fmt.Errorf("%s could not plan the build: %w", b.label, err)
 	}
 	// What was written is checked where it will be read: on the server,
 	// not inside the container that wrote it.
-	generated := path.Join(spec.ContextDir, ".nixpacks")
 	const plainFile = `test ! -L "$1" && test ! -L "$1/Dockerfile" && test -f "$1/Dockerfile"`
 	if _, err := r.Output(ctx, runner.Cmd{Name: "sh", Args: []string{"-c", plainFile, "sh", generated}}); err != nil {
 		return fmt.Errorf("%s did not leave a Dockerfile to build from", b.label)
@@ -329,9 +372,9 @@ const railpackPrepare = `railpack prepare /src --plan-out /tmp/plan.json --info-
 // variables reach the build as secrets: the plan names them, and the
 // frontend gives them to the build's commands without writing them into
 // the image.
-func (d *Deployer) planRailpack(ctx context.Context, r runner.Runner, app db.App, workDir string, spec *docker.BuildSpec, log *Log) error {
+func (d *Deployer) planRailpack(ctx context.Context, r runner.Runner, app db.App, dep db.Deployment, workDir string, spec *docker.BuildSpec, log *Log) error {
 	b := builders[PackRailpack]
-	box, err := d.prepareSandbox(ctx, r, b, workDir, spec.ContextDir, spec.BuildArgs, log)
+	box, err := d.prepareSandbox(ctx, r, b, dep.ID, workDir, spec.ContextDir, spec.BuildArgs, log)
 	if err != nil {
 		return err
 	}
@@ -340,12 +383,7 @@ func (d *Deployer) planRailpack(ctx context.Context, r runner.Runner, app db.App
 	defer cancel()
 
 	log.Step("Planning the build with %s %s", b.label, b.version)
-	prepare, err := box.cmd(append([]string{"sh", "-c", railpackPrepare, "sh"}, envFlags(spec.BuildArgs)...)...)
-	if err != nil {
-		return err
-	}
-	prepare.Stderr = log
-	out, err := r.Output(ctx, prepare)
+	out, err := box.output(ctx, r, log, append([]string{"sh", "-c", railpackPrepare, "sh"}, envFlags(spec.BuildArgs)...)...)
 	if err != nil {
 		return builderError(b, err)
 	}

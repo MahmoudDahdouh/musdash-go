@@ -164,6 +164,9 @@ type fakeTerminal struct {
 	sizes   [][2]int
 	closed  bool
 	closeCh chan struct{}
+	// deaf makes typing wait for ever, as into a program that does not
+	// read what it is sent.
+	deaf bool
 }
 
 func newFakeTerminal() *fakeTerminal {
@@ -182,7 +185,19 @@ func (f *fakeTerminal) Read(p []byte) (int, error) {
 	}
 }
 
+func (f *fakeTerminal) size(i int) [2]int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.sizes[i]
+}
+
 func (f *fakeTerminal) Write(p []byte) (int, error) {
+	if f.deaf {
+		// A program that reads nothing: typing into it waits, until the
+		// terminal is hung up.
+		<-f.closeCh
+		return 0, io.ErrClosedPipe
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.typed = append(f.typed, string(p))
@@ -228,21 +243,50 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 	}
 }
 
+// started is the terminals a scripted server has handed out.
+type started struct {
+	mu    sync.Mutex
+	terms []*fakeTerminal
+	lines []string
+	// make builds the next terminal; nil builds an ordinary one.
+	make func() *fakeTerminal
+}
+
+func (s *started) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.terms)
+}
+
+func (s *started) term(i int) *fakeTerminal {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.terms[i]
+}
+
+func (s *started) line(i int) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lines[i]
+}
+
 // terminalApp is a deployed app whose server hands out scripted terminals.
-func terminalApp(t *testing.T) (a *app, appID, csrf string, terms *[]*fakeTerminal, lines *[]string) {
+func terminalApp(t *testing.T) (a *app, appID, csrf string, st *started) {
 	a = newApp(t, false)
 	a.setup()
 	projectID, env := a.project("Shop")
 	appID = a.newApp(projectID, env, "web", true, nil)
-	var mu sync.Mutex
-	terms, lines = &[]*fakeTerminal{}, &[]string{}
+	st = &started{}
 	a.fake.Term = func(line string, _ runner.Cmd, cols, rows int) (runner.Terminal, error) {
-		mu.Lock()
-		defer mu.Unlock()
+		st.mu.Lock()
+		defer st.mu.Unlock()
 		term := newFakeTerminal()
+		if st.make != nil {
+			term = st.make()
+		}
 		term.sizes = append(term.sizes, [2]int{cols, rows})
-		*terms = append(*terms, term)
-		*lines = append(*lines, line)
+		st.terms = append(st.terms, term)
+		st.lines = append(st.lines, line)
 		return term, nil
 	}
 	_, page := a.get("/apps/" + appID + "/terminal")
@@ -250,7 +294,7 @@ func terminalApp(t *testing.T) (a *app, appID, csrf string, terms *[]*fakeTermin
 	if m == nil || !strings.Contains(page, `data-terminal="/apps/`+appID+`/terminal/ws"`) || !strings.Contains(page, "/static/terminal.js?v=") {
 		t.Fatalf("the terminal page:\n%s", page)
 	}
-	return a, appID, m[1], terms, lines
+	return a, appID, m[1], st
 }
 
 func hi(csrf string) string {
@@ -259,7 +303,7 @@ func hi(csrf string) string {
 }
 
 func TestTerminal(t *testing.T) {
-	a, appID, csrf, terms, lines := terminalApp(t)
+	a, appID, csrf, st := terminalApp(t)
 	app, _ := a.db.AppByID(context.Background(), appID)
 	path := "/apps/" + appID + "/terminal/ws"
 
@@ -271,16 +315,16 @@ func TestTerminal(t *testing.T) {
 		t.Fatalf("handshake answer: %v", res.Header)
 	}
 	ws.text(hi(csrf))
-	waitFor(t, "a terminal being started", func() bool { return len(*terms) == 1 })
-	term := (*terms)[0]
+	waitFor(t, "a terminal being started", func() bool { return st.count() == 1 })
+	term := st.term(0)
 	// A fixed command in the app's own container, with the size the page
 	// measured. Nothing of the request is in it.
 	want := "docker exec --interactive --tty --env TERM=xterm-256color " + app.Container + " sh -c " + shellPick
-	if (*lines)[0] != want {
-		t.Fatalf("the terminal runs %q\nwant              %q", (*lines)[0], want)
+	if st.line(0) != want {
+		t.Fatalf("the terminal runs %q\nwant              %q", st.line(0), want)
 	}
-	if term.sizes[0] != [2]int{120, 40} {
-		t.Fatalf("size %v", term.sizes)
+	if got := term.size(0); got != [2]int{120, 40} {
+		t.Fatalf("size %v", got)
 	}
 
 	// Typed bytes go in as they are; what the shell prints comes back.
@@ -306,8 +350,8 @@ func TestTerminal(t *testing.T) {
 	ws.text(`not json`)
 	ws.text(`{"csrf":"again","cols":0}`)
 	waitFor(t, "the resize", func() bool { term.mu.Lock(); defer term.mu.Unlock(); return len(term.sizes) == 2 })
-	if term.sizes[1] != [2]int{90, 28} {
-		t.Fatalf("sizes %v", term.sizes)
+	if got := term.size(1); got != [2]int{90, 28} {
+		t.Fatalf("resized to %v", got)
 	}
 	// 64 KB at once is the most a browser may send.
 	ws.binary(strings.Repeat("x", wsMaxMessage))
@@ -322,8 +366,8 @@ func TestTerminal(t *testing.T) {
 	// The shell ends: the page is told, and the connection closed.
 	_, ws = a.dialWS(path, nil)
 	ws.text(hi(csrf))
-	waitFor(t, "a second terminal", func() bool { return len(*terms) == 2 })
-	close((*terms)[1].out)
+	waitFor(t, "a second terminal", func() bool { return st.count() == 2 })
+	close(st.term(1).out)
 	if note := string(ws.until(wsText)); !strings.Contains(note, `"exit"`) {
 		t.Fatalf("note %q", note)
 	}
@@ -335,9 +379,9 @@ func TestTerminal(t *testing.T) {
 }
 
 func TestTerminalIsRefused(t *testing.T) {
-	a, appID, csrf, terms, _ := terminalApp(t)
+	a, appID, csrf, st := terminalApp(t)
 	path := "/apps/" + appID + "/terminal/ws"
-	started := func() int { return len(*terms) }
+	started := st.count
 
 	// Before the connection is taken over.
 	for name, c := range map[string]struct {
@@ -411,11 +455,11 @@ func TestTerminalIsRefused(t *testing.T) {
 	if code := ws.closeCode(); code != wsTooBig {
 		t.Fatalf("pieces over the limit: closed with %d", code)
 	}
-	waitFor(t, "its terminal being closed", (*terms)[0].isClosed)
+	waitFor(t, "its terminal being closed", st.term(0).isClosed)
 }
 
 func TestTerminalLimitsAndOtherResources(t *testing.T) {
-	a, appID, csrf, terms, _ := terminalApp(t)
+	a, appID, csrf, st := terminalApp(t)
 	ctx := context.Background()
 	path := "/apps/" + appID + "/terminal/ws"
 
@@ -429,14 +473,14 @@ func TestTerminalLimitsAndOtherResources(t *testing.T) {
 		ws.text(hi(csrf))
 		open = append(open, ws)
 	}
-	waitFor(t, "all terminals", func() bool { return len(*terms) == maxTerminals })
+	waitFor(t, "all terminals", func() bool { return st.count() == maxTerminals })
 	if res, ws := a.dialWS(path, nil); ws != nil || res.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("one terminal too many: %d", res.StatusCode)
 	}
 	// A browser that just goes away gives its place back.
 	open[0].conn.Close()
 	waitFor(t, "the place being given back", func() bool { return len(a.server.terminals) == maxTerminals-1 })
-	waitFor(t, "its terminal being closed", (*terms)[0].isClosed)
+	waitFor(t, "its terminal being closed", st.term(0).isClosed)
 	if _, ws := a.dialWS(path, nil); ws == nil {
 		t.Fatal("no terminal after one was closed")
 	}
@@ -469,7 +513,7 @@ func TestTerminalLimitsAndOtherResources(t *testing.T) {
 }
 
 func TestTerminalThatCannotBeOpened(t *testing.T) {
-	a, appID, csrf, _, _ := terminalApp(t)
+	a, appID, csrf, _ := terminalApp(t)
 	a.fake.Term = func(string, runner.Cmd, int, int) (runner.Terminal, error) {
 		return nil, errors.New("docker: permission denied while trying to connect to /var/run/docker.sock")
 	}
@@ -547,4 +591,26 @@ func TestServiceTerminalIsOnlyInItsOwnContainers(t *testing.T) {
 	if !strings.Contains(started[0], " stack-db-1 sh -c ") {
 		t.Fatalf("started %q", started[0])
 	}
+}
+
+// A shell running something that reads nothing takes what is typed only
+// until its buffer is full; after that, typing waits. A browser that leaves
+// then must still get the terminal closed and its place given back.
+func TestTerminalStuckTypingIsStillClosed(t *testing.T) {
+	a, appID, csrf, st := terminalApp(t)
+	a.server.pingEvery = 30 * time.Millisecond
+	st.make = func() *fakeTerminal {
+		term := newFakeTerminal()
+		term.deaf = true
+		return term
+	}
+	_, ws := a.dialWS("/apps/"+appID+"/terminal/ws", nil)
+	ws.text(hi(csrf))
+	waitFor(t, "a terminal", func() bool { return st.count() == 1 })
+	ws.binary("typed into a program that does not read")
+	time.Sleep(50 * time.Millisecond)
+	// The tab is closed without a word.
+	ws.conn.Close()
+	waitFor(t, "the terminal being closed", st.term(0).isClosed)
+	waitFor(t, "its place being given back", func() bool { return len(a.server.terminals) == 0 })
 }

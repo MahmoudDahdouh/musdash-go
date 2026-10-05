@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -143,4 +144,21 @@ func TestReadContainers(t *testing.T) {
 	if _, err := ReadContainers(context.Background(), fake); err != nil || strings.Contains(asked, " -- ") {
 		t.Fatalf("every container: %q %v", asked, err)
 	}
+}
+
+// TestReadHostOnThisMachine asks the machine the tests run on, when it is
+// one that can answer: the script must work with the tools a server has,
+// not only with the answer written out above.
+func TestReadHostOnThisMachine(t *testing.T) {
+	if _, err := os.Stat("/proc/stat"); err != nil {
+		t.Skip("this machine has no /proc")
+	}
+	h, err := ReadHost(context.Background(), runner.NewLocal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Cores < 1 || h.MemTotal <= 0 || h.MemUsed <= 0 || h.MemUsed > h.MemTotal || h.DiskTotal <= 0 || h.DiskUsed > h.DiskTotal || h.CPU < 0 || h.CPU > 10000 {
+		t.Fatalf("an answer that cannot be right: %+v", h)
+	}
+	t.Logf("%+v", h)
 }

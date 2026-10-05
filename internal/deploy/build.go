@@ -288,6 +288,11 @@ func (d *Deployer) build(ctx context.Context, r runner.Runner, app db.App, dep d
 		return "", "", err
 	}
 
+	// Known from here on, not only once the build is done: an event that
+	// asks "is this commit deployed?" during the build gets the answer.
+	if err := d.DB.SetDeploymentCommit(ctx, dep.ID, commit); err != nil {
+		return "", "", err
+	}
 	buildArgs, err := d.buildArgs(ctx, app)
 	if err != nil {
 		return "", "", err
@@ -310,9 +315,9 @@ func (d *Deployer) build(ctx context.Context, r runner.Runner, app db.App, dep d
 			return "", "", err
 		}
 		if app.BuildPack == PackNixpacks {
-			err = d.planNixpacks(ctx, r, app, checkout, workDir, &spec, log)
+			err = d.planNixpacks(ctx, r, app, dep, checkout, workDir, &spec, log)
 		} else {
-			err = d.planRailpack(ctx, r, app, workDir, &spec, log)
+			err = d.planRailpack(ctx, r, app, dep, workDir, &spec, log)
 		}
 		if err != nil {
 			return "", "", err

@@ -118,9 +118,11 @@ func (d *Deployer) SyncPreview(ctx context.Context, parent db.App, pr source.Pul
 }
 
 // deployedCommit reports whether an app's latest deployment is of this
-// commit and did not fail. An event that says no more than "the pull
-// request is open" (a comment, an approval) then has nothing to deploy.
-// Hosts shorten commit ids, so the start is compared.
+// commit: waiting, building, serving or failed. An event that says no more
+// than "the pull request is open" (a comment, an approval) then has
+// nothing to deploy; a build that failed is started again by a new commit
+// or by hand, not by every comment. Hosts shorten commit ids, so the start
+// is compared.
 func (d *Deployer) deployedCommit(ctx context.Context, appID, commit string) bool {
 	if len(commit) < 7 {
 		return false
@@ -129,7 +131,7 @@ func (d *Deployer) deployedCommit(ctx context.Context, appID, commit string) boo
 	if err != nil || len(last) == 0 {
 		return false
 	}
-	return last[0].Status != db.DeployFailed && last[0].RollbackOf == "" && strings.HasPrefix(last[0].CommitSHA, commit)
+	return last[0].RollbackOf == "" && strings.HasPrefix(last[0].CommitSHA, commit)
 }
 
 func (d *Deployer) createPreview(ctx context.Context, parent db.App, pr source.PullRequest) (db.App, error) {

@@ -651,7 +651,7 @@ func (r *SSHRunner) Terminal(ctx context.Context, c Cmd, cols, rows int) (Termin
 		return fail(err)
 	}
 	t := &sshTerminal{session: session, in: in, out: out, release: release}
-	t.stop = context.AfterFunc(ctx, func() { t.Close() })
+	closeWith(ctx, t, &t.stop)
 	return t, nil
 }
 
