@@ -702,3 +702,92 @@ func TestAppDomainPathsAndPasswords(t *testing.T) {
 		t.Errorf("a path of the dashboard's domain was given to an app: %d", res.StatusCode)
 	}
 }
+
+func TestRollBackFromTheDeploymentPage(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	projectID, env := a.project("Shop")
+	appID := a.newApp(projectID, env, "web", true, nil)
+	ctx := context.Background()
+	wait := func() db.Deployment {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			list, _ := a.db.ListDeployments(ctx, appID, 1)
+			if len(list) == 1 && (list[0].Status == db.DeploySuccess || list[0].Status == db.DeployFailed) {
+				return list[0]
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatal("the deployment did not finish")
+		return db.Deployment{}
+	}
+	first := wait()
+	res, _ := a.post("/apps/"+appID, "/apps/"+appID+"/deploy", nil)
+	if res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("deploy: %d", res.StatusCode)
+	}
+	second := wait()
+	if first.ID == second.ID || second.Status != db.DeploySuccess {
+		t.Fatalf("second deployment: %+v", second)
+	}
+
+	// Offered on an earlier deployment, not on the one that is serving.
+	_, body := a.get("/apps/" + appID + "/deployments/" + first.ID)
+	if !strings.Contains(body, "/deployments/"+first.ID+"/rollback") {
+		t.Fatal("an earlier deployment does not offer a rollback")
+	}
+	_, body = a.get("/apps/" + appID + "/deployments/" + second.ID)
+	if strings.Contains(body, "/rollback") {
+		t.Fatal("the serving deployment offers a rollback to itself")
+	}
+	_, body = a.get("/apps/" + appID + "/deployments")
+	if strings.Count(body, "Serving") != 1 {
+		t.Fatalf("the list marks %d deployments as serving", strings.Count(body, "Serving"))
+	}
+
+	page := "/apps/" + appID + "/deployments/" + first.ID
+	res, _ = a.post(page, page+"/rollback", nil)
+	if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(res.Header.Get("Location"), "/apps/"+appID+"/deployments/") {
+		t.Fatalf("rollback: %d to %q", res.StatusCode, res.Header.Get("Location"))
+	}
+	back := wait()
+	if back.Status != db.DeploySuccess || back.RollbackOf != first.ID || back.KeptImage != first.KeptImage {
+		t.Fatalf("the rollback: %+v", back)
+	}
+	_, body = a.get("/apps/" + appID + "/deployments/" + back.ID)
+	if !strings.Contains(body, "A rollback") || !strings.Contains(body, "/deployments/"+first.ID) {
+		t.Error("the rollback's page does not say what it went back to")
+	}
+	// The deployment it went back to runs already; there is nothing to offer.
+	_, body = a.get(page)
+	if strings.Contains(body, "/rollback") {
+		t.Error("a rollback is offered to the image that is running")
+	}
+
+	// A deployment that failed has nothing to go back to.
+	a.db.Exec(`UPDATE deployments SET status = 'failed' WHERE id = ?`, second.ID)
+	failed := "/apps/" + appID + "/deployments/" + second.ID
+	res, _ = a.post(failed, failed+"/rollback", nil)
+	wantRedirect(t, res, failed)
+	if list, _ := a.db.ListDeployments(ctx, appID, 10); len(list) != 3 {
+		t.Fatalf("%d deployments after a refused rollback", len(list))
+	}
+
+	// Another team's app, or a deployment of another app, is not found.
+	a.db.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('otherteam', 'Other', 1)`)
+	a.db.Exec(`INSERT INTO servers (id, team_id, name, kind, created_at) VALUES ('othersrv', 'otherteam', 'theirs', 'ssh', 1)`)
+	p, _ := a.db.CreateProject(ctx, "otherteam", "Secret", "")
+	envs, _ := a.db.ListEnvironments(ctx, p.ID)
+	other, err := a.db.CreateApp(ctx, "otherteam", db.App{EnvironmentID: envs[0].ID, ServerID: "othersrv", Name: "secret-app", Image: "nginx", Port: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, _ := a.db.CreateDeployment(ctx, db.Deployment{AppID: other.ID, Image: "nginx"})
+	a.db.Exec(`UPDATE deployments SET status = 'success', kept_image = ? WHERE id = ?`, "musdash/"+other.ID+":d-"+theirs.ID, theirs.ID)
+	for _, path := range []string{"/apps/" + other.ID + "/deployments/" + theirs.ID + "/rollback", "/apps/" + appID + "/deployments/" + theirs.ID + "/rollback"} {
+		if res, _ := a.post(page, path, nil); res.StatusCode != http.StatusNotFound {
+			t.Errorf("%s: %d, want 404", path, res.StatusCode)
+		}
+	}
+}

@@ -115,6 +115,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /apps/{id}/deployments", s.authed(s.appDeployments))
 	mux.Handle("GET /apps/{id}/deployments/{dep}", s.authed(s.appDeployment))
 	mux.Handle("GET /apps/{id}/deployments/{dep}/status", s.authed(s.appDeploymentStatus))
+	mux.Handle("POST /apps/{id}/deployments/{dep}/rollback", s.authed(s.appRollback))
 	mux.Handle("GET /apps/{id}/deployments/{dep}/stream", s.authed(s.appDeploymentStream))
 	mux.Handle("GET /apps/{id}/logs", s.authed(s.appLogs))
 	mux.Handle("GET /apps/{id}/logs/stream", s.authed(s.appLogsStream))

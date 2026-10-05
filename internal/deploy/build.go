@@ -23,9 +23,9 @@ const (
 	PackStatic     = "static"
 )
 
-// keepImages is how many built images of an app stay on the server. Older
-// ones are removed after each successful build so the disk does not fill;
-// the ones kept are what a rollback can return to.
+// keepImages is how many images of an app stay on the server, built or
+// pulled. Older ones are removed after each successful deployment so the
+// disk does not fill; the ones kept are what a rollback can return to.
 const keepImages = 5
 
 // TokenSource mints short-lived repository tokens for a GitHub App.
@@ -378,8 +378,12 @@ func (d *Deployer) buildArgs(ctx context.Context, app db.App) (map[string]string
 	return args, nil
 }
 
-// pruneImages removes an app's built images beyond the newest keepImages.
+// pruneImages removes an app's images beyond the newest keepImages.
 // It never fails a deployment: a leftover image costs disk, nothing else.
+//
+// Which are the newest is asked of the deployments, not of Docker: Docker
+// orders images by when they were made, and an image that was rolled back
+// to, or a pulled one, can be old and still be what ran last.
 func (d *Deployer) pruneImages(ctx context.Context, dk docker.Client, appID, current string) {
 	repo := ImageRepository(appID)
 	tags, err := dk.ImageTags(ctx, repo)
@@ -387,11 +391,18 @@ func (d *Deployer) pruneImages(ctx context.Context, dk docker.Client, appID, cur
 		d.Log.Warn("list images to prune", "app", appID, "err", err)
 		return
 	}
-	kept := 0
+	recent, err := d.DB.KeptImages(ctx, appID, keepImages)
+	if err != nil {
+		d.Log.Warn("list images to keep", "app", appID, "err", err)
+		return
+	}
+	keep := map[string]bool{current: true}
+	for _, image := range recent {
+		keep[image] = true
+	}
 	for _, tag := range tags {
 		ref := repo + ":" + tag
-		if ref == current || kept < keepImages {
-			kept++
+		if keep[ref] {
 			continue
 		}
 		if err := dk.RemoveImage(ctx, ref); err != nil {

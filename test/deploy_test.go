@@ -97,6 +97,17 @@ func TestDeployWithDocker(t *testing.T) {
 	// containers of another musdash on this machine are never touched.
 	mine := "label=musdash.resource=" + strings.TrimPrefix(appPath, "/apps/")
 	t.Cleanup(func() { removeManaged(t, mine, "musdash-"+envID[1]) })
+	// The images kept for rollbacks are names this test's app gave to
+	// nginx:alpine; only those names are removed.
+	repo := "musdash/" + strings.TrimPrefix(appPath, "/apps/")
+	t.Cleanup(func() {
+		out, _ := exec.Command("docker", "images", "--format", "{{.Repository}}:{{.Tag}}", repo).Output()
+		for _, ref := range strings.Fields(string(out)) {
+			if strings.HasPrefix(ref, repo+":") {
+				exec.Command("docker", "rmi", ref).Run()
+			}
+		}
+	})
 
 	waitDeployment := func(path string) {
 		t.Helper()
@@ -213,6 +224,73 @@ func TestDeployWithDocker(t *testing.T) {
 	if names := strings.Fields(string(out)); len(names) != 1 {
 		t.Fatalf("containers after the redeploy: %v, want exactly one", names)
 	}
+
+	// Roll back to the first deployment: its image was kept under a name
+	// of the app's own, and that is what runs afterwards.
+	firstID := deployPath[strings.LastIndex(deployPath, "/")+1:]
+	firstPage := appPath + "/deployments/" + firstID
+	res = post(firstPage, firstPage+"/rollback", url.Values{})
+	if res.Request.URL.Path == firstPage {
+		t.Fatalf("the rollback was refused:\n%s", fetch(t, ui, base+firstPage))
+	}
+	waitDeployment(res.Request.URL.Path)
+	out, _ = exec.Command("docker", "ps", "--filter", mine, "--format", "{{.Image}}").Output()
+	if got := strings.TrimSpace(string(out)); got != repo+":d-"+firstID {
+		t.Fatalf("after the rollback the container runs %q, want %s:d-%s", got, repo, firstID)
+	}
+	if log := fetch(t, ui, base+res.Request.URL.Path+"/stream"); strings.Contains(log, "Pulling") {
+		t.Fatalf("a rollback pulled an image:\n%s", log)
+	}
+	if code, body, err := viaProxy(); err != nil || code != 200 || !strings.Contains(body, "Welcome to nginx") {
+		t.Fatalf("after the rollback: %d %v", code, err)
+	}
+	t.Log("rolled back to the first deployment's kept image")
+
+	// A second address for the same app: a path of the host, with the path
+	// taken off and a password in front. Through the real proxy.
+	post(appPath+"/settings", appPath+"/domains", url.Values{"host": {"docs.127.0.0.1.sslip.io"}, "path": {"/docs"}, "strip_prefix": {"1"},
+		"auth_user": {"reader"}, "auth_password": {"a password for the test"}})
+	ask := func(path, user, password string) (int, string) {
+		req, _ := http.NewRequest(http.MethodGet, "http://"+proxyAddr+path, nil)
+		req.Host = "docs.127.0.0.1.sslip.io"
+		if user != "" {
+			req.SetBasicAuth(user, password)
+		}
+		noRedirect := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		res, err := noRedirect.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		body, _ := io.ReadAll(res.Body)
+		return res.StatusCode, res.Header.Get("Location") + string(body)
+	}
+	deadline = time.Now().Add(10 * time.Second)
+	for {
+		if code, _ := ask("/docs/", "", ""); code == http.StatusUnauthorized || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	for _, c := range []struct {
+		path, user, password string
+		code                 int
+		has                  string
+	}{
+		{"/docs/", "", "", 401, ""},
+		{"/docs/", "reader", "wrong", 401, ""},
+		{"/docs/", "reader", "a password for the test", 200, "Welcome to nginx"},
+		{"/docs", "reader", "a password for the test", 200, "Welcome to nginx"},
+		{"/docs/50x.html", "reader", "a password for the test", 200, "An error occurred"},
+		{"/", "reader", "a password for the test", 404, "Nothing is deployed"},
+		{"/docsx", "reader", "a password for the test", 404, "Nothing is deployed"},
+		{"/x/../docs/", "", "", 308, "/docs/"},
+	} {
+		if code, body := ask(c.path, c.user, c.password); code != c.code || !strings.Contains(body, c.has) {
+			t.Fatalf("%s as %q: %d %.80q, want %d with %q", c.path, c.user, code, body, c.code, c.has)
+		}
+	}
+	t.Log("a path of a host, with its prefix removed and a password in front, through the proxy")
 
 	// Runtime logs reach the browser.
 	logClient := &http.Client{Jar: jar}

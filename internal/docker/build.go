@@ -117,6 +117,15 @@ func (c Client) ImageTags(ctx context.Context, repository string) ([]string, err
 	return tags, nil
 }
 
+// Tag gives a local image a second name.
+func (c Client) Tag(ctx context.Context, source, target string) error {
+	if !ValidImage(source) || !ValidImage(target) {
+		return fmt.Errorf("%q or %q is not a valid image name", source, target)
+	}
+	_, err := c.R.Output(ctx, cmd("tag", source, target))
+	return err
+}
+
 // RemoveImage deletes a local image tag. An image still used by a container
 // is left alone, and a missing image is not an error.
 func (c Client) RemoveImage(ctx context.Context, ref string) error {

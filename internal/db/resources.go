@@ -244,13 +244,18 @@ type Deployment struct {
 	CreatedAt  int64
 	StartedAt  int64
 	FinishedAt int64
+	// RollbackOf is the deployment whose image this one runs again, or "".
+	RollbackOf string
+	// KeptImage is the name, in the app's own repository, under which the
+	// deployed image stays on the server to be rolled back to.
+	KeptImage string
 }
 
-const deploymentColumns = `id, app_id, status, trigger, image, commit_sha, log_path, error, created_at, started_at, finished_at`
+const deploymentColumns = `id, app_id, status, trigger, image, commit_sha, log_path, error, created_at, started_at, finished_at, rollback_of, kept_image`
 
 func scanDeployment(row interface{ Scan(...any) error }) (Deployment, error) {
 	var m Deployment
-	err := row.Scan(&m.ID, &m.AppID, &m.Status, &m.Trigger, &m.Image, &m.CommitSHA, &m.LogPath, &m.Error, &m.CreatedAt, &m.StartedAt, &m.FinishedAt)
+	err := row.Scan(&m.ID, &m.AppID, &m.Status, &m.Trigger, &m.Image, &m.CommitSHA, &m.LogPath, &m.Error, &m.CreatedAt, &m.StartedAt, &m.FinishedAt, &m.RollbackOf, &m.KeptImage)
 	return m, err
 }
 
@@ -258,9 +263,37 @@ func (d *DB) CreateDeployment(ctx context.Context, m Deployment) (Deployment, er
 	m.ID = secret.RandomID()
 	m.Status = DeployQueued
 	m.CreatedAt = now()
-	_, err := d.ExecContext(ctx, `INSERT INTO deployments (id, app_id, status, trigger, image, commit_sha, log_path, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, m.ID, m.AppID, m.Status, m.Trigger, m.Image, m.CommitSHA, m.LogPath, m.CreatedAt)
+	_, err := d.ExecContext(ctx, `INSERT INTO deployments (id, app_id, status, trigger, image, commit_sha, log_path, created_at, rollback_of, kept_image)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, m.ID, m.AppID, m.Status, m.Trigger, m.Image, m.CommitSHA, m.LogPath, m.CreatedAt, m.RollbackOf, m.KeptImage)
 	return m, err
+}
+
+// SetDeploymentKept records the name under which a deployment's image is
+// kept on the server.
+func (d *DB) SetDeploymentKept(ctx context.Context, id, kept string) error {
+	_, err := d.ExecContext(ctx, `UPDATE deployments SET kept_image = ? WHERE id = ?`, kept, id)
+	return err
+}
+
+// KeptImages returns the kept images of an app's most recent successful
+// deployments, each once, the most recently deployed first.
+func (d *DB) KeptImages(ctx context.Context, appID string, limit int) ([]string, error) {
+	rows, err := d.QueryContext(ctx, `SELECT kept_image FROM deployments
+		WHERE app_id = ? AND status = 'success' AND kept_image <> ''
+		GROUP BY kept_image ORDER BY max(created_at) DESC, max(rowid) DESC LIMIT ?`, appID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var image string
+		if err := rows.Scan(&image); err != nil {
+			return nil, err
+		}
+		out = append(out, image)
+	}
+	return out, rows.Err()
 }
 
 // Deployment loads one deployment of the given app.
@@ -305,7 +338,8 @@ func (d *DB) QueuedDeployment(ctx context.Context, appID string) (Deployment, er
 
 // SetDeploymentBuild records what a Git deployment built.
 func (d *DB) SetDeploymentBuild(ctx context.Context, id, image, commit string) error {
-	_, err := d.ExecContext(ctx, `UPDATE deployments SET image = ?, commit_sha = ? WHERE id = ?`, image, commit, id)
+	// A built image has a name of the app's own from the start.
+	_, err := d.ExecContext(ctx, `UPDATE deployments SET image = ?, commit_sha = ?, kept_image = ? WHERE id = ?`, image, commit, image, id)
 	return err
 }
 

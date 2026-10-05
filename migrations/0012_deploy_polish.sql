@@ -33,6 +33,8 @@ ALTER TABLE deployments ADD COLUMN rollback_of TEXT NOT NULL DEFAULT '';
 -- deployed is kept on the server. A tag such as nginx:latest moves; this
 -- one does not.
 ALTER TABLE deployments ADD COLUMN kept_image TEXT NOT NULL DEFAULT '';
+-- Images built from Git have always had such a name.
+UPDATE deployments SET kept_image = image WHERE status = 'success' AND image LIKE 'musdash/%';
 
 -- A preview is an app of its own, the child of the app whose pull request
 -- it shows.

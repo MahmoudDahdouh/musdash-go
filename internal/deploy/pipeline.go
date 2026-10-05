@@ -191,14 +191,52 @@ func VolumeName(resourceID, name string) string { return "musdash-" + resourceID
 // Deployments of one app run one at a time, in order.
 func (d *Deployer) Enqueue(ctx context.Context, app db.App, trigger string) (db.Deployment, error) {
 	dep := db.Deployment{AppID: app.ID, Trigger: trigger, Image: app.Image}
+	if app.Source == db.SourceGit {
+		dep.Image = "" // known once the commit is built
+	}
+	return d.enqueue(ctx, app, dep)
+}
+
+// TriggerRollback is the trigger of a deployment made by Rollback.
+const TriggerRollback = "rollback"
+
+// ErrNoRollback is returned when a deployment cannot be rolled back to.
+var ErrNoRollback = errors.New("this deployment cannot be rolled back to")
+
+// Rollback queues a deployment that runs the image of an earlier,
+// successful deployment of the same app again. Nothing is pulled or built:
+// the image is the one that ran then, as it was kept on the server. The
+// app's settings and variables are today's; only the image goes back.
+func (d *Deployer) Rollback(ctx context.Context, app db.App, to db.Deployment) (db.Deployment, error) {
+	// The image must be one of this app's own. A name from anywhere else
+	// would let a deployment row decide what another app runs.
+	if to.AppID != app.ID || to.Status != db.DeploySuccess || !ownImage(app.ID, to.KeptImage) {
+		return db.Deployment{}, ErrNoRollback
+	}
+	return d.enqueue(ctx, app, db.Deployment{AppID: app.ID, Trigger: TriggerRollback,
+		Image: to.Image, CommitSHA: to.CommitSHA, RollbackOf: to.ID, KeptImage: to.KeptImage})
+}
+
+// ownImage reports whether an image name is in the app's own repository.
+func ownImage(appID, image string) bool {
+	tag, ok := strings.CutPrefix(image, ImageRepository(appID)+":")
+	return ok && tag != "" && docker.ValidImage(image)
+}
+
+// keptName is the name under which a pulled image is kept for a deployment.
+func keptName(appID, deploymentID string) string {
+	return ImageRepository(appID) + ":d-" + deploymentID
+}
+
+func (d *Deployer) enqueue(ctx context.Context, app db.App, dep db.Deployment) (db.Deployment, error) {
 	// Deployments of one app never overlap. Builds additionally run one at
 	// a time per server: an image build can use a gigabyte or more of
 	// memory, and two at once would exhaust a small server. Every Git
 	// deployment of an app is on that app's one server, so the build lock
-	// also keeps them in order.
+	// also keeps them in order; a rollback of such an app takes the same
+	// lock for that reason, though it builds nothing.
 	lock := "deploy:" + app.ID
 	if app.Source == db.SourceGit {
-		dep.Image = "" // known once the commit is built
 		// The lock is of the server that does the building.
 		lock = "build:" + app.ServerID
 		if app.BuildServerID != "" {
@@ -334,7 +372,29 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 		return fmt.Errorf("custom Docker options: %w", err)
 	}
 
-	if app.Source == db.SourceGit {
+	// kept is the name of the app's own under which this deployment's
+	// image stays on the server, to be rolled back to.
+	kept := dep.KeptImage
+	switch {
+	case dep.RollbackOf != "":
+		// Checked again here: the row is what decides which image runs.
+		if !ownImage(app.ID, kept) {
+			return ErrNoRollback
+		}
+		was := dep.Image
+		if was == "" {
+			was = kept
+		}
+		log.Step("Rolling back to the image of an earlier deployment (%s)", was)
+		have, herr := dk.HasImage(ctx, kept)
+		if herr != nil {
+			return herr
+		}
+		if !have {
+			return errors.New("the image of that deployment is no longer on the server; deploy again instead")
+		}
+		image = kept
+	case app.Source == db.SourceGit:
 		var commit string
 		if image, commit, err = d.buildFor(ctx, r, server, app, dep, log); err != nil {
 			return err
@@ -342,18 +402,28 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 		if err := d.DB.SetDeploymentBuild(ctx, dep.ID, image, commit); err != nil {
 			return err
 		}
-		// Old images go only once this one is serving.
-		defer func() {
-			if err == nil {
-				d.pruneImages(context.WithoutCancel(ctx), dk, app.ID, image)
-			}
-		}()
-	} else {
+		kept = image
+	default:
 		log.Step("Pulling %s", image)
 		if err := dk.Pull(ctx, image, log); err != nil {
 			return fmt.Errorf("pull %s: %w", image, err)
 		}
+		// A tag such as nginx:latest moves. Under a name of the app's own
+		// the image that is deployed now stays what it is.
+		kept = keptName(app.ID, dep.ID)
+		if err := dk.Tag(ctx, image, kept); err != nil {
+			return fmt.Errorf("keep the image for a rollback: %w", err)
+		}
+		if err := d.DB.SetDeploymentKept(ctx, dep.ID, kept); err != nil {
+			return err
+		}
 	}
+	// Old images go only once this one is serving.
+	defer func() {
+		if err == nil {
+			d.pruneImages(context.WithoutCancel(ctx), dk, app.ID, kept)
+		}
+	}()
 
 	network := NetworkName(app.EnvironmentID)
 	if err := dk.EnsureNetwork(ctx, network); err != nil {
@@ -669,18 +739,16 @@ func (d *Deployer) Destroy(ctx context.Context, appID string) error {
 	if err := r.RemoveAll(ctx, d.at(r).AppDir(app.ID)); err != nil {
 		return err
 	}
-	if app.Source == db.SourceGit {
-		// The images built for it are of no use to anything else.
-		dk := docker.Client{R: r}
-		repo := ImageRepository(app.ID)
-		tags, err := dk.ImageTags(ctx, repo)
-		if err != nil {
-			d.Log.Warn("list a deleted app's images", "app", app.ID, "err", err)
-		}
-		for _, tag := range tags {
-			if err := dk.RemoveImage(ctx, repo+":"+tag); err != nil {
-				d.Log.Warn("remove a deleted app's image", "image", repo+":"+tag, "err", err)
-			}
+	// The images built or kept for it are of no use to anything else.
+	dk := docker.Client{R: r}
+	repo := ImageRepository(app.ID)
+	tags, err := dk.ImageTags(ctx, repo)
+	if err != nil {
+		d.Log.Warn("list a deleted app's images", "app", app.ID, "err", err)
+	}
+	for _, tag := range tags {
+		if err := dk.RemoveImage(ctx, repo+":"+tag); err != nil {
+			d.Log.Warn("remove a deleted app's image", "image", repo+":"+tag, "err", err)
 		}
 	}
 	logs, err := d.DB.DeploymentIDs(ctx, app.ID)

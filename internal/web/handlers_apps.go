@@ -457,6 +457,25 @@ func (s *Server) appDeployments(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, pages.AppDeployments(s.appShell(w, r, v), v, list))
 }
 
+// appRollback runs an earlier deployment's image again.
+func (s *Server) appRollback(w http.ResponseWriter, r *http.Request) {
+	v, to, ok := s.loadDeployment(w, r)
+	if !ok {
+		return
+	}
+	dep, err := s.Deploy.Rollback(r.Context(), v.App, to)
+	if errors.Is(err, deploy.ErrNoRollback) {
+		setFlash(w, r, ui.ToneWarn, "This deployment cannot be rolled back to: it did not succeed, or its image was not kept.")
+		redirect(w, r, "/apps/"+v.App.ID+"/deployments/"+to.ID)
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	redirect(w, r, "/apps/"+v.App.ID+"/deployments/"+dep.ID)
+}
+
 // loadDeployment fetches the deployment in the path, which must belong to
 // the app in the path.
 func (s *Server) loadDeployment(w http.ResponseWriter, r *http.Request) (pages.AppView, db.Deployment, bool) {

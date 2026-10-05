@@ -2,6 +2,7 @@ package pages
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
@@ -385,7 +386,12 @@ templ AppDeployments(s ui.Shell, v AppView, list []db.Deployment) {
 							<td class="fact">{ orDefault(d.Image, "building") }</td>
 							<td>{ ui.StateLabel(d.Trigger) }</td>
 							<td>
-								@ui.StatusPill(d.Status)
+								<span class="flex flex-wrap items-center gap-2">
+									@ui.StatusPill(d.Status)
+									if v.serving(d) {
+										@ui.Badge("Serving", ui.ToneOK)
+									}
+								</span>
 							</td>
 							<td class="fact">{ ui.Took(d.StartedAt, d.FinishedAt) }</td>
 							<td class="text-right">
@@ -403,6 +409,18 @@ templ AppDeployments(s ui.Shell, v AppView, list []db.Deployment) {
 
 func deploymentDone(d db.Deployment) bool {
 	return d.Status == db.DeploySuccess || d.Status == db.DeployFailed
+}
+
+// serving reports whether a deployment's container is the one answering
+// for the app now.
+func (v AppView) serving(d db.Deployment) bool {
+	return v.App.Container != "" && strings.HasSuffix(v.App.Container, "-"+d.ID)
+}
+
+// canRollBack reports whether a deployment's image can be run again: it
+// succeeded, its image was kept, and it is not what is running already.
+func (v AppView) canRollBack(d db.Deployment) bool {
+	return d.Status == db.DeploySuccess && d.KeptImage != "" && !v.serving(d) && v.App.DeployedImage != d.KeptImage
 }
 
 // DeploymentStatus is the status line above a deployment's log. While the
@@ -434,6 +452,29 @@ templ AppDeployment(s ui.Shell, v AppView, d db.Deployment) {
 				@ui.Notice(ui.ToneDanger) {
 					{ d.Error }
 				}
+			}
+			if d.RollbackOf != "" {
+				<p class="muted text-sm">
+					A rollback: it runs the image of
+					<a class="link" href={ templ.SafeURL(v.base() + "/deployments/" + d.RollbackOf) }>an earlier deployment</a>
+					again.
+				</p>
+			}
+			if v.canRollBack(d) {
+				<section class="card">
+					<div class="card-head">
+						<div>
+							<h2 class="card-title">Roll back to this deployment</h2>
+							<p class="muted text-sm">Runs this deployment's image again, as it was kept on the server. Nothing is built or pulled. The app's settings and variables stay as they are today; only the image goes back.</p>
+						</div>
+						<form method="post" action={ templ.SafeURL(v.base() + "/deployments/" + d.ID + "/rollback") }>
+							@ui.CSRF(s.CSRF)
+							@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Secondary, Icon: "refresh"}) {
+								Roll back
+							}
+						</form>
+					</div>
+				</section>
 			}
 			@ui.LogView("deploy-log", templ.Attributes{
 				"hx-ext":      "sse",

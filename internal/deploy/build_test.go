@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -366,21 +367,33 @@ func TestStaticBuildPack(t *testing.T) {
 func TestOldImagesArePruned(t *testing.T) {
 	e := newEnv(t)
 	current := testCommit[:12]
-	rec := &gitEnvRecorder{images: current + "\nt1\nt2\nt3\nt4\nt5\nt6\nt7\n"}
+	repo := ImageRepository(e.app.ID)
+	// Docker lists images by when they were made, which is not the order
+	// they were deployed in: t1 was made last and deployed first.
+	rec := &gitEnvRecorder{images: "t1\n" + current + "\nstray\nt7\nt6\nt5\nt4\nt3\nt2\n"}
 	e.fake.Handle = rec.handle
 	e.gitApp(nil)
+	for i := 1; i <= 7; i++ {
+		tag := "t" + strconv.Itoa(i)
+		if _, err := e.db.Exec(`INSERT INTO deployments (id, app_id, status, image, kept_image, created_at) VALUES (?, ?, 'success', ?, ?, ?)`,
+			"old"+tag, e.app.ID, repo+":"+tag, repo+":"+tag, 1000+i); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if dep := e.deploy(); dep.Status != db.DeploySuccess {
 		t.Fatalf("%s %q", dep.Status, dep.Error)
 	}
 	var removed []string
 	for _, c := range e.fake.Calls() {
 		if ref, ok := strings.CutPrefix(c, "docker rmi "); ok {
-			removed = append(removed, strings.TrimPrefix(ref, ImageRepository(e.app.ID)+":"))
+			removed = append(removed, strings.TrimPrefix(ref, repo+":"))
 		}
 	}
-	// The newest five stay (the current one among them); the rest go.
-	if strings.Join(removed, ",") != "t5,t6,t7" {
-		t.Fatalf("removed %v, want t5 t6 t7", removed)
+	// The image now serving and those of the five deployments before it
+	// stay; older ones go, and so does a tag no deployment knows.
+	sort.Strings(removed)
+	if strings.Join(removed, ",") != "stray,t1,t2" {
+		t.Fatalf("removed %v, want stray t1 t2", removed)
 	}
 }
 

@@ -152,9 +152,15 @@ func (e *env) deployWithin(limit time.Duration) db.Deployment {
 	if err != nil {
 		e.t.Fatal(err)
 	}
+	return e.wait(dep, limit)
+}
+
+// wait waits for a queued deployment to finish.
+func (e *env) wait(dep db.Deployment, limit time.Duration) db.Deployment {
+	e.t.Helper()
 	deadline := time.Now().Add(limit)
 	for time.Now().Before(deadline) {
-		got, _ := e.db.DeploymentByID(ctx, dep.ID)
+		got, _ := e.db.DeploymentByID(context.Background(), dep.ID)
 		if got.Status == db.DeploySuccess || got.Status == db.DeployFailed {
 			return got
 		}
@@ -162,6 +168,16 @@ func (e *env) deployWithin(limit time.Duration) db.Deployment {
 	}
 	e.t.Fatal("deployment did not finish")
 	return dep
+}
+
+// rollback queues a rollback to an earlier deployment and waits for it.
+func (e *env) rollback(to db.Deployment) db.Deployment {
+	e.t.Helper()
+	dep, err := e.d.Rollback(context.Background(), e.reload(), to)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return e.wait(dep, 15*time.Second)
 }
 
 func (e *env) reload() db.App {

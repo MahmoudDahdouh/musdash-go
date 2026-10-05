@@ -18,6 +18,8 @@
 |---|---|---|
 | What a rollback runs | The image of a chosen successful deployment, as it is on the server, with the app's settings of today | Settings and variables are not versioned. The page says so |
 | Keeping images to roll back to | Every deployment's image gets a tag of the app's own (`musdash/<app>:<commit>` for builds, `musdash/<app>:d-<deployment>` for pulled images); the newest five are kept | A pulled tag such as `nginx:latest` moves. The image it pointed at becomes untagged and the daily clean-up would remove it |
+| Which images are the newest five | Asked of the deployments table, not of Docker | Docker orders images by when they were made. A pulled image, or one that was rolled back to, can be old and still be what ran last |
+| Two deployments of one commit | Share one image name; a rebuild of the commit replaces what the earlier deployment would roll back to | The name is the commit. A rebuild with other build variables is rare, and the alternative is an image per deployment |
 | A rollback whose image is gone | Fails at once and says the image is no longer on the server | Rebuilding an old commit is a deployment of that commit, not a rollback; it is not done silently |
 | Path routing | A domain row gets a path prefix. The proxy picks the longest prefix that matches on a segment boundary: `/api` matches `/api` and `/api/x`, not `/apix`. The path is passed on unchanged unless "strip prefix" is set | The usual meaning. Stripping is a switch because apps differ in whether they expect it |
 | One host, several apps | Allowed when the paths differ; `(host, path)` is unique instead of `host` | That is what path routing is for |
@@ -85,10 +87,10 @@ func ReadEvent(body io.Reader, secret []byte, header, event string) (Push, PullR
 ## Tasks
 
 ### Task 1 — Rollback
-- [ ] Tag every deployed image under the app's repository; keep five.
-- [ ] `Rollback`: a deployment with `rollback_of`; the pipeline skips pull and build, checks the image is there, and runs it through the same health check and switch.
-- [ ] Deployments page: "Roll back to this" on successful deployments other than the current one.
-- [ ] Tests: order of commands (no pull, no build), the image gone, team scoping, a rollback of a rollback.
+- [x] Tag every deployed image under the app's repository; keep five.
+- [x] `Rollback`: a deployment with `rollback_of`; the pipeline skips pull and build, checks the image is there, and runs it through the same health check and switch.
+- [x] Deployment page: "Roll back" on successful deployments other than the one serving.
+- [x] Tests: order of commands (no pull, no build), the image gone, team scoping, a rollback of a rollback.
 
 ### Task 2 — Path routing and basic auth
 - [x] Migration; domain form fields; uniqueness on `(host, path)`; validation of the prefix.
