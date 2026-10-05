@@ -1,0 +1,9 @@
+out/
+__pycache__/
+
+# One-off probes written while exploring a page or a failure; no suite runs them
+explore*.py
+x.py
+y.py
+# The sweep as pasted into the Playwright MCP; ui_sweep_node.js is the one that runs
+ui_sweep.js
