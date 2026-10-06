@@ -98,6 +98,8 @@ func TestRunArgsRejectInjection(t *testing.T) {
 		"network as flag":        func(s *RunSpec) { s.Network = "--net=host" },
 		"alias with space":       func(s *RunSpec) { s.Network = "n"; s.Alias = "a b" },
 		"mount target adds opt":  func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountVolume, Source: "v", Target: "/data,readonly"}} },
+		"mount at the root":      func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountVolume, Source: "v", Target: "/"}} },
+		"mount in /proc":         func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountVolume, Source: "v", Target: "/proc/1"}} },
 		"bind source adds opt":   func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountBind, Source: "/a,target=/etc", Target: "/x"}} },
 		"relative bind source":   func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountBind, Source: "relative", Target: "/x"}} },
 		"bind source escapes":    func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountBind, Source: "/srv/../etc", Target: "/x"}} },
@@ -342,5 +344,18 @@ func TestList(t *testing.T) {
 	empty := &scripted{}
 	if got, err := (Client{R: empty}).List(context.Background()); err != nil || len(got) != 0 {
 		t.Fatalf("empty: %+v %v", got, err)
+	}
+}
+
+func TestCheckMountTarget(t *testing.T) {
+	for _, ok := range []string{"/data", "/procfs", "/dev/shm", "/sys/x", "/var/lib/postgresql/data", "/a/"} {
+		if err := CheckMountTarget(ok); err != nil {
+			t.Errorf("%q refused: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"/", "//", "/.", "/proc", "/proc/", "/proc/sys/net", "/./proc", "data", "", "/a,b"} {
+		if err := CheckMountTarget(bad); err == nil {
+			t.Errorf("%q allowed", bad)
+		}
 	}
 }

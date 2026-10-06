@@ -157,6 +157,8 @@ func TestValidateRefuses(t *testing.T) {
 		{"labels", `{"Musdash.Resource": "other"}`, `label "Musdash.Resource"`},
 		{"volumes", `[{"type":"bind","source":"/var/run/docker.sock","target":"/var/run/docker.sock","bind":{}}]`, `/var/run/docker.sock cannot be mounted`},
 		{"volumes", `[{"type":"bind","source":"/","target":"/host","bind":{}}]`, `whole filesystem`},
+		{"volumes", `[{"type":"volume","source":"data","target":"/"}]`, `nothing can be mounted at /,`},
+		{"volumes", `[{"type":"tmpfs","target":"/proc/sys"}]`, `nothing can be mounted at /proc/sys`},
 		{"volumes", `[{"type":"bind","source":"/etc","target":"/host-etc","bind":{}}]`, `/etc cannot be mounted`},
 		{"volumes", `[{"type":"bind","source":"/var/lib/musdash/master.key","target":"/k","bind":{}}]`, `/var/lib/musdash`},
 		{"volumes", `[{"type":"bind","source":"/var/lib/musdash/apps/other/env","target":"/k","bind":{}}]`, `/var/lib/musdash`},

@@ -159,6 +159,23 @@ func ValidMountPath(p string) bool {
 	return !strings.Contains(p, "/../") && !strings.HasSuffix(p, "/..")
 }
 
+// CheckMountTarget reports why nothing can be mounted at a path of the
+// container, or nil. Besides a path that is not one, these are the two
+// places Docker itself refuses, which it does only when the container is
+// started and in words about its own configuration.
+func CheckMountTarget(target string) error {
+	if !ValidMountPath(target) {
+		return fmt.Errorf("mount target %q must be an absolute path without commas", target)
+	}
+	switch clean := path.Clean(target); {
+	case clean == "/":
+		return fmt.Errorf("nothing can be mounted at /, which is the container's whole file system: choose a directory in it, such as /data")
+	case clean == "/proc" || strings.HasPrefix(clean, "/proc/"):
+		return fmt.Errorf("nothing can be mounted at %s: /proc is where the system shows the container its processes, and Docker refuses a mount there", target)
+	}
+	return nil
+}
+
 // deniedBinds are host paths a container must never be given. Mounting any
 // of them, or a directory that contains them, hands the container control of
 // the host: the Docker socket is root, and the system directories hold
@@ -291,8 +308,8 @@ func (s RunSpec) Args() ([]string, error) {
 func validPort(p int) bool { return p >= 1 && p <= 65535 }
 
 func (m Mount) option() (string, error) {
-	if !ValidMountPath(m.Target) {
-		return "", fmt.Errorf("mount target %q must be an absolute path without commas", m.Target)
+	if err := CheckMountTarget(m.Target); err != nil {
+		return "", err
 	}
 	switch m.Kind {
 	case MountVolume:

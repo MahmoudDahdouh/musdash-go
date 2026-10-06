@@ -321,6 +321,10 @@ func (c *checker) mounts(v any) {
 			c.fail("the mount at %q must be a full path in the container, such as /data%s", target, hint)
 			continue
 		}
+		if err := docker.CheckMountTarget(target); err != nil && docker.ValidMountPath(target) {
+			c.fail("%v", err)
+			continue
+		}
 		switch kind {
 		case "volume":
 			if source != "" && !c.volumes[source] {

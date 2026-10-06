@@ -269,6 +269,11 @@ func TestAppStorage(t *testing.T) {
 		{url.Values{"kind": {"bind"}, "source": {"/etc"}, "target": {"/host-etc"}}, "cannot be mounted"},
 		{url.Values{"kind": {"bind"}, "source": {a.cfg.DataDir}, "target": {"/musdash"}}, "cannot be mounted"},
 		{url.Values{"kind": {"bind"}, "source": {"/"}, "target": {"/host"}}, "whole filesystem"},
+		// Docker refuses these, but not before the container is started.
+		{url.Values{"kind": {"volume"}, "source": {"data"}, "target": {"/"}}, "Nothing can be mounted at /,"},
+		{url.Values{"kind": {"volume"}, "source": {"data"}, "target": {"//"}}, "Nothing can be mounted at /,"},
+		{url.Values{"kind": {"volume"}, "source": {"data"}, "target": {"/proc"}}, "Nothing can be mounted at /proc"},
+		{url.Values{"kind": {"file"}, "content": {"x"}, "target": {"/proc/sys/x"}}, "Nothing can be mounted at /proc/sys/x"},
 		{url.Values{"kind": {"tmpfs"}, "source": {"x"}, "target": {"/x"}}, "Choose a storage type"},
 	}
 	for _, c := range bad {
