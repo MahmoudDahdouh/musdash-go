@@ -13,7 +13,6 @@ import (
 // at a glance, and each has a page of its own behind it.
 const (
 	homeEvents   = 12
-	homeTroubles = 20
 	homeProjects = 6
 	// homeEvery is how often Home asks again while something is in
 	// progress.
@@ -22,8 +21,6 @@ const (
 	// be shown as what it uses now. The sampler stores one a minute, so an
 	// older one means the server stopped answering.
 	homeReadingAge = 5 * time.Minute
-	// diskNearlyFull is the share of a disk from which Home says so.
-	diskNearlyFull = 0.9
 )
 
 // homeView reads what Home shows. It asks the database only: what a
@@ -34,9 +31,6 @@ func (s *Server) homeView(r *http.Request) (pages.HomeView, error) {
 	v := pages.HomeView{Admin: db.RoleRank(sess.Role) >= db.RoleRank(db.RoleAdmin)}
 	var err error
 	if v.Totals, err = s.DB.TeamTotals(ctx, sess.TeamID); err != nil {
-		return v, err
-	}
-	if v.Troubles, err = s.DB.Troubles(ctx, sess.TeamID, homeTroubles); err != nil {
 		return v, err
 	}
 	if v.Events, err = s.DB.RecentEvents(ctx, sess.TeamID, homeEvents); err != nil {
@@ -56,14 +50,10 @@ func (s *Server) homeView(r *http.Request) (pages.HomeView, error) {
 	for _, server := range servers {
 		h := pages.HomeServer{Server: server}
 		if sample, ok := samples[server.ID]; ok {
-			disk := ui.Bytes(float64(sample.DiskUsed)) + " of " + ui.Bytes(float64(sample.DiskTotal))
 			h.Meters = []ui.MeterProps{
 				{Label: "Processor", Value: ui.Percent(float64(sample.CPU) / 100), Share: float64(sample.CPU) / 10000},
 				{Label: "Memory", Value: ui.Bytes(float64(sample.Mem)) + " of " + ui.Bytes(float64(sample.MemTotal)), Share: share(sample.Mem, sample.MemTotal)},
-				{Label: "Disk", Value: disk, Share: share(sample.DiskUsed, sample.DiskTotal)},
-			}
-			if share(sample.DiskUsed, sample.DiskTotal) >= diskNearlyFull {
-				h.DiskFull = disk
+				{Label: "Disk", Value: ui.Bytes(float64(sample.DiskUsed)) + " of " + ui.Bytes(float64(sample.DiskTotal)), Share: share(sample.DiskUsed, sample.DiskTotal)},
 			}
 		}
 		v.Servers = append(v.Servers, h)

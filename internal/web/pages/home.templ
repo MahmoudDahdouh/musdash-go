@@ -14,7 +14,6 @@ type HomeView struct {
 	// Admin says the reader may connect a source.
 	Admin    bool
 	Totals   db.Totals
-	Troubles []db.Trouble
 	Events   []db.Event
 	Projects []db.ActiveProject
 	Servers  []HomeServer
@@ -30,121 +29,6 @@ type HomeServer struct {
 	// Meters is empty when the server's usage is not recorded, or its last
 	// reading is too old to be what it uses now.
 	Meters []ui.MeterProps
-	// DiskFull is how full the disk is, in words, when it is nearly full.
-	DiskFull string
-}
-
-// serverIssue is what is wrong with a server: the sentence, and the words
-// and the state of its pill.
-type serverIssue struct {
-	Name, Text, Label, State string
-}
-
-// issue is what is wrong with a server, if anything is.
-func (h HomeServer) issue() (serverIssue, bool) {
-	switch {
-	case h.Server.Status == db.ServerUnreachable:
-		return serverIssue{h.Server.Name, "It cannot be reached. What runs on it may still be running, but nothing can be deployed there.", "Not reachable", "failed"}, true
-	case h.Server.Status == db.ServerProblem:
-		return serverIssue{h.Server.Name, "It was reached, but something a deployment needs is missing.", "Needs attention", "degraded"}, true
-	case h.DiskFull != "":
-		return serverIssue{h.Server.Name, "Its disk is nearly full: " + h.DiskFull + ".", "Disk nearly full", "degraded"}, true
-	}
-	return serverIssue{}, false
-}
-
-func (v HomeView) serverIssues() []serverIssue {
-	var out []serverIssue
-	for _, h := range v.Servers {
-		if issue, ok := h.issue(); ok {
-			out = append(out, issue)
-		}
-	}
-	return out
-}
-
-func issuePill(state string) string {
-	if state == "failed" {
-		return "pill pill-danger"
-	}
-	return "pill pill-warn"
-}
-
-func resourceHref(kind, id string) string {
-	switch kind {
-	case db.KindDatabase:
-		return "/databases/" + id
-	case db.KindService:
-		return "/services/" + id
-	}
-	return "/apps/" + id
-}
-
-func resourceIcon(kind string) string {
-	switch kind {
-	case db.KindDatabase:
-		return "database"
-	case db.KindService:
-		return "layers"
-	}
-	return "box"
-}
-
-// troubleHref is the page on which a trouble can be looked into.
-func troubleHref(t db.Trouble) string {
-	switch t.What {
-	case db.TroubleDeploy:
-		return "/apps/" + t.ID + "/deployments/" + t.Ref
-	case db.TroubleBackup:
-		return "/databases/" + t.ID + "/backups"
-	case db.TroubleTask:
-		return "/apps/" + t.ID + "/tasks/" + t.Ref
-	}
-	return resourceHref(t.Kind, t.ID)
-}
-
-func troubleText(t db.Trouble) string {
-	switch t.What {
-	case db.TroubleDeploy:
-		return "The last deployment failed. The one before it is still serving."
-	case db.TroubleBackup:
-		return "The last backup failed."
-	case db.TroubleTask:
-		return "The scheduled task " + t.Detail + " failed when it last ran."
-	}
-	switch t.Status {
-	case db.AppDegraded:
-		return "Some of its containers are not running."
-	case db.AppFailed:
-		return "It could not be started."
-	}
-	return "It stopped on its own."
-}
-
-// troubleState is the state a trouble's row is drawn in. A resource that
-// is down is an outage; one that runs, with something failed behind it or
-// with part of it missing, is a warning.
-func troubleState(t db.Trouble) string {
-	if t.What == db.TroubleDown && t.Status != db.AppDegraded {
-		return "failed"
-	}
-	return "degraded"
-}
-
-func troubleLabel(t db.Trouble) string {
-	switch t.What {
-	case db.TroubleDeploy:
-		return "Deployment failed"
-	case db.TroubleBackup:
-		return "Backup failed"
-	case db.TroubleTask:
-		return "Task failed"
-	}
-	return ui.StateLabel(t.Status)
-}
-
-func troublePill(t db.Trouble) string {
-	return issuePill(troubleState(t))
 }
 
 func eventHref(e db.Event) string {
@@ -221,13 +105,6 @@ func projectLine(p db.ActiveProject) string {
 	return strconv.Itoa(p.Running) + " of " + strconv.Itoa(p.Resources) + " running"
 }
 
-func runningLine(t db.Totals) string {
-	if t.Running == t.Resources {
-		return "Everything that is deployed here is running."
-	}
-	return strconv.Itoa(t.Running) + " of " + strconv.Itoa(t.Resources) + " apps, databases and services are running. The others were stopped or have not been deployed."
-}
-
 func serverHost(s db.Server) string {
 	if s.Kind == db.ServerLocal {
 		return orDefault(s.IP, "localhost")
@@ -238,7 +115,7 @@ func serverHost(s db.Server) string {
 // Home is the page a person lands on.
 templ Home(s ui.Shell, v HomeView) {
 	@ui.Layout(s) {
-		@ui.PageHeader("Home", "What needs attention, what was done lately, and where it all runs.") {
+		@ui.PageHeader("Home", "What was done lately, and where it all runs.") {
 			if v.Totals.Projects > 0 {
 				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-project"}) {
 					New project
@@ -266,7 +143,6 @@ templ HomeLive(v HomeView) {
 		if v.Totals.Resources == 0 {
 			@homeStart(v)
 		}
-		@homeAttention(v)
 		<div class="grid items-start gap-6 xl:grid-cols-3">
 			<div class="grid min-w-0 gap-6 xl:col-span-2">
 				@homeActivity(v)
@@ -329,48 +205,6 @@ templ homeStep(done bool, title, description string) {
 		</div>
 		{ children... }
 	</li>
-}
-
-// homeAttention lists what is wrong now. Each row says it in a sentence,
-// so on a narrow screen its pill, which only repeats that, gives way.
-templ homeAttention(v HomeView) {
-	if len(v.Troubles)+len(v.serverIssues()) > 0 {
-		<section class="grid gap-2" aria-labelledby="home-attention">
-			<h2 class="section-title" id="home-attention">Needs attention</h2>
-			<div class="card rows">
-				for _, issue := range v.serverIssues() {
-					<a class="row rail" data-state={ issue.State } href="/servers">
-						@ui.Icon("server", "text-ink-mute")
-						<div class="min-w-0 flex-1">
-							<p class="truncate font-semibold">{ issue.Name }</p>
-							<p class="muted text-sm">{ issue.Text }</p>
-						</div>
-						<span class={ issuePill(issue.State), "hidden sm:inline-flex" }>{ issue.Label }</span>
-						@ui.Icon("chevron-right", "text-ink-mute")
-					</a>
-				}
-				for _, t := range v.Troubles {
-					<a class="row rail" data-state={ troubleState(t) } href={ templ.SafeURL(troubleHref(t)) }>
-						@ui.Icon(resourceIcon(t.Kind), "text-ink-mute")
-						<div class="min-w-0 flex-1">
-							<p class="truncate">
-								<span class="font-semibold">{ t.Name }</span>
-								<span class="muted text-sm">{ t.Project } / { t.Environment }</span>
-							</p>
-							<p class="muted text-sm">{ troubleText(t) }</p>
-						</div>
-						<span class="muted hidden text-sm whitespace-nowrap sm:inline">{ ui.Ago(t.At) }</span>
-						<span class={ troublePill(t), "hidden sm:inline-flex" }>{ troubleLabel(t) }</span>
-						@ui.Icon("chevron-right", "text-ink-mute")
-					</a>
-				}
-			</div>
-		</section>
-	} else if v.Totals.Resources > 0 {
-		@ui.Notice(ui.ToneOK) {
-			<p><span class="font-semibold">Nothing needs attention.</span> { runningLine(v.Totals) }</p>
-		}
-	}
 }
 
 templ homeActivity(v HomeView) {

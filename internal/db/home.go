@@ -2,10 +2,9 @@ package db
 
 import "context"
 
-// What Home shows of a team: what was done lately, what is wrong now, and
-// where things are. Every list here is cut by a limit and every query
-// filters on the team itself, so the page costs the same however long an
-// install has run.
+// What Home shows of a team: what was done lately and where things are.
+// Every list here is cut by a limit and every query filters on the team
+// itself, so the page costs the same however long an install has run.
 
 // The kinds of Event.
 const (
@@ -68,78 +67,6 @@ func (d *DB) RecentEvents(ctx context.Context, teamID string, limit int) ([]Even
 			return nil, err
 		}
 		out = append(out, e)
-	}
-	return out, rows.Err()
-}
-
-// The ways a resource can need somebody to look at it.
-const (
-	TroubleDown   = "down"       // it is not running, and nobody stopped it
-	TroubleDeploy = "deployment" // its newest deployment failed; the one before still serves
-	TroubleBackup = "backup"     // its newest backup failed
-	TroubleTask   = "task"       // the newest run of one of its scheduled tasks failed
-)
-
-// Trouble is one thing that is wrong with a resource now.
-type Trouble struct {
-	What string
-	// The resource: KindApp, KindDatabase or KindService, and its state.
-	Kind, ID, Name, Status          string
-	ProjectID, Project, Environment string
-	// Ref is the deployment or the task to look at, and Detail the task's
-	// name.
-	Ref, Detail string
-	At          int64
-}
-
-// Troubles returns what is wrong with the team's resources now, newest
-// first. It is about the present: a failure that a later deployment,
-// backup or run made good is not listed, and neither is anything that was
-// stopped on request or never deployed. A preview is listed with its app
-// and nowhere else, so not here.
-func (d *DB) Troubles(ctx context.Context, teamID string, limit int) ([]Trouble, error) {
-	const where = ` JOIN projects p ON p.id = e.project_id WHERE p.team_id = ?1 `
-	rows, err := d.QueryContext(ctx, `
-		SELECT what, kind, id, name, status, project_id, project, environment, ref, detail, at FROM (
-			SELECT ?3 AS what, ?7 AS kind, a.id AS id, a.name AS name, a.status AS status, p.id AS project_id, p.name AS project, e.name AS environment,
-			       '' AS ref, '' AS detail, a.updated_at AS at
-			FROM apps a JOIN environments e ON e.id = a.environment_id`+where+`AND a.preview_of = '' AND a.status IN (?10, ?11)
-			UNION ALL
-			-- An app that is down is listed once, as down.
-			SELECT ?4, ?7, a.id, a.name, a.status, p.id, p.name, e.name, d.id, '', d.created_at
-			FROM apps a JOIN environments e ON e.id = a.environment_id
-			JOIN deployments d ON d.id = (SELECT id FROM deployments WHERE app_id = a.id ORDER BY created_at DESC, rowid DESC LIMIT 1)`+where+`
-			AND a.preview_of = '' AND a.status NOT IN (?10, ?11) AND d.status = ?13
-			UNION ALL
-			SELECT ?3, ?8, m.id, m.name, m.status, p.id, p.name, e.name, '', '', m.updated_at
-			FROM databases m JOIN environments e ON e.id = m.environment_id`+where+`AND m.status IN (?10, ?11)
-			UNION ALL
-			SELECT ?3, ?9, s.id, s.name, s.status, p.id, p.name, e.name, '', '', s.updated_at
-			FROM services s JOIN environments e ON e.id = s.environment_id`+where+`AND s.status IN (?10, ?11, ?12)
-			UNION ALL
-			SELECT ?5, ?8, m.id, m.name, m.status, p.id, p.name, e.name, b.id, '', b.started_at
-			FROM databases m JOIN environments e ON e.id = m.environment_id
-			JOIN backups b ON b.id = (SELECT id FROM backups WHERE database_id = m.id ORDER BY started_at DESC, rowid DESC LIMIT 1)`+where+`
-			AND b.status = ?13
-			UNION ALL
-			SELECT ?6, ?7, a.id, a.name, a.status, p.id, p.name, e.name, t.id, t.name, r.started_at
-			FROM scheduled_tasks t JOIN apps a ON a.id = t.app_id JOIN environments e ON e.id = a.environment_id
-			JOIN task_runs r ON r.id = (SELECT id FROM task_runs WHERE task_id = t.id ORDER BY started_at DESC, rowid DESC LIMIT 1)`+where+`
-			AND t.enabled = 1 AND r.status = ?13
-		) ORDER BY at DESC, kind, id, what, ref LIMIT ?2`,
-		teamID, limit, TroubleDown, TroubleDeploy, TroubleBackup, TroubleTask, KindApp, KindDatabase, KindService,
-		AppFailed, AppExited, AppDegraded, RunFailed)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Trouble
-	for rows.Next() {
-		var t Trouble
-		if err := rows.Scan(&t.What, &t.Kind, &t.ID, &t.Name, &t.Status, &t.ProjectID, &t.Project, &t.Environment, &t.Ref, &t.Detail, &t.At); err != nil {
-			return nil, err
-		}
-		out = append(out, t)
 	}
 	return out, rows.Err()
 }

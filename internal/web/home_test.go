@@ -14,6 +14,8 @@ import (
 
 // A new install is shown where to start, and Home follows it from there:
 // the first project, the first deployment, the first thing that goes wrong.
+// It has no list of what is wrong: that is said where the thing is, by a
+// project's count and in Recent activity.
 func TestHomeFollowsAnInstall(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
@@ -26,8 +28,8 @@ func TestHomeFollowsAnInstall(t *testing.T) {
 			t.Errorf("a new install's Home lacks %q", want)
 		}
 	}
-	if strings.Contains(page, "Needs attention") || strings.Contains(page, "Nothing needs attention") || strings.Contains(page, `hx-get="/home/live`) {
-		t.Fatal("a new install has nothing to say about attention, and nothing to wait for")
+	if strings.Contains(page, `hx-get="/home/live`) {
+		t.Fatal("a new install has nothing to wait for")
 	}
 	// The sidebar says where the reader is.
 	if !strings.Contains(page, `href="/" aria-current="page"`) || strings.Contains(page, `href="/projects" aria-current="page"`) {
@@ -45,7 +47,7 @@ func TestHomeFollowsAnInstall(t *testing.T) {
 	appID := a.newApp(projectID, env, "web", true, nil)
 	dep := a.waitDeployed(appID)
 	_, page = a.get("/")
-	for _, want := range []string{"Nothing needs attention.", "Everything that is deployed here is running.", "Succeeded", `href="/apps/` + appID + `/deployments/` + dep.ID + `"`, "1 of 1 running", "All 1 project"} {
+	for _, want := range []string{"Succeeded", `href="/apps/` + appID + `/deployments/` + dep.ID + `"`, "1 of 1 running", "All 1 project"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("Home after the first deployment lacks %q", want)
 		}
@@ -59,21 +61,23 @@ func TestHomeFollowsAnInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, page = a.get("/")
-	for _, want := range []string{"Needs attention", "It stopped on its own.", `href="/apps/` + appID + `"`, "1 down", "0 of 1 running"} {
+	for _, want := range []string{"1 down", "0 of 1 running"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("Home with an app down lacks %q", want)
 		}
 	}
-	if strings.Contains(page, "Nothing needs attention") {
-		t.Fatal("an app is down and Home says nothing needs attention")
+	for _, gone := range []string{`id="home-attention"`, "Needs attention", "It stopped on its own."} {
+		if strings.Contains(page, gone) {
+			t.Errorf("Home with an app down still has %q", gone)
+		}
 	}
 
 	// It runs again, and a deployment of it fails: the old one serves.
 	a.db.SetAppStatus(ctx, appID, db.AppRunning)
 	failed, _ := a.db.CreateDeployment(ctx, db.Deployment{AppID: appID, Trigger: "manual"})
 	a.db.FinishDeployment(ctx, failed.ID, db.DeployFailed, "no such image")
-	if _, page = a.get("/"); !strings.Contains(page, "The last deployment failed. The one before it is still serving.") || !strings.Contains(page, `/deployments/`+failed.ID+`"`) {
-		t.Fatal("a failed deployment of a running app is not under Needs attention")
+	if _, page = a.get("/"); !strings.Contains(page, `/deployments/`+failed.ID+`"`) || !strings.Contains(page, "Failed") || strings.Contains(page, `id="home-attention"`) {
+		t.Fatal("a failed deployment is not in Recent activity, or Home lists what is wrong apart from it")
 	}
 }
 
@@ -90,8 +94,7 @@ func TestHomeRowsLeadToPages(t *testing.T) {
 	maindb := a.newDatabase(projectID, env, "postgres", "maindb", nil)
 	a.waitDatabase(maindb.ID)
 
-	// One of everything Home lists, each failed so that it is listed twice:
-	// under Needs attention and under Recent activity.
+	// One of everything Home lists, each failed.
 	dep, _ := a.db.CreateDeployment(ctx, db.Deployment{AppID: appID, Trigger: "manual"})
 	a.db.FinishDeployment(ctx, dep.ID, db.DeployFailed, "")
 	backup, _ := a.db.CreateBackup(ctx, maindb.ID, db.TriggerSchedule)
@@ -103,14 +106,8 @@ func TestHomeRowsLeadToPages(t *testing.T) {
 	}
 	run, _ := a.db.CreateTaskRun(ctx, task.ID, db.TriggerSchedule)
 	a.db.FinishTaskRun(ctx, run.ID, db.RunFailed, 1, "")
-	a.db.SetDatabaseState(ctx, maindb.ID, db.AppExited, "", "")
 
 	_, page := a.get("/")
-	for _, want := range []string{"The last deployment failed.", "The last backup failed.", "The scheduled task cleanup failed when it last ran.", "It stopped on its own."} {
-		if !strings.Contains(page, want) {
-			t.Errorf("Home lacks %q", want)
-		}
-	}
 	rows := homeRowRE.FindAllStringSubmatch(page, -1)
 	seen := map[string]bool{}
 	for _, m := range rows {
@@ -124,7 +121,7 @@ func TestHomeRowsLeadToPages(t *testing.T) {
 			t.Errorf("the row to %s leads to status %d, a whole page: %v", href, res.StatusCode, strings.Contains(body, "<html"))
 		}
 	}
-	for _, want := range []string{"/apps/" + appID + "/deployments/" + dep.ID, "/databases/" + maindb.ID + "/backups", "/apps/" + appID + "/tasks/" + task.ID, "/databases/" + maindb.ID, "/projects/" + projectID} {
+	for _, want := range []string{"/apps/" + appID + "/deployments/" + dep.ID, "/databases/" + maindb.ID + "/backups", "/apps/" + appID + "/tasks/" + task.ID, "/projects/" + projectID} {
 		if !seen[want] {
 			t.Errorf("no row leads to %s: %v", want, seen)
 		}
@@ -194,7 +191,7 @@ func TestHomeShowsOnlyTheTeamsOwn(t *testing.T) {
 
 	for _, path := range []string{"/", "/home/live"} {
 		_, page := a.get(path)
-		for _, secret := range []string{"Secret project", "secret-app", "secret-server", app.ID, dep.ID, "Needs attention"} {
+		for _, secret := range []string{"Secret project", "secret-app", "secret-server", app.ID, dep.ID} {
 			if strings.Contains(page, secret) {
 				t.Errorf("%s shows %q of another team", path, secret)
 			}
@@ -205,8 +202,7 @@ func TestHomeShowsOnlyTheTeamsOwn(t *testing.T) {
 	}
 }
 
-// What a server uses is shown from its last stored reading, and a disk
-// that is nearly full is said out loud.
+// What a server uses is shown from its last stored reading.
 func TestHomeShowsAServersLastReading(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
@@ -229,14 +225,14 @@ func TestHomeShowsAServersLastReading(t *testing.T) {
 	if err := a.db.AddSamples(ctx, server.ID, time.Now().Add(-time.Hour).Unix(), map[string]db.Sample{"": reading}); err != nil {
 		t.Fatal(err)
 	}
-	if _, page := a.get("/"); !strings.Contains(page, "No recent reading of what it uses.") || strings.Contains(page, "Needs attention") {
+	if _, page := a.get("/"); !strings.Contains(page, "No recent reading of what it uses.") || strings.Contains(page, "19.0 GiB") {
 		t.Fatal("an old reading was shown as the present one")
 	}
 	if err := a.db.AddSamples(ctx, server.ID, time.Now().Unix(), map[string]db.Sample{"": reading}); err != nil {
 		t.Fatal(err)
 	}
 	_, page := a.get("/")
-	for _, want := range []string{"42.5%", "1.0 GiB of 4.0 GiB", "19.0 GiB of 20.0 GiB", "Needs attention", "Its disk is nearly full: 19.0 GiB of 20.0 GiB.", "Disk nearly full"} {
+	for _, want := range []string{"42.5%", "1.0 GiB of 4.0 GiB", "19.0 GiB of 20.0 GiB"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("Home lacks %q of the server's reading", want)
 		}
