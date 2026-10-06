@@ -203,3 +203,42 @@ func TestAHealthCheckRefusedBySSHDSaysWhatToChange(t *testing.T) {
 		t.Errorf("the path check: %v", err)
 	}
 }
+
+// A build's output goes to the log, so its error is only an exit status.
+// The line the build gave up with is put next to it: on the page it is
+// what a person reads first, and in the log other lines come after it.
+func TestAFailedBuildNamesItsCause(t *testing.T) {
+	e := newEnv(t)
+	rec := &gitEnvRecorder{}
+	out := "#1 [internal] load build definition from Dockerfile\n" +
+		"#1 0.2 ERROR: not the build's own line\n" +
+		"ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile: no such file or directory\n" +
+		"\nView build details: docker-desktop://dashboard/build/default\n"
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		if strings.HasPrefix(line, "docker build") {
+			// As a stream arrives: the line in pieces.
+			for len(out) > 0 {
+				n := min(len(out), 37)
+				io.WriteString(c.Stdout, out[:n])
+				out = out[n:]
+			}
+			return "", runnertest.Exit("docker", 1, "")
+		}
+		return rec.handle(line, c)
+	}
+	e.gitApp(nil)
+	dep := e.deploy()
+	want := "build: docker exited with status 1: failed to build: failed to solve: failed to read dockerfile: open Dockerfile: no such file or directory"
+	if dep.Status != db.DeployFailed || dep.Error != want {
+		t.Fatalf("%s\n got %q\nwant %q", dep.Status, dep.Error, want)
+	}
+
+	// Of a very long line only the start is kept, and a step's own output
+	// is never taken for the cause.
+	var sink strings.Builder
+	w := &lookupWatch{w: &sink}
+	io.WriteString(w, "error: "+strings.Repeat("x", 5000)+"\n#4 1.0 password=hunter2\nlast words")
+	if err := w.explain("build", &runner.ExitError{Name: "docker", Code: 1}, "s"); len(err.Error()) > 400 || !strings.Contains(err.Error(), "status 1: error: xxx") || strings.Contains(err.Error(), "hunter2") {
+		t.Fatalf("%d bytes: %q", len(err.Error()), err)
+	}
+}

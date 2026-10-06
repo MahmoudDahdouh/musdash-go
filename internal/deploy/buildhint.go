@@ -2,9 +2,13 @@ package deploy
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
 )
 
 // lookupFailures are what tools print when no name server answered, in
@@ -46,18 +50,63 @@ var longestLookupFailure = func() int {
 // say nothing about Docker. musdash cannot see this before a build without
 // running one, so it says it when it happens.
 //
-// Nothing of the output is kept but the end of the last write. The buffer
-// it is looked through in is one write large and is used again.
+// It also notes the line the build gave up with (see errorMarks).
+//
+// Nothing of the output is kept but the end of the last write and that one
+// line. The buffer it is looked through in is one write large and is used
+// again.
 type lookupWatch struct {
 	w io.Writer
 
 	mu   sync.Mutex
 	held []byte
 	seen bool
+
+	line    []byte // the line being written, up to errorLineLimit
+	lastErr string // the last whole line that a tool marked as an error
+}
+
+// errorLineLimit is how much of one line of a build's output is looked at
+// and kept.
+const errorLineLimit = 300
+
+// errorMarks are how the tools of a build begin the line that says why
+// they gave up: BuildKit and Compose, git, the Docker daemon. Only such a
+// line is repeated in a deployment's error, which is also what
+// notifications carry: not whatever a step of the build printed last.
+var errorMarks = []string{"ERROR: ", "error: ", "fatal: ", "Error response from daemon: "}
+
+// noteLines keeps the last line of p, with what came before it, that
+// starts with one of errorMarks. It holds one line at a time, and of a
+// long one only its start.
+func (l *lookupWatch) noteLines(p []byte) {
+	for len(p) > 0 {
+		end := bytes.IndexByte(p, '\n')
+		part := p
+		if end >= 0 {
+			part = p[:end]
+		}
+		if room := errorLineLimit - len(l.line); room > 0 {
+			l.line = append(l.line, part[:min(len(part), room)]...)
+		}
+		if end < 0 {
+			return
+		}
+		text := string(bytes.TrimSpace(l.line))
+		for _, mark := range errorMarks {
+			if strings.HasPrefix(text, mark) {
+				l.lastErr = text
+				break
+			}
+		}
+		l.line = l.line[:0]
+		p = p[end+1:]
+	}
 }
 
 func (l *lookupWatch) Write(p []byte) (int, error) {
 	l.mu.Lock()
+	l.noteLines(p)
 	if !l.seen {
 		// What was kept of the write before, then this one in lower case.
 		from := len(l.held)
@@ -88,8 +137,15 @@ func (l *lookupWatch) Write(p []byte) (int, error) {
 // build printed.
 func (l *lookupWatch) explain(what string, err error, server string) error {
 	l.mu.Lock()
-	seen := l.seen
+	seen, lastErr := l.seen, l.lastErr
 	l.mu.Unlock()
+	// A command whose output went to the log has nothing to say but its
+	// exit status. The line it gave up with is in the log, above whatever
+	// it printed afterwards, and this is where a person looks first.
+	var exit *runner.ExitError
+	if lastErr != "" && errors.As(err, &exit) && exit.Stderr == "" {
+		err = fmt.Errorf("%w: %s", err, strings.TrimPrefix(lastErr, "ERROR: "))
+	}
 	if !seen {
 		return fmt.Errorf("%s: %w", what, err)
 	}
