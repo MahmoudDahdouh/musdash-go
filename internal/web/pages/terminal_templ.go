@@ -126,7 +126,7 @@ func AppTerminal(s ui.Shell, v AppView) templ.Component {
 			}
 			ctx = templ.InitializeContext(ctx)
 			if v.App.Container == "" {
-				templ_7745c5c3_Err = ui.EmptyState("terminal", "Nothing is running", "A terminal opens in the app's running container. Deploy the app first.").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "terminal", Title: "Nothing is running", Text: "A terminal opens in the app's running container. Deploy the app first.", Link: "See its deployments", LinkHref: v.base() + "/deployments"}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -188,7 +188,7 @@ func DatabaseTerminal(s ui.Shell, v DatabaseView) templ.Component {
 			}
 			ctx = templ.InitializeContext(ctx)
 			if v.DB.Container == "" {
-				templ_7745c5c3_Err = ui.EmptyState("terminal", "Nothing is running", "A terminal opens in the database's running container. Start the database first.").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "terminal", Title: "Nothing is running", Text: "A terminal opens in the database's running container. Start the database first."}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -251,7 +251,7 @@ func ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen stri
 			}
 			ctx = templ.InitializeContext(ctx)
 			if chosen == "" {
-				templ_7745c5c3_Err = ui.EmptyState("terminal", "Nothing is running", "A terminal opens in one of the service's running containers. Deploy the service first.").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "terminal", Title: "Nothing is running", Text: "A terminal opens in one of the service's running containers. Deploy the service first."}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

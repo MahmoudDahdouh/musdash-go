@@ -95,7 +95,7 @@ templ SharedVariables(s ui.Shell, v SharedView, c VarsCard) {
 							}
 						</ul>
 					} else {
-						<p class="card-body muted">None yet.</p>
+						@ui.EmptyState(ui.EmptyProps{Icon: "variable", Title: "No variables yet", Text: "An Admin has set none.", Size: ui.EmptySmall})
 					}
 				</section>
 			}

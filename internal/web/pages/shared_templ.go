@@ -297,17 +297,17 @@ func SharedVariables(s ui.Shell, v SharedView, c VarsCard) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<p class=\"card-body muted\">None yet.</p>")
+					templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "variable", Title: "No variables yet", Text: "An Admin has set none.", Size: ui.EmptySmall}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<section class=\"card\"><div class=\"card-head\"><h2 class=\"card-title\">Using one</h2></div><div class=\"card-body grid gap-3 text-ink-soft\"><p>Nothing here reaches a container by itself. An app or a service takes a value by naming it in one of its own variables, alone or inside a longer value:</p><p class=\"code block\">MAIL_HOST=")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<section class=\"card\"><div class=\"card-head\"><h2 class=\"card-title\">Using one</h2></div><div class=\"card-body grid gap-3 text-ink-soft\"><p>Nothing here reaches a container by itself. An app or a service takes a value by naming it in one of its own variables, alone or inside a longer value:</p><p class=\"code block\">MAIL_HOST=")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -320,7 +320,7 @@ func SharedVariables(s ui.Shell, v SharedView, c VarsCard) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</p><p class=\"code block\">MAIL_URL=smtp://")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</p><p class=\"code block\">MAIL_URL=smtp://")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -333,7 +333,7 @@ func SharedVariables(s ui.Shell, v SharedView, c VarsCard) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, ":587</p><p>The name is replaced when the resource is deployed, so a changed value takes effect at the next deploy. A deploy fails, and says which name, when it uses one that does not exist. To give an app this very text, put a backslash before it: <span class=\"code\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, ":587</p><p>The name is replaced when the resource is deployed, so a changed value takes effect at the next deploy. A deploy fails, and says which name, when it uses one that does not exist. To give an app this very text, put a backslash before it: <span class=\"code\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -346,7 +346,7 @@ func SharedVariables(s ui.Shell, v SharedView, c VarsCard) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</span>.</p></div></section></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</span>.</p></div></section></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -58,5 +59,57 @@ func TestCriticalFormsAsk(t *testing.T) {
 	}
 	if seen < 20 {
 		t.Fatalf("only %d critical forms found: were the addresses renamed?", seen)
+	}
+}
+
+// TestEmptyListsUseTheComponent reads the templates: a list that has
+// nothing in it says so with ui.EmptyState, not with a grey sentence where
+// its rows would be, which has no title, no icon and no action. A card
+// whose body is one grey sentence is such a list unless it is named here,
+// and so is any grey paragraph that opens by saying there is none.
+func TestEmptyListsUseTheComponent(t *testing.T) {
+	body := regexp.MustCompile(`<p class="card-body muted[^"]*"[^>]*>\s*([^<]*)`)
+	none := regexp.MustCompile(`<p class="muted[^"]*"[^>]*>\s*((No|Nothing|None|Nobody|There is no|There are no)\b[^<]*)`)
+	// Notes and missing values, not empty lists.
+	allowed := []string{
+		"The database has to be running to be backed up.",
+		"The database keeps answering while the dump is made.",
+		"Nothing is deployed yet. These steps get the first thing running.",
+		"No address: the one it would have is taken.",
+		"No recent reading of what it uses.",
+	}
+
+	files, _ := filepath.Glob("pages/*.templ")
+	more, _ := filepath.Glob("ui/*.templ")
+	files = append(files, more...)
+	if len(files) < 10 {
+		t.Fatalf("only %d templates found", len(files))
+	}
+	states, notes := 0, 0
+	for _, file := range files {
+		if strings.HasSuffix(file, "gallery.templ") {
+			continue
+		}
+		src, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		states += strings.Count(string(src), "EmptyState(")
+		found := body.FindAllStringSubmatch(string(src), -1)
+		found = append(found, none.FindAllStringSubmatch(string(src), -1)...)
+		for _, m := range found {
+			text := strings.TrimSpace(m[1])
+			if slices.Contains(allowed, text) {
+				notes++
+				continue
+			}
+			t.Errorf("%s: %q stands where a list would be: use ui.EmptyState, or name it in this test if it is a note", file, text)
+		}
+	}
+	if states < 40 {
+		t.Fatalf("only %d empty states found: was the component renamed?", states)
+	}
+	if notes < len(allowed) {
+		t.Fatalf("only %d of the %d allowed notes found: were the classes renamed?", notes, len(allowed))
 	}
 }

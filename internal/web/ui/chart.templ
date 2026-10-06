@@ -11,7 +11,7 @@ templ Chart(p ChartProps) {
 			}
 		</figcaption>
 		if len(l.Lines) == 0 {
-			<p class="chart-empty">No samples in this stretch of time.</p>
+			@EmptyState(EmptyProps{Icon: "chart", Title: "No samples in this stretch of time", Size: EmptySmall, Plain: true})
 		} else {
 			<div class="chart-plot">
 				<div class="chart-scale" aria-hidden="true">

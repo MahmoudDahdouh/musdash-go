@@ -641,16 +641,66 @@ templ Toasts(f *Flash) {
 	</div>
 }
 
-// EmptyState fills a list that has nothing in it yet. Its children are the
-// action that creates the first item.
-templ EmptyState(icon, title, description string) {
-	<div class="empty">
-		@Icon(icon, "icon-lg text-ink-mute")
-		<h2 class="empty-title">{ title }</h2>
-		<p class="muted max-w-sm">{ description }</p>
-		<div class="mt-2 flex flex-wrap justify-center gap-2">
+// Sizes of an EmptyState. The default stands where a page's list would be.
+const (
+	// EmptySmall is the one inside a card, where its table or rows would be.
+	EmptySmall = "sm"
+	// EmptyPage is all a page holds: a page that is not there, or not allowed.
+	EmptyPage = "page"
+)
+
+// EmptyProps configures an EmptyState.
+type EmptyProps struct {
+	// Icon is the icon of what would be here; a problem has "alert".
+	Icon string
+	// Title says what is missing, in a few words and without a full stop.
+	Title string
+	// Text says why it matters or what to do next, without repeating the
+	// title. Optional.
+	Text string
+	Size string
+	// Plain writes the title as a line of text, not a heading: for a state
+	// that is one of several under a heading that names it already (a
+	// chart's title, a group's), where the outline would repeat itself.
+	Plain bool
+	// Link is a second action, a text link under the first: somewhere
+	// useful to go, or nothing.
+	Link     string
+	LinkHref string
+	// Attrs go on the element: data-filter-empty and hidden, for the one a
+	// filter shows.
+	Attrs templ.Attributes
+}
+
+// EmptyState says that a list has nothing in it, or that a page cannot be
+// shown, and what to do about it. Its children are the one action that
+// does, as a primary button. The title is a heading of the level its place
+// has, so the page's outline stays true: under a page's title by default,
+// under a card's when small, and the page's own when it is all there is.
+templ EmptyState(p EmptyProps) {
+	<div class={ "empty", templ.KV("empty-"+p.Size, p.Size != "") } { p.Attrs... }>
+		@Icon(p.Icon)
+		if p.Plain {
+			<p class="empty-title">{ p.Title }</p>
+		} else {
+			switch p.Size {
+				case EmptyPage:
+					<h1 class="empty-title">{ p.Title }</h1>
+				case EmptySmall:
+					<h3 class="empty-title">{ p.Title }</h3>
+				default:
+					<h2 class="empty-title">{ p.Title }</h2>
+			}
+		}
+		if p.Text != "" {
+			<p class="empty-text">{ p.Text }</p>
+		}
+		<div class="empty-actions">
 			{ children... }
 		</div>
+		if p.Link != "" {
+			<a class="empty-link" href={ templ.SafeURL(p.LinkHref) }>{ p.Link }</a>
+		}
 	</div>
 }
 

@@ -54,7 +54,7 @@ func TestAppMetrics(t *testing.T) {
 	a.measured(app.Container+"\t12.50%\t100MiB / 512MiB\t1.2kB / 3MB\t4.1MB / 0B\t7\n", nil)
 
 	_, page := a.get("/apps/" + appID + "/metrics")
-	for _, want := range []string{`hx-get="/apps/` + appID + `/metrics/now"`, "sampling is switched off", `href="/apps/` + appID + `/metrics"`} {
+	for _, want := range []string{`hx-get="/apps/` + appID + `/metrics/now"`, "Sampling is switched off", `href="/apps/` + appID + `/metrics"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the metrics page lacks %q", want)
 		}

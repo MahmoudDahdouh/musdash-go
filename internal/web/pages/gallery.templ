@@ -313,11 +313,45 @@ templ Gallery(s ui.Shell) {
 				</div>
 			}
 			@gallerySection("Empty state") {
-				@ui.EmptyState("folder", "No projects yet", "Create a project, then deploy apps, databases and services into it.") {
-					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
-						New project
+				<div class="grid gap-6">
+					<p class="muted">Where a list has nothing in it: an icon, what is missing, what to do about it, one action and at most one link. This size stands where a page's list would be.</p>
+					@ui.EmptyState(ui.EmptyProps{Icon: "folder", Title: "No projects yet", Text: "Create a project, then deploy apps, databases and services into it."}) {
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+							New project
+						}
 					}
-				}
+					@ui.EmptyState(ui.EmptyProps{Icon: "tag", Title: "Nothing has this tag yet", Text: "Give it to an app or a service: open its Settings and edit its tags.", Link: "Go to Projects", LinkHref: "#"})
+					<p class="muted">The small one is inside a card, where its table or rows would be. The card's head has no button while the state has it.</p>
+					<div class="grid gap-6 lg:grid-cols-2 lg:items-start">
+						<section class="card">
+							<div class="card-head">
+								<div>
+									<h2 class="card-title">Backup storage</h2>
+									<p class="muted text-sm">Buckets that database backups are copied to.</p>
+								</div>
+							</div>
+							@ui.EmptyState(ui.EmptyProps{Icon: "drive", Title: "No bucket yet", Text: "Until one is added, backups are kept on the server only, and are lost with it.", Size: ui.EmptySmall}) {
+								@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus"}) {
+									Add bucket
+								}
+							}
+						</section>
+						<section class="card">
+							<div class="card-head">
+								<h2 class="card-title">Recent activity</h2>
+							</div>
+							@ui.EmptyState(ui.EmptyProps{Icon: "clock", Title: "No activity yet", Text: "Nothing has been deployed, backed up or run yet.", Size: ui.EmptySmall})
+						</section>
+					</div>
+					<p class="muted">The largest is all a page holds: a page that is not there, or that a role does not allow. Its title is the page's.</p>
+					<div class="card">
+						@ui.EmptyState(ui.EmptyProps{Icon: "alert", Title: "Page not found", Text: "It may have been deleted, or the address is wrong.", Size: ui.EmptyPage}) {
+							@ui.LinkButton("#", ui.ButtonProps{Variant: ui.Primary}) {
+								Go to Home
+							}
+						}
+					</div>
+				</div>
 			}
 		</div>
 	}

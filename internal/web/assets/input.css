@@ -1190,14 +1190,6 @@
     font-family: var(--font-mono);
     white-space: nowrap;
   }
-  .chart-empty {
-    padding: 28px 0;
-    text-align: center;
-    font-size: var(--text-sm);
-    color: var(--color-ink-mute);
-    border: 1px dashed var(--color-line-strong);
-    border-radius: var(--radius-md);
-  }
 
   .meter {
     display: grid;
@@ -1410,7 +1402,11 @@
     background: var(--color-term-15);
   }
 
-  /* Empty state -------------------------------------------------------- */
+  /* Empty state --------------------------------------------------------
+     Where a list has nothing in it (ui.EmptyState): an icon, a title, a
+     sentence, one action and at most one link under it. This size stands
+     where a page's list would be, so it has a border to hold its place
+     under the header. */
   .empty {
     display: grid;
     justify-items: center;
@@ -1420,11 +1416,83 @@
     border-radius: var(--radius-md);
     text-align: center;
   }
+  .empty > .icon {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 8px;
+    color: var(--color-ink-mute);
+    /* Drawn larger, the stroke of a control's icon is heavy. */
+    stroke-width: 1.5;
+  }
   .empty-title {
-    margin-top: 8px;
     font-size: var(--text-lg);
     line-height: var(--text-lg--line-height);
     font-weight: 600;
+  }
+  /* A centred line the width of a card cannot be read. */
+  .empty-text {
+    max-width: 30rem;
+    color: var(--color-ink-mute);
+  }
+  .empty-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  /* Most have no action: the row then takes no room. */
+  .empty-actions:not(:has(*)) {
+    display: none;
+  }
+  .empty-link {
+    margin-top: 8px;
+    font-size: var(--text-sm);
+  }
+  /* Inside a card, which is its border. Nothing in it is larger than the
+     card's own title. */
+  .empty-sm {
+    padding: 24px 16px;
+    border: 0;
+  }
+  .empty-sm > .icon {
+    width: 20px;
+    height: 20px;
+    margin-bottom: 4px;
+  }
+  .empty-sm .empty-title {
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+  }
+  .empty-sm .empty-text {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+  }
+  .empty-sm .empty-actions {
+    margin-top: 8px;
+  }
+  /* Among other things in a card's body, and not in place of the body,
+     it keeps the place of what is missing: a plot, a file. */
+  .card-body > .empty-sm,
+  .chart > .empty-sm {
+    border: 1px dashed var(--color-line-strong);
+  }
+  /* All a page holds: nothing to be told apart from, so no border. */
+  .empty-page {
+    padding: 64px 24px;
+    border: 0;
+  }
+  .empty-page > .icon {
+    width: 32px;
+    height: 32px;
+    margin-bottom: 12px;
+  }
+  .empty-page .empty-title {
+    font-size: var(--text-xl);
+    line-height: var(--text-xl--line-height);
+  }
+  .empty-page .empty-actions {
+    margin-top: 16px;
   }
 
   /* Key / value list --------------------------------------------------- */

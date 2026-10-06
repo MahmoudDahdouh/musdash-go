@@ -306,14 +306,20 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 			<section class="card">
 				<div class="card-head">
 					<h2 class="card-title">Domains</h2>
-					if !v.App.IsPreview() {
+					if !v.App.IsPreview() && len(v.Domains) > 0 {
 						@ui.LinkButton(v.base()+"/settings#domains", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
 							Manage
 						}
 					}
 				</div>
-				if len(v.Domains) == 0 {
-					<p class="card-body muted">No domain yet. Add one in Settings to reach the app from outside.</p>
+				if len(v.Domains) == 0 && v.App.IsPreview() {
+					@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No address", Text: "This preview could not be given one: the address it would have may be taken.", Size: ui.EmptySmall})
+				} else if len(v.Domains) == 0 {
+					@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No domain yet", Text: "Add one to reach the app from outside.", Size: ui.EmptySmall}) {
+						@ui.LinkButton(v.base()+"/settings#domains", ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus"}) {
+							Add domain
+						}
+					}
 				} else {
 					<div class="rows">
 						for _, d := range v.Domains {
@@ -357,7 +363,7 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 					}
 				</div>
 				if last == nil {
-					<p class="card-body muted">Not deployed yet. Choose Deploy to start the app.</p>
+					@ui.EmptyState(ui.EmptyProps{Icon: "rocket", Title: "Not deployed yet", Text: "Choose Deploy to start the app.", Size: ui.EmptySmall})
 				} else {
 					<a class="row rail" data-state={ last.Status } href={ templ.SafeURL(v.base() + "/deployments/" + last.ID) }>
 						<div class="min-w-0 flex-1">
@@ -379,7 +385,7 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 templ AppDeployments(s ui.Shell, v AppView, list []db.Deployment) {
 	@appFrame(s, v, "deployments") {
 		if len(list) == 0 {
-			@ui.EmptyState("deploy", "No deployments yet", "Each deploy is listed here with its log.")
+			@ui.EmptyState(ui.EmptyProps{Icon: "rocket", Title: "No deployments yet", Text: "Choose Deploy to start the app. Each deployment is listed here with its log."})
 		} else {
 			<section class="card">
 				@ui.Table("Started", "Image", "Trigger", "Status", "Took", "") {
@@ -493,7 +499,7 @@ templ AppDeployment(s ui.Shell, v AppView, d db.Deployment) {
 templ AppLogs(s ui.Shell, v AppView) {
 	@appFrame(s, v, "logs") {
 		if v.App.Container == "" {
-			@ui.EmptyState("terminal", "Nothing is running", "The app's output appears here once it is deployed.")
+			@ui.EmptyState(ui.EmptyProps{Icon: "file", Title: "Nothing is running", Text: "The app's output appears here once it is deployed.", Link: "See its deployments", LinkHref: v.base() + "/deployments"})
 		} else {
 			<div class="grid gap-2">
 				<p class="muted text-sm">The last 200 lines, then new output as it arrives.</p>
@@ -537,12 +543,18 @@ templ AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) {
 						<h2 class="card-title">Storage</h2>
 						<p class="muted text-sm">Data that survives a redeploy. Changes apply on the next deploy.</p>
 					</div>
-					@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-storage"}) {
-						Add storage
+					if len(list) > 0 {
+						@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-storage"}) {
+							Add storage
+						}
 					}
 				</div>
 				if len(list) == 0 {
-					<p class="card-body muted">Nothing is mounted. Without storage, files the app writes are lost when it is redeployed.</p>
+					@ui.EmptyState(ui.EmptyProps{Icon: "drive", Title: "Nothing is mounted", Text: "Without storage, files the app writes are lost when it is redeployed.", Size: ui.EmptySmall}) {
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: "add-storage"}) {
+							Add storage
+						}
+					}
 				} else {
 					@ui.Table("Type", "Source", "Path in the container", "") {
 						for _, st := range list {
@@ -654,7 +666,7 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 				Change
 			}
 		</div>
-		<div class={ "card-body", templ.KV("border-b border-line", len(v.Previews) > 0) }>
+		<div class={ "card-body", templ.KV("border-b border-line", len(v.Previews) > 0 || v.App.Previews) }>
 			@ui.KeyValue([]ui.KVItem{{Key: "Previews", Value: onOff(v.App.Previews)}, {Key: "Domain", Value: orDefault(v.App.PreviewDomain, "Generated addresses over plain HTTP"), Mono: v.App.PreviewDomain != ""}})
 		</div>
 		if len(v.Previews) > 0 {
@@ -682,6 +694,8 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 					</div>
 				}
 			</div>
+		} else if v.App.Previews {
+			@ui.EmptyState(ui.EmptyProps{Icon: "git-branch", Title: "No previews at the moment", Text: "A pull request into " + v.App.Branch + " gets one when it is opened or pushed to.", Size: ui.EmptySmall})
 		}
 	</section>
 	@ui.FormDialog(ui.DialogProps{ID: "edit-previews", Title: "Pull request previews", Description: "A preview runs the pull request's code with this app's variables, so anyone who can push a branch to the repository can read them. Pull requests from forks get no preview. Up to ten previews exist at once. A webhook added by hand must also send pull request events.", Action: v.base() + "/previews", CSRF: csrf, Submit: "Save", Open: !f.OK()}) {
@@ -773,8 +787,10 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form,
 						<h2 class="card-title">Domains</h2>
 						<p class="muted text-sm">Point each domain's DNS at this server first, so its certificate can be issued.</p>
 					</div>
-					@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-domain"}) {
-						Add domain
+					if len(v.Domains) > 0 {
+						@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-domain"}) {
+							Add domain
+						}
 					}
 				</div>
 				if len(v.Domains) > 0 {
@@ -806,7 +822,11 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form,
 						}
 					</div>
 				} else {
-					<p class="card-body muted">No domain yet. The app answers at its generated address only.</p>
+					@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No domain yet", Text: "The app answers at its generated address only.", Size: ui.EmptySmall}) {
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: "add-domain"}) {
+							Add domain
+						}
+					}
 				}
 			</section>
 			@ui.FormDialog(ui.DialogProps{ID: "add-domain", Title: "Add domain", Description: "Point the domain's DNS at this server first, so its certificate can be issued.", Action: v.base() + "/domains", CSRF: s.CSRF, Submit: "Add domain", Wide: true, Open: !domain.OK()}) {

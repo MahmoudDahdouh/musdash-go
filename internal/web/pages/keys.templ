@@ -306,7 +306,7 @@ templ tokensTab(s ui.Shell, v KeysView) {
 			</div>
 		}
 		if len(v.Tokens)+len(v.withToken())+len(v.withSecret()) == 0 {
-			<p class="card-body muted">There is no token yet.</p>
+			@ui.EmptyState(ui.EmptyProps{Icon: "key", Title: "No tokens yet", Text: "Make an API token for a script of your own. The deploy tokens and webhook secrets of apps and services are listed here too.", Size: ui.EmptySmall})
 		} else {
 			@ui.Table("Name", "Type", "Scope", "Last used", "Expires", "") {
 				@tokenRows(s, v)
@@ -379,7 +379,7 @@ templ keysTab(s ui.Shell, v KeysView) {
 				<h2 class="card-title">Private keys</h2>
 				<p class="muted text-sm">SSH key pairs: deploy keys for private repositories on any Git host, and the keys musdash reaches remote servers with. Add the public half to the repository as a read-only key (GitHub, GitLab and Gitea call it a deploy key, Bitbucket an access key) or to the server's authorized keys. The private half never leaves this install.</p>
 			</div>
-			if s.Admin {
+			if s.Admin && len(v.Keys) > 0 {
 				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: "new-key"}) {
 					New key
 				}
@@ -401,9 +401,13 @@ templ keysTab(s ui.Shell, v KeysView) {
 		}
 		if len(v.Keys) == 0 {
 			if s.Admin {
-				<p class="card-body muted">No key yet.</p>
+				@ui.EmptyState(ui.EmptyProps{Icon: "key", Title: "No keys yet", Text: "Create one to deploy from a private repository or to reach a remote server.", Size: ui.EmptySmall}) {
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: "new-key"}) {
+						New key
+					}
+				}
 			} else {
-				<p class="card-body muted">No key yet. An Admin can create one.</p>
+				@ui.EmptyState(ui.EmptyProps{Icon: "key", Title: "No keys yet", Text: "An Admin can create one.", Size: ui.EmptySmall})
 			}
 		} else {
 			@ui.Table("Name", "Public key", "Added", "") {

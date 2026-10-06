@@ -954,7 +954,7 @@ func DatabaseLogs(s ui.Shell, v DatabaseView) templ.Component {
 			}
 			ctx = templ.InitializeContext(ctx)
 			if v.DB.Container == "" {
-				templ_7745c5c3_Err = ui.EmptyState("terminal", "Nothing is running", "The database's output appears here once it is started.").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "file", Title: "Nothing is running", Text: "The database's output appears here once it is started."}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

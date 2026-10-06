@@ -20,7 +20,7 @@ templ Sources(s ui.Shell, sources []db.GitSource, appForm ui.Form) {
 						<h2 class="card-title">GitHub Apps</h2>
 						<p class="muted text-sm">A GitHub App gives musdash read access to the repositories you choose, and tells it when you push.</p>
 					</div>
-					if s.Admin {
+					if s.Admin && len(sources) > 0 {
 						@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "new-github-app"}) {
 							New GitHub App
 						}
@@ -50,9 +50,13 @@ templ Sources(s ui.Shell, sources []db.GitSource, appForm ui.Form) {
 						}
 					</div>
 				} else if s.Admin {
-					<p class="card-body muted">No GitHub App yet.</p>
+					@ui.EmptyState(ui.EmptyProps{Icon: "github", Title: "No GitHub App yet", Text: "Create one to deploy from private repositories, and on every push.", Size: ui.EmptySmall}) {
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: "new-github-app"}) {
+							New GitHub App
+						}
+					}
 				} else {
-					<p class="card-body muted">No GitHub App yet. An Admin can create one.</p>
+					@ui.EmptyState(ui.EmptyProps{Icon: "github", Title: "No GitHub App yet", Text: "An Admin can create one.", Size: ui.EmptySmall})
 				}
 			</section>
 			if s.Admin {

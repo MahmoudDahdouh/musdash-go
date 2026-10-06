@@ -186,7 +186,7 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 						}
 					</div>
 				} else {
-					<p class="card-body muted">Nobody is invited at the moment.</p>
+					@ui.EmptyState(ui.EmptyProps{Icon: "users", Title: "Nobody is invited at the moment", Text: inviteHint(s.Admin), Size: ui.EmptySmall})
 				}
 			</section>
 		</div>
@@ -236,11 +236,19 @@ templ InviteInvalid() {
 	}
 }
 
+// inviteHint is what the empty list of invitations says to do about it.
+func inviteHint(admin bool) string {
+	if admin {
+		return "Invite someone to give them a sign-in of their own."
+	}
+	return "An Admin can invite someone."
+}
+
 // Forbidden is the page for a request the person's role does not allow.
 templ Forbidden(s ui.Shell, needs string) {
 	@ui.Layout(s) {
-		@ui.EmptyState("lock", "Your role does not allow this", "It needs "+needs+" of the team. Ask one of them to do it, or to change your role.") {
-			@ui.LinkButton("/team", ui.ButtonProps{}) {
+		@ui.EmptyState(ui.EmptyProps{Icon: "lock", Title: "Your role does not allow this", Text: "It needs " + needs + " of the team. Ask one of them to do it, or to change your role.", Size: ui.EmptyPage}) {
+			@ui.LinkButton("/team", ui.ButtonProps{Variant: ui.Primary}) {
 				See who is in the team
 			}
 		}

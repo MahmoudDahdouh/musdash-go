@@ -41,7 +41,7 @@ templ ProjectList(s ui.Shell, projects []db.Project, f ui.Form) {
 			}
 		}
 		if len(projects) == 0 {
-			@ui.EmptyState("folder", "No projects yet", "Create a project, then deploy apps, databases and services into it.") {
+			@ui.EmptyState(ui.EmptyProps{Icon: "folder", Title: "No projects yet", Text: "Create a project, then deploy apps, databases and services into it."}) {
 				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-project"}) {
 					New project
 				}
@@ -88,7 +88,7 @@ templ ProjectShow(s ui.Shell, p db.Project, env db.Environment, res Resources) {
 		}
 		@ui.Tabs(projectTabs(p, env.ID), "resources")
 		if res.Count() == 0 {
-			@ui.EmptyState("box", "Nothing is in "+env.Name+" yet", "Add an app from a Git repository or a Docker image, a database, or a ready-made service such as WordPress or n8n.") {
+			@ui.EmptyState(ui.EmptyProps{Icon: "box", Title: "Nothing is in " + env.Name + " yet", Text: "Add an app from a Git repository or a Docker image, a database, or a ready-made service such as WordPress or n8n."}) {
 				@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
 					Add resource
 				}
@@ -138,13 +138,17 @@ templ ProjectDomains(s ui.Shell, p db.Project, list []db.ProjectDomain, apps []A
 		@ui.Tabs(projectTabs(p, ""), "domains")
 		if len(list) == 0 {
 			if len(apps) > 0 {
-				@ui.EmptyState("globe", "No domain yet", "Give an app a domain to reach it from outside. Point the domain's DNS at the app's server first, so its certificate can be issued.") {
+				@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No domain yet", Text: "Give an app a domain to reach it from outside. Point the domain's DNS at the app's server first, so its certificate can be issued."}) {
 					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "add-domain"}) {
 						Add domain
 					}
 				}
 			} else {
-				@ui.EmptyState("globe", "No domain yet", "A domain leads to an app or to a service. Add one of those to the project first.")
+				@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No domain yet", Text: "A domain leads to an app or to a service. Add one of those to the project first."}) {
+					@ui.LinkButton("/projects/"+p.ID, ui.ButtonProps{Variant: ui.Primary}) {
+						Go to Resources
+					}
+				}
 			}
 		} else {
 			<section class="card">
@@ -367,8 +371,8 @@ templ Account(s ui.Shell, profile, password, twoStep ui.Form, v AccountView) {
 // NotFound is the signed-in 404 page.
 templ NotFound(s ui.Shell) {
 	@ui.Layout(s) {
-		@ui.EmptyState("alert", "Page not found", "It may have been deleted, or the address is wrong.") {
-			@ui.LinkButton("/", ui.ButtonProps{}) {
+		@ui.EmptyState(ui.EmptyProps{Icon: "alert", Title: "Page not found", Text: "It may have been deleted, or the address is wrong.", Size: ui.EmptyPage}) {
+			@ui.LinkButton("/", ui.ButtonProps{Variant: ui.Primary}) {
 				Go to Home
 			}
 		}

@@ -19,21 +19,25 @@ templ tagsCard(csrf, action string, tags, teamTags []string) {
 				<h2 class="card-title">Tags</h2>
 				<p class="muted text-sm">Everything with the same tag can be deployed together, from the Tags page.</p>
 			</div>
-			@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-tags"}) {
-				Edit
+			if len(tags) > 0 {
+				@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-tags"}) {
+					Edit
+				}
 			}
 		</div>
-		<div class="card-body">
-			if len(tags) == 0 {
-				<p class="muted">No tags.</p>
-			} else {
-				<p class="flex flex-wrap gap-2">
-					for _, t := range tags {
-						<a class="badge" href={ templ.SafeURL("/tags/" + t) }>{ t }</a>
-					}
-				</p>
+		if len(tags) == 0 {
+			@ui.EmptyState(ui.EmptyProps{Icon: "tag", Title: "No tags", Text: "Give it a tag to deploy it together with everything else that has it.", Size: ui.EmptySmall}) {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: "edit-tags"}) {
+					Add tags
+				}
 			}
-		</div>
+		} else {
+			<p class="card-body flex flex-wrap gap-2">
+				for _, t := range tags {
+					<a class="badge" href={ templ.SafeURL("/tags/" + t) }>{ t }</a>
+				}
+			</p>
+		}
 	</section>
 	@ui.FormDialog(ui.DialogProps{ID: "edit-tags", Title: "Tags", Action: action, CSRF: csrf, Submit: "Save tags"}) {
 		if len(teamTags) > 0 {
@@ -71,7 +75,7 @@ templ Tags(s ui.Shell, list []db.TagCount, f ui.Form) {
 			}
 		}
 		if len(list) == 0 {
-			@ui.EmptyState("tag", "No tags yet", "Make a tag, then give it to apps and services. Everything with that tag can be deployed in one go.") {
+			@ui.EmptyState(ui.EmptyProps{Icon: "tag", Title: "No tags yet", Text: "Make a tag, then give it to apps and services. Everything with that tag can be deployed in one go."}) {
 				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-tag"}) {
 					New tag
 				}
@@ -126,7 +130,7 @@ templ Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, f ui.For
 		}
 		<div class="grid gap-6">
 			if len(apps)+len(services) == 0 {
-				@ui.EmptyState("tag", "Nothing has this tag yet", "Give it to an app or a service: open its Settings and edit its tags.")
+				@ui.EmptyState(ui.EmptyProps{Icon: "tag", Title: "Nothing has this tag yet", Text: "Give it to an app or a service: open its Settings and edit its tags.", Link: "Go to Projects", LinkHref: "/projects"})
 			} else {
 				@ResourceTiles(Resources{Apps: apps, Services: services})
 			}

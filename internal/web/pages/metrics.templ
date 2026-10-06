@@ -129,29 +129,28 @@ templ historyCard(h History) {
 				</nav>
 			}
 		</div>
-		<div class="card-body">
-			if !h.Sampled {
-				<p class="muted text-sm">
-					Nothing is kept for this server: sampling is switched off, which is how it starts.
-					if h.ServerHref != "" {
-						It is switched on under <a class="link" href={ templ.SafeURL(h.ServerHref) }>the server's usage</a>.
-					}
-				</p>
-			} else {
-				<div class="grid gap-x-8 gap-y-8 lg:grid-cols-2">
-					for _, c := range h.Charts {
-						@ui.Chart(c)
-					}
-				</div>
+		if !h.Sampled && h.ServerHref != "" {
+			@ui.EmptyState(ui.EmptyProps{Icon: "chart", Title: "Sampling is switched off", Text: "Nothing is kept for this server, which is how it starts.", Size: ui.EmptySmall}) {
+				@ui.LinkButton(h.ServerHref, ui.ButtonProps{Variant: ui.Primary, Small: true}) {
+					Open the server's usage
+				}
 			}
-		</div>
+		} else if !h.Sampled {
+			@ui.EmptyState(ui.EmptyProps{Icon: "chart", Title: "Sampling is switched off", Text: "Nothing is kept for this server, which is how it starts. It is switched on below.", Size: ui.EmptySmall})
+		} else {
+			<div class="card-body grid gap-x-8 gap-y-8 lg:grid-cols-2">
+				for _, c := range h.Charts {
+					@ui.Chart(c)
+				}
+			</div>
+		}
 	</section>
 }
 
 templ AppMetrics(s ui.Shell, v AppView, h History) {
 	@appFrame(s, v, "metrics") {
 		if v.App.Container == "" {
-			@ui.EmptyState("server", "Nothing is running", "What the app uses appears here once it is deployed.")
+			@ui.EmptyState(ui.EmptyProps{Icon: "chart", Title: "Nothing is running", Text: "What the app uses appears here once it is deployed.", Link: "See its deployments", LinkHref: v.base() + "/deployments"})
 		} else {
 			<div class="grid max-w-5xl gap-6">
 				@UsagePending(v.base() + "/metrics/now")
@@ -164,7 +163,7 @@ templ AppMetrics(s ui.Shell, v AppView, h History) {
 templ DatabaseMetrics(s ui.Shell, v DatabaseView, h History) {
 	@databaseFrame(s, v, "metrics") {
 		if v.DB.Container == "" {
-			@ui.EmptyState("server", "Nothing is running", "What the database uses appears here once it is started.")
+			@ui.EmptyState(ui.EmptyProps{Icon: "chart", Title: "Nothing is running", Text: "What the database uses appears here once it is started."})
 		} else {
 			<div class="grid max-w-5xl gap-6">
 				@UsagePending(v.base() + "/metrics/now")
@@ -177,7 +176,7 @@ templ DatabaseMetrics(s ui.Shell, v DatabaseView, h History) {
 templ ServiceMetrics(s ui.Shell, v ServiceView, h History) {
 	@serviceFrame(s, v, "metrics") {
 		if v.Service.Members == "" || v.Service.Status == db.AppStopped {
-			@ui.EmptyState("server", "Nothing is running", "What the service uses appears here once it is deployed.")
+			@ui.EmptyState(ui.EmptyProps{Icon: "chart", Title: "Nothing is running", Text: "What the service uses appears here once it is deployed."})
 		} else {
 			<div class="grid max-w-5xl gap-6">
 				@UsagePending(v.base() + "/metrics/now")

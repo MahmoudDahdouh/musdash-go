@@ -267,7 +267,7 @@ templ DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connectio
 templ DatabaseLogs(s ui.Shell, v DatabaseView) {
 	@databaseFrame(s, v, "logs") {
 		if v.DB.Container == "" {
-			@ui.EmptyState("terminal", "Nothing is running", "The database's output appears here once it is started.")
+			@ui.EmptyState(ui.EmptyProps{Icon: "file", Title: "Nothing is running", Text: "The database's output appears here once it is started."})
 		} else {
 			<div class="grid gap-2">
 				<p class="muted text-sm">The last 200 lines, then new output as it arrives.</p>

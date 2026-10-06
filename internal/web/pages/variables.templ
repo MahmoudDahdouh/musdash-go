@@ -37,6 +37,12 @@ func (c VarsCard) count() int {
 	return n
 }
 
+// bare says that the card is one list with nothing in it. Its empty state
+// then has the way to the editor, which the head has otherwise.
+func (c VarsCard) bare() bool {
+	return len(c.Groups) == 1 && len(c.Groups[0].Vars) == 0
+}
+
 func varCount(n int) string {
 	if n == 0 {
 		return "None"
@@ -67,8 +73,10 @@ templ Variables(c VarsCard) {
 						</button>
 					}
 				}
-				@ui.LinkButton(c.Edit, ui.ButtonProps{Small: true, Icon: "pencil"}) {
-					Edit
+				if !c.bare() {
+					@ui.LinkButton(c.Edit, ui.ButtonProps{Small: true, Icon: "pencil"}) {
+						Edit
+					}
 				}
 			</div>
 		</div>
@@ -76,8 +84,14 @@ templ Variables(c VarsCard) {
 			if g.Title != "" {
 				<h3 class={ "px-4 pt-3 font-semibold", templ.KV("border-t border-line", i > 0) }>{ g.Title } <span class="muted font-normal">· { varCount(len(g.Vars)) }</span></h3>
 			}
-			if len(g.Vars) == 0 {
-				<p class="card-body muted">None yet.</p>
+			if c.bare() {
+				@ui.EmptyState(ui.EmptyProps{Icon: "variable", Title: "No variables yet", Text: "Add them as lines of NAME=value.", Size: ui.EmptySmall}) {
+					@ui.LinkButton(c.Edit, ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus"}) {
+						Add variables
+					}
+				}
+			} else if len(g.Vars) == 0 {
+				@ui.EmptyState(ui.EmptyProps{Icon: "variable", Title: "None yet", Size: ui.EmptySmall, Plain: true})
 			} else {
 				@ui.Table("Name", "Value") {
 					for _, v := range g.Vars {

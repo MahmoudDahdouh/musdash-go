@@ -63,7 +63,7 @@ func TestKeysPage(t *testing.T) {
 		t.Error("the API Tokens tab is not the one marked as open")
 	}
 	for _, want := range []string{
-		`id="tokens"`, "There is no token yet.", `id="new-token"`, `id="new-deploy-token"`, `id="new-hook-secret"`,
+		`id="tokens"`, "No tokens yet", `id="new-token"`, `id="new-deploy-token"`, `id="new-hook-secret"`,
 		// The five permissions, as checkboxes, Read checked.
 		`id="token_perm_read" name="perm_read" value="1" checked`, `name="perm_write"`, `name="perm_deploy"`, `name="perm_sensitive"`,
 		// Root is the box that stands for the others.

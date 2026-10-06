@@ -262,12 +262,14 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 			<section class="card">
 				<div class="card-head">
 					<h2 class="card-title">Addresses</h2>
-					@ui.LinkButton(v.base()+"/settings", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
-						Change
+					if len(v.Endpoints) > 0 {
+						@ui.LinkButton(v.base()+"/settings", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+							Change
+						}
 					}
 				</div>
 				if len(v.Endpoints) == 0 {
-					<p class="card-body muted">This stack has no web address. To give a service one, add <span class="code">SERVICE_FQDN_NAME_PORT</span> to its environment in the Compose file.</p>
+					@noAddress(v)
 				} else {
 					<div class="rows">
 						for _, e := range v.Endpoints {
@@ -300,9 +302,9 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 					<h2 class="card-title">Containers</h2>
 				</div>
 				if v.Service.Members == "" && v.Service.Status == db.AppDeploying {
-					<p class="card-body muted">The first deployment is under way.</p>
+					@ui.EmptyState(ui.EmptyProps{Icon: "layers", Title: "The first deployment is under way", Text: "Its containers are listed here once they are up.", Size: ui.EmptySmall})
 				} else if v.Service.Members == "" {
-					<p class="card-body muted">Not deployed yet. Choose Deploy to start the stack.</p>
+					@ui.EmptyState(ui.EmptyProps{Icon: "layers", Title: "Not deployed yet", Text: "Choose Deploy to start the stack.", Size: ui.EmptySmall})
 				} else {
 					<div class="card-body">
 						@ui.KeyValue([]ui.KVItem{
@@ -337,7 +339,7 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 					<h2 class="card-title">Latest deployment</h2>
 				</div>
 				if v.Service.Status == db.AppCreated {
-					<p class="card-body muted">Nothing has been deployed yet.</p>
+					@ui.EmptyState(ui.EmptyProps{Icon: "rocket", Title: "Nothing has been deployed yet", Text: "The deployment's log appears here.", Size: ui.EmptySmall})
 				} else {
 					<div class="card-body">
 						@ui.LogView("deploy-log", templ.Attributes{
@@ -354,6 +356,25 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 	}
 }
 
+// noAddress stands where a stack's endpoints would be listed. A file that
+// is read from a repository is not changed here, so it has no button.
+templ noAddress(v ServiceView) {
+	if v.Service.FromGit() {
+		@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No web address", Text: "To give a service one, add SERVICE_FQDN_NAME_PORT to its environment in the repository's Compose file.", Size: ui.EmptySmall})
+	} else {
+		@noAddressOwn(v)
+	}
+}
+
+// noAddressOwn is the same for a stack whose Compose file is edited here.
+templ noAddressOwn(v ServiceView) {
+	@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No web address", Text: "To give a service one, add SERVICE_FQDN_NAME_PORT to its environment in the Compose file.", Size: ui.EmptySmall}) {
+		@ui.LinkButton(v.base()+"/compose", ui.ButtonProps{Variant: ui.Primary, Small: true}) {
+			Open the Compose file
+		}
+	}
+}
+
 func serviceNetwork(v ServiceView) string {
 	if v.Service.ConnectEnv {
 		return "Its own, and the network of " + v.Env.Name
@@ -364,7 +385,7 @@ func serviceNetwork(v ServiceView) string {
 templ ServiceLogs(s ui.Shell, v ServiceView) {
 	@serviceFrame(s, v, "logs") {
 		if !serviceDeployed(v.Service) {
-			@ui.EmptyState("terminal", "Nothing is running", "The containers' output appears here once the service is deployed.")
+			@ui.EmptyState(ui.EmptyProps{Icon: "file", Title: "Nothing is running", Text: "The containers' output appears here once the service is deployed."})
 		} else {
 			<div class="grid gap-2">
 				<p class="muted text-sm">The last 200 lines of every container, then new output as it arrives.</p>
@@ -408,7 +429,7 @@ templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variable
 				<div class="card-body grid gap-4">
 					if git != nil {
 						if v.Service.Compose == "" {
-							<p class="muted">The file has not been fetched yet. It is shown here after the first deployment.</p>
+							@ui.EmptyState(ui.EmptyProps{Icon: "file", Title: "The file has not been fetched yet", Text: "It is shown here after the first deployment.", Size: ui.EmptySmall})
 						} else {
 							<div class="grid gap-2">
 								<p class="field-label">
@@ -463,7 +484,7 @@ templ ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) {
 					</div>
 				</div>
 				if len(v.Endpoints) == 0 {
-					<p class="card-body muted">This stack has no web address. To give a service one, add <span class="code">SERVICE_FQDN_NAME_PORT</span> to its environment in the Compose file.</p>
+					@noAddress(v)
 				}
 				if len(v.Endpoints) > 0 {
 					<div class="rows">

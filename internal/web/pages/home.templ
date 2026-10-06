@@ -216,7 +216,7 @@ templ homeActivity(v HomeView) {
 			</div>
 		</div>
 		if len(v.Events) == 0 {
-			<p class="card-body muted">Nothing has been deployed, backed up or run yet.</p>
+			@ui.EmptyState(ui.EmptyProps{Icon: "clock", Title: "No activity yet", Text: "Nothing has been deployed, backed up or run yet.", Size: ui.EmptySmall})
 		} else {
 			<div class="rows">
 				for _, e := range v.Events {
@@ -256,7 +256,7 @@ templ homeProjects(v HomeView) {
 			}
 		</div>
 		if len(v.Projects) == 0 {
-			<p class="card-body muted">No projects yet.</p>
+			@ui.EmptyState(ui.EmptyProps{Icon: "folder", Title: "No projects yet", Text: "A project groups the apps, databases and services of one product.", Size: ui.EmptySmall})
 		} else {
 			<div class="rows">
 				for _, p := range v.Projects {
