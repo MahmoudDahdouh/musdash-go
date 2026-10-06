@@ -84,6 +84,7 @@ Open `http://127.0.0.1:8000`. The first visit asks you to create the owner accou
 | `musdash proxy` | Runs the edge proxy |
 | `musdash migrate` | Applies database migrations and exits |
 | `musdash reset-password <email>` | Prints a one-time link to choose a new password |
+| `musdash unlock <email>` | Lets an account that was locked for too many wrong passwords or codes try again at once |
 | `musdash disable-2fa <email>` | Turns off an account's two-step sign-in, for somebody who lost their phone and their recovery codes |
 | `musdash version` | Prints the version |
 

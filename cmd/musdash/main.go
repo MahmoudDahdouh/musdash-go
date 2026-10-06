@@ -45,6 +45,7 @@ Commands:
   migrate          Apply database migrations and exit
   reset-password   Print a one-time link to reset an account's password
   disable-2fa      Turn off an account's two-step sign-in
+  unlock           Let an account that was locked for too many attempts try again
   version          Print the version
 
 Run "musdash <command> -h" for a command's flags.
@@ -67,6 +68,8 @@ func main() {
 		err = runResetPassword(args)
 	case "disable-2fa":
 		err = runDisableTwoStep(args)
+	case "unlock":
+		err = runUnlock(args)
 	case "version", "-v", "--version":
 		fmt.Println("musdash", version)
 	case "help", "-h", "--help":
@@ -472,5 +475,46 @@ func runDisableTwoStep(args []string) error {
 		return err
 	}
 	fmt.Printf("Two-step sign-in is off for %s. They sign in with their password and can set it up again under Account.\n", user.Email)
+	return nil
+}
+
+// unlockFor is how long an unlock waits to be used. It is the length of a
+// lock-out: one that began after the command ran is not what was meant.
+const unlockFor = 15 * time.Minute
+
+// runUnlock is for an account that too many wrong passwords or codes have
+// locked: anybody who knows the email can cause that, and the count is in
+// the running server's memory. This leaves word in the database, which the
+// server reads the next time it would refuse the account.
+func runUnlock(args []string) error {
+	fs := flag.NewFlagSet("unlock", flag.ExitOnError)
+	cfg := commonFlags(fs)
+	fs.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage: musdash unlock [flags] <email>")
+		fs.PrintDefaults()
+	}
+	fs.Parse(args)
+	if fs.NArg() != 1 {
+		fs.Usage()
+		os.Exit(2)
+	}
+
+	ctx := context.Background()
+	d, err := openDB(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	user, err := d.UserByEmail(ctx, strings.ToLower(strings.TrimSpace(fs.Arg(0))))
+	if errors.Is(err, db.ErrNotFound) {
+		return fmt.Errorf("no account uses %s", fs.Arg(0))
+	}
+	if err != nil {
+		return err
+	}
+	if err := d.AllowUnlock(ctx, user.ID, time.Now().Add(unlockFor).Unix()); err != nil {
+		return err
+	}
+	fmt.Printf("%s can try again now. This holds for %d minutes and for one lock-out.\n", user.Email, int(unlockFor.Minutes()))
 	return nil
 }

@@ -333,7 +333,7 @@ func (s *Server) accountPassword(w http.ResponseWriter, r *http.Request) {
 	// A stolen or unattended session must not be able to guess the current
 	// password without limit.
 	key := "password:" + sess.UserID
-	if ok, wait := s.accounts.Take(key); !ok {
+	if ok, wait := s.takeAccount(r.Context(), "password", sess.UserID); !ok {
 		f.Fail("current", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		s.renderAccount(w, r, http.StatusTooManyRequests, ui.Form{}, f, ui.Form{})
 		return

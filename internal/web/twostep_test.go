@@ -460,3 +460,44 @@ func TestCodeLimitSurvivesAFloodOfOtherAddresses(t *testing.T) {
 		t.Fatal("the account's limit on codes was reset from outside")
 	}
 }
+
+// What `musdash unlock` writes lets a locked account in again, once, and
+// not after its time has passed.
+func TestUnlockLiftsALockOut(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	key, _ := a.turnOnTwoStep()
+	ctx := context.Background()
+	u, _ := a.db.UserByEmail(ctx, testEmail)
+
+	lock := func() *http.Client {
+		c, _ := a.signIn(testEmail, testPassword)
+		for {
+			if res, _ := a.sendCode(c, "000000"); res.StatusCode == http.StatusTooManyRequests {
+				return c
+			}
+		}
+	}
+
+	// One that ran out before the lock-out is not used.
+	if err := a.db.AllowUnlock(ctx, u.ID, time.Now().Add(-time.Minute).Unix()); err != nil {
+		t.Fatal(err)
+	}
+	c := lock()
+	res, _ := a.sendCode(c, codeIn(key, 1))
+	wantStatus(t, res, http.StatusTooManyRequests)
+
+	if err := a.db.AllowUnlock(ctx, u.ID, time.Now().Add(time.Minute).Unix()); err != nil {
+		t.Fatal(err)
+	}
+	res, _ = a.sendCode(c, codeIn(key, 1))
+	wantRedirect(t, res, "/")
+	if !signedIn(a, c) {
+		t.Fatal("not signed in after the unlock")
+	}
+
+	// It was used up: the next lock-out holds.
+	c = lock()
+	res, _ = a.sendCode(c, codeIn(key, 2))
+	wantStatus(t, res, http.StatusTooManyRequests)
+}

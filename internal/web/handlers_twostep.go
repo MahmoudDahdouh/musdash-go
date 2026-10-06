@@ -42,8 +42,32 @@ var errTOTPKey = errors.New("the second step's key cannot be decrypted: was the 
 // The sign-in limiter is keyed by address: anybody can fill its table
 // from many addresses, and a full table is emptied, which would hand out
 // fresh guesses.
-func (s *Server) codeAllowed(userID string) (bool, time.Duration) {
-	return s.accounts.Take("code:" + userID)
+func (s *Server) codeAllowed(ctx context.Context, userID string) (bool, time.Duration) {
+	return s.takeAccount(ctx, "code", userID)
+}
+
+// takeAccount counts one attempt of a kind ("password" or "code") at an
+// account. An account that is refused is asked once more whether somebody
+// on the server ran `musdash unlock` for it: the counts are in this
+// process's memory, where that command cannot reach, so it leaves a mark
+// in the database, and this is where it is read. Only a refused attempt
+// reads it, so the limit costs no query until it is hit.
+func (s *Server) takeAccount(ctx context.Context, kind, userID string) (bool, time.Duration) {
+	key := kind + ":" + userID
+	ok, wait := s.accounts.Take(key)
+	if ok {
+		return true, 0
+	}
+	err := s.DB.TakeUnlock(ctx, userID, time.Now().Unix())
+	if err != nil {
+		if !errors.Is(err, db.ErrNotFound) {
+			s.Log.Error("reading an unlock", "err", err)
+		}
+		return false, wait
+	}
+	s.Log.Info("account unlocked from the command line", "user", userID)
+	s.accounts.Reset("password:"+userID, "code:"+userID)
+	return s.accounts.Take(key)
 }
 
 // secondStep reports whether what was typed is a code the person's app
@@ -83,7 +107,7 @@ func (s *Server) secondStep(ctx context.Context, user db.User, typed string) (bo
 func (s *Server) passwordAgain(r *http.Request, f *ui.Form, field string) bool {
 	sess := sessionFrom(r)
 	key := "password:" + sess.UserID
-	if ok, wait := s.accounts.Take(key); !ok {
+	if ok, wait := s.takeAccount(r.Context(), "password", sess.UserID); !ok {
 		f.Fail(field, "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		return false
 	}
@@ -165,7 +189,7 @@ func (s *Server) twoStepConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 	// Somebody at a session left open does not know the key, and must not
 	// be able to guess a code until one turns the second step on with it.
-	if ok, wait := s.codeAllowed(sess.UserID); !ok {
+	if ok, wait := s.codeAllowed(r.Context(), sess.UserID); !ok {
 		again(http.StatusTooManyRequests, "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		return
 	}
@@ -205,7 +229,7 @@ func (s *Server) twoStepCodes(w http.ResponseWriter, r *http.Request) {
 	}
 	var f ui.Form
 	f.Set("_form", "codes")
-	if ok, wait := s.codeAllowed(sess.UserID); !ok {
+	if ok, wait := s.codeAllowed(r.Context(), sess.UserID); !ok {
 		f.Fail("code", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		s.renderAccount(w, r, http.StatusTooManyRequests, ui.Form{}, ui.Form{}, f)
 		return
@@ -242,7 +266,7 @@ func (s *Server) twoStepOff(w http.ResponseWriter, r *http.Request) {
 	}
 	var f ui.Form
 	f.Set("_form", "off")
-	if ok, wait := s.codeAllowed(sess.UserID); !ok {
+	if ok, wait := s.codeAllowed(r.Context(), sess.UserID); !ok {
 		f.Fail("code", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		s.renderAccount(w, r, http.StatusTooManyRequests, ui.Form{}, ui.Form{}, f)
 		return
@@ -357,7 +381,7 @@ func (s *Server) loginCodeSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var f ui.Form
-	if ok, wait := s.codeAllowed(user.ID); !ok {
+	if ok, wait := s.codeAllowed(r.Context(), user.ID); !ok {
 		f.Fail("form", "Too many attempts. Try again in "+itoa(int(wait.Minutes())+1)+" minutes.")
 		w.Header().Set("Retry-After", itoa(int(wait.Seconds())+1))
 		s.render(w, r, http.StatusTooManyRequests, pages.LoginCode(f, anonCSRF(w, r)))
