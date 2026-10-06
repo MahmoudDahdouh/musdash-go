@@ -409,6 +409,20 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 				return err
 			}
 		}
+		// A mount inside one of the repository's needs its directory to be
+		// in the repository: the files are mounted read-only, so Docker
+		// cannot make it, and says so in words about a file system that
+		// name neither the mount nor the reason.
+		for _, n := range resolved.NestedInCheckout(checkout) {
+			rel := strings.TrimPrefix(strings.TrimPrefix(n.Path, checkout), "/")
+			out, err := r.Output(ctx, runner.Cmd{Name: "git", Args: []string{"-C", checkout, "ls-tree", "HEAD", "--", rel}, Env: gitEnv()})
+			if err != nil {
+				return fmt.Errorf("inspect the repository: %w", err)
+			}
+			if len(out) == 0 {
+				return fmt.Errorf("service %s: the mount at %s lies inside %s, which is mounted from the repository. musdash mounts a repository's files read-only, and the repository has no %s for Docker to mount it on. Add it to the repository (a directory needs a file in it to be kept, such as .gitkeep), or build the files into the image instead of mounting them", n.Service, n.Target, n.Under, rel)
+			}
+		}
 	}
 
 	members := resolved.Services()

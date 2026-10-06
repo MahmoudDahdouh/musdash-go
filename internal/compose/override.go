@@ -292,3 +292,50 @@ func (p Project) Volumes() []string {
 	sort.Strings(names)
 	return names
 }
+
+// Nested is a mount whose target lies inside another mount of the same
+// service that comes from the checkout.
+type Nested struct {
+	Service string
+	Target  string // where the mount is, in the container
+	Under   string // the target of the mount from the checkout it lies in
+	Path    string // the directory of the checkout it would be mounted on
+}
+
+// NestedInCheckout returns the mounts that need a directory of the checkout
+// to be mounted on. Files of the checkout are mounted read-only (see
+// Apply), so Docker cannot make that directory, as it would under a mount
+// that can be written to: it has to be in the repository. The usual case
+// is a development file with "./app:/app" and a volume at
+// "/app/node_modules".
+func (p Project) NestedInCheckout(checkout string) []Nested {
+	var out []Nested
+	services := asMap(p.doc["services"])
+	for _, name := range sortedKeys(services) {
+		mounts := asList(asMap(services[name])["volumes"])
+		for _, m := range mounts {
+			target, _ := asMap(m)["target"].(string)
+			if !path.IsAbs(target) {
+				continue
+			}
+			// The innermost mount from the checkout that the target is in
+			// is the one whose directory it lands on.
+			var under, source string
+			for _, o := range mounts {
+				other := asMap(o)
+				t, _ := other["target"].(string)
+				s, _ := other["source"].(string)
+				if other["type"] == "bind" && inside(s, checkout) && path.IsAbs(t) &&
+					path.Clean(t) != path.Clean(target) && inside(target, t) && len(path.Clean(t)) > len(under) {
+					under, source = path.Clean(t), path.Clean(s)
+				}
+			}
+			if under == "" {
+				continue
+			}
+			rel := strings.TrimPrefix(strings.TrimPrefix(path.Clean(target), under), "/")
+			out = append(out, Nested{Service: name, Target: path.Clean(target), Under: under, Path: path.Join(source, rel)})
+		}
+	}
+	return out
+}

@@ -989,6 +989,8 @@ type gitStack struct {
 	checkout  string          // the directory of the latest clone
 	checkouts []string        // every directory cloned into, by name
 	links     map[string]bool // repository paths that are symbolic links
+	missing   map[string]bool // paths the repository does not have
+	mounts    string          // further mounts of the service, as JSON, each ending with a comma
 	compose   string
 	failUp    bool
 }
@@ -1023,6 +1025,9 @@ func (g *gitStack) handle(e *env) func(line string, c runner.Cmd) (string, error
 			return "0123456789abcdef0123456789abcdef01234567\n", nil
 		case strings.Contains(line, "ls-tree HEAD -- "):
 			p := line[strings.Index(line, "-- ")+3:]
+			if g.missing[p] {
+				return "", nil
+			}
 			if g.links[p] {
 				return "120000 blob abc\t" + p + "\n", nil
 			}
@@ -1033,11 +1038,48 @@ func (g *gitStack) handle(e *env) func(line string, c runner.Cmd) (string, error
 			return `{"name":"` + g.project + `","networks":{"default":{"name":"` + g.project + `_default"}},"services":{"web":{
 				"build":{"context":"` + g.checkout + `/deploy","dockerfile":"Dockerfile"},
 				"environment":{"SERVICE_FQDN_WEB_8080":"x.example.test"},"networks":{"default":null},
-				"volumes":[{"type":"bind","source":"` + g.checkout + `/deploy/conf/site.conf","target":"/etc/site.conf","bind":{"create_host_path":true}}]}}}`, nil
+				"volumes":[` + strings.ReplaceAll(g.mounts, "CHECKOUT", g.checkout) + `{"type":"bind","source":"` + g.checkout + `/deploy/conf/site.conf","target":"/etc/site.conf","bind":{"create_host_path":true}}]}}}`, nil
 		case strings.HasPrefix(line, "docker inspect"):
 			return running, nil
 		}
 		return "", nil
+	}
+}
+
+// A development file mounts the source and puts a volume inside it. The
+// source is mounted read-only here, so the volume needs its directory to
+// be in the repository, and the deployment says so before Docker is asked.
+func TestGitServiceWithAMountInsideTheCheckout(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, err := e.db.CreateService(ctx, e.team, db.Service{
+		EnvironmentID: e.app.EnvironmentID, ServerID: e.server.ID, Name: "stack", Template: db.TemplateGit,
+		RepoURL: "https://github.com/acme/stack", RepoName: "acme/stack", Branch: "main", ComposePath: "deploy/compose.yaml",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &gitStack{project: ServiceProject(s.ID), compose: gitComposeFile, missing: map[string]bool{"deploy/app/node_modules": true},
+		mounts: `{"type":"bind","source":"CHECKOUT/deploy/app","target":"/usr/src/app","bind":{"create_host_path":true}},
+			{"type":"volume","target":"/usr/src/app/node_modules","volume":{}},`}
+	e.fake.Handle = g.handle(e)
+
+	got := e.deployService(s, 10*time.Second)
+	for _, want := range []string{"service web: the mount at /usr/src/app/node_modules lies inside /usr/src/app", "has no deploy/app/node_modules"} {
+		if !strings.Contains(got.LastError, want) {
+			t.Fatalf("want %q in %q", want, got.LastError)
+		}
+	}
+	for _, c := range e.fake.Calls() {
+		if strings.Contains(c, " build") || strings.Contains(c, " up --detach") {
+			t.Fatalf("something ran for a stack that cannot start: %s", c)
+		}
+	}
+
+	// With the directory in the repository there is something to mount on.
+	g.missing = nil
+	if got = e.deployService(got, 10*time.Second); got.Status != db.AppRunning {
+		t.Fatalf("%+v\n%s", got, e.serviceLog(s))
 	}
 }
 

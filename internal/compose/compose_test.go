@@ -2,6 +2,7 @@ package compose
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -534,5 +535,28 @@ func TestSandboxImage(t *testing.T) {
 		if got := SandboxImage(version); got != want {
 			t.Errorf("%q: %s, want %s", version, got, want)
 		}
+	}
+}
+
+func TestNestedInCheckout(t *testing.T) {
+	p := parse(t, `{"name":"x","services":{
+		"b":{"volumes":[
+			{"type":"bind","source":"/co/app","target":"/usr/src/app"},
+			{"type":"bind","source":"/co/app/conf","target":"/usr/src/app/conf/"},
+			{"type":"volume","target":"/usr/src/app/node_modules"},
+			{"type":"volume","source":"cache","target":"/usr/src/app/conf/cache"},
+			{"type":"volume","source":"data","target":"/usr/src/application"},
+			{"type":"tmpfs","target":"/tmp"}]},
+		"a":{"volumes":[
+			{"type":"bind","source":"/srv/files","target":"/files"},
+			{"type":"volume","target":"/files/tmp"}]}}}`)
+	got := p.NestedInCheckout("/co")
+	want := []Nested{
+		{"b", "/usr/src/app/conf", "/usr/src/app", "/co/app/conf"},
+		{"b", "/usr/src/app/node_modules", "/usr/src/app", "/co/app/node_modules"},
+		{"b", "/usr/src/app/conf/cache", "/usr/src/app/conf", "/co/app/conf/cache"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
 	}
 }
