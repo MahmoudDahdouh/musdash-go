@@ -52,7 +52,12 @@ func (s *Server) renderTeam(w http.ResponseWriter, r *http.Request, status int, 
 		return
 	}
 	v.Me, v.Role = sess.UserID, sess.Role
-	s.render(w, r, status, pages.Team(s.shell(w, r, "Team", "team"), v, invite, rename))
+	shell := s.shell(w, r, "Team", "team")
+	if v.Link != "" {
+		// The page answers the POST that made the link: see renderKeys.
+		shell.Address = "/team"
+	}
+	s.render(w, r, status, pages.Team(shell, v, invite, rename))
 }
 
 func (s *Server) teamPage(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +118,16 @@ func (s *Server) invitationCreate(w http.ResponseWriter, r *http.Request) {
 		s.renderTeam(w, r, http.StatusUnprocessableEntity, pages.TeamView{}, f, ui.Form{})
 		return
 	}
+	// Sent again, this would be refused for the address it has just invited.
+	if s.sentBefore(w, r, "/team") {
+		return
+	}
+	made := false
+	defer func() {
+		if !made {
+			s.notSent(r)
+		}
+	}()
 	token := secret.RandomToken(32)
 	_, err := s.DB.CreateInvitation(ctx, db.Invitation{
 		TeamID: sess.TeamID, Email: email, Role: role, TokenHash: secret.HashToken(token),
@@ -131,6 +146,7 @@ func (s *Server) invitationCreate(w http.ResponseWriter, r *http.Request) {
 		s.renderTeam(w, r, http.StatusUnprocessableEntity, pages.TeamView{}, f, ui.Form{})
 		return
 	}
+	made = true
 	s.Log.Info("invitation made", "role", role)
 	// The link is on this page and nowhere else: not in a redirect, a
 	// cookie or the log.
@@ -242,10 +258,16 @@ func (s *Server) memberReset(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Sent again, this would make a second link beside the one that was
+	// just shown.
+	if s.sentBefore(w, r, "/team") {
+		return
+	}
 	token := secret.RandomToken(32)
 	sess := sessionFrom(r)
 	err := s.DB.CreatePasswordResetBy(r.Context(), sess.TeamID, sess.UserID, m.UserID, secret.HashToken(token), time.Now().Add(memberResetLifetime).Unix())
 	if s.managedNoMore(w, r, err) {
+		s.notSent(r)
 		return
 	}
 	s.Log.Info("reset link made", "member", m.UserID, "by", sessionFrom(r).UserID)

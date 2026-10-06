@@ -270,7 +270,7 @@ func TestWhatARoleChangeEnds(t *testing.T) {
 		if err := d.CreatePasswordReset(ctx, "r-"+userID, userID, now()+60); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := d.CreateAPIToken(ctx, APIToken{UserID: userID, TeamID: team, Name: "ci", TokenHash: "t-" + userID, Ability: AbilityRead}); err != nil {
+		if _, err := d.CreateAPIToken(ctx, APIToken{UserID: userID, TeamID: team, Name: "ci", TokenHash: "t-" + userID, Abilities: AbilityRead}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -396,7 +396,7 @@ func TestPasswordAndSecondStepEndAPITokens(t *testing.T) {
 	}
 	make := func() {
 		t.Helper()
-		if _, err := d.CreateAPIToken(ctx, APIToken{UserID: u.ID, TeamID: team, Name: "ci", TokenHash: secretish(), Ability: AbilityDeploy}); err != nil {
+		if _, err := d.CreateAPIToken(ctx, APIToken{UserID: u.ID, TeamID: team, Name: "ci", TokenHash: secretish(), Abilities: AbilityDeploy}); err != nil {
 			t.Fatal(err)
 		}
 	}

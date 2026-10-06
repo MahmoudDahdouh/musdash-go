@@ -15,37 +15,89 @@ type AccountView struct {
 	RecoveryCodes int // how many are left
 }
 
-func abilityLabel(ability string) string {
-	if ability == db.AbilityDeploy {
-		return "Read and deploy"
-	}
-	return "Read only"
+// TokenPerm is one permission an API token can have, as the New token
+// dialog offers it: Field is its checkbox.
+type TokenPerm struct {
+	Ability string
+	Field   string
+	Label   string
+	Hint    string
 }
 
-var abilityOptions = []ui.Option{
-	{Value: db.AbilityRead, Label: "Read only"},
-	{Value: db.AbilityDeploy, Label: "Read and deploy: also deploy, start and stop"},
+// TokenPerms is every permission, in the order the dialog lists them. The
+// handler that makes a token reads the same list, so a box cannot be drawn
+// that nothing reads.
+var TokenPerms = []TokenPerm{
+	{db.AbilityRead, "perm_read", "Read", "See projects, servers, apps, databases, services and deployments."},
+	{db.AbilityWrite, "perm_write", "Write", "Start and stop apps, databases and services."},
+	{db.AbilityRoot, "perm_root", "Root", "Everything you may do yourself, and what later versions add. It needs none of the others."},
+	{db.AbilityDeploy, "perm_deploy", "Deploy", "Start deployments: of one app or service, of several, or of a tag. On its own it reads nothing."},
+	{db.AbilitySensitive, "perm_sensitive", "Read sensitive data", "Read, with the values of variables and the passwords of databases in the answers."},
+}
+
+func abilityLabel(ability string) string {
+	for _, p := range TokenPerms {
+		if p.Ability == ability {
+			return p.Label
+		}
+	}
+	return ability
+}
+
+// abilityTone draws the two permissions that reach furthest apart from
+// the rest.
+func abilityTone(ability string) string {
+	switch ability {
+	case db.AbilityRoot:
+		return ui.ToneDanger
+	case db.AbilitySensitive:
+		return ui.ToneWarn
+	}
+	return ui.ToneNeutral
+}
+
+// permChecked says whether a permission's box is checked: as it was sent,
+// for a form that came back, and Read alone for a new one.
+func permChecked(f ui.Form, p TokenPerm) bool {
+	if f.Values == nil {
+		return p.Ability == db.AbilityRead
+	}
+	return f.V(p.Field) != ""
+}
+
+// permAttrs marks Root as the box that stands for the others (data-alone).
+func permAttrs(p TokenPerm) templ.Attributes {
+	if p.Ability == db.AbilityRoot {
+		return templ.Attributes{"data-alone": "token-perms"}
+	}
+	return nil
 }
 
 var expiryOptions = []ui.Option{
-	{Value: "90", Label: "In 90 days"},
-	{Value: "30", Label: "In 30 days"},
-	{Value: "365", Label: "In a year"},
+	{Value: "7", Label: "7 days"},
+	{Value: "30", Label: "30 days"},
+	{Value: "60", Label: "60 days"},
+	{Value: "90", Label: "90 days"},
+	{Value: "365", Label: "1 year"},
 	{Value: "never", Label: "Never"},
 }
 
 func tokenExpiry(t db.APIToken) string {
 	if t.ExpiresAt == 0 {
-		return "does not expire"
+		return "Never"
 	}
-	return "expires " + ui.Until(t.ExpiresAt)
+	return upperFirst(ui.Until(t.ExpiresAt))
 }
 
 func tokenUsed(t db.APIToken) string {
-	if t.LastUsedAt == 0 {
-		return "never used"
+	return upperFirst(ui.Ago(t.LastUsedAt))
+}
+
+func upperFirst(s string) string {
+	if s == "" {
+		return s
 	}
-	return "last used " + ui.Ago(t.LastUsedAt)
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // groupKey writes a key in groups of four, which is how people copy one

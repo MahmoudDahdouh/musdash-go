@@ -51,6 +51,10 @@ type Server struct {
 	// accounts counts attempts at one account's password and second step.
 	// Its keys are accounts that exist, so nobody outside can fill it.
 	accounts *auth.Limiter
+	// sent remembers, for a day, the forms that were acted on and must not
+	// be acted on again when a browser sends them a second time: see
+	// sentBefore.
+	sent *auth.Limiter
 	// hooks limits the endpoints other machines call; hookBodies lets one
 	// webhook body be read at a time.
 	hooks      *auth.Limiter
@@ -76,6 +80,7 @@ type Server struct {
 func (s *Server) Handler() http.Handler {
 	s.logins = auth.NewLimiter(5, 15*time.Minute)
 	s.accounts = auth.NewLimiter(5, 15*time.Minute)
+	s.sent = auth.NewLimiter(1, 24*time.Hour)
 	s.hooks = auth.NewLimiter(120, time.Minute)
 	s.apiCalls = auth.NewLimiter(apiPerMinute, time.Minute)
 	s.apiAddrs = auth.NewLimiter(apiPerMinuteByAddress, time.Minute)
@@ -100,7 +105,8 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /api/v1/deploy", open, s.apiDeploy)
 
 	// The API: each request carries a person's API token and no session.
-	read, operate := db.AbilityRead, db.AbilityDeploy
+	// Each route names the one permission its token must have.
+	read, write, deploys := db.AbilityRead, db.AbilityWrite, db.AbilityDeploy
 	handle("GET /api/v1/me", open, s.api(read, s.apiMe))
 	handle("GET /api/v1/servers", open, s.api(read, s.apiServers))
 	handle("GET /api/v1/projects", open, s.api(read, s.apiProjects))
@@ -108,17 +114,18 @@ func (s *Server) Handler() http.Handler {
 	handle("GET /api/v1/apps", open, s.api(read, s.apiApps))
 	handle("GET /api/v1/apps/{id}", open, s.api(read, s.apiApp))
 	handle("GET /api/v1/apps/{id}/deployments", open, s.api(read, s.apiAppDeployments))
-	handle("POST /api/v1/apps/{id}/deploy", open, s.api(operate, s.apiAppDeploy))
-	handle("POST /api/v1/apps/{id}/stop", open, s.api(operate, s.apiAppStop))
+	handle("GET /api/v1/apps/{id}/envs", open, s.api(read, s.apiAppEnvs))
+	handle("POST /api/v1/apps/{id}/deploy", open, s.api(deploys, s.apiAppDeploy))
+	handle("POST /api/v1/apps/{id}/stop", open, s.api(write, s.apiAppStop))
 	handle("GET /api/v1/deployments/{id}", open, s.api(read, s.apiDeployment))
 	handle("GET /api/v1/databases", open, s.api(read, s.apiDatabases))
 	handle("GET /api/v1/databases/{id}", open, s.api(read, s.apiDatabase))
-	handle("POST /api/v1/databases/{id}/start", open, s.api(operate, s.apiDatabaseStart))
-	handle("POST /api/v1/databases/{id}/stop", open, s.api(operate, s.apiDatabaseStop))
+	handle("POST /api/v1/databases/{id}/start", open, s.api(write, s.apiDatabaseStart))
+	handle("POST /api/v1/databases/{id}/stop", open, s.api(write, s.apiDatabaseStop))
 	handle("GET /api/v1/services", open, s.api(read, s.apiServices))
 	handle("GET /api/v1/services/{id}", open, s.api(read, s.apiService))
-	handle("POST /api/v1/services/{id}/deploy", open, s.api(operate, s.apiServiceDeploy))
-	handle("POST /api/v1/services/{id}/stop", open, s.api(operate, s.apiServiceStop))
+	handle("POST /api/v1/services/{id}/deploy", open, s.api(deploys, s.apiServiceDeploy))
+	handle("POST /api/v1/services/{id}/stop", open, s.api(write, s.apiServiceStop))
 	handle("/api/", open, s.apiNotFound)
 
 	// Signed-out pages.
@@ -260,6 +267,9 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /tags/{tag}/deploy", member, s.tagDeploy)
 
 	handle("GET /keys", member, s.keysPage)
+	handle("GET /keys/tokens", member, s.tokensPage)
+	handle("POST /keys/deploy-tokens", member, s.keysDeployToken)
+	handle("POST /keys/webhook-secrets", member, s.keysWebhookSecret)
 	handle("GET /sources", member, s.sourcesPage)
 	handle("POST /sources/github", admin, s.githubStart)
 	handle("GET /sources/github/callback", admin, s.githubCallback)
@@ -384,6 +394,58 @@ func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 	s.Log.Error("request failed", "route", logRoute(r), "err", err)
 	s.render(w, r, http.StatusInternalServerError, pages.Message("Something went wrong", "The error was logged on the server. Try again; if it keeps happening, check the musdash log."))
+}
+
+// sentBefore reports whether the form of this request was acted on
+// already, and answers the request itself when it was.
+//
+// A secret that is shown once is rendered in the answer to the POST that
+// made it, so the page a person then looks at is the answer to a POST, and
+// a browser's Refresh sends that POST again. Without this, a refresh made
+// a second token of the same name, a second key, or replaced the deploy
+// token that had just been copied. Such a form carries a value of its own
+// (ui.Once), and the handler asks here right before it writes: a value
+// that was seen before changes nothing and leads back to the page.
+//
+// The check and the record are one step under the limiter's lock, so two
+// POSTs at the same moment cannot both pass. A form without the value is
+// acted on as ever: this keeps a browser from repeating itself, and CSRF is
+// what keeps strangers out.
+//
+// A handler whose write then fails, or that finds only afterwards that the
+// form cannot be acted on, gives the value back with notSent: the note a
+// repeat gets says something was made, and must not be told to somebody
+// for whom nothing was.
+func (s *Server) sentBefore(w http.ResponseWriter, r *http.Request, back string) bool {
+	key := onceKey(r)
+	if key == "" {
+		return false
+	}
+	if ok, _ := s.sent.Take(key); ok {
+		return false
+	}
+	setFlash(w, r, ui.ToneWarn, "That form had been sent already, so nothing more was done. What it made was shown once: if you did not copy it, remove it and make another.")
+	redirect(w, r, back)
+	return true
+}
+
+// notSent forgets that the form of this request was acted on, because in
+// the end it was not: sent again, it is a first time.
+func (s *Server) notSent(r *http.Request) {
+	if key := onceKey(r); key != "" {
+		s.sent.Reset(key)
+	}
+}
+
+// onceKey is what a form is remembered by: whose it is, and its own value.
+// The value is hashed, since it is the browser's and the limiter's keys are
+// short. A form that carries none has no key.
+func onceKey(r *http.Request) string {
+	once := r.PostFormValue(ui.OnceField)
+	if once == "" {
+		return ""
+	}
+	return sessionFrom(r).UserID + ":" + secret.HashToken(once)
 }
 
 // redirect sends the browser to path. htmx requests get HX-Redirect so the

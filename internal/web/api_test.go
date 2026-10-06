@@ -3,24 +3,43 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"html"
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 )
 
 var newTokenRE = regexp.MustCompile(`id="new-token-value">(msd_[A-Za-z0-9_-]+)<`)
 
-// newToken makes an API token for the owner through the Account page.
-func (a *app) newToken(ability string) string {
+// operator is what a token had that the old "deploy" ability gave: it
+// reads, starts and stops, and deploys.
+var operator = []string{db.AbilityRead, db.AbilityWrite, db.AbilityDeploy}
+
+// tokenForm is the New API token dialog, filled in: the boxes of the
+// given permissions checked.
+func tokenForm(name, expires string, abilities ...string) url.Values {
+	form := url.Values{"token_name": {name}, "token_expires": {expires}, "token_password": {testPassword}}
+	for _, p := range pages.TokenPerms {
+		if slices.Contains(abilities, p.Ability) {
+			form.Set(p.Field, "1")
+		}
+	}
+	return form
+}
+
+// newToken makes an API token for the owner through the Keys page.
+func (a *app) newToken(abilities ...string) string {
 	a.t.Helper()
-	res, body := a.post("/account", "/account/tokens", url.Values{"token_name": {"ci"}, "token_ability": {ability}, "token_expires": {"never"}, "token_password": {testPassword}})
+	res, body := a.post("/keys/tokens", "/account/tokens", tokenForm("ci", "never", abilities...))
 	wantStatus(a.t, res, http.StatusOK)
 	m := newTokenRE.FindStringSubmatch(body)
 	if m == nil {
@@ -34,9 +53,9 @@ func (a *app) newToken(ability string) string {
 	return m[1]
 }
 
-func (p person) newToken(ability string) string {
+func (p person) newToken(abilities ...string) string {
 	p.a.t.Helper()
-	res, body := p.post("/account/tokens", url.Values{"token_name": {"ci"}, "token_ability": {ability}, "token_expires": {"30"}, "token_password": {testPassword}})
+	res, body := p.post("/account/tokens", tokenForm("ci", "30", abilities...))
 	wantStatus(p.a.t, res, http.StatusOK)
 	m := newTokenRE.FindStringSubmatch(body)
 	if m == nil {
@@ -74,15 +93,19 @@ func TestAPITokensOnTheAccountPage(t *testing.T) {
 	owner, _ := a.db.UserByEmail(ctx, testEmail)
 	team := firstTeam(t, a)
 
+	without := func(form url.Values, field string) url.Values {
+		form.Del(field)
+		return form
+	}
 	for name, form := range map[string]url.Values{
-		"no name":      {"token_name": {""}, "token_ability": {"read"}, "token_expires": {"never"}},
-		"bad ability":  {"token_name": {"x"}, "token_ability": {"root"}, "token_expires": {"never"}},
-		"bad lifetime": {"token_name": {"x"}, "token_ability": {"read"}, "token_expires": {"3650"}},
+		"no name":       tokenForm("", "never", db.AbilityRead),
+		"no permission": tokenForm("x", "never"),
+		"bad lifetime":  tokenForm("x", "3650", db.AbilityRead),
 		// A session alone does not make a token.
-		"no password":    {"token_name": {"x"}, "token_ability": {"read"}, "token_expires": {"never"}},
-		"wrong password": {"token_name": {"x"}, "token_ability": {"read"}, "token_expires": {"never"}, "token_password": {"not my password"}},
+		"no password":    without(tokenForm("x", "never", db.AbilityRead), "token_password"),
+		"wrong password": {"token_name": {"x"}, "perm_read": {"1"}, "token_expires": {"never"}, "token_password": {"not my password"}},
 	} {
-		res, body := a.post("/account", "/account/tokens", form)
+		res, body := a.post("/keys/tokens", "/account/tokens", form)
 		if res.StatusCode != http.StatusUnprocessableEntity || newTokenRE.MatchString(body) {
 			t.Errorf("%s: status %d", name, res.StatusCode)
 		}
@@ -91,9 +114,9 @@ func TestAPITokensOnTheAccountPage(t *testing.T) {
 		t.Fatalf("a refused form made a token: %+v", list)
 	}
 
-	token := a.newToken(db.AbilityDeploy)
+	token := a.newToken(operator...)
 	list, _ := a.db.ListAPITokens(ctx, owner.ID, team)
-	if len(list) != 1 || list[0].Name != "ci" || list[0].Ability != db.AbilityDeploy || list[0].ExpiresAt != 0 {
+	if len(list) != 1 || list[0].Name != "ci" || list[0].Abilities != "read,write,deploy" || list[0].ExpiresAt != 0 {
 		t.Fatalf("stored: %+v", list)
 	}
 	// Stored as its hash, shown once, never logged.
@@ -102,8 +125,8 @@ func TestAPITokensOnTheAccountPage(t *testing.T) {
 	if stored != secret.HashToken(token) || strings.Contains(stored, token) {
 		t.Fatal("the token must be stored as its hash")
 	}
-	_, page := a.get("/keys")
-	if strings.Contains(page, token) || !strings.Contains(page, "Read and deploy") {
+	_, page := a.get("/keys/tokens")
+	if strings.Contains(page, token) || !strings.Contains(page, `<span class="badge">Deploy</span>`) {
 		t.Fatal("the Keys page should list the token without showing it")
 	}
 	if strings.Contains(logs.String(), token) {
@@ -117,12 +140,12 @@ func TestAPITokensOnTheAccountPage(t *testing.T) {
 	mem := a.newPerson("Member", db.RoleMember)
 	res, _ := mem.post("/account/tokens/"+list[0].ID+"/delete", nil)
 	wantStatus(t, res, http.StatusNotFound)
-	if _, page := mem.get("/keys"); strings.Contains(page, list[0].ID) {
+	if _, page := mem.get("/keys/tokens"); strings.Contains(page, list[0].ID) {
 		t.Fatal("a Member's Keys page shows the Owner's token")
 	}
 	// Revoked, it stops working at once.
-	res, _ = a.post("/account", "/account/tokens/"+list[0].ID+"/delete", nil)
-	wantRedirect(t, res, "/keys#tokens")
+	res, _ = a.post("/keys/tokens", "/account/tokens/"+list[0].ID+"/delete", nil)
+	wantRedirect(t, res, "/keys/tokens")
 	if res, _ := a.call(http.MethodGet, "/api/v1/me", token); res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("a revoked token still works: %d", res.StatusCode)
 	}
@@ -131,7 +154,7 @@ func TestAPITokensOnTheAccountPage(t *testing.T) {
 	for i := 0; i < db.MaxAPITokens; i++ {
 		a.newToken(db.AbilityRead)
 	}
-	res, _ = a.post("/account", "/account/tokens", url.Values{"token_name": {"one more"}, "token_ability": {"read"}, "token_expires": {"never"}, "token_password": {testPassword}})
+	res, _ = a.post("/keys/tokens", "/account/tokens", tokenForm("one more", "never", db.AbilityRead))
 	wantStatus(t, res, http.StatusUnprocessableEntity)
 }
 
@@ -139,7 +162,7 @@ func TestAPIRefusesWhatIsNotALiveToken(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
 	ctx := context.Background()
-	good := a.newToken(db.AbilityDeploy)
+	good := a.newToken(operator...)
 	expired := a.newToken(db.AbilityRead)
 	a.db.Exec(`UPDATE api_tokens SET expires_at = ? WHERE token_hash = ?`, time.Now().Unix()-1, secret.HashToken(expired))
 	mem := a.newPerson("Member", db.RoleMember)
@@ -226,7 +249,7 @@ func TestAPIReadsAndOperates(t *testing.T) {
 	svc := a.newService(projectID, env, "blog", nil)
 	res, _ := a.post("/apps/"+appID+"/settings", "/apps/"+appID+"/tags", url.Values{"tags": {"nightly"}})
 	wantRedirect(t, res, "/apps/"+appID+"/settings#tags")
-	read, deploy := a.newToken(db.AbilityRead), a.newToken(db.AbilityDeploy)
+	read, deploy := a.newToken(db.AbilityRead), a.newToken(operator...)
 
 	// Reading.
 	res, body := a.call(http.MethodGet, "/api/v1/me", read)
@@ -235,7 +258,7 @@ func TestAPIReadsAndOperates(t *testing.T) {
 		t.Fatalf("headers: %q %q", ct, res.Header.Get("Cache-Control"))
 	}
 	me := decode[map[string]any](t, body)
-	if me["role"] != db.RoleOwner || me["user"].(map[string]any)["email"] != testEmail || me["token"].(map[string]any)["ability"] != db.AbilityRead {
+	if me["role"] != db.RoleOwner || me["user"].(map[string]any)["email"] != testEmail || fmt.Sprint(me["token"].(map[string]any)["abilities"]) != "[read]" {
 		t.Fatalf("me: %v", me)
 	}
 	_, body = a.call(http.MethodGet, "/api/v1/projects", read)
@@ -372,7 +395,7 @@ func TestAPIDeployEndpoint(t *testing.T) {
 	svc := a.newService(projectID, env, "blog", nil)
 	a.db.SetTags(ctx, team, db.KindApp, api, []string{"nightly"})
 	a.db.SetTags(ctx, team, db.KindService, svc.ID, []string{"nightly"})
-	token := a.newToken(db.AbilityDeploy)
+	token := a.newToken(operator...)
 
 	// What a call may not be.
 	for name, query := range map[string]string{
@@ -514,7 +537,7 @@ func TestAPINeverReturnsSecrets(t *testing.T) {
 	}
 	paths := []string{
 		"/api/v1/me", "/api/v1/servers", "/api/v1/projects", "/api/v1/tags", "/api/v1/apps", "/api/v1/apps/" + gitApp.ID,
-		"/api/v1/apps/" + gitApp.ID + "/deployments", "/api/v1/deployments/" + failed.ID,
+		"/api/v1/apps/" + gitApp.ID + "/deployments", "/api/v1/apps/" + gitApp.ID + "/envs", "/api/v1/deployments/" + failed.ID,
 		"/api/v1/databases", "/api/v1/databases/" + database.ID, "/api/v1/services", "/api/v1/services/" + svc.ID,
 	}
 	// The walk must cover every GET route of the API.
@@ -535,13 +558,63 @@ func TestAPINeverReturnsSecrets(t *testing.T) {
 				t.Errorf("%s returns a value that must stay in the database: %q", path, v)
 			}
 		}
-		for _, field := range []string{"password", "secret", "hash", "variables", "private"} {
-			if strings.Contains(strings.ToLower(body), `"`+field) {
-				t.Errorf("%s has a field named like a secret: %s", path, field)
+		// A field, not a value: a variable may well be called SECRET, and
+		// its name is what the envs route is there to list.
+		if m := secretFieldRE.FindString(strings.ToLower(body)); m != "" {
+			t.Errorf("%s has a field named like a secret: %s", path, m)
+		}
+	}
+
+	// A token that reads sensitive data is the one exception, and it is
+	// given exactly two things: an app's variables with their values, and a
+	// database's password.
+	sensitive := a.newToken(db.AbilitySensitive)
+	_, body := a.call(http.MethodGet, "/api/v1/apps/"+gitApp.ID+"/envs", sensitive)
+	envs := map[string]apiEnv{}
+	for _, e := range decode[[]apiEnv](t, body) {
+		envs[e.Key] = e
+	}
+	if e := envs["SECRET"]; e.Value == nil || *e.Value != "plain-env-value-1" || e.Build {
+		t.Fatalf("SECRET for a sensitive token: %s", body)
+	}
+	if e := envs["BUILD_SECRET"]; e.Value == nil || *e.Value != "plain-env-value-2" || !e.Build {
+		t.Fatalf("BUILD_SECRET for a sensitive token: %s", body)
+	}
+	// What names a shared variable is given as it is stored: the name.
+	if e := envs["A"]; e.Value == nil || *e.Value != "{{team.T}}" || strings.Contains(body, "plain-shared-value") {
+		t.Fatalf("a shared variable's value reached the API: %s", body)
+	}
+	_, body = a.call(http.MethodGet, "/api/v1/databases/"+database.ID, sensitive)
+	if got := decode[apiDatabase](t, body); got.Password != password {
+		t.Fatalf("the database's password for a sensitive token: %s", body)
+	}
+	// The same routes for a token that only reads: the names, no value.
+	_, body = a.call(http.MethodGet, "/api/v1/apps/"+gitApp.ID+"/envs", token)
+	plain := decode[[]apiEnv](t, body)
+	if len(plain) != len(envs) || strings.Contains(body, `"value"`) {
+		t.Fatalf("envs for a read token: %s", body)
+	}
+	for _, e := range plain {
+		if e.Value != nil || e.Key == "" {
+			t.Fatalf("envs for a read token: %s", body)
+		}
+	}
+	// Everywhere else a sensitive token gets what a read token gets.
+	for _, path := range paths {
+		if strings.HasSuffix(path, "/envs") || path == "/api/v1/databases/"+database.ID {
+			continue
+		}
+		res, body := a.call(http.MethodGet, path, sensitive)
+		wantStatus(t, res, http.StatusOK)
+		for _, v := range forbidden {
+			if strings.Contains(body, v) {
+				t.Errorf("%s returns to a sensitive token what must stay in the database: %q", path, v)
 			}
 		}
 	}
 }
+
+var secretFieldRE = regexp.MustCompile(`"(password|secret|hash|variables|private)[^"]*"\s*:`)
 
 func TestAPIRateLimits(t *testing.T) {
 	a := newApp(t, false)
@@ -603,7 +676,7 @@ func TestAPITokensEndWithThePassword(t *testing.T) {
 	}
 
 	// A reset through a link.
-	token := mem.newToken(db.AbilityDeploy)
+	token := mem.newToken(operator...)
 	res, body := ad.post("/team/members/"+mem.user.ID+"/reset", nil)
 	wantStatus(t, res, http.StatusOK)
 	link := linkRE.FindStringSubmatch(html.UnescapeString(body))[3]
@@ -632,5 +705,92 @@ func TestAPITokensEndWithThePassword(t *testing.T) {
 	a.turnOnTwoStep()
 	if works(token) {
 		t.Fatal("an API token outlived turning the second step on")
+	}
+}
+
+// Each permission opens its own routes and no other's: reading does not
+// deploy, deploying does not read, and writing is neither. Root opens all.
+func TestAPITokenPermissions(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	projectID, env := a.project("Shop")
+	appID := a.newApp(projectID, env, "web", true, nil)
+	database := a.newDatabase(projectID, env, "postgres", "main", nil)
+	a.waitDatabase(database.ID)
+	a.stackServer("front", "3000", nil)
+	svc := a.newService(projectID, env, "blog", nil)
+	a.waitService(svc.ID)
+
+	type call struct{ method, path string }
+	routes := map[string][]call{
+		db.AbilityRead: {
+			{http.MethodGet, "/api/v1/me"}, {http.MethodGet, "/api/v1/apps"}, {http.MethodGet, "/api/v1/apps/" + appID},
+			{http.MethodGet, "/api/v1/apps/" + appID + "/envs"}, {http.MethodGet, "/api/v1/databases/" + database.ID},
+			{http.MethodGet, "/api/v1/services"},
+		},
+		db.AbilityDeploy: {
+			{http.MethodPost, "/api/v1/apps/" + appID + "/deploy"}, {http.MethodPost, "/api/v1/services/" + svc.ID + "/deploy"},
+			{http.MethodPost, "/api/v1/deploy?uuid=" + appID},
+		},
+		db.AbilityWrite: {
+			{http.MethodPost, "/api/v1/apps/" + appID + "/stop"}, {http.MethodPost, "/api/v1/databases/" + database.ID + "/stop"},
+			{http.MethodPost, "/api/v1/databases/" + database.ID + "/start"}, {http.MethodPost, "/api/v1/services/" + svc.ID + "/stop"},
+		},
+	}
+	// Every route of the API is in the table above or is one of the lists
+	// it has an example of: a new route has to be given a permission here.
+	for _, tc := range []struct {
+		name      string
+		abilities []string
+		opens     []string
+	}{
+		{"read", []string{db.AbilityRead}, []string{db.AbilityRead}},
+		{"deploy", []string{db.AbilityDeploy}, []string{db.AbilityDeploy}},
+		{"write", []string{db.AbilityWrite}, []string{db.AbilityWrite}},
+		{"read sensitive", []string{db.AbilitySensitive}, []string{db.AbilityRead}},
+		{"read and deploy", []string{db.AbilityRead, db.AbilityDeploy}, []string{db.AbilityRead, db.AbilityDeploy}},
+		// Root with other boxes checked is root.
+		{"root", []string{db.AbilityRoot, db.AbilityRead}, []string{db.AbilityRead, db.AbilityDeploy, db.AbilityWrite}},
+	} {
+		token := a.newToken(tc.abilities...)
+		for needs, calls := range routes {
+			for _, c := range calls {
+				res, body := a.call(c.method, c.path, token)
+				refused := res.StatusCode == http.StatusForbidden
+				if want := !slices.Contains(tc.opens, needs); refused != want {
+					t.Errorf("a %s token at %s %s: status %d, refused=%v, want %v", tc.name, c.method, c.path, res.StatusCode, refused, want)
+				}
+				// The refusal names what is missing, as the dialog calls it.
+				if refused && !strings.Contains(body, apiNeeds[needs]+" permission") {
+					t.Errorf("a %s token at %s: the refusal does not name the %s permission: %s", tc.name, c.path, apiNeeds[needs], body)
+				}
+				// Let through, a call may still find the app busy with the
+				// deployment an earlier one started: that is not a refusal.
+				if !refused && res.StatusCode >= 300 && res.StatusCode != http.StatusConflict {
+					t.Errorf("a %s token at %s %s: status %d: %s", tc.name, c.method, c.path, res.StatusCode, body)
+				}
+			}
+		}
+		// What the token says of itself.
+		_, body := a.call(http.MethodGet, "/api/v1/me", token)
+		if slices.Contains(tc.opens, db.AbilityRead) {
+			want, _ := db.NormalAbilities(tc.abilities)
+			got := decode[map[string]any](t, body)["token"].(map[string]any)["abilities"]
+			if fmt.Sprint(got) != "["+strings.ReplaceAll(want, ",", " ")+"]" {
+				t.Errorf("a %s token says it has %v, want %s", tc.name, got, want)
+			}
+		}
+	}
+
+	// The route table agrees: every API route asks for a permission this
+	// test has an example of.
+	seen := 0
+	for _, route := range a.server.routes {
+		if strings.Contains(route.pattern, " /api/v1/") {
+			seen++
+		}
+	}
+	if seen != 20 {
+		t.Fatalf("the API has %d routes: give the new one a permission, and this test an example of it", seen)
 	}
 }

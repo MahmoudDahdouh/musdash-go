@@ -344,9 +344,10 @@ func TestManualWebhookAndDeployToken(t *testing.T) {
 	}
 
 	key := []byte(a.webhookSecret(app.ID))
-	// The app's own Settings no longer hold it: they point at the Keys page.
-	if _, page := a.get(settings); strings.Contains(page, string(key)) || !strings.Contains(page, `href="/keys#deploy-tokens"`) {
-		t.Fatal("the settings page shows the secret, or does not lead to the Keys page")
+	// The app's own Settings hold neither it nor a word about tokens:
+	// those are the Keys page's.
+	if _, page := a.get(settings); strings.Contains(page, string(key)) || strings.Contains(page, "Deploy from outside") || strings.Contains(page, "/webhooks/git/") {
+		t.Fatal("the settings page shows the secret, or still has a card about tokens")
 	}
 
 	if res, _ := a.hook(hookPath, key, "push", "m1", pushBody("acme/shop", "refs/heads/other")); res.StatusCode != http.StatusOK || a.deployJobs() != 0 {
@@ -361,13 +362,13 @@ func TestManualWebhookAndDeployToken(t *testing.T) {
 	}
 
 	// Deploy token: shown once, stored hashed.
-	res, page := a.post("/keys", "/apps/"+app.ID+"/deploy-token", nil)
+	res, page := a.post("/keys/tokens", "/apps/"+app.ID+"/deploy-token", nil)
 	wantStatus(t, res, http.StatusOK)
 	tm := regexp.MustCompile(`mdt_[A-Za-z0-9_-]{40,}`).FindString(page)
 	if tm == "" {
 		t.Fatal("the new deploy token is not shown")
 	}
-	if _, page = a.get("/keys"); strings.Contains(page, tm) || !strings.Contains(page, "Has a token") {
+	if _, page = a.get("/keys/tokens"); strings.Contains(page, tm) || !strings.Contains(page, `action="/apps/`+app.ID+`/deploy-token"`) {
 		t.Fatal("the token is shown again, or the Keys page does not know there is one")
 	}
 	stored, _ := a.db.AppByID(ctx, app.ID)
@@ -410,8 +411,8 @@ func TestManualWebhookAndDeployToken(t *testing.T) {
 		t.Fatalf("deployment: %+v %v", dep, err)
 	}
 
-	res, _ = a.post("/keys", "/apps/"+app.ID+"/deploy-token", url.Values{"revoke": {"1"}})
-	wantRedirect(t, res, "/keys#deploy-tokens")
+	res, _ = a.post("/keys/tokens", "/apps/"+app.ID+"/deploy-token", url.Values{"revoke": {"1"}})
+	wantRedirect(t, res, "/keys/tokens")
 	if res, _ := api(app.ID, tm); res.StatusCode != http.StatusUnauthorized {
 		t.Fatal("a revoked token still works")
 	}
@@ -501,7 +502,7 @@ func TestWebhookHardening(t *testing.T) {
 	// The deploy API hands back the waiting deployment rather than queueing
 	// another behind it.
 	a.db.Exec(`UPDATE deployments SET status = 'failed'`)
-	_, page := a.post("/keys", "/apps/"+app.ID+"/deploy-token", nil)
+	_, page := a.post("/keys/tokens", "/apps/"+app.ID+"/deploy-token", nil)
 	token := regexp.MustCompile(`mdt_[A-Za-z0-9_-]{40,}`).FindString(page)
 	api := func() map[string]string {
 		req, _ := http.NewRequest(http.MethodPost, a.url+"/api/v1/deploy?uuid="+app.ID, nil)
@@ -689,7 +690,7 @@ func TestDeployKeys(t *testing.T) {
 	projectID, env := a.project("Shop")
 	a.newGitApp(projectID, env, "web", url.Values{"access": {"key:" + keys[0].ID}, "repo": {"git@github.com:acme/shop.git"}})
 	res, _ = a.post("/keys", "/sources/keys/"+keys[0].ID+"/delete", nil)
-	wantRedirect(t, res, "/keys#ssh-keys")
+	wantRedirect(t, res, "/keys")
 	if keys, _ := a.db.ListSSHKeys(ctx, team); len(keys) != 1 {
 		t.Fatal("a key in use was deleted")
 	}

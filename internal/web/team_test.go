@@ -477,7 +477,7 @@ func TestAResetLinkEndsWhenItsAccountIsPromoted(t *testing.T) {
 	team := firstTeam(t, a)
 	ad := a.newPerson("Admin", db.RoleAdmin)
 	mem := a.newPerson("Member", db.RoleMember)
-	memToken := mem.newToken(db.AbilityDeploy)
+	memToken := mem.newToken(operator...)
 
 	res, body := ad.post("/team/members/"+mem.user.ID+"/reset", nil)
 	wantStatus(t, res, http.StatusOK)

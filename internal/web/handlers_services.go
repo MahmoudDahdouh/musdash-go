@@ -10,7 +10,6 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
-	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
@@ -527,16 +526,7 @@ func (s *Server) serviceWebhookSecret(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	sealed, err := s.Box.SealString(secret.RandomHex(24))
-	if err == nil {
-		err = s.DB.SetServiceWebhookSecret(r.Context(), sessionFrom(r).TeamID, v.Service.ID, sealed)
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	setFlash(w, r, ui.ToneOK, "Webhook secret saved. Enter it in the repository's webhook settings.")
-	redirect(w, r, "/keys#webhooks")
+	s.newHookSecret(w, r, serviceKeyOwner(v.Service, ""))
 }
 
 // serviceDeployToken creates, replaces or revokes the service's deploy
@@ -550,26 +540,14 @@ func (s *Server) serviceDeployToken(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	teamID := sessionFrom(r).TeamID
 	if r.PostFormValue("revoke") == "1" {
-		if err := s.DB.SetServiceDeployToken(r.Context(), teamID, v.Service.ID, ""); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		setFlash(w, r, ui.ToneOK, "Deploy token revoked.")
-		redirect(w, r, "/keys#deploy-tokens")
+		s.revokeDeployToken(w, r, serviceKeyOwner(v.Service, ""))
 		return
 	}
-	token := "mdt_" + secret.RandomToken(32)
-	hash := secret.HashToken(token)
-	if err := s.DB.SetServiceDeployToken(r.Context(), teamID, v.Service.ID, hash); err != nil {
-		s.fail(w, r, err)
+	if s.sentBefore(w, r, pages.TokensPath) {
 		return
 	}
-	// Rendered directly rather than after a redirect, so the token is never
-	// placed in a cookie or a URL.
-	s.renderKeys(w, r, http.StatusOK, keysState{newDeploy: &pages.NewDeployToken{
-		Owner: v.Service.Name, Token: token, URL: s.publicBase(r) + "/api/v1/deploy?uuid=" + v.Service.ID}})
+	s.newDeployToken(w, r, serviceKeyOwner(v.Service, ""))
 }
 
 func (s *Server) serviceCompose(w http.ResponseWriter, r *http.Request) {

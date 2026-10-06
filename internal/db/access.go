@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
+	"strings"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 )
@@ -88,11 +90,20 @@ func (d *DB) CountRecoveryCodes(ctx context.Context, userID string) (int, error)
 	return n, err
 }
 
-// What an API token may do. A token that may deploy may also read.
+// What an API token may do. Each permission is its own: one that may
+// deploy does not thereby read. Two include others: a token that reads
+// sensitive data reads, and root is all of them, with whatever a later
+// version adds.
 const (
-	AbilityRead   = "read"
-	AbilityDeploy = "deploy"
+	AbilityRead      = "read"
+	AbilityWrite     = "write"
+	AbilityDeploy    = "deploy"
+	AbilitySensitive = "read:sensitive"
+	AbilityRoot      = "root"
 )
+
+// abilityOrder is the order permissions are stored and listed in.
+var abilityOrder = []string{AbilityRead, AbilitySensitive, AbilityWrite, AbilityDeploy}
 
 // MaxAPITokens is how many tokens one person may have.
 const MaxAPITokens = 20
@@ -100,15 +111,49 @@ const MaxAPITokens = 20
 // ErrTooMany is returned when a person has as many of something as they may.
 var ErrTooMany = errors.New("no more can be added")
 
+// ErrAbilities is returned for a set of permissions that names none, or
+// one that does not exist.
+var ErrAbilities = errors.New("not a set of permissions")
+
+// NormalAbilities writes a choice of permissions the one way it is stored:
+// known names only, each once, in a fixed order. Root stands alone, since
+// nothing adds to it, and reading sensitive data brings reading with it.
+func NormalAbilities(chosen []string) (string, error) {
+	has := map[string]bool{}
+	for _, a := range chosen {
+		if a != AbilityRoot && !slices.Contains(abilityOrder, a) {
+			return "", ErrAbilities
+		}
+		has[a] = true
+	}
+	if has[AbilityRoot] {
+		return AbilityRoot, nil
+	}
+	if has[AbilitySensitive] {
+		has[AbilityRead] = true
+	}
+	var out []string
+	for _, a := range abilityOrder {
+		if has[a] {
+			out = append(out, a)
+		}
+	}
+	if len(out) == 0 {
+		return "", ErrAbilities
+	}
+	return strings.Join(out, ","), nil
+}
+
 // APIToken is a person's token for the API. It acts as that person in
 // that team.
 type APIToken struct {
-	ID         string
-	UserID     string
-	TeamID     string
-	Name       string
-	TokenHash  string
-	Ability    string
+	ID        string
+	UserID    string
+	TeamID    string
+	Name      string
+	TokenHash string
+	// Abilities is what the token may do, as NormalAbilities writes it.
+	Abilities  string
 	CreatedAt  int64
 	LastUsedAt int64
 	ExpiresAt  int64 // 0 for one that does not expire
@@ -118,14 +163,36 @@ type APIToken struct {
 	Role      string
 }
 
-// MayDeploy reports whether the token may do more than read.
-func (t APIToken) MayDeploy() bool { return t.Ability == AbilityDeploy }
+// AbilityList is the token's permissions, one by one.
+func (t APIToken) AbilityList() []string {
+	if t.Abilities == "" {
+		return nil
+	}
+	return strings.Split(t.Abilities, ",")
+}
 
-// CreateAPIToken stores a token by its hash.
+// May reports whether the token has a permission. What is stored is
+// normal, so a name is either there or covered by root; a token with
+// nothing stored may do nothing.
+func (t APIToken) May(ability string) bool {
+	for _, a := range t.AbilityList() {
+		if a == ability || a == AbilityRoot {
+			return true
+		}
+	}
+	return false
+}
+
+// CreateAPIToken stores a token by its hash. Its permissions are stored
+// in their normal form, whatever form they were given in.
 func (d *DB) CreateAPIToken(ctx context.Context, t APIToken) (APIToken, error) {
+	var err error
+	if t.Abilities, err = NormalAbilities(t.AbilityList()); err != nil {
+		return t, err
+	}
 	t.ID = secret.RandomID()
 	t.CreatedAt = now()
-	err := d.Tx(ctx, func(tx *sql.Tx) error {
+	err = d.Tx(ctx, func(tx *sql.Tx) error {
 		var n int
 		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM api_tokens WHERE user_id = ?`, t.UserID).Scan(&n); err != nil {
 			return err
@@ -133,8 +200,8 @@ func (d *DB) CreateAPIToken(ctx context.Context, t APIToken) (APIToken, error) {
 		if n >= MaxAPITokens {
 			return ErrTooMany
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO api_tokens (id, user_id, team_id, name, token_hash, ability, created_at, expires_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, t.ID, t.UserID, t.TeamID, t.Name, t.TokenHash, t.Ability, t.CreatedAt, t.ExpiresAt)
+		_, err := tx.ExecContext(ctx, `INSERT INTO api_tokens (id, user_id, team_id, name, token_hash, abilities, created_at, expires_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, t.ID, t.UserID, t.TeamID, t.Name, t.TokenHash, t.Abilities, t.CreatedAt, t.ExpiresAt)
 		return err
 	})
 	return t, err
@@ -143,7 +210,7 @@ func (d *DB) CreateAPIToken(ctx context.Context, t APIToken) (APIToken, error) {
 // ListAPITokens returns a person's tokens for a team, newest first. The
 // hashes are not read: no page has a use for them.
 func (d *DB) ListAPITokens(ctx context.Context, userID, teamID string) ([]APIToken, error) {
-	rows, err := d.QueryContext(ctx, `SELECT id, user_id, team_id, name, ability, created_at, last_used_at, expires_at
+	rows, err := d.QueryContext(ctx, `SELECT id, user_id, team_id, name, abilities, created_at, last_used_at, expires_at
 		FROM api_tokens WHERE user_id = ? AND team_id = ? ORDER BY created_at DESC, id`, userID, teamID)
 	if err != nil {
 		return nil, err
@@ -152,7 +219,7 @@ func (d *DB) ListAPITokens(ctx context.Context, userID, teamID string) ([]APITok
 	var out []APIToken
 	for rows.Next() {
 		var t APIToken
-		if err := rows.Scan(&t.ID, &t.UserID, &t.TeamID, &t.Name, &t.Ability, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.UserID, &t.TeamID, &t.Name, &t.Abilities, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -171,12 +238,12 @@ func (d *DB) DeleteAPIToken(ctx context.Context, userID, id string) error {
 func (d *DB) TokenByHash(ctx context.Context, hash string) (APIToken, error) {
 	var t APIToken
 	err := d.QueryRowContext(ctx, `
-		SELECT t.id, t.user_id, t.team_id, t.name, t.ability, t.created_at, t.last_used_at, t.expires_at, u.name, u.email, m.role
+		SELECT t.id, t.user_id, t.team_id, t.name, t.abilities, t.created_at, t.last_used_at, t.expires_at, u.name, u.email, m.role
 		FROM api_tokens t
 		JOIN users u ON u.id = t.user_id
 		JOIN team_members m ON m.team_id = t.team_id AND m.user_id = t.user_id
 		WHERE t.token_hash = ? AND (t.expires_at = 0 OR t.expires_at > ?)`, hash, now()).
-		Scan(&t.ID, &t.UserID, &t.TeamID, &t.Name, &t.Ability, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt, &t.UserName, &t.UserEmail, &t.Role)
+		Scan(&t.ID, &t.UserID, &t.TeamID, &t.Name, &t.Abilities, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt, &t.UserName, &t.UserEmail, &t.Role)
 	return t, notFound(err)
 }
 

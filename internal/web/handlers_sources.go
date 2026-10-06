@@ -239,9 +239,19 @@ func (s *Server) sshKeyCreate(w http.ResponseWriter, r *http.Request) {
 	f.Set("key_name", name)
 	if name == "" || len(name) > 60 {
 		f.Fail("key_name", "Enter a name, up to 60 characters.")
-		s.renderKeys(w, r, http.StatusUnprocessableEntity, keysState{keyForm: f})
+		s.renderKeys(w, r, http.StatusUnprocessableEntity, pages.KeysTabKeys, keysState{keyForm: f})
 		return
 	}
+	// Sent again, this would make a second key pair of the same name.
+	if s.sentBefore(w, r, pages.KeysPath) {
+		return
+	}
+	made := false
+	defer func() {
+		if !made {
+			s.notSent(r)
+		}
+	}()
 	public, private, err := source.GenerateDeployKey("musdash")
 	if err != nil {
 		s.fail(w, r, err)
@@ -257,8 +267,9 @@ func (s *Server) sshKeyCreate(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	made = true
 	// Shown straight away, with the public half ready to copy.
-	s.renderKeys(w, r, http.StatusOK, keysState{newKey: &key})
+	s.renderKeys(w, r, http.StatusOK, pages.KeysTabKeys, keysState{newKey: &key})
 }
 
 func (s *Server) sshKeyDelete(w http.ResponseWriter, r *http.Request) {
@@ -275,5 +286,5 @@ func (s *Server) sshKeyDelete(w http.ResponseWriter, r *http.Request) {
 	default:
 		setFlash(w, r, ui.ToneOK, "Key deleted.")
 	}
-	redirect(w, r, "/keys#ssh-keys")
+	redirect(w, r, pages.KeysPath)
 }

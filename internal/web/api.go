@@ -41,7 +41,7 @@ const (
 
 // One wording for every request that does not carry a usable token: a
 // wrong one, an expired one, and one whose person was removed.
-const apiNoToken = "Send an API token as: Authorization: Bearer <token>. Tokens are made under Account."
+const apiNoToken = "Send an API token as: Authorization: Bearer <token>. Tokens are made under Keys & tokens."
 
 func apiError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -105,16 +105,28 @@ func (s *Server) apiToken(w http.ResponseWriter, r *http.Request) (db.APIToken, 
 // request carried.
 type apiHandler func(w http.ResponseWriter, r *http.Request, t db.APIToken)
 
-// api wraps an API route. needs is db.AbilityRead for a route that only
-// reads, db.AbilityDeploy for one that starts or stops something.
+// apiNeeds says, for a refusal, what a permission is called on the page
+// where tokens are made.
+var apiNeeds = map[string]string{
+	db.AbilityRead:   "Read",
+	db.AbilityWrite:  "Write",
+	db.AbilityDeploy: "Deploy",
+}
+
+// api wraps an API route. needs is the permission its token must have:
+// db.AbilityRead for a route that only reads, db.AbilityDeploy for one
+// that starts a deployment, db.AbilityWrite for one that starts or stops
+// something else. A permission is not implied by another: only root, and
+// reading sensitive data for reading, cover more than their own name
+// (db.APIToken.May).
 func (s *Server) api(needs string, h apiHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, ok := s.apiToken(w, r)
 		if !ok {
 			return
 		}
-		if needs == db.AbilityDeploy && !token.MayDeploy() {
-			apiError(w, http.StatusForbidden, "This token may only read. Make one that may deploy under Account.")
+		if !token.May(needs) {
+			apiError(w, http.StatusForbidden, "This token lacks the "+apiNeeds[needs]+" permission. Make one that has it under Keys & tokens.")
 			return
 		}
 		// Every route of this version is something a Member may do. A
@@ -200,8 +212,10 @@ type apiDatabase struct {
 	Image         string `json:"image"`
 	Status        string `json:"status"`
 	PublicPort    int    `json:"public_port,omitempty"`
-	CreatedAt     int64  `json:"created_at"`
-	UpdatedAt     int64  `json:"updated_at"`
+	// Password is there only for a token that reads sensitive data.
+	Password  string `json:"password,omitempty"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 func toAPIDatabase(m db.Database) apiDatabase {
@@ -260,6 +274,15 @@ type apiTag struct {
 	Services int    `json:"services"`
 }
 
+// apiEnv is one of an app's variables. Value is nil, and so left out, for
+// a token that does not read sensitive data: a variable that is set to
+// nothing and one whose value is withheld must not look the same.
+type apiEnv struct {
+	Key   string  `json:"key"`
+	Value *string `json:"value,omitempty"`
+	Build bool    `json:"build"`
+}
+
 // apiQueued is one thing the deploy endpoint was asked to deploy.
 type apiQueued struct {
 	Kind         string `json:"kind"` // "app" or "service"
@@ -280,7 +303,7 @@ func (s *Server) apiMe(w http.ResponseWriter, r *http.Request, t db.APIToken) {
 		"user":  map[string]string{"id": t.UserID, "name": t.UserName, "email": t.UserEmail},
 		"team":  map[string]string{"id": team.ID, "name": team.Name},
 		"role":  t.Role,
-		"token": map[string]any{"name": t.Name, "ability": t.Ability, "expires_at": t.ExpiresAt},
+		"token": map[string]any{"name": t.Name, "abilities": t.AbilityList(), "expires_at": t.ExpiresAt},
 	})
 }
 
@@ -385,6 +408,37 @@ func (s *Server) apiApp(w http.ResponseWriter, r *http.Request, t db.APIToken) {
 	if err != nil {
 		s.apiFail(w, r, err)
 		return
+	}
+	apiOK(w, http.StatusOK, out)
+}
+
+// apiAppEnvs lists an app's variables: their names for any token that
+// reads, their values as well for one that reads sensitive data. A value
+// is what was stored, so one that names a shared variable shows the name.
+// A preview has none of its own and answers with its parent's, which is
+// what it runs with.
+func (s *Server) apiAppEnvs(w http.ResponseWriter, r *http.Request, t db.APIToken) {
+	app, ok := s.apiLoadApp(w, r, t)
+	if !ok {
+		return
+	}
+	sealed, err := s.DB.ListEnvVars(r.Context(), db.KindApp, app.ConfigOwner())
+	if err != nil {
+		s.apiFail(w, r, err)
+		return
+	}
+	out := make([]apiEnv, 0, len(sealed))
+	for _, ev := range sealed {
+		item := apiEnv{Key: ev.Key, Build: ev.BuildTime}
+		if t.May(db.AbilitySensitive) {
+			plain, err := s.Box.OpenString(ev.Value)
+			if err != nil {
+				s.apiFail(w, r, errors.New("environment variable "+ev.Key+" cannot be decrypted"))
+				return
+			}
+			item.Value = &plain
+		}
+		out = append(out, item)
 	}
 	apiOK(w, http.StatusOK, out)
 }
@@ -518,9 +572,19 @@ func (s *Server) apiLoadDatabase(w http.ResponseWriter, r *http.Request, t db.AP
 }
 
 func (s *Server) apiDatabase(w http.ResponseWriter, r *http.Request, t db.APIToken) {
-	if m, ok := s.apiLoadDatabase(w, r, t); ok {
-		apiOK(w, http.StatusOK, toAPIDatabase(m))
+	m, ok := s.apiLoadDatabase(w, r, t)
+	if !ok {
+		return
 	}
+	out := toAPIDatabase(m)
+	if t.May(db.AbilitySensitive) && m.Password != "" {
+		var err error
+		if out.Password, err = s.Box.OpenString(m.Password); err != nil {
+			s.apiFail(w, r, errors.New("the database's password cannot be decrypted"))
+			return
+		}
+	}
+	apiOK(w, http.StatusOK, out)
 }
 
 func (s *Server) apiDatabaseStart(w http.ResponseWriter, r *http.Request, t db.APIToken) {

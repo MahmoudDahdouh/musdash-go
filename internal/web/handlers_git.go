@@ -7,7 +7,6 @@ import (
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
-	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
@@ -195,17 +194,7 @@ func (s *Server) appWebhookSecret(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	sealed, err := s.Box.SealString(secret.RandomHex(24))
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err := s.DB.SetAppWebhookSecret(r.Context(), sessionFrom(r).TeamID, v.App.ID, sealed); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	setFlash(w, r, ui.ToneOK, "Webhook secret saved. Enter it in the repository's webhook settings.")
-	redirect(w, r, "/keys#webhooks")
+	s.newHookSecret(w, r, appKeyOwner(v.App, ""))
 }
 
 // appBuildServer chooses the server a Git app's image is built on.
@@ -239,24 +228,12 @@ func (s *Server) appDeployToken(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	teamID := sessionFrom(r).TeamID
 	if r.PostFormValue("revoke") == "1" {
-		if err := s.DB.SetAppDeployToken(r.Context(), teamID, v.App.ID, ""); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		setFlash(w, r, ui.ToneOK, "Deploy token revoked.")
-		redirect(w, r, "/keys#deploy-tokens")
+		s.revokeDeployToken(w, r, appKeyOwner(v.App, ""))
 		return
 	}
-	token := "mdt_" + secret.RandomToken(32)
-	hash := secret.HashToken(token)
-	if err := s.DB.SetAppDeployToken(r.Context(), teamID, v.App.ID, hash); err != nil {
-		s.fail(w, r, err)
+	if s.sentBefore(w, r, pages.TokensPath) {
 		return
 	}
-	// Rendered directly rather than after a redirect, so the token is never
-	// placed in a cookie or a URL.
-	s.renderKeys(w, r, http.StatusOK, keysState{newDeploy: &pages.NewDeployToken{
-		Owner: v.App.Name, Token: token, URL: s.publicBase(r) + "/api/v1/deploy?uuid=" + v.App.ID}})
+	s.newDeployToken(w, r, appKeyOwner(v.App, ""))
 }

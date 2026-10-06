@@ -338,7 +338,7 @@ func (v NewResource) privateRepo(access string, has bool) string {
 		return v.base() + "/apps/new?source=git&access=" + access
 	}
 	if access == "key" {
-		return "/keys#ssh-keys"
+		return KeysPath
 	}
 	return "/sources"
 }

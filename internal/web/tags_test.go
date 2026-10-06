@@ -77,9 +77,15 @@ func TestTagsOnAppsAndServices(t *testing.T) {
 	}
 	res, body = a.get("/tags/nightly")
 	wantStatus(t, res, http.StatusOK)
-	for _, want := range []string{"/apps/" + web, "/apps/" + api, "/services/" + svc.ID, "/api/v1/deploy?tag=nightly", "Deploy all"} {
+	for _, want := range []string{"/apps/" + web, "/apps/" + api, "/services/" + svc.ID, "Deploy all"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the tag's page lacks %q", want)
+		}
+	}
+	// How a pipeline does the same is on the Keys page, not here.
+	for _, gone := range []string{"/api/v1/", "MUSDASH_TOKEN", "API token", "From a pipeline"} {
+		if strings.Contains(body, gone) {
+			t.Errorf("the tag's page still has %q", gone)
 		}
 	}
 	for _, path := range []string{"/tags/nosuchtag", "/tags/Not%20A%20Tag", "/tags/..%2f"} {

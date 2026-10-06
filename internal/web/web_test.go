@@ -771,7 +771,7 @@ func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
 		"/services/" + svc.ID, "/services/" + svc.ID + "/compose", "/services/" + svc.ID + "/settings",
 		"/", "/projects", base, base + "/e/" + env.ID, base + "/e/" + env.ID + "/new", base + "/domains", base + "/settings",
 		"/apps/" + appID, "/apps/" + appID + "/environment", "/apps/" + appID + "/environment/edit", "/apps/" + appID + "/storage", "/apps/" + appID + "/settings",
-		"/tags", "/keys", "/servers", "/sources", "/team", "/team/variables", "/account",
+		"/tags", "/keys", "/keys/tokens", "/servers", "/sources", "/team", "/team/variables", "/account",
 		"/settings", "/settings/storages", "/settings/notifications", "/_ui",
 	} {
 		res, body := a.get(page)

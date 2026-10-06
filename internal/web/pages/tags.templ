@@ -17,7 +17,7 @@ templ tagsCard(csrf, action string, tags, teamTags []string) {
 		<div class="card-head">
 			<div>
 				<h2 class="card-title">Tags</h2>
-				<p class="muted text-sm">Everything with the same tag can be deployed together, from the Tags page or with one API call.</p>
+				<p class="muted text-sm">Everything with the same tag can be deployed together, from the Tags page.</p>
 			</div>
 			@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-tags"}) {
 				Edit
@@ -103,7 +103,7 @@ func tagSummary(n int) string {
 
 // Tag is one tag: what has it, and what can be done with the tag itself.
 // f is the rename form.
-templ Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, base string, f ui.Form) {
+templ Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, f ui.Form) {
 	@ui.Layout(s) {
 		@ui.PageHeader(tag, tagSummary(len(apps)+len(services))) {
 			@ui.Button(ui.ButtonProps{Icon: "pencil", Opens: "rename-tag"}) {
@@ -130,17 +130,6 @@ templ Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, base str
 			} else {
 				@ResourceTiles(Resources{Apps: apps, Services: services})
 			}
-			<section class="card max-w-3xl">
-				<div class="card-head">
-					<div>
-						<h2 class="card-title">From a pipeline</h2>
-						<p class="muted text-sm">The same as the button, with an API token that may deploy.</p>
-					</div>
-				</div>
-				<div class="card-body">
-					@ui.Copyable("curl -X POST -H \"Authorization: Bearer $MUSDASH_TOKEN\" \"" + base + "/api/v1/deploy?tag=" + tag + "\"")
-				</div>
-			</section>
 		</div>
 		@ui.FormDialog(ui.DialogProps{ID: "rename-tag", Title: "Rename tag", Description: "What has the tag keeps it under the new name. A pipeline that deploys by the old name has to be changed.", Action: "/tags/" + tag, CSRF: s.CSRF, Submit: "Rename tag", Open: !f.OK()}) {
 			@ui.TextField(f, "Name", "Lowercase letters, numbers, dots and hyphens.", ui.InputProps{ID: "tag-name", Name: "name", Mono: true, Required: true, Value: tag, Autocomplete: "off", Attrs: templ.Attributes{"maxlength": "32"}})

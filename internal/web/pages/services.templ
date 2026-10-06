@@ -445,7 +445,6 @@ templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variable
 				@ui.FormCard("Source", "The repository the Compose file is read from.", v.base()+"/source", s.CSRF, "Save source") {
 					@serviceGitFields(git.Source, git.Choices, v.Service, false)
 				}
-				@keysLink("service")
 			}
 		</div>
 	}

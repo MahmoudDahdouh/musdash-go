@@ -22,6 +22,11 @@ type Shell struct {
 	Crumbs []Crumb
 	Flash  *Flash
 	Dev    bool
+	// Address is set on a page that is the answer to a POST and shows what
+	// that POST made: the address the same page has for a GET. The browser
+	// is given it in place of the POST's own (static/app.js), so that
+	// Refresh fetches the page instead of sending the form again.
+	Address string
 }
 
 // NavItem is one entry in the sidebar.
@@ -192,7 +197,12 @@ templ Layout(s Shell) {
 	<!DOCTYPE html>
 	<html lang="en">
 		@head(s.Title)
-		<body hx-headers={ csrfHeader(s.CSRF) }>
+		<body
+			hx-headers={ csrfHeader(s.CSRF) }
+			if s.Address != "" {
+				data-address={ s.Address }
+			}
+		>
 			<a href="#content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-paper focus:px-3 focus:py-2">Skip to content</a>
 			<div class="shell">
 				@sidebar(s)

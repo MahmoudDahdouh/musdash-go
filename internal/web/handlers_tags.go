@@ -150,7 +150,7 @@ func (s *Server) loadTag(w http.ResponseWriter, r *http.Request) (string, []db.A
 
 func (s *Server) renderTag(w http.ResponseWriter, r *http.Request, status int, tag string, apps []db.App, services []db.Service, f ui.Form) {
 	shell := s.shell(w, r, tag, "tags", ui.Crumb{Label: "Tags", Href: "/tags"}, ui.Crumb{Label: tag, Icon: "tag"})
-	s.render(w, r, status, pages.Tag(shell, tag, apps, services, s.publicBase(r), f))
+	s.render(w, r, status, pages.Tag(shell, tag, apps, services, f))
 }
 
 func (s *Server) tagShow(w http.ResponseWriter, r *http.Request) {

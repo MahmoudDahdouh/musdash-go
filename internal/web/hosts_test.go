@@ -46,9 +46,9 @@ func bitbucketPRBody(state, source, commit string, number string) string {
 // would: the Keys page lists it hidden, and Show asks for it.
 func (a *app) webhookSecret(appID string) string {
 	a.t.Helper()
-	res, _ := a.post("/keys", "/apps/"+appID+"/webhook-secret", nil)
-	wantRedirect(a.t, res, "/keys#webhooks")
-	_, page := a.get("/keys")
+	res, _ := a.post("/keys/tokens", "/apps/"+appID+"/webhook-secret", nil)
+	wantRedirect(a.t, res, "/keys/tokens")
+	_, page := a.get("/keys/tokens")
 	if !strings.Contains(page, "/webhooks/git/"+appID) || !strings.Contains(page, `hx-get="/apps/`+appID+`/webhook-secret"`) {
 		a.t.Fatal("the Keys page does not list the webhook address with a way to show its secret")
 	}
@@ -76,7 +76,7 @@ func TestWebhooksOfOtherGitHosts(t *testing.T) {
 	secret, otherSecret := a.webhookSecret(app.ID), a.webhookSecret(other.ID)
 
 	// The pages say where each host wants the address and the secret.
-	_, page := a.get("/keys")
+	_, page := a.get("/keys/tokens")
 	for _, want := range []string{"GitLab", "Secret token", "Bitbucket", "Gitea"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the Keys page does not mention %q", want)

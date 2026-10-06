@@ -41,7 +41,7 @@ func tagsCard(csrf, action string, tags, teamTags []string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<section class=\"card\" id=\"tags\"><div class=\"card-head\"><div><h2 class=\"card-title\">Tags</h2><p class=\"muted text-sm\">Everything with the same tag can be deployed together, from the Tags page or with one API call.</p></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<section class=\"card\" id=\"tags\"><div class=\"card-head\"><div><h2 class=\"card-title\">Tags</h2><p class=\"muted text-sm\">Everything with the same tag can be deployed together, from the Tags page.</p></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -493,7 +493,7 @@ func tagSummary(n int) string {
 
 // Tag is one tag: what has it, and what can be done with the tag itself.
 // f is the rename form.
-func Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, base string, f ui.Form) templ.Component {
+func Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, f ui.Form) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -677,15 +677,7 @@ func Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, base stri
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<section class=\"card max-w-3xl\"><div class=\"card-head\"><div><h2 class=\"card-title\">From a pipeline</h2><p class=\"muted text-sm\">The same as the button, with an API token that may deploy.</p></div></div><div class=\"card-body\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = ui.Copyable("curl -X POST -H \"Authorization: Bearer $MUSDASH_TOKEN\" \""+base+"/api/v1/deploy?tag="+tag+"\"").Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div></section></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

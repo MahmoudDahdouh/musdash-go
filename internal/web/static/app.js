@@ -26,6 +26,20 @@
     dialog.querySelector("[aria-invalid=true]")?.focus();
   });
 
+  // A page that answers a POST and shows what it made (a token, a key) says
+  // which address it has for a GET. Putting that in the address bar makes
+  // Refresh fetch the page, where it would have sent the form again.
+  if (document.body.dataset.address) history.replaceState(history.state, "", document.body.dataset.address);
+
+  // data-alone="<id>" on a checkbox: while it is checked, the other
+  // checkboxes inside that element cannot be, because it stands for them all.
+  const alone = (el) =>
+    document.getElementById(el.dataset.alone)?.querySelectorAll("input[type=checkbox]").forEach((box) => {
+      if (box !== el) box.disabled = el.checked;
+    });
+  on("change", "[data-alone]", alone);
+  document.querySelectorAll("[data-alone]").forEach(alone);
+
   // On a narrow screen the trail and a row of tabs are wider than the page
   // and scroll sideways. They start at where the person is: the end of the
   // trail, and the tab that is open.

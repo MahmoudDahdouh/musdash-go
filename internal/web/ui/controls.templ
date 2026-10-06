@@ -1,6 +1,10 @@
 package ui
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
+)
 
 // Button variants.
 const (
@@ -389,6 +393,17 @@ templ Radio(name, id, value string, checked bool, attrs templ.Attributes) {
 			{ children... }
 		</span>
 	</label>
+}
+
+// OnceField is the name of the field Once renders.
+const OnceField = "_once"
+
+// Once is the hidden field of a form that must be acted on once however
+// often the browser sends it: one whose answer shows a secret, and so
+// cannot be a redirect. The value is new each time the form is drawn; the
+// server remembers the ones it acted on.
+templ Once() {
+	<input type="hidden" name={ OnceField } value={ secret.RandomToken(12) }/>
 }
 
 // CSRF is the hidden field every state-changing form carries.

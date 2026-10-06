@@ -62,17 +62,6 @@ templ Sources(s ui.Shell, sources []db.GitSource, appForm ui.Form) {
 					@ui.TextField(appForm, "This dashboard's address", "GitHub sends you back here, and sends push events here. It must be reachable from the internet for pushes to deploy.", ui.InputProps{ID: "base", Mono: true, Required: true})
 				}
 			}
-			<section class="card" id="keys">
-				<div class="card-head">
-					<div>
-						<h2 class="card-title">Deploy keys</h2>
-						<p class="muted text-sm">For private repositories on any Git host: GitLab, Bitbucket, Gitea, Forgejo, GitHub or your own. They are kept with every other key and token.</p>
-					</div>
-					@ui.LinkButton("/keys#ssh-keys", ui.ButtonProps{Small: true, Icon: "key"}) {
-						Keys & tokens
-					}
-				</div>
-			</section>
 		</div>
 	}
 }

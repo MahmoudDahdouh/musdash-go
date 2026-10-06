@@ -126,6 +126,7 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 									<div class="flex flex-wrap justify-end gap-2">
 										<form method="post" action={ templ.SafeURL("/team/members/" + m.UserID + "/reset") }>
 											@ui.CSRF(s.CSRF)
+											@ui.Once()
 											@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "key", Attrs: ui.Ask("Make a reset link for "+m.Name+"?", "Whoever opens the link chooses a new password for this account. It is shown once, right after it is made.", "Make reset link", false)}) {
 												Reset link
 											}
@@ -191,6 +192,7 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 		</div>
 		if s.Admin {
 			@ui.FormDialog(ui.DialogProps{ID: "invite", Title: "Invite someone", Description: "You get a link to send them. It works once, within seven days, and is shown once.", Action: "/team/invitations", CSRF: s.CSRF, Submit: "Create invitation link", Open: !invite.OK()}) {
+				@ui.Once()
 				@ui.TextField(invite, "Email", "The address they will sign in with.", ui.InputProps{ID: "email", Type: "email", Required: true, Autocomplete: "off"})
 				if s.Owner {
 					@ui.Field(ui.FieldProps{Label: "Role", For: "role", Error: invite.E("role")}) {

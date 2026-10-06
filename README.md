@@ -150,7 +150,7 @@ Neither builder is installed on a server. The first build that needs one makes a
 A push deploys the app when auto-deploy is on:
 
 - Through a GitHub App, pushes arrive on their own; nothing to add.
-- Otherwise add a webhook to the repository. The **Keys & tokens** page shows the address and the secret of every app and service, and says where each host wants them.
+- Otherwise add a webhook to the repository. On the **Keys & tokens** page, under **API Tokens**, **Webhook secret** makes the secret for an app or a service; its row has the address and shows the secret, and the page says where each host wants them.
 
 | Host | The secret goes in | Events to send |
 |---|---|---|
@@ -160,7 +160,7 @@ A push deploys the app when auto-deploy is on:
 
 Private repositories on these hosts are read with a deploy key (Bitbucket calls it an access key). Bitbucket Data Center is not supported.
 
-A CI pipeline can start a deployment with the app's deploy token, made on the same page:
+A CI pipeline can start a deployment with the app's deploy token, made on the same page with **Deploy token**:
 
 ```bash
 curl -X POST -H "Authorization: Bearer $MUSDASH_DEPLOY_TOKEN" "https://musdash.example.com/api/v1/deploy?uuid=APP_ID"
@@ -214,7 +214,7 @@ A service also takes a Compose file that lives in a repository ("Compose file in
 - `build:` is allowed for contexts inside the repository. Images are built with `docker compose build`, one build at a time per server, and named by musdash.
 - Files of the repository can be mounted into containers (`./nginx.conf:/etc/nginx/nginx.conf`). They are mounted read-only, and a path that is a symbolic link in the repository is refused. Data that a container writes belongs in a named volume.
 - `include`, `extends` and `env_file` may name files of the repository.
-- A push to the branch redeploys it, through the GitHub App or through a webhook you add to the repository; a deploy token does the same for a CI pipeline. Both are on the Keys & tokens page.
+- A push to the branch redeploys it, through the GitHub App or through a webhook you add to the repository; a deploy token does the same for a CI pipeline. Both are made on the Keys & tokens page, under API Tokens.
 - Only the Compose file itself is scanned for `SERVICE_…` variables, not files it includes.
 
 ## More servers
@@ -311,7 +311,17 @@ A tag is a short name such as `nightly` or `frontend`. The Tags page makes, rena
 
 ## The API
 
-For scripts and pipelines. Under Keys & tokens, make a token: it asks for your password, is shown once, and is stored as a hash. A token may read, or read and deploy; it can have an end date; it acts as the person who made it. It stops working when they leave the team, change or reset their password, turn on two-step sign-in, or are given a higher role.
+For scripts and pipelines. On the Keys & tokens page, under API Tokens, make a token: it asks for your password, is shown once, and is stored as a hash. It can end in 7, 30, 60 or 90 days or a year, or never; it acts as the person who made it, within the permissions it was given, and never does what that person may not. It stops working when they leave the team, change or reset their password, turn on two-step sign-in, or are given a higher role.
+
+| Permission | What a token with it may do |
+|---|---|
+| Read (`read`) | Every `GET` below |
+| Write (`write`) | Start and stop apps, databases and services |
+| Deploy (`deploy`) | Start deployments |
+| Read sensitive data (`read:sensitive`) | Read, with the values of an app's variables and a database's password in the answers |
+| Root (`root`) | All of the above, and what later versions add |
+
+Each permission is its own: a token that only deploys can call none of the `GET` routes, which is what a pipeline wants. (A deploy call still answers with the ids of what it queued, and with `404` for an id that does not exist.) A token made before permissions existed keeps what it could do (`read`, or `read`, `write` and `deploy`).
 
 ```bash
 curl -H "Authorization: Bearer $MUSDASH_TOKEN" https://musdash.example.com/api/v1/apps
@@ -327,16 +337,17 @@ curl -X POST -H "Authorization: Bearer $MUSDASH_TOKEN" "https://musdash.example.
 | Servers, projects with their environments, tags | `GET /api/v1/servers`, `/projects`, `/tags` | read |
 | Apps | `GET /api/v1/apps` (`?tag=`), `/apps/{id}` | read |
 | An app's deployments, one deployment | `GET /api/v1/apps/{id}/deployments` (`?limit=`), `/deployments/{id}` | read |
-| Databases and services | `GET /api/v1/databases`, `/databases/{id}`, `/services`, `/services/{id}` | read |
-| Deploy or stop an app | `POST /api/v1/apps/{id}/deploy`, `/apps/{id}/stop` | deploy |
-| Start or stop a database | `POST /api/v1/databases/{id}/start`, `/databases/{id}/stop` | deploy |
-| Deploy or stop a service | `POST /api/v1/services/{id}/deploy`, `/services/{id}/stop` | deploy |
+| An app's variables: their names, and their values for `read:sensitive` | `GET /api/v1/apps/{id}/envs` | read |
+| Databases and services (a database's `password` for `read:sensitive`) | `GET /api/v1/databases`, `/databases/{id}`, `/services`, `/services/{id}` | read |
+| Deploy an app or a service | `POST /api/v1/apps/{id}/deploy`, `/services/{id}/deploy` | deploy |
 | Deploy several at once | `POST /api/v1/deploy?uuid=ID,ID&tag=TAG,TAG` | deploy |
+| Stop an app or a service | `POST /api/v1/apps/{id}/stop`, `/services/{id}/stop` | write |
+| Start or stop a database | `POST /api/v1/databases/{id}/start`, `/databases/{id}/stop` | write |
 
 - Answers are JSON; an error is `{"error": "…"}` with a 4xx or 5xx status. Times are Unix seconds.
 - A deploy answers `202` with the deployment's id, which `GET /api/v1/deployments/{id}` follows until its `status` is `success` or `failed`. When a deployment that had not started yet will do what the call asked for, the status is `waiting` and nothing more is queued.
 - `POST /api/v1/deploy` deploys nothing when one of its ids is unknown.
-- The API never returns a variable's value, a password or a key.
+- The API never returns a key, a hash or a webhook secret, and returns a variable's value or a database's password only to a token with `read:sensitive`. A value that names a shared variable (`{{team.NAME}}`) is returned as that name. `GET /api/v1/me` lists the token's permissions as `abilities`.
 - It reads and operates. Creating and configuring are done in the dashboard.
 - Limits: 120 calls a minute for a token and 600 for an address; beyond that the answer is `429` with `Retry-After`.
 - The API takes a token and nothing else: a browser's session is not accepted there, and a token is not accepted by the dashboard's pages.
@@ -444,7 +455,7 @@ How the pages are laid out:
 - The bar at the top is where you are: the project, its environment and the resource, each a switcher to the others beside it. An environment is part of the address (`/projects/<id>/e/<environment>`); a project's own address leads to its first one.
 - Projects, and what is in an environment, are tiles. Apps, databases and services are all resources and are added from one page, **Add resource**.
 - A form of up to five fields is a dialog, opened from a button beside what it changes. Anything that stops, removes or replaces something asks first; deleting a project, an app, a database or a service asks for its name.
-- Keys, tokens and webhook secrets of the whole team are on one page, **Keys & tokens**. A project's domains are on its **Domains** tab.
+- Keys, tokens and webhook secrets of the whole team are on one page, **Keys & tokens**, in two tabs: **Private Keys** (SSH key pairs) and **API Tokens** (a person's API tokens, deploy tokens and webhook secrets, in one table). No other page holds them or points at them. A project's domains are on its **Domains** tab.
 
 The design system lives in two places:
 

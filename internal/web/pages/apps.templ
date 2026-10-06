@@ -763,7 +763,6 @@ templ AppSettings(s ui.Shell, v AppView, general, domain, src, previews ui.Form,
 					}
 				}
 			}
-			@keysLink("app")
 			if v.App.Source == db.SourceGit {
 				@previewsCard(s.CSRF, v, previews)
 			}
