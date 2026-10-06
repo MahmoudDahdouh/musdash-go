@@ -880,12 +880,79 @@ func TestUnknownPathIs404(t *testing.T) {
 	}
 }
 
-func TestMemReadout(t *testing.T) {
+// between is the part of a page from one mark to the next. A page that
+// lacks either fails the test here, with its address.
+func between(t *testing.T, page, body, from, to string) string {
+	t.Helper()
+	i := strings.Index(body, from)
+	if i < 0 {
+		t.Fatalf("%s: no %s", page, from)
+	}
+	j := strings.Index(body[i:], to)
+	if j < 0 {
+		t.Fatalf("%s: no %s after %s", page, to, from)
+	}
+	return body[i : i+j]
+}
+
+// TestHeader pins the bar at the top: the team first, as a switcher, and
+// the person last, with a menu that holds the account and Sign out. The
+// sidebar holds neither any more.
+func TestHeader(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
-	res, body := a.get("/sys/mem")
+	projectID, env := a.project("Shop")
+	teamStep := regexp.MustCompile(`(?s)<nav class="crumbs"[^>]*>\s*<div class="select" data-select>\s*<button[^>]*id="crumb-0"[^>]*popovertarget="crumb-0-menu".*?Default team.*?hx-get="/switch/teams"`)
+	for _, page := range []string{"/", "/projects", "/projects/" + projectID + "/e/" + env.ID, "/account", "/nosuchpage"} {
+		_, body := a.get(page)
+		if !teamStep.MatchString(body) {
+			t.Errorf("%s: the trail does not start with the team switcher", page)
+		}
+		bar := between(t, page, body, `<div class="topbar">`, `<main class="page"`)
+		for _, want := range []string{`id="usermenu"`, `href="/account"`, `action="/logout"`, `name="_csrf"`, "data-confirm=", "Owner", testEmail, `href="/settings"`} {
+			if !strings.Contains(bar, want) {
+				t.Errorf("%s: the bar lacks %s", page, want)
+			}
+		}
+		side := between(t, page, body, `<aside class="sidebar"`, `</aside>`)
+		for _, gone := range []string{`action="/logout"`, `href="/account"`, "is using", "/sys/mem"} {
+			if strings.Contains(side, gone) {
+				t.Errorf("%s: the sidebar still holds %s", page, gone)
+			}
+		}
+	}
+	// A page that has a trail of its own keeps it, after the team.
+	_, body := a.get("/projects/" + projectID + "/e/" + env.ID)
+	if !regexp.MustCompile(`(?s)Default team.*?crumb-sep.*?href="/projects".*?Shop`).MatchString(body) {
+		t.Error("the project's trail does not follow the team")
+	}
+	_, body = a.get("/account")
+	if !regexp.MustCompile(`href="/account"[^>]*aria-current="page"`).MatchString(body) {
+		t.Error("the account page is not marked in the person's menu")
+	}
+
+	// Settings is an Admin's, in the menu as in the sidebar.
+	member := a.newPerson("Member", db.RoleMember)
+	if _, body := member.get("/"); strings.Contains(body, `href="/settings"`) || !strings.Contains(body, `id="usermenu"`) {
+		t.Error("a Member's menu: Settings shown, or no menu")
+	}
+
+	// What the team switcher lists: the one team, where the person is, and
+	// the way to its page.
+	res, body := a.get("/switch/teams")
 	wantStatus(t, res, http.StatusOK)
-	if !regexp.MustCompile(`>\d+ MB<`).MatchString(body) {
-		t.Fatalf("readout: %s", body)
+	if !regexp.MustCompile(`(?s)href="/"[^>]*aria-selected="true".*?Default team.*?href="/team"`).MatchString(body) {
+		t.Fatalf("team options: %s", body)
+	}
+	// A renamed team is named so on the next page.
+	res, _ = a.post("/team", "/team", url.Values{"name": {"Acme"}})
+	wantRedirect(t, res, "/team")
+	if _, body = a.get("/"); !strings.Contains(body, "Acme") || strings.Contains(body, "Default team") {
+		t.Error("the bar does not name the renamed team")
+	}
+
+	// The memory line went, and its route with it.
+	if res, _ = a.get("/sys/mem"); res.StatusCode != http.StatusNotFound {
+		t.Errorf("/sys/mem: status %d", res.StatusCode)
 	}
 }

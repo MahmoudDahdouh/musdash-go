@@ -67,6 +67,14 @@ func (s *Server) menuNote(w http.ResponseWriter, r *http.Request, text string) {
 	s.render(w, r, http.StatusOK, ui.MenuNote(text, true))
 }
 
+// switchTeams answers the team switcher, the first step of every trail. An
+// install has one team, so the list is the one the person is in: the step
+// is where another would be listed. The name is the session's own, which
+// was read for this request.
+func (s *Server) switchTeams(w http.ResponseWriter, r *http.Request) {
+	s.render(w, r, http.StatusOK, pages.TeamOptions(sessionFrom(r).TeamName))
+}
+
 // switchEnvironments answers the environment switcher: the project's
 // environments, each a link to its page.
 func (s *Server) switchEnvironments(w http.ResponseWriter, r *http.Request) {

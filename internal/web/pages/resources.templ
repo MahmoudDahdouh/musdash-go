@@ -70,6 +70,14 @@ templ EnvironmentOptions(p db.Project, envs []db.Environment, at string) {
 	@ui.MenuAction("/projects/"+p.ID+"/settings#environments", "settings", "Manage environments")
 }
 
+// TeamOptions is what the team switcher lists: the team the person is in,
+// which leads to Home, the page that is the team's own.
+templ TeamOptions(team string) {
+	@ui.SwitchOption("/", "users", team, true)
+	@ui.MenuSep()
+	@ui.MenuAction("/team", "settings", "Manage team")
+}
+
 // ResourceOptions is what the resource switcher lists. at is the current
 // one, as "kind:id".
 templ ResourceOptions(env db.Environment, res Resources, at string) {

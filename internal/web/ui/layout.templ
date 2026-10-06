@@ -3,6 +3,8 @@ package ui
 import (
 	"encoding/json"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/static"
 )
@@ -11,6 +13,7 @@ import (
 type Shell struct {
 	Title  string
 	Active string // key of the current navigation item
+	Team   string // the team the person is in: the first step of the trail
 	Name   string // signed-in person's name
 	Email  string
 	// Admin and Owner say what the person's role lets them do, so a page
@@ -18,7 +21,6 @@ type Shell struct {
 	Admin  bool
 	Owner  bool
 	CSRF   string
-	MemMB  int // musdash's own memory use, shown in the sidebar
 	Crumbs []Crumb
 	Flash  *Flash
 	Dev    bool
@@ -92,13 +94,29 @@ func navGroups(s Shell) []NavGroup {
 	return out
 }
 
-// trail is what the bar at the top shows: the page's crumbs or, for a page
-// that has none, its own title, so the bar always says where you are.
+// trail is what the bar at the top shows: the team, which is the root of
+// everything a person can open, then the page's crumbs or, for a page that
+// has none, its own title, so the bar always says where you are. The team
+// is put in front here and not by the handlers, so no page can leave it
+// out. It is a switcher: the place another team would be chosen.
 func trail(s Shell) []Crumb {
-	if len(s.Crumbs) > 0 || s.Title == "" {
-		return s.Crumbs
+	steps := s.Crumbs
+	if len(steps) == 0 && s.Title != "" {
+		steps = []Crumb{{Label: s.Title}}
 	}
-	return []Crumb{{Label: s.Title}}
+	if s.Team == "" {
+		return steps
+	}
+	return append([]Crumb{{Label: s.Team, Icon: "users", Menu: "/switch/teams"}}, steps...)
+}
+
+// initial is the letter in the person's mark.
+func initial(s Shell) string {
+	r, _ := utf8.DecodeRuneInString(strings.TrimSpace(orDefault(s.Name, s.Email)))
+	if r == utf8.RuneError {
+		return "?"
+	}
+	return strings.ToUpper(string(r))
 }
 
 func csrfHeader(token string) string {
@@ -126,11 +144,6 @@ templ head(title string) {
 		<script src={ static.URL("htmx-sse.js") } defer></script>
 		<script src={ static.URL("app.js") } defer></script>
 	</head>
-}
-
-// MemReadout is the sidebar's live footprint figure. It refreshes itself.
-templ MemReadout(mb int) {
-	<span class="fact" id="mem" hx-get="/sys/mem" hx-trigger="every 30s" hx-swap="outerHTML">{ strconv.Itoa(mb) } MB</span>
 }
 
 templ sidebar(s Shell) {
@@ -166,30 +179,68 @@ templ sidebar(s Shell) {
 				</div>
 			}
 		</nav>
-		<div class="mt-auto grid gap-0.5 border-t border-line px-4 py-2">
-			<a
-				class="nav-item"
-				href="/account"
-				if s.Active == "account" {
-					aria-current="page"
-				}
-			>
-				@Icon("user")
-				<span class="min-w-0 flex-1 truncate">{ orDefault(s.Name, s.Email) }</span>
-			</a>
-			<form method="post" action="/logout">
-				@CSRF(s.CSRF)
-				<button type="submit" class="nav-item w-full cursor-pointer" data-confirm="You will need your password to come back in." data-confirm-title="Sign out of musdash?" data-confirm-submit="Sign out">
-					@Icon("log-out")
-					Sign out
-				</button>
-			</form>
-			<p class="flex items-center justify-between px-2 pt-2 pb-1 text-xs text-ink-mute" title="Memory musdash itself is using right now">
-				<span>musdash is using</span>
-				@MemReadout(s.MemMB)
-			</p>
-		</div>
 	</aside>
+}
+
+// userMenu is the end of the bar: who is signed in, and what is theirs
+// rather than the team's. It is built like a switcher, so static/app.js
+// places and steers it the same way. Sign out is a form, so the form is in
+// the menu with its button: the question it asks is read from there.
+templ userMenu(s Shell) {
+	<div class="select topbar-end" data-select>
+		<button
+			type="button"
+			id="usermenu"
+			class="user-button"
+			aria-label={ "Account: " + orDefault(s.Name, s.Email) }
+			aria-haspopup="listbox"
+			aria-expanded="false"
+			aria-controls="usermenu-list"
+			popovertarget="usermenu-menu"
+		>
+			<span class="avatar" aria-hidden="true">{ initial(s) }</span>
+			<span class="hidden truncate sm:block">{ orDefault(s.Name, s.Email) }</span>
+			@Icon("chevron-down")
+		</button>
+		<div class="menu" id="usermenu-menu" popover data-menu-end>
+			<div class="menu-head">
+				if s.Name != "" {
+					<p class="truncate font-semibold">{ s.Name }</p>
+				}
+				<p class="truncate text-sm text-ink-mute">{ s.Email }</p>
+			</div>
+			<div class="menu-options" id="usermenu-list" role="listbox" aria-labelledby="usermenu">
+				@userMenuLink("/account", "user", "Account", s.Active == "account")
+				if s.Admin {
+					@userMenuLink("/settings", "settings", "Settings", s.Active == "settings")
+				}
+				@MenuSep()
+				<form method="post" action="/logout">
+					@CSRF(s.CSRF)
+					<button type="submit" class="menu-item" role="option" aria-selected="false" tabindex="-1" data-confirm="You will need your password to come back in." data-confirm-title="Sign out of musdash?" data-confirm-submit="Sign out">
+						@Icon("log-out", "text-ink-mute")
+						<span class="min-w-0 flex-1 truncate">Sign out</span>
+					</button>
+				</form>
+			</div>
+		</div>
+	</div>
+}
+
+templ userMenuLink(href, icon, label string, current bool) {
+	<a
+		class="menu-item"
+		role="option"
+		href={ templ.SafeURL(href) }
+		aria-selected="false"
+		if current {
+			aria-current="page"
+		}
+		tabindex="-1"
+	>
+		@Icon(icon, "text-ink-mute")
+		<span class="min-w-0 flex-1 truncate">{ label }</span>
+	</a>
 }
 
 // Layout is the signed-in application frame.
@@ -208,12 +259,11 @@ templ Layout(s Shell) {
 				@sidebar(s)
 				<div class="main">
 					<div class="topbar">
-						<div class="topbar-inner">
-							<button type="button" class="btn btn-ghost btn-icon topbar-menu" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Menu">
-								@Icon("menu")
-							</button>
-							@Trail(trail(s))
-						</div>
+						<button type="button" class="btn btn-ghost btn-icon topbar-menu" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Menu">
+							@Icon("menu")
+						</button>
+						@Trail(trail(s))
+						@userMenu(s)
 					</div>
 					<main class="page" id="content">
 						{ children... }

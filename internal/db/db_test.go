@@ -253,6 +253,17 @@ func TestSessionLifecycle(t *testing.T) {
 	if err != nil || got.User.Email != "a@example.com" || got.Role != RoleOwner {
 		t.Fatalf("live session: %+v %v", got, err)
 	}
+	// The team's name comes with the session, as it is now: the bar at the
+	// top of every page starts with it.
+	if got.TeamName != "Default team" {
+		t.Fatalf("team name = %q", got.TeamName)
+	}
+	if err := d.RenameTeam(ctx, team, "Shop"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = d.SessionByHash(ctx, "live"); got.TeamName != "Shop" {
+		t.Fatalf("team name after a rename = %q", got.TeamName)
+	}
 	if _, err := d.SessionByHash(ctx, "dead"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expired session must not load, got %v", err)
 	}

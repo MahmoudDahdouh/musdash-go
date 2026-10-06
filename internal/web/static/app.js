@@ -68,6 +68,10 @@
     const ok = dialog.querySelector("#confirm-ok");
     ok.textContent = el.dataset.confirmSubmit || "Confirm";
     ok.className = el.dataset.confirmTone === "danger" ? "btn btn-danger" : "btn btn-primary";
+    // A dialog gives the focus back to what had it when it opened, and a
+    // button in a menu is not there to take it once the menu has shut. Its
+    // menu's own button is.
+    el.closest("[data-select]")?.querySelector("[popovertarget]")?.focus();
     dialog.showModal();
   });
   on("click", "#confirm-ok", (ok) => {
@@ -192,7 +196,11 @@
     // is filtered stays against it.
     list.style.top = up ? "auto" : r.bottom + gap + "px";
     list.style.bottom = up ? innerHeight - r.top + gap + "px" : "auto";
-    list.style.left = Math.max(edge, Math.min(r.left, innerWidth - list.offsetWidth - edge)) + "px";
+    // By the button's left edge, or by its right one for a menu marked
+    // data-menu-end: one whose button is at the end of a row, where a menu
+    // hung from the left edge would be pushed back in by the window.
+    const left = list.dataset.menuEnd === undefined ? r.left : r.right - list.offsetWidth;
+    list.style.left = Math.max(edge, Math.min(left, innerWidth - list.offsetWidth - edge)) + "px";
   };
   const setActive = (list, option, reveal = true) => {
     const filter = list.querySelector("[data-select-filter]");
@@ -279,7 +287,9 @@
     box.querySelector("[popovertarget]").focus();
     // A Picker's option has filled its field already (data-fill), a
     // switcher's is a link the browser now follows: no value here to keep.
-    const input = box.querySelector("input[type=hidden]");
+    // Only the box's own input says so: a form inside a menu has hidden
+    // fields too.
+    const input = box.querySelector(":scope > input[type=hidden]");
     if (!input) return;
     optionsOf(list).forEach((o) => o.setAttribute("aria-selected", String(o === el)));
     box.querySelector("[data-select-label]").textContent = el.textContent.trim();

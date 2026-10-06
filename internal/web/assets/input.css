@@ -1443,27 +1443,31 @@
   .main {
     min-width: 0;
   }
-  /* The bar at the top of every page says where you are: the trail of
-     places above this one, some of them switchers to the places beside it.
-     On a small screen it also opens the sidebar. Its inner box has the
-     page's width, so the trail starts where the page's content does. */
+  /* The bar at the top of every page says where you are and who you are:
+     the trail from the team down to this place, some of its steps switchers
+     to the places beside them, and at the far end the person's own menu. On
+     a small screen it also opens the sidebar. It has no box of the page's
+     width inside it: the trail starts where the bar does, whatever the
+     window, and the person's menu ends where the bar ends. */
   .topbar {
     position: sticky;
     top: 0;
     z-index: 30;
-    height: 48px;
-    background: var(--color-sunk);
-    border-bottom: 1px solid var(--color-line-strong);
-  }
-  .topbar-inner {
     display: flex;
     align-items: center;
     gap: 8px;
-    width: 100%;
-    max-width: 68rem;
-    height: 100%;
-    margin: 0 auto;
+    height: 48px;
     padding: 0 12px;
+    background: var(--color-sunk);
+    border-bottom: 1px solid var(--color-line-strong);
+  }
+  /* The trail has the room the two ends leave, and scrolls inside it. */
+  .topbar > .crumbs {
+    flex: 1;
+  }
+  .topbar-end {
+    flex: none;
+    margin-left: auto;
   }
   .page {
     width: 100%;
@@ -1479,8 +1483,8 @@
     .main {
       margin-left: var(--size-sidebar);
     }
-    .topbar-inner {
-      padding: 0 26px;
+    .topbar {
+      padding: 0 16px;
     }
     .topbar-menu {
       display: none;
@@ -1490,8 +1494,8 @@
     }
   }
   /* The sidebar's entries in groups: a gap and a heading tell one purpose
-     from the next. The nav scrolls on a short window; the brand above it and
-     the account below it stay put. */
+     from the next. The nav scrolls on a short window; the brand above it
+     stays put. */
   .nav {
     display: grid;
     align-content: start;
@@ -1593,6 +1597,49 @@
   }
   button.crumb .icon:last-child {
     color: var(--color-ink-mute);
+  }
+  /* The person at the end of the bar: their mark, their name where there
+     is room for it, and a menu. */
+  .user-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 14rem;
+    height: var(--size-control-sm);
+    padding: 0 6px 0 4px;
+    border-radius: var(--radius-md);
+    color: var(--color-ink);
+    font-size: var(--text-base);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .user-button:hover,
+  .user-button[aria-expanded="true"] {
+    background: var(--color-veil);
+  }
+  .user-button .icon {
+    color: var(--color-ink-mute);
+  }
+  /* A person's mark is their initial: nothing to store or fetch. */
+  .avatar {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-full);
+    background: var(--color-brand-600);
+    color: var(--color-white);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1;
+  }
+  /* What a menu says before its options: whose it is. */
+  .menu-head {
+    flex: none;
+    min-width: 0;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--color-line);
   }
   /* A rule between the places a menu lists and what else it offers. */
   .menu-sep {

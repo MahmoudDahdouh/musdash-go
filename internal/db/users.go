@@ -38,9 +38,10 @@ type Session struct {
 	TeamID    string
 	CSRFToken string
 	ExpiresAt int64
-	// Joined from users and team_members for the request context.
-	User User
-	Role string
+	// Joined from users, team_members and teams for the request context.
+	User     User
+	Role     string
+	TeamName string
 }
 
 const (
@@ -135,14 +136,15 @@ func (d *DB) SessionByHash(ctx context.Context, tokenHash string) (Session, erro
 	var s Session
 	err := d.QueryRowContext(ctx, `
 		SELECT s.token_hash, s.user_id, s.team_id, s.csrf_token, s.expires_at,
-		       u.id, u.email, u.name, u.password_hash, u.created_at, u.totp_secret, u.totp_pending, u.totp_step, m.role
+		       u.id, u.email, u.name, u.password_hash, u.created_at, u.totp_secret, u.totp_pending, u.totp_step, m.role, t.name
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		JOIN team_members m ON m.team_id = s.team_id AND m.user_id = s.user_id
+		JOIN teams t ON t.id = s.team_id
 		WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash, now()).
 		Scan(&s.TokenHash, &s.UserID, &s.TeamID, &s.CSRFToken, &s.ExpiresAt,
 			&s.User.ID, &s.User.Email, &s.User.Name, &s.User.PasswordHash, &s.User.CreatedAt,
-			&s.User.TOTPSecret, &s.User.TOTPPending, &s.User.TOTPStep, &s.Role)
+			&s.User.TOTPSecret, &s.User.TOTPPending, &s.User.TOTPStep, &s.Role, &s.TeamName)
 	return s, notFound(err)
 }
 

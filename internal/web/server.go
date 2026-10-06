@@ -21,7 +21,6 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
 	"github.com/MahmoudDahdouh/musdash-go/internal/source"
-	"github.com/MahmoudDahdouh/musdash-go/internal/sysmem"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/static"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
@@ -151,7 +150,6 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /account/two-step/off", member, s.twoStepOff)
 	handle("POST /account/tokens", member, s.tokenCreate)
 	handle("POST /account/tokens/{id}/delete", member, s.tokenDelete)
-	handle("GET /sys/mem", member, s.memReadout)
 
 	handle("GET /{$}", member, s.home)
 	handle("GET /home/live", member, s.homeLive)
@@ -162,6 +160,7 @@ func (s *Server) Handler() http.Handler {
 	handle("GET /projects/{id}/e/{env}/new", member, s.resourceNew)
 	handle("GET /projects/{id}/switch/environments", member, s.switchEnvironments)
 	handle("GET /environments/{id}/switch/resources", member, s.switchResources)
+	handle("GET /switch/teams", member, s.switchTeams)
 	handle("POST /projects/{id}", member, s.projectUpdate)
 	handle("GET /projects/{id}/settings", member, s.projectSettings)
 	handle("GET /projects/{id}/domains", member, s.projectDomains)
@@ -356,20 +355,16 @@ func (s *Server) shell(w http.ResponseWriter, r *http.Request, title, active str
 	return ui.Shell{
 		Title:  title,
 		Active: active,
+		Team:   sess.TeamName,
 		Name:   sess.User.Name,
 		Email:  sess.User.Email,
 		Admin:  db.RoleRank(sess.Role) >= db.RoleRank(db.RoleAdmin),
 		Owner:  sess.Role == db.RoleOwner,
 		CSRF:   sess.CSRFToken,
-		MemMB:  sysmem.MB(sysmem.RSS()),
 		Crumbs: crumbs,
 		Flash:  takeFlash(w, r),
 		Dev:    s.Cfg.Dev,
 	}
-}
-
-func (s *Server) memReadout(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, http.StatusOK, ui.MemReadout(sysmem.MB(sysmem.RSS())))
 }
 
 func (s *Server) gallery(w http.ResponseWriter, r *http.Request) {
