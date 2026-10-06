@@ -766,6 +766,9 @@ func TestCleanup(t *testing.T) {
 	for _, want := range []string{
 		"\ndocker image prune --force\n",
 		"\ndocker builder prune --force --filter until=168h\n",
+		"\ndocker builder prune --force --max-used-space 2GB\n",
+		// The disk is still full after that: the rest of the cache goes.
+		"\ndocker builder prune --force\n",
 		"\ndocker rm --force musdash-gone-app\n",
 		"\ndocker rm --force musdash-db-gone\n",
 		"\ndocker network rm musdash-goneenvaaaaa\n",
@@ -784,6 +787,34 @@ func TestCleanup(t *testing.T) {
 	}
 	if msg := e.told(1); !strings.Contains(msg, "is 91% full") {
 		t.Fatalf("notification: %s", msg)
+	}
+}
+
+// The build cache is kept to a size. An older Docker knows the flag by
+// another name, and a disk with room keeps what cache is left.
+func TestCleanupTrimsTheBuildCache(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		switch {
+		case strings.Contains(line, "--max-used-space"):
+			return "", runnertest.Exit("docker", 125, "unknown flag: --max-used-space\nSee 'docker builder prune --help'.")
+		case strings.HasPrefix(line, "docker info"):
+			return "/var/lib/docker\n", nil
+		case strings.HasPrefix(line, "df "):
+			return "Filesystem     1024-blocks     Used Available Capacity Mounted on\n/dev/sda1         80000000 40000000  40000000      50% /\n", nil
+		}
+		return "", nil
+	}
+	if err := e.o.runCleanupJob(ctx, []byte(`{"server_id":"`+e.server.ID+`"}`)); err != nil {
+		t.Fatal(err)
+	}
+	all := "\n" + strings.Join(e.fake.Calls(), "\n") + "\n"
+	if !strings.Contains(all, "\ndocker builder prune --force --keep-storage 2GB\n") {
+		t.Errorf("the older flag was not tried:%s", all)
+	}
+	if strings.Contains(all, "\ndocker builder prune --force\n") {
+		t.Errorf("all of the cache was removed from a disk with room:%s", all)
 	}
 }
 

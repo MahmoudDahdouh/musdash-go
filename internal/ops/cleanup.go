@@ -26,6 +26,11 @@ const (
 	diskWarnPercent = 85
 	// Build cache older than this is removed.
 	buildCacheAge = "168h"
+	// buildCacheKeep is how much build cache a server keeps whatever its
+	// age. A week of builds on a small server is several gigabytes, on a
+	// disk that has twenty; this much keeps the layers of the last builds,
+	// which is what makes the next one fast.
+	buildCacheKeep = "2GB"
 )
 
 type cleanupPayload struct {
@@ -91,29 +96,53 @@ func (o *Ops) runCleanupJob(ctx context.Context, raw []byte) error {
 	// Only what nothing refers to. `image prune --all` would also take the
 	// image of every stopped app and database, and the images kept to roll
 	// back to.
-	for _, c := range [][]string{
-		{"image", "prune", "--force"},
-		{"builder", "prune", "--force", "--filter", "until=" + buildCacheAge},
-	} {
-		out, err := r.Output(ctx, runner.Cmd{Name: "docker", Args: c})
-		if err != nil {
-			o.Log.Warn("docker clean-up", "server", server.Name, "command", strings.Join(c[:2], " "), "err", err)
-			continue
-		}
-		o.Log.Info("docker clean-up", "server", server.Name, "command", strings.Join(c[:2], " "), "result", lastLine(string(out)))
-	}
+	o.dockerCleanup(ctx, server, r, "image", "prune", "--force")
+	o.dockerCleanup(ctx, server, r, "builder", "prune", "--force", "--filter", "until="+buildCacheAge)
+	o.trimBuildCache(ctx, server, r)
 	o.removeOrphans(ctx, server, docker.Client{R: r})
 	o.removeNetworks(ctx, server, docker.Client{R: r})
 
-	if used, ok := diskUsed(ctx, r); ok && used >= diskWarnPercent {
+	used, ok := diskUsed(ctx, r)
+	if ok && used >= diskWarnPercent {
+		// Build cache costs only the time of the next build. A full disk
+		// stops deployments, and databases with them.
+		o.dockerCleanup(ctx, server, r, "builder", "prune", "--force")
+		used, ok = diskUsed(ctx, r)
+	}
+	if ok && used >= diskWarnPercent {
 		o.Notify(server.TeamID, notify.Event{
 			Kind: notify.EventDisk, At: time.Now(),
 			Title: fmt.Sprintf("The disk of %s is %d%% full", server.Name, used),
-			Body:  "Docker keeps images, volumes and build cache there. Unused images and old build cache were just removed; what is left is in use or is data.",
+			Body:  "Docker keeps images, volumes and build cache there. Unused images and the build cache were just removed; what is left is in use or is data.",
 			URL:   "/servers",
 		})
 	}
 	return nil
+}
+
+// dockerCleanup runs one docker command of the clean-up and logs what it
+// freed. A command that fails is logged and the clean-up goes on.
+func (o *Ops) dockerCleanup(ctx context.Context, server db.Server, r runner.Runner, args ...string) error {
+	out, err := r.Output(ctx, runner.Cmd{Name: "docker", Args: args})
+	if err != nil {
+		o.Log.Warn("docker clean-up", "server", server.Name, "command", strings.Join(args[:2], " "), "err", err)
+		return err
+	}
+	o.Log.Info("docker clean-up", "server", server.Name, "command", strings.Join(args[:2], " "), "result", lastLine(string(out)))
+	return nil
+}
+
+// trimBuildCache removes build cache beyond buildCacheKeep, the least
+// recently used first. Age alone does not bound it: a busy week of builds
+// fills a small disk before any of it is a week old.
+func (o *Ops) trimBuildCache(ctx context.Context, server db.Server, r runner.Runner) {
+	err := o.dockerCleanup(ctx, server, r, "builder", "prune", "--force", "--max-used-space", buildCacheKeep)
+	// The flag had another name before Docker 28, which newer ones still
+	// take but say they will drop.
+	var exit *runner.ExitError
+	if errors.As(err, &exit) && strings.Contains(exit.Stderr, "unknown flag") {
+		o.dockerCleanup(ctx, server, r, "builder", "prune", "--force", "--keep-storage", buildCacheKeep)
+	}
 }
 
 // removeOrphans removes stopped containers whose app, database or service
