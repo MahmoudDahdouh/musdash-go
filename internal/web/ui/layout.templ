@@ -183,64 +183,35 @@ templ sidebar(s Shell) {
 }
 
 // userMenu is the end of the bar: who is signed in, and what is theirs
-// rather than the team's. It is built like a switcher, so static/app.js
-// places and steers it the same way. Sign out is a form, so the form is in
-// the menu with its button: the question it asks is read from there.
+// rather than the team's. Sign out is a form, so the form is in the menu
+// with its button: the question it asks is read from there.
 templ userMenu(s Shell) {
-	<div class="select topbar-end" data-select>
-		<button
-			type="button"
-			id="usermenu"
-			class="user-button"
-			aria-label={ "Account: " + orDefault(s.Name, s.Email) }
-			aria-haspopup="listbox"
-			aria-expanded="false"
-			aria-controls="usermenu-list"
-			popovertarget="usermenu-menu"
-		>
-			<span class="avatar" aria-hidden="true">{ initial(s) }</span>
-			<span class="hidden truncate sm:block">{ orDefault(s.Name, s.Email) }</span>
-			@Icon("chevron-down")
-		</button>
-		<div class="menu" id="usermenu-menu" popover data-menu-end>
-			<div class="menu-head">
-				if s.Name != "" {
-					<p class="truncate font-semibold">{ s.Name }</p>
-				}
-				<p class="truncate text-sm text-ink-mute">{ s.Email }</p>
-			</div>
-			<div class="menu-options" id="usermenu-list" role="listbox" aria-labelledby="usermenu">
-				@userMenuLink("/account", "user", "Account", s.Active == "account")
-				if s.Admin {
-					@userMenuLink("/settings", "settings", "Settings", s.Active == "settings")
-				}
-				@MenuSep()
-				<form method="post" action="/logout">
-					@CSRF(s.CSRF)
-					<button type="submit" class="menu-item" role="option" aria-selected="false" tabindex="-1" data-confirm="You will need your password to come back in." data-confirm-title="Sign out of musdash?" data-confirm-submit="Sign out">
-						@Icon("log-out", "text-ink-mute")
-						<span class="min-w-0 flex-1 truncate">Sign out</span>
-					</button>
-				</form>
-			</div>
-		</div>
+	<div class="topbar-end">
+		@Menu(MenuProps{ID: "usermenu", Label: "Account: " + orDefault(s.Name, s.Email), Class: "user-button", End: true, Button: userButton(s), Head: userHead(s)}) {
+			@MenuItem(MenuItemProps{Href: "/account", Icon: "user", Label: "Account", Current: s.Active == "account"})
+			if s.Admin {
+				@MenuItem(MenuItemProps{Href: "/settings", Icon: "settings", Label: "Settings", Current: s.Active == "settings"})
+			}
+			@MenuSep()
+			<form method="post" action="/logout">
+				@CSRF(s.CSRF)
+				@MenuItem(MenuItemProps{Icon: "log-out", Label: "Sign out", Danger: true, Attrs: Ask("Sign out of musdash?", "You will need your password to come back in.", "Sign out", true)})
+			</form>
+		}
 	</div>
 }
 
-templ userMenuLink(href, icon, label string, current bool) {
-	<a
-		class="menu-item"
-		role="option"
-		href={ templ.SafeURL(href) }
-		aria-selected="false"
-		if current {
-			aria-current="page"
-		}
-		tabindex="-1"
-	>
-		@Icon(icon, "text-ink-mute")
-		<span class="min-w-0 flex-1 truncate">{ label }</span>
-	</a>
+templ userButton(s Shell) {
+	<span class="avatar" aria-hidden="true">{ initial(s) }</span>
+	<span class="hidden truncate sm:block">{ orDefault(s.Name, s.Email) }</span>
+	@Icon("chevron-down")
+}
+
+templ userHead(s Shell) {
+	if s.Name != "" {
+		<p class="truncate font-semibold">{ s.Name }</p>
+	}
+	<p class="truncate text-sm text-ink-mute">{ s.Email }</p>
 }
 
 // Layout is the signed-in application frame.

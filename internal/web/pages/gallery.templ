@@ -241,6 +241,18 @@ templ Gallery(s ui.Shell) {
 					@ui.Trail([]ui.Crumb{{Label: "Projects", Href: "#"}, {Label: "Shop", Href: "#", Icon: "folder"}, {Label: "production", Menu: "/_ui/switch", Icon: "globe"}, {Label: "storefront", Menu: "/_ui/switch", Icon: "app-window", Filter: "Find a resource"}})
 				</div>
 			}
+			@gallerySection("Menu") {
+				<div class="card card-body flex items-center gap-3">
+					@ui.Menu(ui.MenuProps{ID: "demo-actions", Label: "More actions", Class: "btn btn-secondary btn-icon", Button: ui.Icon("more")}) {
+						@ui.MenuItem(ui.MenuItemProps{Href: "#", Icon: "eye", Label: "Overview", Current: true})
+						@ui.MenuItem(ui.MenuItemProps{Href: "#", Icon: "pencil", Label: "Rename"})
+						@ui.MenuItem(ui.MenuItemProps{Href: "#", Icon: "copy", Label: "Duplicate"})
+						@ui.MenuSep()
+						@ui.MenuItem(ui.MenuItemProps{Href: "#", Icon: "trash", Label: "Delete", Danger: true})
+					}
+					<p class="muted">Things to do and places to go. It opens with nothing marked; an item for what ends or removes something is a danger item.</p>
+				</div>
+			}
 			@gallerySection("Tabs") {
 				@ui.Tabs([]ui.Tab{{Key: "a", Label: "Overview", Href: "#", Icon: "dashboard"}, {Key: "b", Label: "Deployments", Href: "#", Icon: "rocket"}, {Key: "c", Label: "Logs", Href: "#", Icon: "file"}, {Key: "d", Label: "Settings", Href: "#", Icon: "settings"}}, "a")
 			}

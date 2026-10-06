@@ -51,7 +51,7 @@ func TestCriticalFormsAsk(t *testing.T) {
 				continue
 			}
 			seen++
-			if !strings.Contains(block, "ui.Ask(") && !strings.Contains(block, "proxyAsk(") && !strings.Contains(block, "data-match") && !strings.Contains(block, "data-confirm") {
+			if !strings.Contains(block, "Ask(") && !strings.Contains(block, "data-match") && !strings.Contains(block, "data-confirm") {
 				t.Errorf("%s: the form %s acts on one click: give its button ui.Ask", file, a)
 			}
 		}

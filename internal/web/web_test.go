@@ -909,7 +909,7 @@ func TestHeader(t *testing.T) {
 			t.Errorf("%s: the trail does not start with the team switcher", page)
 		}
 		bar := between(t, page, body, `<div class="topbar">`, `<main class="page"`)
-		for _, want := range []string{`id="usermenu"`, `href="/account"`, `action="/logout"`, `name="_csrf"`, "data-confirm=", "Owner", testEmail, `href="/settings"`} {
+		for _, want := range []string{`id="usermenu"`, `href="/account"`, `action="/logout"`, `name="_csrf"`, "data-confirm=", "Owner", testEmail, `href="/settings"`, "data-menu-actions"} {
 			if !strings.Contains(bar, want) {
 				t.Errorf("%s: the bar lacks %s", page, want)
 			}
@@ -926,9 +926,23 @@ func TestHeader(t *testing.T) {
 	if !regexp.MustCompile(`(?s)Default team.*?crumb-sep.*?href="/projects".*?Shop`).MatchString(body) {
 		t.Error("the project's trail does not follow the team")
 	}
+	// The menu marks the page the person is on and no other: an item is
+	// not the current one for being the first.
 	_, body = a.get("/account")
 	if !regexp.MustCompile(`href="/account"[^>]*aria-current="page"`).MatchString(body) {
 		t.Error("the account page is not marked in the person's menu")
+	}
+	_, body = a.get("/")
+	if menu := between(t, "/", body, `id="usermenu-list"`, `<main class="page"`); strings.Contains(menu, "aria-current") || strings.Contains(menu, `aria-selected="true"`) {
+		t.Error("the person's menu marks an item on a page that is none of its own")
+	}
+	// Sign out is the menu's danger item, and so is the button that
+	// confirms it.
+	if !regexp.MustCompile(`<button type="submit" class="menu-item menu-item-danger"[^>]*data-confirm-tone="danger"[^>]*>`).MatchString(body) {
+		t.Error("Sign out is not a danger item with a danger question")
+	}
+	if regexp.MustCompile(`href="/account"[^>]*menu-item-danger|menu-item-danger[^>]*href="/account"`).MatchString(body) {
+		t.Error("the account item is drawn as a danger item")
 	}
 
 	// Settings is an Admin's, in the menu as in the sidebar.

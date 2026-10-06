@@ -452,12 +452,35 @@
   .menu-item:active {
     background: var(--color-veil-strong);
   }
+  /* What ends or removes something: red in its text, and a pale red where
+     another item is grey. Not a red block: a menu is read before it is
+     pressed, and one loud item would be all that is seen of it. Named
+     with both classes: an item that is a link takes its colour from
+     a.menu-item otherwise. */
+  .menu-item.menu-item-danger {
+    color: var(--color-danger);
+  }
+  .menu-item.menu-item-danger:hover,
+  .menu-item.menu-item-danger:focus,
+  .menu-item.menu-item-danger[data-active] {
+    background: var(--color-danger-soft);
+  }
+  .menu-item.menu-item-danger:active {
+    color: var(--color-danger-strong);
+  }
   /* Inside the item: the menu scrolls, and would cut off a ring around it. */
   .menu-item:focus-visible {
     outline-offset: -2px;
   }
+  /* In a menu of actions nothing is chosen, but one item can be the page
+     the person is on. It is marked as the sidebar marks it, without the
+     fill, which here would read as the pointer being on it. */
+  [data-menu-actions] .menu-item[aria-current="page"] {
+    font-weight: 600;
+  }
   /* With a filter, focus stays in its field and the arrow keys move this
      marker instead: the option Enter would choose. */
+  [data-menu-actions] .menu-item[aria-current="page"]::after,
   .menu-item[data-active]::after {
     content: "";
     position: absolute;

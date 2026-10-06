@@ -126,10 +126,106 @@ templ SwitchOption(href, icon, label string, current bool) {
 // MenuAction is a link at the foot of a menu that goes somewhere else than
 // the places above it: to add one, to manage them. A filter does not hide it.
 templ MenuAction(href, icon, label string) {
-	<a class="menu-item" role="option" href={ templ.SafeURL(href) } aria-selected="false" tabindex="-1" data-keep>
-		@Icon(icon, "text-ink-mute")
-		<span class="min-w-0 flex-1 truncate">{ label }</span>
-	</a>
+	@MenuItem(MenuItemProps{Href: href, Icon: icon, Label: label, Attrs: templ.Attributes{"data-keep": true}})
+}
+
+// MenuProps describes a Menu.
+type MenuProps struct {
+	ID string
+	// Label says what the button is to a reader who does not see it.
+	Label string
+	// Class is the button's: a .btn, or a class of the place it is in.
+	Class string
+	// End hangs the menu from the button's right edge, for a button at the
+	// end of a row.
+	End bool
+	// Button is what the button shows; Head, if any, is said above the
+	// items: whose menu it is.
+	Button templ.Component
+	Head   templ.Component
+}
+
+// Menu is a button that opens a menu of things to do and places to go: its
+// children, MenuItem and MenuSep. A Select and a switcher open on the option
+// that is chosen. A Menu has none, so it opens with nothing marked and the
+// focus still on its button (data-menu-actions, static/app.js): an item is
+// marked when the pointer or the arrow keys are on it.
+templ Menu(p MenuProps) {
+	<div class="select" data-select>
+		<button
+			type="button"
+			id={ p.ID }
+			class={ p.Class }
+			aria-label={ p.Label }
+			aria-haspopup="listbox"
+			aria-expanded="false"
+			aria-controls={ p.ID + "-list" }
+			popovertarget={ p.ID + "-menu" }
+		>
+			@p.Button
+		</button>
+		<div class="menu" id={ p.ID + "-menu" } popover data-menu-actions data-menu-end?={ p.End }>
+			if p.Head != nil {
+				<div class="menu-head">
+					@p.Head
+				</div>
+			}
+			<div class="menu-options" id={ p.ID + "-list" } role="listbox" aria-labelledby={ p.ID }>
+				{ children... }
+			</div>
+		</div>
+	</div>
+}
+
+// MenuItemProps describes one item of a menu.
+type MenuItemProps struct {
+	Label string
+	Icon  string
+	// Href makes the item a link. Without one it is a button that sends the
+	// form it is in.
+	Href string
+	// Danger is for what ends or removes something. It is red in its text
+	// and a pale red under the pointer, never a red block: a menu is read
+	// before it is pressed.
+	Danger bool
+	// Current marks the page the person is on.
+	Current bool
+	Attrs   templ.Attributes
+}
+
+// MenuItem is one thing a menu offers.
+templ MenuItem(p MenuItemProps) {
+	if p.Href != "" {
+		<a
+			class={ "menu-item", templ.KV("menu-item-danger", p.Danger) }
+			role="option"
+			href={ templ.SafeURL(p.Href) }
+			aria-selected="false"
+			if p.Current {
+				aria-current="page"
+			}
+			tabindex="-1"
+			{ p.Attrs... }
+		>
+			@menuItemBody(p)
+		</a>
+	} else {
+		<button type="submit" class={ "menu-item", templ.KV("menu-item-danger", p.Danger) } role="option" aria-selected="false" tabindex="-1" { p.Attrs... }>
+			@menuItemBody(p)
+		</button>
+	}
+}
+
+templ menuItemBody(p MenuItemProps) {
+	if p.Icon != "" {
+		// A danger item's icon has the item's colour.
+		if p.Danger {
+			@Icon(p.Icon)
+		} else {
+			@Icon(p.Icon, "text-ink-mute")
+		}
+	}
+	<span class="min-w-0 flex-1 truncate">{ p.Label }</span>
 }
 
 // MenuSep is the rule between a menu's places and its actions.

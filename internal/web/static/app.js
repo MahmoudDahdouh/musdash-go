@@ -179,6 +179,16 @@
   // keys move a marker (data-active) the field reports as its current option.
   let openList = null;
   let optionIDs = 0;
+  // A Menu (data-menu-actions) lists things to do, and none of them is the
+  // chosen one: it opens with nothing marked and the focus on its button.
+  // Opened from the keyboard, the focus goes in, to the end the key says:
+  // entering is that list and key, from the key press until the list opens.
+  const isActions = (list) => list.dataset.menuActions !== undefined;
+  let entering = null;
+  const enter = (list, key) => {
+    const all = optionsOf(list).filter((o) => !o.hidden);
+    (key === "ArrowUp" ? all[all.length - 1] : all[0])?.focus();
+  };
   const shut = (list) => list?.isConnected && list.matches(":popover-open") && list.hidePopover();
   const optionsOf = (list) => [...list.querySelectorAll("[role=option]")];
   const place = (list, button) => {
@@ -242,6 +252,7 @@
       if (!open) {
         delete list.dataset.placed;
         if (openList === list) openList = null;
+        if (entering?.list === list) entering = null;
         return;
       }
       openList = list;
@@ -254,7 +265,9 @@
       }
       place(list, button);
       list.dataset.placed = "1";
-      (filter || list.querySelector("[aria-selected=true]") || list.querySelector("[role=option]"))?.focus();
+      if (!isActions(list)) (filter || list.querySelector("[aria-selected=true]") || list.querySelector("[role=option]"))?.focus();
+      else if (entering?.list === list) enter(list, entering.key);
+      entering = null;
     },
     true,
   );
@@ -297,14 +310,23 @@
     input.value = el.dataset.value;
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
+  // Enter and Space press the button as they press any, and the browser
+  // opens the list. A click that no pointer made says so (detail 0).
+  on("click", "[data-select] > [popovertarget]", (button, e) => {
+    if (e.detail === 0) entering = { list: button.parentElement.querySelector("[popover]"), key: "ArrowDown" };
+  });
   on("keydown", "[data-select]", (box, e) => {
     const list = box.querySelector("[popover]");
     if (e.target.closest("[popovertarget]")) {
-      // Enter and Space open it as they press any button; so do the arrows.
-      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !list.matches(":popover-open")) {
-        e.preventDefault();
-        list.showPopover();
-      }
+      const open = list.matches(":popover-open");
+      // Open with the focus still on the button is a Menu the pointer
+      // opened. Tab leaves it and the arrows go into it.
+      if (e.key === "Tab") shut(list);
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      if (open) return enter(list, e.key);
+      entering = { list, key: e.key };
+      list.showPopover();
       return;
     }
     if (e.key === "Tab") {

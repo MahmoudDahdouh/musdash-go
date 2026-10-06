@@ -70,3 +70,21 @@ The review of the code found a second one. The confirm dialog gives the focus ba
 - `web`: every signed-in page's trail starts with the team switcher; the bar holds the account link and the Sign out form, the sidebar neither; a Member's menu has no Settings, an Admin's has; `/switch/teams` names the team and leads to `/team`; `/sys/mem` is gone.
 - `TestSignedInPagesHaveNoInlineScriptOrStyle` (no id twice, no inline style), `TestCriticalFormsAsk` (Sign out asks) and `TestRouteTableRefusesByRole` keep holding.
 - In the browser: the bar at a wide and a narrow window, both menus by pointer and by keyboard, Sign out through its question.
+
+## Second pass: the menu's items
+
+Asked for the same day, after looking at it: the Account item always looked active, and the menu needs a variant for dangerous items, in soft colours; Sign out's question should have a danger button.
+
+**Why Account looked active.** It was not the item. `app.js` puts the focus on the first option of any menu it opens, and a focused item is drawn like one under the pointer. That is right for a `Select` or a switcher, which open on the option that is chosen, and wrong for a menu where nothing is.
+
+| # | Decision | Why |
+|---|---|---|
+| 16 | The menu is a component of its own, `ui.Menu`, with `ui.MenuItem` for what is in it. The person's menu is built from them; `MenuAction` is a `MenuItem` | Asked for as a component with variants, and the gallery needs one to show |
+| 17 | A `Menu`'s popover is marked `data-menu-actions`. Opened with the pointer it marks nothing and the focus stays on its button; ArrowDown and ArrowUp go in from there. Opened from the keyboard (arrows, Enter, Space) the focus goes to the first item, or the last for ArrowUp | Somebody using the keys needs to be somewhere; somebody using the pointer must not see an item lit that they did not point at |
+| 18 | Tab from the button of an open menu shuts it | The focus is no longer inside the list, where Tab already did |
+| 19 | `MenuItem.Danger`: red text and icon, `danger-soft` under the pointer and the focus. Sign out is one | "Soft colours": a red block in a menu would be all that is read of it |
+| 20 | `MenuItem.Current`: semibold with the sidebar's rail, and no fill | The fill is what read as "active". Only the Account and Settings pages mark anything |
+| 21 | Sign out's question uses `ui.Ask(…, danger)`, so its confirm button is the red one | Asked for |
+| 22 | Roles stay `listbox` and `option` | Every menu here is steered by the same code through them; nothing is ever `aria-selected` in a `Menu` |
+
+Found while checking it in the browser: `a.menu-item` sets a link's colour and outranked `.menu-item-danger`, so a danger item that is a link was black. The danger rules name both classes.
