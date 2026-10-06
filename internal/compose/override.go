@@ -339,3 +339,28 @@ func (p Project) NestedInCheckout(checkout string) []Nested {
 	}
 	return out
 }
+
+// EnvFile is a file a service takes variables from.
+type EnvFile struct {
+	Service string
+	Path    string
+}
+
+// EnvFiles returns what the services name under "env_file". Only a
+// document loaded raw has them: when Compose fills a document in, it reads
+// the files into "environment" and drops the key, so that what a file
+// held cannot be told from what the Compose file said.
+func (p Project) EnvFiles() []EnvFile {
+	var out []EnvFile
+	services := asMap(p.doc["services"])
+	for _, name := range sortedKeys(services) {
+		for _, entry := range asList(asMap(services[name])["env_file"]) {
+			file, ok := entry.(string)
+			if !ok {
+				file, _ = asMap(entry)["path"].(string)
+			}
+			out = append(out, EnvFile{Service: name, Path: file})
+		}
+	}
+	return out
+}
