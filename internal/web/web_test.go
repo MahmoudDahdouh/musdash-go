@@ -1165,6 +1165,16 @@ func TestHeader(t *testing.T) {
 				t.Errorf("%s: the sidebar still holds %s", page, gone)
 			}
 		}
+		// On a small screen the sidebar is a drawer over the page: its
+		// backdrop is the element after it, which is how the stylesheet
+		// finds it, and it has a way out of its own, since the bar's button
+		// is behind the backdrop then.
+		if !regexp.MustCompile(`</aside>\s*<div class="sidebar-backdrop"></div>`).MatchString(body) {
+			t.Errorf("%s: no backdrop right after the sidebar", page)
+		}
+		if !regexp.MustCompile(`<button type="button" class="[^"]*sidebar-close[^"]*" data-nav-toggle aria-label="Close menu"`).MatchString(side) {
+			t.Errorf("%s: the sidebar has no Close button", page)
+		}
 	}
 	// A page that has a trail of its own keeps it, after the team.
 	_, body := a.get("/projects/" + projectID + "/env/" + env.ID)

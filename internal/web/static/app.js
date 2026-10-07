@@ -112,15 +112,25 @@
     if (none) none.hidden = shown > 0;
   });
 
-  // Sidebar on small screens.
+  // Sidebar on small screens: a drawer over the page, which is out of reach
+  // behind it as it is behind a dialog. The stylesheet draws the backdrop,
+  // which keeps the pointer from the page; inert keeps the keyboard from it.
+  // The focus goes in with the drawer and comes back to the bar's button.
   const sidebar = () => document.getElementById("sidebar");
   const setNav = (open) => {
     const s = sidebar();
-    if (!s) return;
+    if (!s || (s.dataset.open === "true") === open) return;
+    const main = document.querySelector(".main");
+    const inside = s.contains(document.activeElement);
     s.dataset.open = String(open);
-    document.querySelectorAll("[data-nav-toggle]").forEach((b) => b.setAttribute("aria-expanded", String(open)));
+    document.querySelectorAll("[data-nav-toggle][aria-expanded]").forEach((b) => b.setAttribute("aria-expanded", String(open)));
+    main.inert = open;
+    if (open) s.querySelector("a, button").focus();
+    // A press on the backdrop has taken the focus from the drawer already.
+    else if (inside || document.activeElement === document.body) main.querySelector("[data-nav-toggle]").focus();
   };
   on("click", "[data-nav-toggle]", () => setNav(sidebar()?.dataset.open !== "true"));
+  // A click beside the drawer lands on its backdrop.
   document.addEventListener("click", (e) => {
     const s = sidebar();
     if (s?.dataset.open === "true" && !s.contains(e.target) && !e.target.closest("[data-nav-toggle]")) setNav(false);
@@ -128,6 +138,9 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") setNav(false);
   });
+  // On a wide window the sidebar is part of the page, and the page would
+  // stay inert behind a drawer that is one no more.
+  matchMedia("(min-width: 64rem)").addEventListener("change", () => setNav(false));
 
   // Typed confirmation: the form's submit button unlocks only when the field
   // holds exactly the expected text.
@@ -293,6 +306,46 @@
   };
   document.addEventListener("scroll", shutUnlessInside, true);
   window.addEventListener("resize", shutUnlessInside);
+  // A press outside an open list closes it and is spent on that, as a press
+  // on a dialog's backdrop is: what was under the pointer is not pressed as
+  // well. The browser closes the list and would hand the press on; spent is
+  // that list, from such a press to the click it ends in, and both are kept
+  // from the page. The list's own button is not outside: the browser closes
+  // the list on it, and a spent click would leave it open. The page is asked
+  // which list is open, not openList: toggle, which sets that, comes a
+  // moment after the list is open.
+  //
+  // A press that ends in no click (a drag, the other button, a scroll by
+  // touch) leaves spent set. The next press decides anew, and a key or a
+  // cancelled touch forgets it: a click the keyboard makes is its own.
+  let spent = null;
+  const forget = () => (spent = null);
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      const list = document.querySelector("[data-select] :popover-open");
+      const box = list?.closest("[data-select]");
+      spent = box && e.target instanceof Node && !box.contains(e.target) ? list : null;
+      // The focus that was in the list would be nowhere once it is gone.
+      if (spent && list.contains(document.activeElement)) box.querySelector("[popovertarget]").focus();
+    },
+    true,
+  );
+  document.addEventListener("pointercancel", forget, true);
+  document.addEventListener("keydown", forget, true);
+  // mousedown as well: it would move the focus to what was pressed, and a
+  // dialog reads it as a press on its backdrop.
+  const spend = (e) => {
+    if (!spent) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type !== "click") return;
+    // Still open after a press that ended somewhere else than it began.
+    shut(spent);
+    spent = null;
+  };
+  document.addEventListener("mousedown", spend, true);
+  document.addEventListener("click", spend, true);
   on("input", "[data-select-filter]", (el) => narrow(el.closest("[popover]")));
   on("mouseover", "[data-select] [role=option]", (el) => {
     const list = el.closest("[popover]");
@@ -412,6 +465,8 @@
     const dialog = searchBox();
     // Not over another dialog: what that one asks would be left behind it.
     if (!dialog || document.querySelector("dialog[open]")) return;
+    // Nor over the open sidebar, which leaves first.
+    setNav(false);
     dialog.showModal();
     freshSearch(dialog);
   };

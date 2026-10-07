@@ -387,6 +387,16 @@
     visibility: visible;
     animation: menu-in var(--duration-fast) ease-out;
   }
+  /* While a menu is open the page behind it does not answer the pointer,
+     as the page behind a dialog does not: nothing lights up as if it could
+     be pressed. The press that closes the menu is kept from the page by
+     static/app.js, which does not depend on this. */
+  html:has(.menu:popover-open) body {
+    pointer-events: none;
+  }
+  .menu:popover-open {
+    pointer-events: auto;
+  }
   @keyframes menu-in {
     from {
       opacity: 0;
@@ -1026,7 +1036,7 @@
     width: min(40rem, calc(100vw - 2rem));
   }
   .modal::backdrop {
-    background: color-mix(in srgb, var(--color-ink) 40%, transparent);
+    background: var(--color-backdrop);
   }
   .modal[open] {
     animation: modal-in var(--duration-base) ease-out;
@@ -1506,6 +1516,10 @@
   .shell {
     min-height: 100dvh;
   }
+  /* On a small screen the sidebar is off the page until it is opened, and
+     then it is over the page as a dialog is: the page is behind a backdrop,
+     and static/app.js makes it inert. Closed, it is hidden as well as off
+     the screen, or its links would still take the focus. */
   .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -1516,11 +1530,34 @@
     background: var(--color-sunk);
     border-right: 1px solid var(--color-line-strong);
     transform: translateX(-100%);
-    transition: transform var(--duration-base) ease-out;
+    visibility: hidden;
+    /* Sliding out, it is seen and no longer pressed: the bar's button is
+       under its first link. */
+    pointer-events: none;
+    /* Hidden only once it has slid out. */
+    transition:
+      transform var(--duration-base) ease-out,
+      visibility 0s var(--duration-base);
   }
+  /* Visible at once: the focus goes into it as it opens. */
   .sidebar[data-open="true"] {
     transform: none;
+    visibility: visible;
+    pointer-events: auto;
     box-shadow: var(--shadow-overlay);
+    transition: transform var(--duration-base) ease-out;
+  }
+  /* Between the bar (30) and the sidebar (40). */
+  .sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    background: var(--color-backdrop);
+  }
+  .sidebar[data-open="true"] + .sidebar-backdrop {
+    display: block;
+    animation: menu-in var(--duration-base) ease-out;
   }
   .main {
     min-width: 0;
@@ -1562,9 +1599,15 @@
     padding: 20px 16px 48px;
   }
   @media (min-width: 64rem) {
-    .sidebar {
+    .sidebar,
+    .sidebar[data-open="true"] {
       transform: none;
+      visibility: visible;
+      pointer-events: auto;
       box-shadow: none;
+    }
+    .sidebar[data-open="true"] + .sidebar-backdrop {
+      display: none;
     }
     .main {
       margin-left: var(--size-sidebar);
@@ -1572,7 +1615,8 @@
     .topbar {
       padding: 0 16px;
     }
-    .topbar-menu {
+    .topbar-menu,
+    .sidebar-close {
       display: none;
     }
     .page {

@@ -147,12 +147,21 @@ templ head(title string) {
 	</head>
 }
 
+// sidebar is the navigation, and on a small screen a drawer over the page
+// (static/app.js): the element after it is the backdrop the page is behind
+// while it is open, and Close is the way out for whoever has no Escape key,
+// since the bar's own button is behind the backdrop then.
 templ sidebar(s Shell) {
 	<aside class="sidebar" id="sidebar" aria-label="Main navigation">
-		<a href="/" class="flex h-14 items-center gap-2.5 px-4 text-ink hover:no-underline">
-			@Mark("size-6")
-			<span class="text-lg font-semibold tracking-tight">musdash</span>
-		</a>
+		<div class="flex h-14 items-center justify-between pl-4 pr-2">
+			<a href="/" class="flex items-center gap-2.5 text-ink hover:no-underline">
+				@Mark("size-6")
+				<span class="text-lg font-semibold tracking-tight">musdash</span>
+			</a>
+			<button type="button" class="btn btn-ghost btn-icon sidebar-close" data-nav-toggle aria-label="Close menu">
+				@Icon("x")
+			</button>
+		</div>
 		<nav class="nav px-4 py-2">
 			for i, g := range navGroups(s) {
 				<div
@@ -181,6 +190,7 @@ templ sidebar(s Shell) {
 			}
 		</nav>
 	</aside>
+	<div class="sidebar-backdrop"></div>
 }
 
 // userMenu is the last thing in the bar, after the search: who is signed

@@ -105,6 +105,10 @@
   --color-veil: color-mix(in srgb, var(--palette-gray-500) 10%, transparent);
   --color-veil-strong: color-mix(in srgb, var(--palette-gray-500) 15%, transparent);
 
+  /* Roles: backdrop. What dims the page behind a dialog, and behind the
+     sidebar where it comes in over the page. */
+  --color-backdrop: color-mix(in srgb, var(--palette-gray-950) 40%, transparent);
+
   /* Roles: borders. line divides and outlines cards, line-strong outlines
      controls, line-veil darkens the edge of a filled control whatever its
      colour. */
