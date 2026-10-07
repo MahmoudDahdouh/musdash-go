@@ -331,7 +331,7 @@ templ DatabaseSettings(s ui.Shell, v DatabaseView, f ui.Form, volume string) {
 					Reachable from the internet, on a port of the server
 				}
 				@ui.TextField(f, "Public port", "Leave it empty and musdash picks a free one. Use 1024 to 65535, outside 20000 to 29999.", ui.InputProps{ID: "public_port", Mono: true, Value: publicPortValue(f, v.DB), Attrs: templ.Attributes{"inputmode": "numeric"}})
-				<div class="grid gap-4 sm:grid-cols-2">
+				<div class="grid items-start gap-4 sm:grid-cols-2">
 					@ui.TextField(f, "Memory limit (MB)", "Empty for no limit.", ui.InputProps{ID: "memory_mb", Mono: true, Value: zeroBlank(v.DB.MemoryMB), Attrs: templ.Attributes{"inputmode": "numeric"}})
 					@ui.TextField(f, "CPU limit (cores)", "Such as 0.5 or 2. Empty for no limit.", ui.InputProps{ID: "cpus", Mono: true, Value: cpusValue(v.DB.CPUs), Attrs: templ.Attributes{"inputmode": "decimal"}})
 				</div>

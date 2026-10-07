@@ -203,7 +203,7 @@ templ gitRepoFields(f ui.Form, c GitChoices, app db.App) {
 
 templ gitBuildFields(f ui.Form, c GitChoices, app db.App) {
 	@ui.TextField(f, "Base directory", "The folder inside the repository to build from. Empty for the repository root.", ui.InputProps{ID: "base_dir", Mono: true, Value: app.BaseDir, Placeholder: "apps/web"})
-	<div class="grid gap-4 sm:grid-cols-2">
+	<div class="grid items-start gap-4 sm:grid-cols-2">
 		@ui.TextField(f, "Dockerfile", "For the Dockerfile build. Relative to the base directory.", ui.InputProps{ID: "dockerfile_path", Mono: true, Value: app.DockerfilePath, Placeholder: "Dockerfile"})
 		@ui.TextField(f, "Folder to serve", "For a static site. Relative to the base directory.", ui.InputProps{ID: "publish_dir", Mono: true, Value: app.PublishDir, Placeholder: "dist"})
 	</div>
@@ -740,7 +740,7 @@ templ AppSettings(s ui.Shell, v AppView, general, src, previews ui.Form, choices
 					@ui.TextField(general, "Docker image", "", ui.InputProps{ID: "image", Mono: true, Value: v.App.Image, Required: true})
 				}
 				@ui.TextField(general, "Port", "The port the app listens on inside its container.", ui.InputProps{ID: "port", Mono: true, Value: strconv.Itoa(v.App.Port), Required: true, Attrs: templ.Attributes{"inputmode": "numeric"}})
-				<div class="grid gap-4 sm:grid-cols-2">
+				<div class="grid items-start gap-4 sm:grid-cols-2">
 					@ui.TextField(general, "Memory limit (MB)", "Empty for no limit.", ui.InputProps{ID: "memory_mb", Mono: true, Value: zeroBlank(v.App.MemoryMB), Attrs: templ.Attributes{"inputmode": "numeric"}})
 					@ui.TextField(general, "CPU limit", "In cores, such as 0.5. Empty for no limit.", ui.InputProps{ID: "cpus", Mono: true, Value: cpusValue(v.App.CPUs), Attrs: templ.Attributes{"inputmode": "decimal"}})
 				</div>
@@ -871,7 +871,7 @@ templ AppDomains(s ui.Shell, v AppView, f ui.Form) {
 				}
 			</section>
 			@ui.FormDialog(ui.DialogProps{ID: "add-domain", Title: "Add domain", Description: "Point the domain's DNS at the app's server first, so its certificate can be issued.", Action: v.Path() + "/domains", CSRF: s.CSRF, Submit: "Add domain", Wide: true, Open: !f.OK()}) {
-					<div class="grid gap-4 sm:grid-cols-2">
+					<div class="grid items-start gap-4 sm:grid-cols-2">
 						@ui.TextField(f, "Domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com"})
 						@ui.TextField(f, "Only under this path", "Optional. With /api, this app answers app.example.com/api and what is below it; another app can take the rest of the domain.", ui.InputProps{ID: "path", Mono: true, Placeholder: "/api"})
 					</div>
@@ -887,7 +887,7 @@ templ AppDomains(s ui.Shell, v AppView, f ui.Form) {
 					<fieldset class="grid gap-4">
 						<legend class="field-label">Ask for a password</legend>
 						<p class="muted text-sm">Optional. The browser asks for this user name and password before anything reaches the app. Over plain HTTP they travel unencrypted.</p>
-						<div class="grid gap-4 sm:grid-cols-2">
+						<div class="grid items-start gap-4 sm:grid-cols-2">
 							@ui.TextField(f, "User name", "", ui.InputProps{ID: "auth_user", Autocomplete: "off"})
 							@ui.TextField(f, "Password", "8 to 72 characters. It is stored as a hash and cannot be shown again.", ui.InputProps{ID: "auth_password", Type: "password", Autocomplete: "new-password"})
 						</div>

@@ -562,7 +562,7 @@ templ Storages(s ui.Shell, list []db.S3Storage, f ui.Form) {
 			@ui.FormDialog(ui.DialogProps{ID: "add-bucket", Title: "Add a bucket", Description: "The keys are stored encrypted and are not shown again.", Action: "/settings/storages", CSRF: s.CSRF, Submit: "Add bucket", Wide: true, Open: !f.OK()}) {
 				@ui.TextField(f, "Name", "What you call it here, such as Offsite.", ui.InputProps{ID: "name", Required: true})
 				@ui.TextField(f, "Endpoint", "The address of the S3 service, such as https://s3.eu-central-1.amazonaws.com. Leave empty for Amazon S3 with the region below.", ui.InputProps{ID: "endpoint", Mono: true, Placeholder: "https://…"})
-				<div class="grid gap-4 sm:grid-cols-2">
+				<div class="grid items-start gap-4 sm:grid-cols-2">
 					@ui.TextField(f, "Region", "Such as eu-central-1. Many providers accept auto or nothing.", ui.InputProps{ID: "region", Mono: true})
 					@ui.TextField(f, "Bucket", "It must exist already.", ui.InputProps{ID: "bucket", Mono: true, Required: true})
 				</div>

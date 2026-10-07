@@ -86,7 +86,7 @@ templ Servers(s ui.Shell, list []ServerInfo, keys []db.SSHKey, f ui.Form) {
 		if s.Admin {
 			@ui.FormDialog(ui.DialogProps{ID: "add-server", Title: "Add a server", Description: "Another machine with Docker, reached over SSH. Nothing of musdash is installed on it except, if you choose so, the proxy that serves its domains.", Action: "/servers", CSRF: s.CSRF, Submit: "Add server", Wide: true, Open: addServerOpen(f)}) {
 					@ui.TextField(f, "Name", "What you call it here, such as Frankfurt.", ui.InputProps{ID: "name", Required: true})
-					<div class="grid gap-4 sm:grid-cols-[1fr_8rem]">
+					<div class="grid items-start gap-4 sm:grid-cols-[1fr_8rem]">
 						@ui.TextField(f, "Address", "An IP address or a host name.", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "203.0.113.20"})
 						@ui.TextField(f, "SSH port", "", ui.InputProps{ID: "port", Mono: true, Value: "22", Attrs: templ.Attributes{"inputmode": "numeric"}})
 					</div>
