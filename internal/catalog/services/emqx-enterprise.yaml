@@ -18,6 +18,11 @@ services:
       timeout: 30s
       retries: 5
       start_period: 30s
+    ports:
+      - "1883:1883"
+      - "8083:8083"
+      - "8084:8084"
+      - "8883:8883"
 volumes:
   emqx_data:
   emqx_log:

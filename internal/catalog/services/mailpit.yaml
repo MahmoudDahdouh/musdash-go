@@ -23,6 +23,8 @@ services:
     configs:
       - source: mailpit-htpasswd
         target: /data/htpasswd
+    ports:
+      - "1025:1025"
 volumes:
   mailpit-data:
 configs:

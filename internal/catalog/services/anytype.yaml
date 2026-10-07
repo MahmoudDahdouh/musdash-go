@@ -1,0 +1,19 @@
+# name: Anytype
+# about: Anytype is a personal knowledge baseâ€”your digital brainâ€”that lets you gather, connect and remix all kinds of information.
+# docs: https://doc.anytype.io/anytype-docs
+# website: https://anytype.io/
+# categories: docs
+# source: dokploy
+services:
+  any-sync-bundle:
+    image: ghcr.io/grishy/any-sync-bundle:latest
+    restart: unless-stopped
+    volumes:
+      - any-sync-bundle-anytype-data:/data
+    environment:
+      ANY_SYNC_BUNDLE_INIT_EXTERNAL_ADDRS: "192.168.100.9"
+    ports:
+      - "33010:33010"
+      - "33020:33020/udp"
+volumes:
+  any-sync-bundle-anytype-data:

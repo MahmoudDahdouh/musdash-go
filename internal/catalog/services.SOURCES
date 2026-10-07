@@ -23,6 +23,7 @@ anonupload dokploy -
 anse dokploy -
 answer dokploy -
 anubis dokploy -
+anytype dokploy selfhst:anytype.svg
 appflowy dokploy selfhst:appflowy.svg
 apprise-api coolify -
 appsmith coolify -
@@ -100,6 +101,7 @@ commento dokploy selfhst:commento.svg
 commentoplusplus dokploy selfhst:commento.svg
 conduit dokploy selfhst:conduit.svg
 confluence dokploy selfhst:confluence.svg
+convertx dokploy -
 convex coolify coolify:convex.svg
 cookie-cloud dokploy -
 coralproject dokploy -
@@ -151,6 +153,7 @@ embystat coolify -
 emqx dokploy selfhst:emqx.svg
 emqx-enterprise coolify -
 engram coolify -
+enshrouded dokploy -
 ente-photos-with-s3 coolify selfhst:ente-photos.svg
 erpnext dokploy dokploy:erpnext.svg
 etherpad dokploy selfhst:etherpad.svg
@@ -269,7 +272,7 @@ java dokploy selfhst:java.svg
 jean coolify -
 jellyfin coolify selfhst:jellyfin.svg
 jellyseerr dokploy selfhst:jellyseerr.svg
-jitsi dokploy -
+jitsi coolify -
 joomla dokploy selfhst:joomla.svg
 joomla-with-mariadb coolify selfhst:joomla.svg
 joplin coolify selfhst:joplin.svg
@@ -277,7 +280,7 @@ joplin-server dokploy -
 jupyter-notebook-python coolify -
 kanbn dokploy -
 kaneo dokploy selfhst:kaneo.svg
-karakeep dokploy selfhst:karakeep.svg
+karakeep coolify selfhst:karakeep.svg
 kavita dokploy selfhst:kavita.svg
 kener dokploy selfhst:kener.svg
 keycloak coolify selfhst:keycloak.svg
@@ -339,6 +342,7 @@ metabase coolify selfhst:metabase.svg
 metamcp coolify -
 metube coolify selfhst:metube.svg
 mindsdb coolify coolify:mindsdb.svg
+minecraft coolify coolify:minecraft.svg
 miniflux coolify selfhst:miniflux.svg
 misaka-danmu-server dokploy -
 mixpost coolify selfhst:mixpost.svg
@@ -402,6 +406,7 @@ opengist dokploy selfhst:opengist.svg
 openhabittracker dokploy -
 openinary dokploy dokploy:openinary.svg
 openobserve coolify selfhst:openobserve.svg
+openpanel coolify selfhst:openpanel.svg
 openseo dokploy -
 opensourcepos dokploy dokploy:opensourcepos.svg
 openspeedtest dokploy -
@@ -418,6 +423,7 @@ owncloud coolify selfhst:owncloud.svg
 owncloud-infinite-scale dokploy dokploy:owncloud-infinite-scale.svg
 pairdrop coolify selfhst:pairdrop.svg
 palmr dokploy selfhst:palmr.svg
+palworld coolify -
 paperclip dokploy dokploy:logo.svg
 paperless coolify selfhst:paperless-ngx.svg
 parseable dokploy selfhst:parseable.svg
@@ -431,8 +437,9 @@ peppermint dokploy selfhst:peppermint.svg
 pgadmin coolify selfhst:pgadmin.svg
 pgbackweb coolify -
 phpmyadmin coolify selfhst:phpmyadmin.svg
+picsur dokploy -
 pinchflat dokploy -
-plane dokploy selfhst:plane.svg
+plane coolify selfhst:plane.svg
 plark dokploy dokploy:plark.svg
 plausible dokploy selfhst:plausible.svg
 plex coolify selfhst:plex.svg
@@ -480,6 +487,7 @@ rote dokploy -
 roundcube dokploy selfhst:roundcube.svg
 rss-bridge dokploy selfhst:rss-bridge.svg
 rsshub dokploy selfhst:rsshub.svg
+rustdesk dokploy selfhst:rustdesk.svg
 rustfs dokploy selfhst:rustfs.svg
 rustrak dokploy dokploy:rustrak.svg
 rustrak-full dokploy dokploy:rustrak.svg
@@ -487,6 +495,7 @@ rustrak-sqlite dokploy dokploy:rustrak.svg
 rutorrent dokploy -
 rybbit coolify selfhst:rybbit.svg
 ryot coolify -
+satisfactory coolify -
 scrypted dokploy selfhst:scrypted.svg
 seafile coolify selfhst:seafile.svg
 seanime dokploy -
@@ -515,6 +524,7 @@ soketi-app-manager coolify coolify:soketi-app-manager.svg
 sonarr coolify selfhst:sonarr.svg
 spacedrive dokploy -
 spacetimedb dokploy -
+sparkyfitness coolify -
 speedtest-tracker dokploy selfhst:speedtest-tracker.svg
 spliit dokploy selfhst:spliit.svg
 stack-auth dokploy -
@@ -541,6 +551,7 @@ tandoor-recipes dokploy selfhst:tandoor-recipes.svg
 teable coolify -
 tela dokploy -
 termix coolify selfhst:termix.svg
+terraria-server coolify -
 thingsboard dokploy selfhst:thingsboard.svg
 tianji dokploy selfhst:tianji.svg
 timescaledb dokploy dokploy:timescaledb.svg
@@ -560,6 +571,7 @@ typebot dokploy selfhst:typebot.svg
 typecho dokploy -
 typesense coolify -
 umami coolify selfhst:umami.svg
+unifi dokploy -
 unleash dokploy -
 unleash-with-postgresql coolify coolify:unleash.svg
 unleash-without-database coolify coolify:unleash.svg

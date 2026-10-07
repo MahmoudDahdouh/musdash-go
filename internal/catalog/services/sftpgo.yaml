@@ -25,6 +25,8 @@ services:
     volumes:
       - sftpgo-data:/srv/sftpgo/data
       - sftpgo-keys:/var/lib/sftpgo
+    ports:
+      - "2222:2222"
   postgresql:
     image: postgres:17-alpine
     environment:

@@ -25,6 +25,8 @@ services:
       interval: 2s
       timeout: 10s
       retries: 15
+    ports:
+      - "32222:22"
   mysql:
     image: mysql:8.0
     volumes:

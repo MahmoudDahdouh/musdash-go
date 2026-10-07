@@ -28,6 +28,8 @@ services:
       interval: 2s
       timeout: 10s
       retries: 15
+    ports:
+      - "32222:22"
   postgresql:
     image: postgres:16-alpine
     volumes:

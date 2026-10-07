@@ -10,6 +10,9 @@ services:
     volumes:
       - lodestone:/home/user/.lodestone
     restart: unless-stopped
+    ports:
+      - "16662:16662"
+      - "35565-35590:25565-25590"
   lodestone_dashboard:
     image: ghcr.io/lodestone-team/lodestone_dashboard:v0.5.1
     restart: always

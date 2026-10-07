@@ -116,6 +116,9 @@ services:
     configs:
       - source: routr-config-keys-public-pem
         target: /etc/routr/keys/public.pem
+    ports:
+      - "5060:5060/udp"
+      - "5060-5063:5060-5063"
   rtpengine:
     image: fonoster/rtpengine:0.3.17
     restart: unless-stopped
@@ -124,6 +127,9 @@ services:
       PORT_MAX: ${RTPENGINE_PORT_MAX:-20000}
       PORT_MIN: ${RTPENGINE_PORT_MIN:-10000}
       PUBLIC_IP: ${RTPENGINE_PUBLIC_IP:-CHANGE_ME_TO_HOST_IP}
+    ports:
+      - "10000-10100:10000-10100/udp"
+      - "8080:8080"
   asterisk:
     image: fonoster/asterisk:20
     restart: unless-stopped
@@ -198,6 +204,8 @@ services:
         target: /etc/envoy/keys/.gitkeep
       - source: envoy-config-keys-public-pem
         target: /etc/envoy/keys/public.pem
+    ports:
+      - "8449:8449"
 volumes:
   db:
   influxdb:

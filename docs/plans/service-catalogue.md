@@ -325,3 +325,139 @@ found, and what was done about each.
   (`INSTANCE_NAME=${INSTANCE_NAME:-coolify}`): a value may mean something
   to the app, and the converter does not guess.
 
+
+## Second pass: the services that were left out
+
+Asked for on 2026-10-07, after the first pass: the list of what is left out
+was read as work that was not finished. Of the 112, this pass brings in the
+ones that need no rule of `Validate` changed, and says which need one.
+
+### What a rule stands in the way of, and what does not
+
+| Left out for | How many | In this pass |
+|---|---|---|
+| A port of its own, and no web address | 6 | Yes: ports are kept (below) |
+| An address the converter could not place | 5 | Four of them: Coolify's own rule, read properly |
+| `${jwt}` | 2 | Yes: both use it as a secret, which any long random text is |
+| Nothing said about it (Palworld) | 1 | Yes: a line written here |
+| A host name that no service is routed to, beside ports (RustDesk) | 1 | Yes: asked for on the form |
+| The Docker socket, a directory of the server, a capability, the host's network, seccomp off, `volumes_from`, `runtime` | 66 | No. Each is a rule of `Validate`, and a rule is not changed to get a number up: it is asked first |
+| Coolify hides it, a duplicate, an engine musdash runs as a database | 26 | No: not missing |
+| Builds from source, a file the blueprint does not carry, too large, one address shared by path, `${uuid}`, a password hash, secrets from Compose's own environment, four ports under one name | 17 | No: nothing mechanical turns these into a template |
+
+### Decisions
+
+| Question | Decision | Why |
+|---|---|---|
+| Does a template publish ports | Yes, the ones its source published with a port of the server named: SSH for Gitea, MQTT, a game's UDP port. This replaces "a template publishes none" | Every such port in the two catalogues was looked at (83 entries, 35 templates): each is a protocol the proxy cannot carry. Without it the template is half a service, and six are none |
+| Which are dropped | One with no port of the server named (Compose would pick any, which `Validate` refuses), one under 1024 (refused), one bound to an address, and one that is the service's web port (the proxy has it) | `Validate` and `deploy.ValidPublicPort` stay as they are. A mail server therefore still has no port 25: said in the report, as a rule to decide on |
+| A port from 20000 to 29999 | Moved up by 10000 (22222 becomes 32222, 25565 becomes 35565) | That range is musdash's own, for the loopback ports of what it runs. The person sees the number in the Compose tab |
+| A port that is a variable with no default (`${PORT}:25565`) | The variable's default is the container's port, moved the same way | The form would otherwise ask for a number nobody knows |
+| Two copies of one such template on a server | The second fails to start with Docker's "port is already allocated", and its port is changed in the Compose tab | It is so in both catalogues. The rule "two copies never collide" holds for everything reached through the proxy, and cannot for a fixed port |
+| Whose address is `SERVICE_URL_X` when X is no service | The one service that lists it alone in its `environment` (Coolify's own rule), before the one that names it with a port | Mentions are not ownership: a second service that only reads the address made four templates unplaceable |
+| A port no file names | A short table in `overrides.go`, by service, read from the template's own health check | Three services |
+| `${jwt…}` | A 64-character generated value, where the variable it fills is named a secret | A JWT secret is a key, not a token. Anything else that asks for a JWT stays out |
+
+### Work
+
+1. Converter: ports, address ownership by declaration, the header's first
+   port, `${jwt}` as a secret, an unrouted host name beside ports, the
+   Palworld line. Its tests.
+2. Catalogue tests: "no `ports:`" becomes "every published port is one
+   `ValidPublicPort` takes, written as a fixed number or a variable with
+   one", and a template is reached by an address, `connect: true` or a
+   port.
+3. Run the import; the sandbox test for everything; start for real one
+   template with a port beside its address (Gitea) and one with ports only.
+4. README, CLAUDE.md, the left-out list.
+
+### Review of this plan
+
+- *Would publishing ports open something that is closed today?* Yes, on
+  purpose, and only what its makers open: Mailpit's SMTP port, RabbitMQ's
+  AMQP port. Checked that no database port is among the 83. It is written
+  in the Compose text a person sees, not added behind it.
+- *The web port twice.* UniFi and a few others publish the port their
+  address also goes to. The check for it is by service, after addresses are
+  placed.
+- *A range* (`10000-10100/udp`) is kept whole or not at all: its ends are
+  checked and moved together.
+- *Not in this pass, after looking:* a "this service is reached at
+  server:port" line on the service's page. The Compose tab shows the port.
+
+### What the second pass built
+
+**The numbers.** 617 templates (the six, 312 of Coolify's, 305 of
+Dokploy's), 423 of the imported ones with a logo; 100 services left out.
+Twelve are new: Anytype, ConvertX, Enshrouded, Minecraft, OpenPanel,
+Palworld, Picsur, RustDesk, Satisfactory, SparkyFitness, Terraria and
+UniFi Network. Thirty templates publish ports now, among them the eight of
+Gitea and Forgejo (SSH on 32222), GitLab, EMQX, Mosquitto, RabbitMQ, SFTPGo
+and Syncthing. Three are now made from Coolify's template where they were
+made from Dokploy's (Jitsi, Karakeep, Plane): Coolify's is the one
+preferred, and its addresses can be placed now.
+
+**What changed against the plan of this pass**
+
+- *A service that needs a port under 1024 publishes none.* The first run
+  left Stalwart and Poste.io with ManageSieve open and no port 25: a port
+  open for nothing. All of a service's ports or none.
+- *A variable port that had to move is written as its number.* Minecraft's
+  `${PORT}` is also read inside the container; one name with the default
+  25565 in one line and 35565 in the next says nothing a person can follow.
+- *A port written down by hand comes before the header's*, and the header's
+  port is not given to an address when another service's address already
+  has it. Found by reading the output: Swetrix's API was given the
+  dashboard's port.
+
+- *Two that could be converted are left out all the same.* Swetrix's
+  ClickHouse asks for the capability `SYS_NICE`, which the sandbox test
+  refused. Neon's WebSocket proxy relays whoever reaches it to any address
+  (`ALLOW_ADDR_REGEX=.*`): behind Coolify's own domain that is its makers'
+  choice, but a template here gives it a public address, and an open relay
+  into the server's networks is not something a click on Deploy should
+  make. Both are in `rejected.txt`.
+- *A password in a file the template carries.* UniFi's blueprint writes
+  the database's password into the app's environment and into the script
+  that makes the user. Both ends are in the file, so it is generated now;
+  the rule read only the environment before. Where the word also stands
+  in the file with another meaning, all of it is left, as before.
+
+**What it found in the first pass.** Reactive Resume's storage address
+went to port 3000, the app's own, since the header's port was given to the
+one address that named none. It goes to MinIO's 9000 now. The same check
+was run over every template: no other one changed.
+
+**Still left out, and why it is not a matter of converting**
+
+| | Services |
+|---|---|
+| The Docker socket | 39 rows: Portainer, Dozzle, Traefik, Watchtower, Beszel's agent, Coder, the CI runners |
+| A capability (`NET_ADMIN`, `SYS_ADMIN`, `SYS_PTRACE`) | 11: WireGuard, Tailscale, Pi-hole, AnythingLLM, LiveKit |
+| A directory of the server (`/`, `/run/dbus`, `/lib/modules`) | 8: Home Assistant, Netdata, Scrutiny, wg-easy |
+| The host's network, seccomp off, `volumes_from`, `runtime` | 8 |
+
+Each of these is a rule of `Validate`, and what they keep out is a stack
+that can take the server: every Member may deploy a service. Letting the
+catalogue's own templates through, for an Admin, with the page saying what
+the service is given, is a design of its own and a decision that is not
+this plan's to make.
+
+A port under 1024 is the smaller question of the same kind: with it, the
+mail servers (Stalwart, Mailu, Poste.io) and AdGuard Home would be whole.
+
+**What was checked in the second pass**
+
+- `go vet ./... && go test ./...` and `make catalog-test`.
+- `TestCatalogueLoadsInTheSandbox` for all 617, with the ports a
+  deployment lets a stack publish as the rule.
+- Six started for real with `TestCatalogueWithDocker`, which now also
+  connects to every TCP port a template publishes: Gitea (its address, and
+  SSH on 32222), RustDesk (five ports and no address), Terraria (7777),
+  UniFi Network (8443), Picsur (the secret that was `${jwt}`) and
+  SparkyFitness (the address placed by who declares it). Each came up,
+  answered, kept its values across a redeploy and was removed with its
+  volumes. For UniFi that shows the app runs, not that it signed in to its
+  database with the generated password: its port answers either way.
+- Not started: the other six new ones (ConvertX's image is several
+  gigabytes), and the templates that only gained ports.

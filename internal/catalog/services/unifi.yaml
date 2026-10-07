@@ -1,0 +1,46 @@
+# name: Unifi Network
+# about: Unifi Network is an open-source enterprise network management platform for wireless networks.
+# docs: https://help.ui.com/hc/en-us/articles/360012282453-Self-Hosting-a-UniFi-Network-Server
+# website: https://www.ui.com/
+# categories: networking
+# source: dokploy
+services:
+  unifi-network-application:
+    image: lscr.io/linuxserver/unifi-network-application:latest
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - MONGO_HOST=unifi-db
+      - MONGO_USER=unifi
+      - MONGO_PASS=${SERVICE_PASSWORD_MONGO}
+      - MONGO_PORT=27017
+      - MONGO_DBNAME=unifi
+      - MEM_LIMIT=1024
+      - MEM_STARTUP=1024
+      - MONGO_TLS=
+      - MONGO_AUTHSOURCE=
+    volumes:
+      - unifi-network-application-config:/config
+    restart: unless-stopped
+    depends_on:
+      - unifi-db
+    ports:
+      - "8443:8443"
+  unifi-db:
+    image: mongo:4.4
+    volumes:
+      - unifi-db-db-data:/data/db
+    expose:
+      - 27017
+    restart: unless-stopped
+    configs:
+      - source: unifi-db-init-mongo-sh
+        target: /docker-entrypoint-initdb.d/init-mongo.sh
+        mode: 0555
+volumes:
+  unifi-db-db-data:
+  unifi-network-application-config:
+configs:
+  unifi-db-init-mongo-sh:
+    content: "#!/bin/bash\nmongo <<EOF\nuse unifi\ndb.createUser({\nuser: \"unifi\",\npwd: \"${SERVICE_PASSWORD_MONGO}\",\nroles: [\n    { db: \"unifi\", role: \"dbOwner\" },\n    { db: \"unifi_stat\", role: \"dbOwner\" }\n]\n})\nEOF \n"

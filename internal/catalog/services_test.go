@@ -160,7 +160,8 @@ var ownTemplates = map[string]bool{"cloudflared": true, "ghost": true, "minio": 
 func TestServiceCatalogue(t *testing.T) {
 	var (
 		keyRE     = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-		portsRE   = regexp.MustCompile(`(?m)^\s+ports:`)
+		portsRE   = regexp.MustCompile(`^\s+ports:\s*$`)
+		portRE    = regexp.MustCompile(`^\s+- "(\d+(-\d+)?|\$\{[A-Z][A-Z0-9_]*:-\d+\}):\d+(-\d+)?(/udp)?"$`)
 		imageRE   = regexp.MustCompile(`(?m)^\s+image:\s*["']?([^\s"']+)`)
 		commentRE = regexp.MustCompile(`(?m)^#`)
 	)
@@ -207,10 +208,30 @@ func TestServiceCatalogue(t *testing.T) {
 		if len(tpl.Compose) > 128<<10 {
 			t.Errorf("%s: %d KB, more than a Compose file may be", key, len(tpl.Compose)>>10)
 		}
-		// Ports are named by variables, never published by the template:
-		// two copies of one template must not collide on the server.
-		if portsRE.MatchString(tpl.Compose) {
-			t.Errorf("%s: publishes a port itself", key)
+		// What is reached through the proxy publishes nothing: two copies
+		// of one template must not collide on the server. A port a
+		// template does publish is one the proxy cannot carry (SSH, MQTT,
+		// a game's), named in full: a port of the server, as a number or
+		// a variable with one, and the container's. The six written for
+		// musdash publish none.
+		ports := 0
+		lines := strings.Split(tpl.Compose, "\n")
+		for i, line := range lines {
+			if !portsRE.MatchString(line) {
+				continue
+			}
+			if tpl.Source == "" {
+				t.Errorf("%s: publishes a port itself", key)
+			}
+			for _, entry := range lines[i+1:] {
+				if !strings.HasPrefix(strings.TrimSpace(entry), "- ") {
+					break
+				}
+				ports++
+				if !portRE.MatchString(entry) {
+					t.Errorf("%s: the port %s is not a port of the server and one of the container", key, strings.TrimSpace(entry))
+				}
+			}
 		}
 		// Every image carries a tag. One that is a variable carries what
 		// the variable holds.
@@ -231,12 +252,12 @@ func TestServiceCatalogue(t *testing.T) {
 				t.Errorf("%s: %s names an endpoint whose port is declared nowhere", key, v.Name)
 			}
 		}
-		// A template publishes no port, so there are two ways to reach
-		// what it runs: a web address, or the environment's network. One
-		// with neither would be listed and be of use to nobody (a game
-		// server whose port is closed).
-		if len(withPort) == 0 && !tpl.ConnectEnv {
-			t.Errorf("%s: no address and not connected to its environment: nothing can reach it", key)
+		// There are three ways to reach what a template runs: a web
+		// address, the environment's network, or a port of the server it
+		// publishes. One with none would be listed and be of use to
+		// nobody (a game server whose port is closed).
+		if len(withPort) == 0 && !tpl.ConnectEnv && ports == 0 {
+			t.Errorf("%s: no address, no port, and not connected to its environment: nothing can reach it", key)
 		}
 		// What a person must type before a template can be deployed is
 		// asked for on its form. An imported template asks for nothing

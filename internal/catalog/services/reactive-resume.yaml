@@ -60,7 +60,7 @@ services:
       - MINIO_BROWSER_REDIRECT_URL=${MINIO_BROWSER_REDIRECT_URL:-}
       - MINIO_ROOT_USER=$SERVICE_USER_MINIO
       - MINIO_ROOT_PASSWORD=$SERVICE_PASSWORD_MINIO
-      - SERVICE_FQDN_MINIO_3000
+      - SERVICE_FQDN_MINIO_9000
     volumes:
       - minio-data:/data
     healthcheck:

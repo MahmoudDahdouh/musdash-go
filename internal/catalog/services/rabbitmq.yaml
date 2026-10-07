@@ -19,5 +19,7 @@ services:
       retries: 10
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq/
+    ports:
+      - "${PORT:-5672}:5672"
 volumes:
   rabbitmq-data:

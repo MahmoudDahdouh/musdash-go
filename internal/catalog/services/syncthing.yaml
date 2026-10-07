@@ -20,6 +20,10 @@ services:
       interval: 5s
       timeout: 20s
       retries: 10
+    ports:
+      - "32000:22000"
+      - "32000:22000/udp"
+      - "31027:21027/udp"
 volumes:
   syncthing_config:
   syncthing_data1:

@@ -1,0 +1,27 @@
+# name: ConvertX
+# about: ConvertX is a service for converting media files, with optional user registration and file management features.
+# docs: https://github.com/c4illin/ConvertX#environment-variables
+# website: https://github.com/c4illin/ConvertX
+# categories: media, devtools
+# source: dokploy
+services:
+  convertx:
+    image: ghcr.io/c4illin/convertx:latest
+    restart: unless-stopped
+    expose:
+      - 3000
+    environment:
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT_SECRET}
+      - ACCOUNT_REGISTRATION=${ACCOUNT_REGISTRATION:-false}
+      - HTTP_ALLOWED=${HTTP_ALLOWED:-true}
+      - ALLOW_UNAUTHENTICATED=${ALLOW_UNAUTHENTICATED:-false}
+      - AUTO_DELETE_EVERY_N_HOURS=${AUTO_DELETE_EVERY_N_HOURS:-24}
+      - WEBROOT=${WEBROOT:-}
+      - FFMPEG_ARGS=${FFMPEG_ARGS:-}
+      - HIDE_HISTORY=${HIDE_HISTORY:-false}
+      - LANGUAGE=${LANGUAGE:-en}
+      - SERVICE_FQDN_CONVERTX_3000
+    volumes:
+      - convertx-data:/app/data
+volumes:
+  convertx-data:

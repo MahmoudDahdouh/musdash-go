@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -879,9 +880,13 @@ func TestPrepareServiceGeneratesOnceAndTracksEndpoints(t *testing.T) {
 	}
 }
 
+// publishedRE reads a TCP port of the server from a template's "ports":
+// the number, or the default of the variable that holds it.
+var publishedRE = regexp.MustCompile(`(?m)^\s+- "(?:(\d+)|\$\{[A-Z][A-Z0-9_]*:-(\d+)\}):\d+"$`)
+
 // TestCatalogueWithDocker installs templates of the service catalogue on
 // the local Docker daemon: each must come up healthy, answer on the
-// loopback port of its endpoint, keep its data and generated values across
+// loopback port of its endpoint and on the ports it publishes, keep its data and generated values across
 // a redeploy, and go away with its volumes. It downloads several gigabytes
 // of images, so it has its own switch. Without more it installs the
 // templates written for musdash; MUSDASH_SERVICES="wordpress,umami" runs
@@ -937,11 +942,29 @@ func TestCatalogueWithDocker(t *testing.T) {
 				t.Fatalf("%s %s\n%s", got.Status, got.LastError, lastLines(e.serviceLog(s), 30))
 			}
 			endpoints, _ := e.db.ListEndpoints(ctx, s.ID)
-			if len(endpoints) == 0 {
-				t.Fatal("the template has no endpoint")
+			// The TCP ports of the server the template publishes itself,
+			// for what the proxy cannot carry.
+			var published []string
+			for _, m := range publishedRE.FindAllStringSubmatch(tpl.Compose, -1) {
+				published = append(published, m[1]+m[2])
+			}
+			if len(endpoints) == 0 && len(published) == 0 && !tpl.ConnectEnv {
+				t.Fatal("the template has no endpoint and no port")
 			}
 			answers := func() {
 				t.Helper()
+				for _, port := range published {
+					conn, err := net.DialTimeout("tcp", "127.0.0.1:"+port, 5*time.Second)
+					for wait := time.Now().Add(2 * time.Minute); err != nil && time.Now().Before(wait); {
+						time.Sleep(3 * time.Second)
+						conn, err = net.DialTimeout("tcp", "127.0.0.1:"+port, 5*time.Second)
+					}
+					if err != nil {
+						t.Fatalf("the published port %s does not answer: %v", port, err)
+					}
+					conn.Close()
+					t.Logf("the published port %s answers", port)
+				}
 				for _, ep := range endpoints {
 					req, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1:"+strconv.Itoa(ep.HostPort)+"/", nil)
 					req.Host = ep.Host

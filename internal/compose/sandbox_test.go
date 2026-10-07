@@ -213,8 +213,8 @@ func TestCatalogueLoadsInTheSandbox(t *testing.T) {
 			// out a port for each.
 			if want, ours := wantEndpoints[tpl.Key]; ours && strings.Join(got, " ") != want {
 				t.Errorf("endpoints %q, want %q", strings.Join(got, " "), want)
-			} else if len(endpoints) == 0 && !tpl.ConnectEnv {
-				t.Errorf("no endpoint, and not connected to its environment: nothing can reach it")
+			} else if len(endpoints) == 0 && !tpl.ConnectEnv && !strings.Contains(tpl.Compose, "\n    ports:\n") {
+				t.Errorf("no endpoint, no port, and not connected to its environment: nothing can reach it")
 			} else if ours != (tpl.Source == "") {
 				t.Errorf("a template written for musdash that this test does not know, or the other way round (source %q)", tpl.Source)
 			}
@@ -223,7 +223,13 @@ func TestCatalogueLoadsInTheSandbox(t *testing.T) {
 			if err != nil {
 				t.Fatalf("load: %v", err)
 			}
-			err = resolved.Validate(ValidateOptions{Dir: dir, ValidPort: func(int) bool { return false }})
+			// The ports a deployment lets a stack publish
+			// (deploy.ValidPublicPort, which this package cannot name).
+			// The six written for musdash publish none.
+			publicPort := func(p int) bool {
+				return tpl.Source != "" && p >= 1024 && p <= 65535 && (p < 20000 || p > 29999)
+			}
+			err = resolved.Validate(ValidateOptions{Dir: dir, ValidPort: publicPort})
 			if err != nil {
 				t.Fatalf("the template does not pass musdash's own rules:\n%v", err)
 			}

@@ -9,7 +9,6 @@ can still be run from its own Compose file, changed by hand.
 |---|---|---|
 | anythingllm | coolify | it needs the capability SYS_ADMIN, which a stack may not have |
 | anythingllm | dokploy | it needs the capability SYS_ADMIN, which a stack may not have |
-| anytype | dokploy | it is reached on a port of its own, not through the proxy (a game, a VPN, a peer-to-peer node), and a template publishes none |
 | appwrite | coolify | it mounts the Docker socket or Docker's own files, which hands a container the server |
 | appwrite | dokploy | it serves one address from two services, by path |
 | arche | dokploy | it mounts the Docker socket or Docker's own files, which hands a container the server |
@@ -33,7 +32,6 @@ can still be run from its own Compose file, changed by hand.
 | cloudflare-ddns | dokploy | it uses the server's own network (network_mode: host) |
 | coder | coolify | Coolify does not offer it itself (its template is marked to be ignored) |
 | coder | dokploy | it mounts the Docker socket or Docker's own files, which hands a container the server |
-| convertx | dokploy | it needs a generated value musdash has no equal of: ${jwt} |
 | creed | dokploy | it builds an image from source, which a template has none of |
 | crowdsec | dokploy | it mounts a file next to the Compose file that the template does not carry (../files/acquis.yaml) |
 | cup | dokploy | it mounts the Docker socket or Docker's own files, which hands a container the server |
@@ -46,7 +44,6 @@ can still be run from its own Compose file, changed by hand.
 | dozzle-with-auth | coolify | it mounts the Docker socket or Docker's own files, which hands a container the server |
 | dragonfly-db | dokploy | musdash runs it as a database, with backups and a port of its own: see Databases |
 | edgedb | coolify | Coolify does not offer it itself (its template is marked to be ignored) |
-| enshrouded | dokploy | it is reached on a port of its own, not through the proxy (a game, a VPN, a peer-to-peer node), and a template publishes none |
 | ente-photos | coolify | its address WEB names two ports, 3002 and 3004 |
 | erpnext-v16 | dokploy | the catalogue has it as erpnext |
 | esphome | coolify | it uses the server's own network (network_mode: host) |
@@ -75,11 +72,10 @@ can still be run from its own Compose file, changed by hand.
 | macos | dokploy | it needs the capability NET_ADMIN, which a stack may not have |
 | mautic5 | coolify | Coolify does not offer it itself (its template is marked to be ignored) |
 | mcsmanager | dokploy | it mounts the Docker socket or Docker's own files, which hands a container the server |
-| minecraft | coolify | it is reached on a port of its own, not through the proxy (a game, a VPN, a peer-to-peer node), and a template publishes none |
 | minepanel | dokploy | it mounts the Docker socket or Docker's own files, which hands a container the server |
 | minio-community-edition | coolify | Coolify does not offer it itself (its template is marked to be ignored) |
 | multica | dokploy | it builds an image from source, which a template has none of |
-| neon-ws-proxy | coolify | its address NEONPROXY does not say which port it goes to |
+| neon-ws-proxy | coolify | as written it relays a visitor to any address (ALLOW_ADDR_REGEX=.*), and a template gives it a public one |
 | netbird-client | coolify | it needs the capability NET_ADMIN, which a stack may not have |
 | netdata | dokploy | it mounts a directory of the server (/etc/passwd) |
 | nextcloud-aio | dokploy | the catalogue has it as nextcloud |
@@ -88,18 +84,14 @@ can still be run from its own Compose file, changed by hand.
 | odoo-18 | dokploy | the catalogue has it as odoo |
 | odoo-19 | dokploy | the catalogue has it as odoo |
 | openhands | dokploy | it mounts the Docker socket or Docker's own files, which hands a container the server |
-| openpanel | coolify | its address OPAPI does not say which service it is for |
-| openpanel | dokploy | it serves one address from two services, by path |
 | openresty-manager | dokploy | it mounts a directory of the server (/etc/resolv.conf) |
 | openstatus | dokploy | it builds an image from source, which a template has none of |
 | osticket | coolify | Coolify does not offer it itself (its template is marked to be ignored) |
 | outline | dokploy | it ships a fixed password, as a hash, that would be the same on every install |
-| palworld | coolify | its catalogue says nothing about it |
 | paperless-ngx | dokploy | the catalogue has it as paperless |
 | peerdb | dokploy | it serves one address from two services, by path |
 | photoprism | dokploy | it turns off a protection of its container (seccomp:unconfined) |
 | pi-hole | coolify | it needs the capability NET_ADMIN, which a stack may not have |
-| picsur | dokploy | it needs a generated value musdash has no equal of: ${jwt} |
 | pingvinshare | coolify | Coolify does not offer it itself (its template is marked to be ignored) |
 | pingvinshare-with-clamav | coolify | Coolify does not offer it itself (its template is marked to be ignored) |
 | portainer | coolify | it mounts the Docker socket or Docker's own files, which hands a container the server |
@@ -108,24 +100,19 @@ can still be run from its own Compose file, changed by hand.
 | pterodactyl-with-wings | coolify | it mounts the Docker socket or Docker's own files, which hands a container the server |
 | pulse | dokploy | it mounts the Docker socket or Docker's own files, which hands a container the server |
 | registry | dokploy | the catalogue has it as docker-registry |
-| rustdesk | dokploy | it names an address that no service is routed to (server_domain) |
-| satisfactory | coolify | it is reached on a port of its own, not through the proxy (a game, a VPN, a peer-to-peer node), and a template publishes none |
 | scrutiny | dokploy | it mounts a directory of the server (/run/udev) |
 | sim | dokploy | it serves one address from two services, by path |
 | snapp | dokploy | it mounts a file next to the Compose file that the template does not carry (../files/snapp-db) |
 | sonarqube | coolify | Coolify does not offer it itself (its template is marked to be ignored) |
 | spacebot | coolify | it turns off a protection of its container (seccomp=unconfined) |
-| sparkyfitness | coolify | its address SPARKYFITNESS does not say which service it is for |
 | stirling | dokploy | the catalogue has it as stirling-pdf |
 | streamflow | dokploy | it builds an image from source, which a template has none of |
 | supabase | coolify | it needs a generated value musdash has no equal of: SERVICE_SUPABASEANON |
 | supabase | dokploy | its template.toml could not be read |
-| swetrix | coolify | its address SWETRIXAPI does not say which service it is for |
+| swetrix | coolify | it needs the capability SYS_NICE, which a stack may not have |
 | tailscale-client | coolify | it needs the capability NET_ADMIN, which a stack may not have |
-| terraria-server | coolify | it is reached on a port of its own, not through the proxy (a game, a VPN, a peer-to-peer node), and a template publishes none |
 | trigger | coolify | it mounts the Docker socket or Docker's own files, which hands a container the server |
 | triggerdotdev | dokploy | it mounts the Docker socket or Docker's own files, which hands a container the server |
-| unifi | dokploy | it is reached on a port of its own, not through the proxy (a game, a VPN, a peer-to-peer node), and a template publishes none |
 | wg-easy | dokploy | it mounts a directory of the server (/lib/modules) |
 | windmill | coolify | it mounts the Docker socket or Docker's own files, which hands a container the server |
 | windmill | dokploy | it mounts the Docker socket or Docker's own files, which hands a container the server |

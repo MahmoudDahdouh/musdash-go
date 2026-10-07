@@ -12,5 +12,9 @@ services:
       - oryx-data:/data
     environment:
       - SERVICE_FQDN_ORYX_2022
+    ports:
+      - "1935:1935"
+      - "8000:8000/udp"
+      - "10080:10080/udp"
 volumes:
   oryx-data:

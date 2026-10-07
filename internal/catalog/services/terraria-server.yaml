@@ -1,0 +1,26 @@
+# name: Terraria Server
+# about: Docker multi-arch Image for Terraria Server.
+# docs: https://github.com/hexlo/terraria-server-docker
+# categories: games
+# source: coolify
+services:
+  terraria-server:
+    image: hexlo/terraria-server-docker:1.4.5.0
+    stdin_open: true
+    tty: true
+    volumes:
+      - terraria-server:/root/.local/share/Terraria/Worlds
+    environment:
+      - worldpath=${WORLDPATH:-/root/.local/share/Terraria/Worlds}
+      - autocreate=${AUTOCREATE:-2}
+      - world=${WORLD:-world1.wld}
+      - difficulty=${DIFFICULTY:-1}
+      - maxplayers=${MAXPLAYERS:-8}
+      - password=${SERVICE_PASSWORD_TERRARIA}
+      - motd=${MOTD:-Welcome to the server!}
+      - language=${LANGUAGE:-en/US}
+      - secure=${SECURE:-1}
+    ports:
+      - "7777:7777"
+volumes:
+  terraria-server:

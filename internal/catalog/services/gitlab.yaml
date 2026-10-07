@@ -29,6 +29,8 @@ services:
       - "gitlab-logs:/var/log/gitlab"
       - "gitlab-data:/var/opt/gitlab"
     shm_size: 256m
+    ports:
+      - "2222:22"
 volumes:
   gitlab-config:
   gitlab-data:

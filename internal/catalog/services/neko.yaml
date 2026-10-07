@@ -10,3 +10,5 @@ services:
     shm_size: "2gb"
     environment:
       - SERVICE_FQDN_NEKO_8080
+    ports:
+      - "52000-52100:52000-52100/udp"
