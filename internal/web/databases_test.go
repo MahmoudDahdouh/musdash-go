@@ -66,6 +66,37 @@ func TestCreateDatabase(t *testing.T) {
 			t.Errorf("the engine list is missing %s", tpl.Label)
 		}
 	}
+	// Each is a card with its logo, its documentation and website at the
+	// start of the foot and Deploy, the one link to its form, at the end.
+	for _, tpl := range catalog.Databases() {
+		at := strings.Index(engines, `data-search="database `+tpl.Engine+` `)
+		if at < 0 {
+			t.Errorf("%s: no card", tpl.Label)
+			continue
+		}
+		card := between(t, tpl.Label, engines[strings.LastIndex(engines[:at], "<li"):], "<li", "</li>")
+		form := html.EscapeString("/projects/" + projectID + "/env/" + env.ID + "/database/new?engine=" + tpl.Engine)
+		for _, want := range []string{
+			`<img src="/static/logo-` + tpl.Engine + `.svg?v=`,
+			`href="` + tpl.Docs + `" target="_blank" rel="noopener"`,
+			`href="` + tpl.Website + `" target="_blank" rel="noopener"`,
+			`offer-go" href="` + form + `" aria-label="Deploy: ` + tpl.Label + `"`,
+		} {
+			if !strings.Contains(card, want) {
+				t.Errorf("%s: no %s in its card: %s", tpl.Label, want, card)
+			}
+		}
+		if strings.Count(card, form) != 1 {
+			t.Errorf("%s: its card has more than one link to the form", tpl.Label)
+		}
+	}
+	// A way into a private repository that the team does not have yet does
+	// not say Deploy: its card leads to where the access is added.
+	for title, action := range map[string]string{"Private repository, with a GitHub App": "Connect", "Private repository, with GitLab": "Connect", "Private repository, with a deploy key": "Add key"} {
+		if !strings.Contains(engines, `aria-label="`+action+`: `+title+`"`) {
+			t.Errorf("%s: its button does not say %s", title, action)
+		}
+	}
 	_, form := a.get("/projects/" + projectID + "/env/" + env.ID + "/database/new?engine=postgres")
 	if !strings.Contains(form, `value="postgres:17-alpine"`) {
 		t.Fatal("the form does not offer the default image")

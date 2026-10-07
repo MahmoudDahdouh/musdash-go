@@ -1223,7 +1223,7 @@ func Gallery(s ui.Shell) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Tiles("Projects", false).Render(templ.WithChildren(ctx, templ_7745c5c3_Var40), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Tiles("Projects").Render(templ.WithChildren(ctx, templ_7745c5c3_Var40), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1239,21 +1239,21 @@ func Gallery(s ui.Shell) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: "#", Icon: "github", Title: "Public repository", Text: "Any Git host, read without signing in.", Compact: true}).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.Offer(ui.OfferProps{Href: "#", Logo: "postgres", Icon: "database", Title: "PostgreSQL", Text: "The general-purpose relational database.", Docs: "https://www.postgresql.org/docs/", Website: "https://www.postgresql.org/"}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: "#", Icon: "box", Title: "Docker image", Text: "An image from a registry.", Compact: true}).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.Offer(ui.OfferProps{Href: "#", Logo: "docker", Icon: "box", Title: "Docker image", Text: "Run an image from a registry."}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: "#", Icon: "database", Title: "PostgreSQL", Text: "postgres:17-alpine", Mono: true, Compact: true}).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.Offer(ui.OfferProps{Href: "#", Icon: "key", Title: "Private repository, with a deploy key", Text: "No logo of its own: its icon, in the brand's blue.", Action: "Add key"}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Tiles("Kinds of resource", true).Render(templ.WithChildren(ctx, templ_7745c5c3_Var44), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Offers("Kinds of resource").Render(templ.WithChildren(ctx, templ_7745c5c3_Var44), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

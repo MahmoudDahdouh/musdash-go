@@ -271,27 +271,24 @@ type TileProps struct {
 	Mono bool
 	// State, when set, is written as a pill at the top right.
 	State string
-	// Compact is the small form, for a choice among many: no square behind
-	// the icon and no row of figures.
-	Compact bool
 	// Search is the text a filter field looks in. Empty leaves the tile
 	// out of filtering.
 	Search string
 }
 
 // Tiles is a grid of tiles. label says what they are, for a screen reader.
-templ Tiles(label string, compact bool) {
-	<ul class={ "tiles", templ.KV("tiles-compact", compact) } aria-label={ label }>
+templ Tiles(label string) {
+	<ul class="tiles" aria-label={ label }>
 		{ children... }
 	</ul>
 }
 
 // Tile is one thing among several of its kind, the whole of it a link:
-// a project, a resource, a kind of resource to add. Its children are the
-// figures in the row at its bottom (Meta).
+// a project, an environment, a resource. Its children are the figures in
+// the row at its bottom (Meta). A kind of thing to add is an Offer.
 templ Tile(p TileProps) {
 	<li
-		class={ "tile", templ.KV("tile-compact", p.Compact) }
+		class="tile"
 		if p.State != "" {
 			data-state={ p.State }
 		}
@@ -303,7 +300,7 @@ templ Tile(p TileProps) {
 			<span class="tile-icon">
 				@Icon(p.Icon)
 			</span>
-			<h3 class={ "tile-title flex-1", templ.KV("truncate", !p.Compact) }>
+			<h3 class="tile-title flex-1 truncate">
 				<a class="tile-link" href={ templ.SafeURL(p.Href) }>{ p.Title }</a>
 			</h3>
 			if p.State != "" {
@@ -313,11 +310,9 @@ templ Tile(p TileProps) {
 		if p.Text != "" {
 			<p class={ "tile-text", templ.KV("fact", p.Mono) }>{ p.Text }</p>
 		}
-		if !p.Compact {
-			<div class="tile-meta">
-				{ children... }
-			</div>
-		}
+		<div class="tile-meta">
+			{ children... }
+		</div>
 	</li>
 }
 

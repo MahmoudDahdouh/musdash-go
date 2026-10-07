@@ -1,0 +1,52 @@
+package ui
+
+import (
+	"context"
+	"strings"
+	"testing"
+)
+
+func renderOffer(t *testing.T, p OfferProps) string {
+	t.Helper()
+	var b strings.Builder
+	if err := Offer(p).Render(context.Background(), &b); err != nil {
+		t.Fatal(err)
+	}
+	return b.String()
+}
+
+// TestOffer pins the card of something that can be added: the owner's logo
+// as an image, the links that lead outside before the one action, and that
+// action the card's only link into the dashboard.
+func TestOffer(t *testing.T) {
+	full := renderOffer(t, OfferProps{Href: "/add", Logo: "postgres", Icon: "database", Title: "PostgreSQL", Text: "A database.", Docs: "https://docs.example/", Website: "https://example/"})
+	if !strings.Contains(full, `<img src="/static/logo-postgres.svg?v=`) || !strings.Contains(full, `width="48" height="48"`) {
+		t.Errorf("no logo of 48px: %s", full)
+	}
+	docs, site, action := strings.Index(full, "Docs</a>"), strings.Index(full, "Website</a>"), strings.Index(full, `href="/add"`)
+	if docs < 0 || site < docs || action < site {
+		t.Errorf("the foot is not Docs, Website, then the action: %s", full)
+	}
+	for _, link := range []string{`href="https://docs.example/" target="_blank" rel="noopener"`, `href="https://example/" target="_blank" rel="noopener"`} {
+		if !strings.Contains(full, link) {
+			t.Errorf("no %s in %s", link, full)
+		}
+	}
+	if !strings.Contains(full, `class="btn btn-sm btn-secondary offer-go" href="/add" aria-label="Deploy: PostgreSQL"`) || strings.Count(full, `href="/add"`) != 1 {
+		t.Errorf("the action is not the one link to the form: %s", full)
+	}
+
+	// Nothing to read about it, and an action of its own.
+	bare := renderOffer(t, OfferProps{Href: "/sources", Logo: "github", Icon: "github", Title: "GitHub", Action: "Connect"})
+	if strings.Contains(bare, "_blank") || !strings.Contains(bare, `aria-label="Connect: GitHub"`) || strings.Contains(bare, "Deploy") {
+		t.Errorf("a card with no links and its own action: %s", bare)
+	}
+
+	// A name this build has no file for is drawn with the icon, not with a
+	// page that fails.
+	for _, logo := range []string{"", "no-such-product"} {
+		if plain := renderOffer(t, OfferProps{Href: "/add", Logo: logo, Icon: "key", Title: "Key"}); strings.Contains(plain, "<img") || !strings.Contains(plain, `<svg class="icon"`) {
+			t.Errorf("logo %q: want the icon in its place: %s", logo, plain)
+		}
+	}
+}

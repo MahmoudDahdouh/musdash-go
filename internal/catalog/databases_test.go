@@ -27,6 +27,10 @@ func TestEveryEngineIsComplete(t *testing.T) {
 		if tpl.Label == "" || tpl.About == "" || tpl.Port == 0 || tpl.DefaultUser == "" {
 			t.Errorf("%s: a required field is empty", tpl.Engine)
 		}
+		// The card of an engine links to both.
+		if !strings.HasPrefix(tpl.Docs, "https://") || !strings.HasPrefix(tpl.Website, "https://") {
+			t.Errorf("%s: docs %q and website %q must both be https addresses", tpl.Engine, tpl.Docs, tpl.Website)
+		}
 		if !imageRE.MatchString(tpl.Image) {
 			t.Errorf("%s: image %q must carry an explicit tag", tpl.Engine, tpl.Image)
 		}

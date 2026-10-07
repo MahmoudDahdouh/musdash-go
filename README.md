@@ -472,7 +472,7 @@ The design system lives in two places:
 - Tokens and component styles: `internal/web/assets/input.css`
 - Components: `internal/web/ui`
 
-Icons are from the free [Hugeicons](https://hugeicons.com) set, Stroke Rounded (MIT licence, `internal/web/ui/icons.LICENSE`). The logos of the notification channels (Discord, Slack, Mattermost, Telegram, Pushover) are from the [selfh.st icon collection](https://selfh.st/icons) (CC BY 4.0, `internal/web/static/logos.LICENSE`, which says what was changed); each is a trademark of its owner.
+Icons are from the free [Hugeicons](https://hugeicons.com) set, Stroke Rounded (MIT licence, `internal/web/ui/icons.LICENSE`). The logos of the notification channels and of what the Add resource page offers are from the [selfh.st icon collection](https://selfh.st/icons) (CC BY 4.0), but for Ghost's ([Simple Icons](https://simpleicons.org), CC0) and KeyDB's and Dragonfly's (the outlines [Coolify](https://github.com/coollabsio/coolify) ships, Apache 2.0). `internal/web/static/logos.LICENSE` says which is which and what was changed; each is a trademark of its owner.
 
 ## Layout
 

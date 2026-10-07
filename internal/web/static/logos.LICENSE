@@ -1,13 +1,30 @@
 logo-discord.svg, logo-slack.svg, logo-mattermost.svg, logo-telegram.svg
-and logo-pushover.svg are from the selfh.st icon collection
+and logo-pushover.svg (the notification channels), and logo-git.svg,
+logo-github.svg, logo-gitlab.svg, logo-docker.svg, logo-postgres.svg,
+logo-mysql.svg, logo-mariadb.svg, logo-mongodb.svg, logo-redis.svg,
+logo-clickhouse.svg, logo-cloudflared.svg, logo-minio.svg, logo-n8n.svg,
+logo-uptime-kuma.svg and logo-wordpress.svg (what the Add resource page
+offers) are from the selfh.st icon collection
 (https://selfh.st/icons, https://github.com/selfhst/icons), which is
 licensed under Creative Commons Attribution 4.0 International
 (https://creativecommons.org/licenses/by/4.0/).
 
 Changed here: each style attribute is written as the presentation
 attributes it stands for (style="fill:#5865f2" is fill="#5865f2"), since
-the dashboard's content security policy drops a style attribute. Nothing
-else of a file is changed.
+the dashboard's content security policy drops a style attribute, and a
+<style> element of classes is written onto what had the class, for the
+same reason. Nothing else of a file is changed.
+
+The collection has no SVG of three:
+
+logo-ghost.svg is the outline from Simple Icons
+(https://simpleicons.org, CC0 1.0), in Ghost's own black on a white disc.
+
+logo-keydb.svg and logo-dragonfly.svg are the outlines from Coolify's
+public/svgs (https://github.com/coollabsio/coolify, Apache License 2.0),
+which draws them in one colour. Changed here: the colours are those of
+each owner's own icon (KeyDB's favicon; the two ends of the gradient in
+Dragonfly's logo), and the editor's metadata is removed.
 
 Each logo is a trademark of its owner and is used only to name that
 owner's service.

@@ -81,7 +81,7 @@ templ Tags(s ui.Shell, list []db.TagCount, f ui.Form) {
 				}
 			}
 		} else {
-			@ui.Tiles("Tags", false) {
+			@ui.Tiles("Tags") {
 				for _, t := range list {
 					@ui.Tile(ui.TileProps{Href: "/tags/" + t.Tag, Icon: "tag", Title: t.Tag}) {
 						if t.Apps+t.Services == 0 {

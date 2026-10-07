@@ -1,6 +1,7 @@
 # name: Ghost
 # about: A publishing platform for blogs and newsletters, with its own MySQL database.
 # docs: https://ghost.org/docs/
+# website: https://ghost.org/
 services:
   ghost:
     image: ghost:5-alpine

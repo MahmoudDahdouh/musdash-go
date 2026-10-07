@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -585,6 +586,36 @@ func TestEveryChannelKindHasALogo(t *testing.T) {
 		}
 		if len(body) > 2048 {
 			t.Errorf("logo-%s.svg is %d bytes: a logo of 16 pixels should be far under that", k.Kind, len(body))
+		}
+	}
+}
+
+// Everything the Add resource page offers has its owner's logo: one file
+// for an engine or a template, named by its key, and nothing on the page.
+// The files are held to what the notification kinds' are: a browser drops
+// a style inside an image, and a logo reaches for no other address.
+func TestEveryOfferHasALogo(t *testing.T) {
+	a := newApp(t, false)
+	names := []string{"git", "github", "gitlab", "docker"}
+	for _, e := range catalog.Databases() {
+		names = append(names, e.Engine)
+	}
+	for _, s := range catalog.Services() {
+		names = append(names, s.Key)
+	}
+	for _, name := range names {
+		res, body := a.get("/static/logo-" + name + ".svg")
+		if res.StatusCode != http.StatusOK || res.Header.Get("Content-Type") != "image/svg+xml" {
+			t.Errorf("no logo-%s.svg (%d, %q)", name, res.StatusCode, res.Header.Get("Content-Type"))
+			continue
+		}
+		for _, bad := range []string{"style", "class=", "currentColor", "<script", "href", "<image", "<foreignObject"} {
+			if strings.Contains(body, bad) {
+				t.Errorf("logo-%s.svg holds %q", name, bad)
+			}
+		}
+		if len(body) > 6<<10 {
+			t.Errorf("logo-%s.svg is %d bytes: find a simpler drawing", name, len(body))
 		}
 	}
 }

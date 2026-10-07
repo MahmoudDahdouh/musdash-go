@@ -165,7 +165,7 @@ func TestServiceCatalogue(t *testing.T) {
 	serviceRE := regexp.MustCompile(`(?m)^  ([a-z0-9-]+):\s*$`)
 	for _, key := range want {
 		tpl, ok := Service(key)
-		if !ok || tpl.Name == "" || tpl.About == "" || !strings.HasPrefix(tpl.Docs, "https://") {
+		if !ok || tpl.Name == "" || tpl.About == "" || !strings.HasPrefix(tpl.Docs, "https://") || !strings.HasPrefix(tpl.Website, "https://") {
 			t.Errorf("%s: missing, or its header is incomplete: %+v", key, tpl)
 			continue
 		}

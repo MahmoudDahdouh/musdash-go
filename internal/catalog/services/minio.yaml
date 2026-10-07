@@ -1,6 +1,7 @@
 # name: MinIO
 # about: S3-compatible object storage, with a web console.
 # docs: https://min.io/docs/minio/container/index.html
+# website: https://www.min.io/
 services:
   minio:
     # MinIO no longer publishes its own image. This one is built from MinIO's

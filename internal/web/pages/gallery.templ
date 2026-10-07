@@ -224,7 +224,7 @@ templ Gallery(s ui.Shell) {
 				}
 			}
 			@gallerySection("Tiles") {
-				@ui.Tiles("Projects", false) {
+				@ui.Tiles("Projects") {
 					@ui.Tile(ui.TileProps{Href: "#", Icon: "folder", Title: "Shop", Text: "The storefront, its API and what they keep their data in. A description longer than three lines is cut off where the third one ends, so every tile of a row keeps the same shape whatever was written about it."}) {
 						@ui.Meta("app-window", "3", "apps")
 						@ui.Meta("database", "1", "databases")
@@ -238,10 +238,10 @@ templ Gallery(s ui.Shell) {
 						@ui.Meta("database", "PostgreSQL", "engine")
 					}
 				}
-				@ui.Tiles("Kinds of resource", true) {
-					@ui.Tile(ui.TileProps{Href: "#", Icon: "github", Title: "Public repository", Text: "Any Git host, read without signing in.", Compact: true})
-					@ui.Tile(ui.TileProps{Href: "#", Icon: "box", Title: "Docker image", Text: "An image from a registry.", Compact: true})
-					@ui.Tile(ui.TileProps{Href: "#", Icon: "database", Title: "PostgreSQL", Text: "postgres:17-alpine", Mono: true, Compact: true})
+				@ui.Offers("Kinds of resource") {
+					@ui.Offer(ui.OfferProps{Href: "#", Logo: "postgres", Icon: "database", Title: "PostgreSQL", Text: "The general-purpose relational database.", Docs: "https://www.postgresql.org/docs/", Website: "https://www.postgresql.org/"})
+					@ui.Offer(ui.OfferProps{Href: "#", Logo: "docker", Icon: "box", Title: "Docker image", Text: "Run an image from a registry."})
+					@ui.Offer(ui.OfferProps{Href: "#", Icon: "key", Title: "Private repository, with a deploy key", Text: "No logo of its own: its icon, in the brand's blue.", Action: "Add key"})
 				}
 			}
 			@gallerySection("Trail and switcher") {

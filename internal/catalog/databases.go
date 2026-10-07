@@ -13,8 +13,11 @@ type DBTemplate struct {
 	Engine string // "postgres"
 	Label  string // "PostgreSQL"
 	About  string // one line for the engine picker
-	Image  string // default image; a person may choose another tag
-	Port   int    // the port clients connect to
+	// Docs and Website are where the engine's makers write about it.
+	Docs    string
+	Website string
+	Image   string // default image; a person may choose another tag
+	Port    int    // the port clients connect to
 	// Env is the container's environment. Values may use {{.User}},
 	// {{.Pass}} and {{.DB}}.
 	Env map[string]string
@@ -113,6 +116,7 @@ const (
 var databases = []DBTemplate{
 	{
 		Engine: "postgres", Label: "PostgreSQL", About: "The general-purpose relational database.",
+		Docs: "https://www.postgresql.org/docs/", Website: "https://www.postgresql.org/",
 		Image: "postgres:17-alpine", Port: 5432,
 		Env:        map[string]string{"POSTGRES_USER": "{{.User}}", "POSTGRES_PASSWORD": "{{.Pass}}", "POSTGRES_DB": "{{.DB}}"},
 		VolumePath: "/var/lib/postgresql/data",
@@ -127,6 +131,7 @@ var databases = []DBTemplate{
 	},
 	{
 		Engine: "mysql", Label: "MySQL", About: "The widely used relational database.",
+		Docs: "https://dev.mysql.com/doc/", Website: "https://www.mysql.com/",
 		Image: "mysql:8.4", Port: 3306,
 		// The administrator shares the generated password but can only log
 		// in from inside the container, which is how backups run. What an
@@ -146,6 +151,7 @@ var databases = []DBTemplate{
 	},
 	{
 		Engine: "mariadb", Label: "MariaDB", About: "A community-developed fork of MySQL.",
+		Docs: "https://mariadb.com/docs/", Website: "https://mariadb.org/",
 		Image: "mariadb:11", Port: 3306,
 		Env: map[string]string{
 			"MARIADB_ROOT_PASSWORD": "{{.Pass}}", "MARIADB_ROOT_HOST": "localhost",
@@ -160,6 +166,7 @@ var databases = []DBTemplate{
 	},
 	{
 		Engine: "mongodb", Label: "MongoDB", About: "A document database.",
+		Docs: "https://www.mongodb.com/docs/", Website: "https://www.mongodb.com/",
 		Image: "mongo:8", Port: 27017,
 		Env:        map[string]string{"MONGO_INITDB_ROOT_USERNAME": "{{.User}}", "MONGO_INITDB_ROOT_PASSWORD": "{{.Pass}}"},
 		VolumePath: "/data/db",
@@ -173,6 +180,7 @@ var databases = []DBTemplate{
 	},
 	{
 		Engine: "redis", Label: "Redis", About: "An in-memory key-value store, saved to disk.",
+		Docs: "https://redis.io/docs/latest/", Website: "https://redis.io/",
 		Image: "redis:7-alpine", Port: 6379,
 		Env:         map[string]string{"REDIS_PASSWORD": "{{.Pass}}", "REDISCLI_AUTH": "{{.Pass}}"},
 		Command:     []string{"sh", "-c", redisCommand},
@@ -184,6 +192,7 @@ var databases = []DBTemplate{
 	},
 	{
 		Engine: "keydb", Label: "KeyDB", About: "A multithreaded, Redis-compatible store.",
+		Docs: "https://docs.keydb.dev/docs/", Website: "https://docs.keydb.dev/",
 		Image: "eqalpha/keydb:latest", Port: 6379,
 		Env:         map[string]string{"REDIS_PASSWORD": "{{.Pass}}", "REDISCLI_AUTH": "{{.Pass}}"},
 		Command:     []string{"sh", "-c", keydbCommand},
@@ -194,6 +203,7 @@ var databases = []DBTemplate{
 	},
 	{
 		Engine: "dragonfly", Label: "Dragonfly", About: "A fast, Redis-compatible in-memory store.",
+		Docs: "https://www.dragonflydb.io/docs", Website: "https://www.dragonflydb.io/",
 		Image: "docker.dragonflydb.io/dragonflydb/dragonfly:latest", Port: 6379,
 		// Dragonfly reads any flag from an environment variable named
 		// DFLY_<flag>.
@@ -204,6 +214,7 @@ var databases = []DBTemplate{
 	},
 	{
 		Engine: "clickhouse", Label: "ClickHouse", About: "A column store for analytics.",
+		Docs: "https://clickhouse.com/docs", Website: "https://clickhouse.com/",
 		Image: "clickhouse/clickhouse-server:latest-alpine", Port: 9000,
 		Env: map[string]string{
 			"CLICKHOUSE_USER": "{{.User}}", "CLICKHOUSE_PASSWORD": "{{.Pass}}", "CLICKHOUSE_DB": "{{.DB}}",

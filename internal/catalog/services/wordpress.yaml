@@ -1,6 +1,7 @@
 # name: WordPress
 # about: The publishing platform, with its own MariaDB database.
 # docs: https://wordpress.org/documentation/
+# website: https://wordpress.org/
 services:
   wordpress:
     image: wordpress:6-apache

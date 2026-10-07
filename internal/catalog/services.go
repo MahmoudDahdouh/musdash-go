@@ -14,6 +14,7 @@ import (
 //	name     what the catalogue calls it
 //	about    one line for the catalogue
 //	docs     where its documentation is
+//	website  where its makers present it
 //	connect  "true" when the stack must join the environment's network to
 //	         be of use, as a tunnel that forwards to apps does
 //
@@ -26,6 +27,7 @@ type ServiceTemplate struct {
 	Name    string
 	About   string
 	Docs    string
+	Website string
 	Compose string // the whole file, header included
 	// ConnectEnv is the template's default for joining the environment's
 	// network.
@@ -62,6 +64,8 @@ var serviceTemplates = sync.OnceValue(func() []ServiceTemplate {
 				t.About = value
 			case "docs":
 				t.Docs = value
+			case "website":
+				t.Website = value
 			case "connect":
 				t.ConnectEnv = value == "true"
 			}

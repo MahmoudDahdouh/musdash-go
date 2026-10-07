@@ -47,7 +47,7 @@ templ ProjectList(s ui.Shell, projects []db.Project, f ui.Form) {
 				}
 			}
 		} else {
-			@ui.Tiles("Projects", false) {
+			@ui.Tiles("Projects") {
 				for _, p := range projects {
 					@ui.Tile(ui.TileProps{Href: "/projects/" + p.ID, Icon: "folder", Title: p.Name, Text: p.Description}) {
 						@ui.Meta(KindIcon(db.KindApp), strconv.Itoa(p.Apps), noun(p.Apps, "app", "apps"))
@@ -82,7 +82,7 @@ templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, f ui.Form) {
 			}
 		}
 		@ui.Tabs(projectTabs(p), "environments")
-		@ui.Tiles("Environments", false) {
+		@ui.Tiles("Environments") {
 			for _, e := range envs {
 				@ui.Tile(ui.TileProps{Href: EnvPath(p.ID, e.ID), Icon: "box", Title: e.Name}) {
 					@ui.Meta(KindIcon(db.KindApp), strconv.Itoa(e.Apps), noun(e.Apps, "app", "apps"))

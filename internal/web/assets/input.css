@@ -79,6 +79,8 @@
   --size-control: 2rem; /* 32px: inputs and buttons */
   --size-control-sm: 1.75rem; /* 28px */
   --size-rail: 3px;
+  --size-logo: 3rem; /* 48px: a logo on the card of something to add */
+  --size-mark: 4rem; /* 64px: the square it stands on */
 }
 
 @layer base {
@@ -622,8 +624,8 @@
   }
 
   /* Tile ---------------------------------------------------------------
-   * One thing among several of its kind: a project, a resource, a kind of
-   * resource to add. An icon in a grey square, a heading, a description of
+   * One thing among several of its kind: a project, an environment, a
+   * resource. An icon in a grey square, a heading, a description of
    * up to three lines and a row of figures at the bottom. The heading is
    * the link and its ::after covers the tile, so the whole tile is the
    * target while there is one link to tab to and one name read out.
@@ -726,24 +728,82 @@
     position: relative;
     z-index: 1;
   }
-  /* Compact: a choice in a long list of them. No square behind the icon
-     and less room around it. */
-  .tiles-compact {
-    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-    gap: 8px;
+  /*
+   * Offer: one thing that can be added, on the page that lists them all
+   * (ui.Offer). A tile's box with the owner's mark on a soft square, the
+   * name and a line beside it and, under a rule, a foot: where to read
+   * about it at the start, the button that starts it at the end. Start
+   * and end, never left and right: the foot follows the text's direction.
+   */
+  .offers {
+    grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
   }
-  .tile-compact {
-    padding: 12px;
-    border-radius: var(--radius-md);
+  .offer {
+    gap: 16px;
   }
-  .tile-compact .tile-head {
+  .offer-head {
+    display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: 12px;
+    min-width: 0;
   }
-  .tile-compact .tile-icon {
-    width: 20px;
-    height: 20px;
-    background: none;
+  /* A tile cuts its description after three lines. An offer's is the
+     catalogue's own sentence, and may say what has to be done first: all
+     of it is shown. */
+  .offer .tile-text {
+    display: block;
+  }
+  /* The logo is 48px, with 8px of the square around it. An offer with no
+     logo has its icon there, in the brand's blue. */
+  .offer-mark {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: var(--size-mark);
+    height: var(--size-mark);
+    border-radius: var(--radius-lg);
+    background: var(--color-sunk-strong);
+    color: var(--color-brand-600);
+  }
+  .offer-mark img {
+    width: var(--size-logo);
+    height: var(--size-logo);
+    object-fit: contain;
+  }
+  .offer-mark .icon {
+    width: var(--size-control);
+    height: var(--size-control);
+  }
+  /* The rule is the card's width: the foot reaches back over the tile's
+     padding on three sides. */
+  .offer-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-block: auto -16px;
+    margin-inline: -16px;
+    padding: 8px 12px;
+    border-block-start: 1px solid var(--color-line);
+  }
+  /* The links that lead outside stand above the one that covers the
+     card. */
+  .offer-foot > :not(.offer-go) {
+    position: relative;
+    z-index: 1;
+  }
+  .offer-go {
+    margin-inline-start: auto;
+  }
+  .offer-go::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-lg);
+  }
+  .tile:has(.offer-go:hover) {
+    border-color: var(--color-ink-faint);
+    box-shadow: var(--shadow-raised);
   }
 
   /* State rail: a coloured left edge that says what a resource is doing.
