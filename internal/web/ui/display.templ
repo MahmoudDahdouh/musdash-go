@@ -633,23 +633,9 @@ type ConfirmProps struct {
 // submit button stays disabled until Match has been typed. Its children
 // explain what will be lost.
 templ Confirm(p ConfirmProps) {
-	@ConfirmTrigger(p)
-	@ConfirmDialog(p) {
-		{ children... }
-	}
-}
-
-// ConfirmTrigger is the button of a Confirm alone, for one that stands where
-// its dialog cannot: inside another form, which cannot hold the dialog's.
-templ ConfirmTrigger(p ConfirmProps) {
 	@Button(ButtonProps{Variant: DangerQuiet, Icon: "trash", Attrs: templ.Attributes{"data-open": p.ID}}) {
 		{ p.Trigger }
 	}
-}
-
-// ConfirmDialog is the dialog of a Confirm alone, to go with a
-// ConfirmTrigger.
-templ ConfirmDialog(p ConfirmProps) {
 	@Modal(p.ID, p.Title) {
 		<form method="post" action={ templ.SafeURL(p.Action) }>
 			@CSRF(p.CSRF)

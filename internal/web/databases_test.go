@@ -357,7 +357,7 @@ func TestStopStartAndDeleteDatabase(t *testing.T) {
 
 	// Neither the environment nor the project can go while it holds a
 	// database.
-	projectSettings := "/projects/" + projectID // its Settings are a dialog of its page
+	projectSettings := "/projects/" + projectID + "/settings"
 	res, _ = a.post(projectSettings, "/projects/"+projectID+"/delete", url.Values{"confirm": {"Shop"}})
 	wantRedirect(t, res, projectSettings)
 	if _, err := a.db.Project(ctx, firstTeam(t, a), projectID); err != nil {

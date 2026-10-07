@@ -548,7 +548,7 @@ func TestServiceFailureStopAndDelete(t *testing.T) {
 	wantStatus(t, res, http.StatusConflict)
 
 	// The project cannot go while it holds a service.
-	projectSettings := "/projects/" + projectID // its Settings are a dialog of its page
+	projectSettings := "/projects/" + projectID + "/settings"
 	res, _ = a.post(projectSettings, "/projects/"+projectID+"/delete", url.Values{"confirm": {"Shop"}})
 	wantRedirect(t, res, projectSettings)
 

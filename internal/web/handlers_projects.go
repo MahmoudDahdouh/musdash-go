@@ -82,21 +82,20 @@ func (s *Server) projectCreate(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, "/projects/"+p.ID)
 }
 
-// renderProject draws a project's page: its environments as cards. details
-// is the Settings form and add the Add environment form, with what was
-// refused when one comes back.
-func (s *Server) renderProject(w http.ResponseWriter, r *http.Request, status int, p db.Project, details, add ui.Form) {
+// renderProject draws a project's page: its environments as cards. f is
+// the Add environment form, with what was refused when it comes back.
+func (s *Server) renderProject(w http.ResponseWriter, r *http.Request, status int, p db.Project, f ui.Form) {
 	envs, err := s.DB.ListEnvironments(r.Context(), p.ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, status, pages.ProjectShow(s.shell(w, r, p.Name, "projects", projectCrumbs(p)...), p, envs, details, add))
+	s.render(w, r, status, pages.ProjectShow(s.shell(w, r, p.Name, "projects", projectCrumbs(p)...), p, envs, f))
 }
 
 func (s *Server) projectShow(w http.ResponseWriter, r *http.Request) {
 	if p, ok := s.loadProject(w, r); ok {
-		s.renderProject(w, r, http.StatusOK, p, ui.Form{}, ui.Form{})
+		s.renderProject(w, r, http.StatusOK, p, ui.Form{})
 	}
 }
 
@@ -115,11 +114,14 @@ func (s *Server) environmentShow(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, pages.EnvironmentShow(s.shell(w, r, env.Name, "projects", envCrumbs(p, env)...), p, env, res))
 }
 
-// projectSettings is where the project's Settings were a page. They are a
-// dialog of the project's page now, which this address leads to.
+// renderSettings draws the project's Settings tab; details is its form.
+func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, status int, p db.Project, details ui.Form) {
+	s.render(w, r, status, pages.ProjectSettings(s.shell(w, r, p.Name, "projects", projectCrumbs(p, ui.Crumb{Label: "Settings"})...), p, details))
+}
+
 func (s *Server) projectSettings(w http.ResponseWriter, r *http.Request) {
 	if p, ok := s.loadProject(w, r); ok {
-		redirect(w, r, "/projects/"+p.ID)
+		s.renderSettings(w, r, http.StatusOK, p, ui.Form{})
 	}
 }
 
@@ -130,7 +132,7 @@ func (s *Server) projectUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	name, description, f := projectForm(r)
 	if !f.OK() {
-		s.renderProject(w, r, http.StatusUnprocessableEntity, p, f, ui.Form{})
+		s.renderSettings(w, r, http.StatusUnprocessableEntity, p, f)
 		return
 	}
 	if err := s.DB.UpdateProject(r.Context(), p.TeamID, p.ID, name, description); err != nil {
@@ -138,7 +140,7 @@ func (s *Server) projectUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Project saved.")
-	redirect(w, r, "/projects/"+p.ID)
+	redirect(w, r, "/projects/"+p.ID+"/settings")
 }
 
 func (s *Server) projectDelete(w http.ResponseWriter, r *http.Request) {
@@ -150,13 +152,13 @@ func (s *Server) projectDelete(w http.ResponseWriter, r *http.Request) {
 	// stray or scripted POST cannot delete a project.
 	if strings.TrimSpace(r.PostFormValue("confirm")) != p.Name {
 		setFlash(w, r, ui.ToneDanger, "The project was not deleted: the name you typed did not match.")
-		redirect(w, r, "/projects/"+p.ID)
+		redirect(w, r, "/projects/"+p.ID+"/settings")
 		return
 	}
 	err := s.DB.DeleteProject(r.Context(), p.TeamID, p.ID)
 	if db.IsForeignKey(err) {
 		setFlash(w, r, ui.ToneDanger, "The project still has apps, databases or services in it. Delete them first.")
-		redirect(w, r, "/projects/"+p.ID)
+		redirect(w, r, "/projects/"+p.ID+"/settings")
 		return
 	}
 	if err != nil {
@@ -190,7 +192,7 @@ func (s *Server) environmentCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	if !f.OK() {
 		// Back on the project's page, where the form is, with it open.
-		s.renderProject(w, r, http.StatusUnprocessableEntity, p, ui.Form{}, f)
+		s.renderProject(w, r, http.StatusUnprocessableEntity, p, f)
 		return
 	}
 	// Into the new environment: adding to it is what comes next.

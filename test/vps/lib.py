@@ -233,6 +233,12 @@ def _compat(page, action):
         page = action + "/edit"
     if action and re.match(r"^/apps/[a-z2-7]+/domains$", action) and page == action[:-len("domains")] + "settings":
         page = action  # an app's domains moved from its Settings to a tab of their own
+    m = re.match(r"^/projects/([a-z2-7]+)/settings$", page or "")
+    if m and action == f"/projects/{m.group(1)}/environments":
+        # Add environment is on the project's own page, the Environments
+        # tab. The query keeps the client from serving the first
+        # environment's page in its place.
+        page = f"/projects/{m.group(1)}?tab=environments"
     m = re.match(r"^/environments/([a-z2-7]+)/delete$", action or "")
     if m and re.match(r"^/projects/[a-z2-7]+/settings$", page or ""):
         page = f"/environments/{m.group(1)}/settings"  # an environment is deleted from its own Settings
@@ -271,13 +277,8 @@ class Client:
         asked = path
         if translate and not self.token:  # the API names a resource by its id alone
             path = long_path(path, self._ask)
-            m = re.match(r"^/projects/(%s)(/settings)?$" % _ID, path)
-            if method == "GET" and m and m.group(2):
-                # A project's Settings are a dialog of its own page, which
-                # holds the forms the Settings page had and lists the
-                # environments.
-                path = "/projects/" + m.group(1)
-            elif method == "GET" and m:
+            m = re.match(r"^/projects/(%s)$" % _ID, path)
+            if method == "GET" and m:
                 # What the scripts call a project's page is its first
                 # environment's: what runs in it. The project's own page
                 # lists the environments in the order they were made.
