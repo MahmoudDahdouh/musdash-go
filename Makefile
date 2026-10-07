@@ -4,7 +4,7 @@ GOBUILD := CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)"
 TAILWIND := bin/tailwindcss
 TAILWIND_VERSION := v4.3.3
 
-.PHONY: build build-linux generate templ css test rss rss-linux dev tools clean
+.PHONY: build build-linux generate templ css test rss rss-linux catalog-test dev tools clean
 
 ## build: compile for this machine into bin/musdash
 build:
@@ -36,6 +36,11 @@ rss:
 rss-linux:
 	docker run --rm -v "$(CURDIR)":/src -v musdash-gocache:/root/.cache/go-build -v musdash-gomod:/go/pkg/mod \
 		-w /src golang:1.27-alpine go test ./test -run TestIdleRSS -count=1 -v
+
+## catalog-test: check the converter that makes the imported service templates
+## (tools/catalog is a module of its own, so "go test ./..." does not reach it)
+catalog-test:
+	cd tools/catalog && go vet . && go test .
 
 ## dev: run the control plane against ./data with the component gallery on
 dev:

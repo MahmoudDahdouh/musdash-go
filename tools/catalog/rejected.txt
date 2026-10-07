@@ -1,0 +1,27 @@
+# What TestCatalogueLoadsInTheSandbox (internal/compose) refused of the
+# templates this program had converted: "source/key", a tab, the reason. A
+# template listed here is left out on the next run, and the other
+# catalogue's template of the same service, if there is one, is tried.
+coolify/anythingllm	it needs the capability SYS_ADMIN, which a stack may not have
+dokploy/blender	it uses "runtime": it replaces the container runtime
+dokploy/borgitory	it needs the capability SYS_ADMIN, which a stack may not have
+coolify/changedetection	it needs the capability SYS_ADMIN, which a stack may not have
+coolify/cloudflare-ddns	it uses the server's own network (network_mode: host)
+coolify/esphome	it uses the server's own network (network_mode: host)
+coolify/espocrm	it uses "volumes_from": it mounts another container's data
+coolify/kuzzle	it needs the capability SYS_PTRACE, which a stack may not have
+dokploy/livekit	it needs the capability SYS_ADMIN, which a stack may not have
+dokploy/macos	it needs the capability NET_ADMIN, which a stack may not have
+coolify/netbird-client	it needs the capability NET_ADMIN, which a stack may not have
+coolify/obsidian	it turns off a protection of its container (seccomp=unconfined)
+dokploy/photoprism	it turns off a protection of its container (seccomp:unconfined)
+coolify/pi-hole	it needs the capability NET_ADMIN, which a stack may not have
+coolify/spacebot	it turns off a protection of its container (seccomp=unconfined)
+coolify/tailscale-client	it needs the capability NET_ADMIN, which a stack may not have
+dokploy/windows	it needs the capability NET_ADMIN, which a stack may not have
+coolify/wireguard-easy	it needs the capability NET_ADMIN, which a stack may not have
+dokploy/zulip	it reads its secrets from the environment of where Compose runs, which is musdash itself
+dokploy/anythingllm	it needs the capability SYS_ADMIN, which a stack may not have
+dokploy/cloudflare-ddns	it uses the server's own network (network_mode: host)
+# Tried for real (TestCatalogueWithDocker) and found not to start, as its makers wrote it:
+coolify/hoppscotch	its migration job fails as written: it runs "pnpx prisma migrate deploy", and the Prisma that command downloads today has no "migrate"
