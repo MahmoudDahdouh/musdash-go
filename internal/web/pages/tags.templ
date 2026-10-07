@@ -17,7 +17,7 @@ templ tagsCard(csrf, action string, tags, teamTags []string) {
 		<div class="card-head">
 			<div>
 				<h2 class="card-title">Tags</h2>
-				<p class="muted text-sm">Everything with the same tag can be deployed together, from the Tags page.</p>
+				<p class="muted text-sm">What shares a tag is listed together on the Tags page, and the API can deploy it in one call.</p>
 			</div>
 			if len(tags) > 0 {
 				@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-tags"}) {
@@ -26,7 +26,7 @@ templ tagsCard(csrf, action string, tags, teamTags []string) {
 			}
 		</div>
 		if len(tags) == 0 {
-			@ui.EmptyState(ui.EmptyProps{Icon: "tag", Title: "No tags", Text: "Give it a tag to deploy it together with everything else that has it.", Size: ui.EmptySmall}) {
+			@ui.EmptyState(ui.EmptyProps{Icon: "tag", Title: "No tags", Text: "Give it a tag to group it with everything else that has it.", Size: ui.EmptySmall}) {
 				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: "edit-tags"}) {
 					Add tags
 				}
@@ -60,14 +60,14 @@ templ tagsCard(csrf, action string, tags, teamTags []string) {
 }
 
 templ newTagDialog(csrf string, f ui.Form) {
-	@ui.FormDialog(ui.DialogProps{ID: "new-tag", Title: "New tag", Description: "A tag groups apps and services that are deployed together. Give it to them afterwards, from their Settings.", Action: "/tags", CSRF: csrf, Submit: "Create tag", Open: !f.OK()}) {
+	@ui.FormDialog(ui.DialogProps{ID: "new-tag", Title: "New tag", Description: "A tag groups apps and services that belong together. Give it to them afterwards, from their Settings.", Action: "/tags", CSRF: csrf, Submit: "Create tag", Open: !f.OK()}) {
 		@ui.TextField(f, "Name", "Lowercase letters, numbers, dots and hyphens.", ui.InputProps{ID: "tag-name", Name: "name", Mono: true, Required: true, Autofocus: true, Placeholder: "weekly", Autocomplete: "off", Attrs: templ.Attributes{"maxlength": "32"}})
 	}
 }
 
 templ Tags(s ui.Shell, list []db.TagCount, f ui.Form) {
 	@ui.Layout(s) {
-		@ui.PageHeader("Tags", "Groups of apps and services that are deployed together.") {
+		@ui.PageHeader("Tags", "Groups of apps and services. What shares a tag is listed together, and the API can deploy it in one call.") {
 			if len(list) > 0 {
 				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-tag"}) {
 					New tag
@@ -75,7 +75,7 @@ templ Tags(s ui.Shell, list []db.TagCount, f ui.Form) {
 			}
 		}
 		if len(list) == 0 {
-			@ui.EmptyState(ui.EmptyProps{Icon: "tag", Title: "No tags yet", Text: "Make a tag, then give it to apps and services. Everything with that tag can be deployed in one go."}) {
+			@ui.EmptyState(ui.EmptyProps{Icon: "tag", Title: "No tags yet", Text: "Make a tag, then give it to apps and services. Everything with that tag is listed together, and the API can deploy it in one call."}) {
 				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-tag"}) {
 					New tag
 				}
@@ -96,6 +96,28 @@ templ Tags(s ui.Shell, list []db.TagCount, f ui.Form) {
 		}
 		@newTagDialog(s.CSRF, f)
 	}
+}
+
+// tagHas says how many things have a tag, in a word or two.
+func tagHas(t db.TagCount) string {
+	if n := t.Apps + t.Services; n > 0 {
+		return strconv.Itoa(n)
+	}
+	return "empty"
+}
+
+// TagOptions is what the tag switcher lists: the team's tags. at is the
+// one the person is on.
+templ TagOptions(list []db.TagCount, at string) {
+	for _, t := range list {
+		@ui.SwitchOption("/tags/"+t.Tag, "tag", t.Tag, t.Tag == at) {
+			<span class="muted text-xs">{ tagHas(t) }</span>
+		}
+	}
+	if len(list) > 0 {
+		@ui.MenuSep()
+	}
+	@ui.MenuAction("/tags", "dashboard", "All tags")
 }
 
 func tagSummary(n int) string {
@@ -119,14 +141,6 @@ templ Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, f ui.For
 					Delete
 				}
 			</form>
-			if len(apps)+len(services) > 0 {
-				<form method="post" action={ templ.SafeURL("/tags/" + tag + "/deploy") }>
-					@ui.CSRF(s.CSRF)
-					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy", Attrs: ui.Ask("Deploy everything tagged "+tag+"?", plural(len(apps)+len(services), "resource is", "resources are")+" deployed again, each as a push would.", "Deploy all", false)}) {
-						Deploy all
-					}
-				</form>
-			}
 		}
 		<div class="grid gap-6">
 			if len(apps)+len(services) == 0 {

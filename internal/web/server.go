@@ -162,6 +162,7 @@ func (s *Server) Handler() http.Handler {
 	handle("GET /environments/{id}/switch/resources", member, s.switchResources)
 	handle("GET /switch/teams", member, s.switchTeams)
 	handle("GET /switch/projects", member, s.switchProjects)
+	handle("GET /switch/tags", member, s.switchTags)
 	handle("POST /projects/{id}", member, s.projectUpdate)
 	handle("GET /projects/{id}/settings", member, s.projectSettings)
 	handle("POST /projects/{id}/delete", member, s.projectDelete)
@@ -263,7 +264,6 @@ func (s *Server) Handler() http.Handler {
 	handle("GET /tags/{tag}", member, s.tagShow)
 	handle("POST /tags/{tag}", member, s.tagRename)
 	handle("POST /tags/{tag}/delete", member, s.tagDelete)
-	handle("POST /tags/{tag}/deploy", member, s.tagDeploy)
 
 	handle("GET /keys", member, s.keysPage)
 	handle("GET /keys/tokens", member, s.tokensPage)

@@ -10,13 +10,11 @@ forms = [f for f in parse_forms(r.text) if "t2-grp" in f["action"] or "deploy" i
 print([(f["action"]) for f in forms])
 check("S13.9a", "t2-grp" in t and "t2-app" in t and "t2-svcvars" in t, "Tags page lists the tag with both the app and the service")
 def n_deploys(): return int(shout("ls /var/lib/musdash/logs/deployments | wc -l")), int(shout("ls /var/lib/musdash/logs/services | wc -l"))
-f = [x for x in forms if "t2-grp" in x["action"]][0]
+# Deploy all left the tag's page on 2026-10-07: the tag is deployed through the API.
+D = Client(token=ensure_tokens(c)["deploy_token"])
 b = n_deploys()
-rr = c.post_form(f, follow=False)
-import base64
-ck = re.search(r"musdash_flash=([^;]*)", rr.headers.get("set-cookie", "")); print(base64.urlsafe_b64decode(ck.group(1) + "=" * (-len(ck.group(1)) % 4)).decode() if ck else "(no flash)")
-rr2 = c.post_form(f, follow=False)
-ck = re.search(r"musdash_flash=([^;]*)", rr2.headers.get("set-cookie", "")); print(base64.urlsafe_b64decode(ck.group(1) + "=" * (-len(ck.group(1)) % 4)).decode() if ck else "(no flash)")
+rr = D.post("/api/v1/deploy?tag=t2-grp"); print(rr.status, rr.text[:200])
+rr2 = D.post("/api/v1/deploy?tag=t2-grp"); print(rr2.status, rr2.text[:200])
 time.sleep(40)
 a = n_deploys(); print("deploy logs before/after", b, a)
-check("S13.9b", a[0] - b[0] <= 1 and a[1] - b[1] <= 1 and (a[0] > b[0] or a[1] > b[1]), f"Deploy all queued each once; second click did not double-queue (new app logs {a[0]-b[0]}, service logs {a[1]-b[1]})")
+check("S13.9b", a[0] - b[0] <= 1 and a[1] - b[1] <= 1 and (a[0] > b[0] or a[1] > b[1]), f"deploying the tag through the API queued each once; the second call did not double-queue (new app logs {a[0]-b[0]}, service logs {a[1]-b[1]})")

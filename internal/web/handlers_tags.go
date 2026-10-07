@@ -149,7 +149,11 @@ func (s *Server) loadTag(w http.ResponseWriter, r *http.Request) (string, []db.A
 }
 
 func (s *Server) renderTag(w http.ResponseWriter, r *http.Request, status int, tag string, apps []db.App, services []db.Service, f ui.Form) {
-	shell := s.shell(w, r, tag, "tags", ui.Crumb{Label: "Tags", Href: "/tags"}, ui.Crumb{Label: tag, Icon: "tag"})
+	// The tag's step is a switcher to the team's other tags. A tag is
+	// letters, numbers, dots and hyphens (loadTag), so it is its own
+	// escaped form.
+	shell := s.shell(w, r, tag, "tags", ui.Crumb{Label: "Tags", Href: "/tags"},
+		ui.Crumb{Label: tag, Icon: "tag", Filter: "Find a tag", Menu: "/switch/tags?at=" + tag})
 	s.render(w, r, status, pages.Tag(shell, tag, apps, services, f))
 }
 
@@ -207,25 +211,14 @@ func (s *Server) tagDelete(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, "/tags")
 }
 
-func (s *Server) tagDeploy(w http.ResponseWriter, r *http.Request) {
-	tag, _, _, ok := s.loadTag(w, r)
-	if !ok {
-		return
-	}
-	queued, tagged, err := s.Deploy.DeployTag(r.Context(), sessionFrom(r).TeamID, tag, "tag")
+// switchTags answers the tag switcher: the team's tags, each a link to its
+// page.
+func (s *Server) switchTags(w http.ResponseWriter, r *http.Request) {
+	list, err := s.DB.ListTags(r.Context(), sessionFrom(r).TeamID)
 	if err != nil {
-		s.fail(w, r, err)
+		s.Log.Error("switcher", "route", logRoute(r), "err", err)
+		s.menuNote(w, r, "The tags could not be listed.")
 		return
 	}
-	switch {
-	case tagged == 0:
-		setFlash(w, r, ui.ToneNeutral, "Nothing has this tag yet, so nothing was deployed.")
-	case queued == tagged:
-		setFlash(w, r, ui.ToneOK, "Deploying "+itoa(queued)+" of "+itoa(tagged)+".")
-	case queued == 0:
-		setFlash(w, r, ui.ToneNeutral, "Nothing was queued: each of them already has a deployment waiting.")
-	default:
-		setFlash(w, r, ui.ToneOK, "Deploying "+itoa(queued)+" of "+itoa(tagged)+". The others already have a deployment waiting.")
-	}
-	redirect(w, r, "/tags/"+tag)
+	s.render(w, r, http.StatusOK, pages.TagOptions(list, r.URL.Query().Get("at")))
 }

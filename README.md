@@ -307,7 +307,7 @@ MAIL_URL=smtp://{{team.SMTP_HOST}}:587
 
 ## Tags
 
-A tag is a short name such as `nightly` or `frontend`. The Tags page makes, renames and deletes them, and a tag can exist before anything has it; an app's and a service's Settings page chooses among them or adds a new one. A tag's page has **Deploy all**, which queues a deployment of everything that has the tag. Something that already has a deployment waiting is not queued twice. The same can be done with one API call (below).
+A tag is a short name such as `nightly` or `frontend`. The Tags page makes, renames and deletes them, and a tag can exist before anything has it; an app's and a service's Settings page chooses among them or adds a new one. A tag's page lists what has it, and its step of the header switches to the team's other tags. Everything that has a tag is deployed with one API call (below); something that already has a deployment waiting is not queued twice.
 
 ## The API
 

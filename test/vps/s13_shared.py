@@ -48,11 +48,12 @@ mc2 = mc.submit(f"/apps/{web}/environment", action=f"/apps/{web}/environment", v
 c.submit(f"/apps/{web}/settings", action=f"/apps/{web}/tags", tags="nightly t-group")
 c.submit(f"/apps/{who}/settings", action=f"/apps/{who}/tags", tags="nightly")
 tp = c.get("/tags"); check("S13.9a", "nightly" in tp.text and "t-group" in tp.text, "Tags page lists the tags")
+# Deploy all left the tag's page on 2026-10-07: a tag is deployed through the API.
 tg = c.get("/tags/nightly"); fm = [f for f in parse_forms(tg.text) if f["action"] == "/tags/nightly/deploy"]
-check("S13.9b", len(fm) == 1, "tag page has Deploy all")
-r1 = c.post_form(fm[0]); r2 = c.post_form([f for f in parse_forms(c.get("/tags/nightly").text) if f["action"] == "/tags/nightly/deploy"][0])
-n = shout(f"journalctl -u musdash-server --since '-1 min' --no-pager | grep -ci 'deploy' || true")
-rec("S13.9c", "INFO", "deploy-all twice: " + flash(r1)[-120:] + " || " + flash(r2)[-120:])
+check("S13.9b", len(fm) == 0 and "/switch/tags?at=nightly" in tg.text, "tag page has no Deploy all, and its header step is the tag switcher")
+D = Client(token=ensure_tokens(c)["deploy_token"])
+r1 = D.post("/api/v1/deploy?tag=nightly"); r2 = D.post("/api/v1/deploy?tag=nightly")
+rec("S13.9c", "INFO", f"deploy by tag through the API, twice: {r1.status} {r1.text[:160]} || {r2.status} {r2.text[:160]}")
 a = Client(token=state()["read_token"]).get("/api/v1/apps?tag=nightly").json()
 check("S13.9d", {x["id"] for x in a} == {web, who}, f"API ?tag=nightly returns both apps ({[x['name'] for x in a]})")
 time.sleep(30)

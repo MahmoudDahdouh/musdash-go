@@ -77,7 +77,7 @@ func TestTagsOnAppsAndServices(t *testing.T) {
 	}
 	res, body = a.get("/tags/nightly")
 	wantStatus(t, res, http.StatusOK)
-	for _, want := range []string{"/apps/" + web, "/apps/" + api, "/services/" + svc.ID, "Deploy all"} {
+	for _, want := range []string{"/apps/" + web, "/apps/" + api, "/services/" + svc.ID, `hx-get="/switch/tags?at=nightly"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the tag's page lacks %q", want)
 		}
@@ -93,28 +93,29 @@ func TestTagsOnAppsAndServices(t *testing.T) {
 		wantStatus(t, res, http.StatusNotFound)
 	}
 
-	// Deploy all: one deployment for each app and for the service.
+	// The page does not deploy: that is a pipeline's to do, through the
+	// API. The button went, and its address with it.
+	if strings.Contains(body, "Deploy all") || strings.Contains(body, "/tags/nightly/deploy") {
+		t.Fatal("the tag's page still offers to deploy everything")
+	}
 	before := a.deployJobs()
 	res, _ = a.post("/tags/nightly", "/tags/nightly/deploy", nil)
-	wantRedirect(t, res, "/tags/nightly")
-	for _, id := range []string{web, api} {
-		if dep := a.waitDeployed(id); dep.Trigger != "tag" || dep.Status != db.DeploySuccess {
-			t.Fatalf("deployment of %s: %+v", id, dep)
-		}
-	}
-	if got := a.deployJobs() - before; got != 2 {
-		t.Fatalf("%d app deployments queued, want 2", got)
-	}
-	var serviceJobs int
-	a.db.QueryRow(`SELECT count(*) FROM jobs WHERE kind = 'service' AND json_extract(payload, '$.id') = ?`, svc.ID).Scan(&serviceJobs)
-	if serviceJobs != 1 {
-		t.Fatalf("%d service deployments, want 1", serviceJobs)
-	}
-	if got := a.waitService(svc.ID); got.Status != db.AppRunning {
-		t.Fatalf("the service after Deploy all: %s: %s", got.Status, got.LastError)
-	}
-	res, _ = a.post("/tags/nightly", "/tags/nosuchtag/deploy", nil)
 	wantStatus(t, res, http.StatusNotFound)
+	if got := a.deployJobs() - before; got != 0 {
+		t.Fatalf("%d deployments queued through an address that is gone", got)
+	}
+
+	// The tag's step of the trail is a switcher: the team's tags, the
+	// current one marked, how many things have each, and the way to the
+	// list.
+	res, menu := a.get("/switch/tags?at=nightly")
+	wantStatus(t, res, http.StatusOK)
+	if !regexp.MustCompile(`href="/tags/nightly"[^>]*aria-selected="true"`).MatchString(menu) || !regexp.MustCompile(`href="/tags/frontend"[^>]*aria-selected="false"`).MatchString(menu) {
+		t.Fatalf("tag switcher: %s", menu)
+	}
+	if !strings.Contains(menu, `href="/tags"`) || !strings.Contains(menu, ">3<") {
+		t.Fatalf("the tag switcher lacks the way to the list, or the count of what has nightly: %s", menu)
+	}
 
 	// Ticked tags and typed ones are saved together.
 	res, _ = a.post(settings, "/apps/"+web+"/tags", url.Values{"tag": {"nightly"}, "tags": {"blue"}})
@@ -188,15 +189,10 @@ func TestTagsAreMadeRenamedAndDeleted(t *testing.T) {
 	}
 	a.post("/apps/"+web+"/settings", "/apps/"+web+"/tags", url.Values{"tag": {"nightly"}})
 
-	// Deploying an empty tag queues nothing and says so.
+	// A tag nothing has: its page says so, and the switcher too.
 	a.post("/tags", "/tags", url.Values{"name": {"empty"}})
-	res, _ = a.post("/tags/empty", "/tags/empty/deploy", nil)
-	wantRedirect(t, res, "/tags/empty")
-	if _, body = a.get("/tags/empty"); !strings.Contains(body, "Nothing has this tag yet, so nothing was deployed.") {
-		t.Fatal("deploying an empty tag does not say that nothing has it")
-	}
-	if n := a.deployJobs(); n != 0 {
-		t.Fatalf("%d deployments queued for an empty tag", n)
+	if _, menu := a.get("/switch/tags?at=empty"); !regexp.MustCompile(`(?s)href="/tags/empty"[^>]*aria-selected="true".*?>empty<.*?>empty<`).MatchString(menu) {
+		t.Fatalf("the switcher does not say that a tag nothing has is empty: %s", menu)
 	}
 
 	// Renaming takes the app along; a name in use, or one that is no tag, is refused.
@@ -262,9 +258,10 @@ func TestAnotherTeamsTagsAreNotShown(t *testing.T) {
 	if strings.Contains(body, "secret-app") {
 		t.Fatal("another team's app is shown")
 	}
-	for _, path := range []string{"/tags/nightly/deploy", "/tags/nightly/delete"} {
-		res, _ = a.post("/tags", path, nil)
-		wantStatus(t, res, http.StatusNotFound)
+	res, _ = a.post("/tags", "/tags/nightly/delete", nil)
+	wantStatus(t, res, http.StatusNotFound)
+	if _, menu := a.get("/switch/tags?at=nightly"); strings.Contains(menu, "nightly") {
+		t.Fatal("the tag switcher lists another team's tag")
 	}
 	res, _ = a.post("/tags", "/tags/nightly", url.Values{"name": {"mine"}})
 	wantStatus(t, res, http.StatusNotFound)
