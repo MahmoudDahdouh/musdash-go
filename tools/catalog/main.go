@@ -315,6 +315,12 @@ func (t *tmpl) describe(names nameBook) error {
 	}
 	t.About = about(t.About)
 	if t.About == "" {
+		t.About = aboutOverrides[t.Key]
+	}
+	if t.Docs == "" && t.Website == "" {
+		t.Docs = docsOverrides[t.Key]
+	}
+	if t.About == "" {
 		return fmt.Errorf("its catalogue says nothing about it")
 	}
 	https := func(u string) string {

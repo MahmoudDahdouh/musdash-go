@@ -34,3 +34,23 @@ var categoryOverrides = map[string]string{
 	"ownCloud": "storage", "owncloud": "storage, productivity", "opnform": "business, productivity",
 	"mixpost": "business", "statusnook": "monitoring",
 }
+
+// servicePorts are the ports of services whose address names none and
+// whose file publishes none, by template and service: read from the
+// health check each one has in its own file.
+var servicePorts = map[string]map[string]int{
+	"openpanel": {"openpanel-api": 3000, "openpanel-worker": 3000},
+	"swetrix":   {"swetrix-api": 5005},
+	// MinIO's API, which the app's STORAGE_PORT also says.
+	"reactive-resume": {"minio": 9000},
+}
+
+// aboutOverrides are the lines about templates whose source has none.
+var aboutOverrides = map[string]string{
+	"palworld": "A dedicated server for Palworld, the multiplayer creature-collecting survival game.",
+}
+
+// docsOverrides are where those templates are documented.
+var docsOverrides = map[string]string{
+	"palworld": "https://github.com/thijsvanloef/palworld-server-docker",
+}

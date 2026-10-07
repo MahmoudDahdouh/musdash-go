@@ -41,12 +41,13 @@ type tmpl struct {
 	// Published says the source published a port of the server, and
 	// Addressed that a service of the template has a web address.
 	Published, Addressed bool
+	// Ports is how many ports of the server the template publishes.
+	Ports int
 }
 
 // reach settles how a template with no web address is reached, once its
-// categories are known. A template publishes no port (two copies of it
-// would collide on the server), so one with no address either is reached
-// from its environment's network or not at all.
+// categories are known: from its environment's network, on the ports of
+// the server it publishes, or not at all.
 func (t *tmpl) reach() error {
 	if t.Addressed {
 		return nil
@@ -65,7 +66,10 @@ func (t *tmpl) reach() error {
 			return nil
 		}
 	}
-	return fmt.Errorf("it is reached on a port of its own, not through the proxy (a game, a VPN, a peer-to-peer node), and a template publishes none")
+	if t.Ports > 0 {
+		return nil
+	}
+	return fmt.Errorf("it is reached on a port of its own that a stack may not publish (one under 1024, or one that is not named)")
 }
 
 // readCoolify reads a Coolify template: a Compose file under a header of
@@ -110,7 +114,9 @@ func readCoolify(file, svgs string) (*tmpl, error) {
 				t.Logos = append(t.Logos, filepath.Join(svgs, strings.TrimPrefix(value, "svgs/")))
 			}
 		case "port":
-			t.Port, _ = strconv.Atoi(value)
+			// "80, 2112": the first is where the address goes.
+			first, _, _ := strings.Cut(value, ",")
+			t.Port, _ = strconv.Atoi(strings.TrimSpace(first))
 		case "ignore":
 			t.Ignore = value == "true"
 		}

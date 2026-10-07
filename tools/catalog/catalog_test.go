@@ -209,8 +209,8 @@ services:
 	wantNone(t, got, "SERVICE_URL_SITE_", "SERVICE_URL_SITE}", "SERVICE_FQDN_SITE}")
 }
 
-// A template publishes no port, so one with no web address is reached from
-// its environment or not at all.
+// A template with no web address is reached from its environment, on the
+// ports of the server it publishes, or not at all.
 func TestTemplatesWithNoAddress(t *testing.T) {
 	dir := t.TempDir()
 	for name, c := range map[string]struct {
@@ -221,8 +221,11 @@ func TestTemplatesWithNoAddress(t *testing.T) {
 		// Coolify gives it a domain at the header's port without a variable.
 		"cms": {"# category: cms\n# port: 8080\n", "services:\n  web:\n    image: x:1\n", "- SERVICE_FQDN_WEB_8080", false},
 		// The first port it published is SSH; the header says where the web is.
-		"git":    {"# category: git\n# port: 3000\n", "services:\n  web:\n    image: x:1\n    ports:\n      - 2222:22\n      - 3000:3000\n    environment:\n      - SERVICE_URL_WEB\n", "- SERVICE_FQDN_WEB_3000", false},
-		"game":   {"# category: games\n# port: 25565\n", "services:\n  mc:\n    image: x:1\n    ports:\n      - 25565:25565\n", "port of its own", true},
+		"git": {"# category: git\n# port: 3000\n", "services:\n  web:\n    image: x:1\n    ports:\n      - 2222:22\n      - 3000:3000\n    environment:\n      - SERVICE_URL_WEB\n", "- SERVICE_FQDN_WEB_3000", false},
+		// A game is reached on its port, moved out of musdash's own range.
+		"game": {"# category: games\n# port: 25565\n", "services:\n  mc:\n    image: x:1\n    ports:\n      - 25565:25565\n", `- "35565:25565"`, false},
+		// DNS has no other port than 53, which a stack may not publish.
+		"dns":    {"# category: networking\n", "services:\n  dns:\n    image: x:1\n    ports:\n      - 53:53/udp\n", "port of its own", true},
 		"cache":  {"# category: database\n", "services:\n  kv:\n    image: x:1\n    ports:\n      - 6379:6379\n", "# connect: true", false},
 		"tunnel": {"# category: networking\n", "services:\n  agent:\n    image: x:1\n", "# connect: true", false},
 	} {
@@ -249,6 +252,125 @@ func TestTemplatesWithNoAddress(t *testing.T) {
 			t.Errorf("git: the address goes to SSH:\n%s", got)
 		}
 	}
+}
+
+// The ports a source published are kept where a stack may publish them.
+func TestPublishedPorts(t *testing.T) {
+	web := map[int]bool{3000: true}
+	for in, want := range map[string]string{
+		"2222:22":                    "2222:22",
+		"22222:22":                   "32222:22",
+		"27015:27015/udp":            "37015:27015/udp",
+		"1883:1883/tcp":              "1883:1883",
+		"5060-5063:5060-5063":        "5060-5063:5060-5063",
+		"25565-25590:25565-25590":    "35565-35590:25565-25590",
+		"${PORT}:25565":              "35565:25565",
+		"$PORT:5672":                 "${PORT:-5672}:5672",
+		"${DHT_PORT:-6881}:6881/udp": "${DHT_PORT:-6881}:6881/udp",
+		"${GAME:-27015}:7777/udp":    "37015:7777/udp",
+		// The proxy's, a port nobody named, the privileged ones, one
+		// bound to an address, and what is not a port.
+		"3000:3000":           "",
+		"8080":                "",
+		"7882/udp":            "",
+		"25:25":               "",
+		"53:53/udp":           "",
+		"127.0.0.1:5432:5432": "",
+		"19990-20010:1-21":    "",
+		"60000-70000:1-10001": "",
+		"2222:${SSH}":         "",
+		"${PORTS}:5060-5063":  "",
+		"1883:1883/sctp":      "",
+	} {
+		p, ok := readPort(str(in))
+		got := ""
+		if ok {
+			got, _ = p.kept(web)
+		}
+		if got != want {
+			t.Errorf("%s: %q, want %q", in, got, want)
+		}
+	}
+	// UDP at the number of the web port is another port.
+	if p, _ := readPort(str("3000:3000/udp")); true {
+		if got, _ := p.kept(web); got != "3000:3000/udp" {
+			t.Errorf("3000/udp: %q", got)
+		}
+	}
+
+	dir := t.TempDir()
+	tpl, err := readCoolify(write(t, dir, "git.yaml", `# slogan: x
+# documentation: https://x
+# category: git
+# port: 3000
+services:
+  git:
+    image: x:1
+    environment:
+      - SERVICE_URL_GIT_3000
+      - DB=${SERVICE_URL_DB_5432}
+    ports:
+      - 22222:22
+      - "3000:3000"
+      - target: 9418
+        published: "9418"
+        protocol: tcp
+  db:
+    image: y:1
+    ports:
+      - 5432:5432
+      - 22222:2222
+  mail:
+    image: z:1
+    ports:
+      - 25:25
+      - 4190:4190
+`), dir)
+	if err == nil {
+		err = tpl.convert()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(tpl.render())
+	// The database's port is where its address goes, and its second port
+	// is one of the server that the first service has.
+	wantAll(t, got, "    ports:\n      - \"32222:22\"\n      - \"9418:9418\"\n")
+	// A mail server without port 25 is not one: it publishes nothing.
+	wantNone(t, got, "3000:3000", "22222", "32222:2222", "5432:5432", "4190")
+	if tpl.Ports != 2 {
+		t.Errorf("%d ports kept, want 2", tpl.Ports)
+	}
+}
+
+// Coolify gives an address to the service that lists it, whoever else
+// reads it; a header can name two ports, and the first is the web's.
+func TestAddressBelongsToWhoDeclaresIt(t *testing.T) {
+	dir := t.TempDir()
+	tpl, err := readCoolify(write(t, dir, "panel.yaml", `# slogan: x
+# documentation: https://x
+# port: 80, 2112
+services:
+  panel-web:
+    image: x:1
+    environment:
+      - SERVICE_URL_PANEL
+      - API=${SERVICE_URL_PAPI_4000}
+  panel-api:
+    image: x:1
+    environment:
+      - SERVICE_URL_PAPI_4000
+      - WEB=${SERVICE_URL_PANEL}
+`), dir)
+	if err == nil {
+		err = tpl.convert()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(tpl.render())
+	wantAll(t, got, "- SERVICE_URL_PANEL_WEB\n", "- SERVICE_FQDN_PANEL_WEB_80\n", "API=${SERVICE_URL_PANEL_API_4000}", "- SERVICE_URL_PANEL_API_4000\n", "WEB=${SERVICE_URL_PANEL_WEB}")
+	wantNone(t, got, "PAPI", "SERVICE_URL_PANEL}", "2112")
 }
 
 // A link that gives a service a second name keeps the name; a job is waited
@@ -425,6 +547,82 @@ func TestDokployRefusesAShippedHash(t *testing.T) {
 	write(t, dir, "docker-compose.yml", "services:\n  web:\n    image: example/portal:1\n    environment:\n      HASH: ${HASH}\n")
 	if _, err := readDokploy(dir); err == nil || !strings.Contains(err.Error(), "fixed password") {
 		t.Fatalf("%v, want a refusal", err)
+	}
+}
+
+// A password its makers wrote into the app's environment and into the
+// script that makes the database's user has both its ends in the file: it
+// is generated. One that also stands in the file as a word of another
+// meaning is left, all of it.
+func TestPasswordInACarriedFile(t *testing.T) {
+	for name, c := range map[string]struct {
+		script string
+		want   []string
+		not    []string
+	}{
+		"both ends": {`db.createUser({user: "app", pwd: "app_password"})`,
+			[]string{"MONGO_PASS=${SERVICE_PASSWORD_MONGO}", `pwd: "${SERVICE_PASSWORD_MONGO}"`}, []string{"app_password"}},
+		"another word": {`db.createUser({user: "app", pwd: "app_password"}); print("app_password is set")`,
+			[]string{"MONGO_PASS=app_password", `pwd: "app_password"`}, []string{"SERVICE_PASSWORD"}},
+	} {
+		dir := t.TempDir()
+		tpl, err := readCoolify(write(t, dir, name+".yaml", `# slogan: x
+# documentation: https://x
+services:
+  app:
+    image: x:1
+    environment:
+      - SERVICE_URL_APP_8080
+      - MONGO_PASS=app_password
+  db:
+    image: mongo:7
+    volumes:
+      - type: bind
+        source: ./init.js
+        target: /docker-entrypoint-initdb.d/init.js
+        content: '`+c.script+`'
+`), dir)
+		if err == nil {
+			err = tpl.convert()
+		}
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		got := string(tpl.render())
+		wantAll(t, got, c.want...)
+		wantNone(t, got, c.not...)
+	}
+}
+
+// A JWT secret is a key; and beside ports of the server, a host name that
+// no service is routed to is the server's own.
+func TestDokployHelpersOfAServiceWithPorts(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "relay")
+	write(t, dir, "meta.json", `{"id":"relay","name":"Relay","description":"Relays.","links":{"website":"https://relay.example"},"tags":["networking"]}`)
+	write(t, dir, "template.toml", "[variables]\nserver_domain = \"${domain}\"\njwt_secret = \"${jwt:32}\"\n[config]\nenv = [\"RELAY=${server_domain}:21117\", \"JWT_SECRET=${jwt_secret}\"]\n")
+	write(t, dir, "docker-compose.yml", "services:\n  relay:\n    image: example/relay:1\n    environment:\n      RELAY: ${RELAY}\n      JWT_SECRET: ${JWT_SECRET}\n    ports:\n      - \"21117:21117\"\n")
+	tpl, err := readDokploy(dir)
+	if err == nil {
+		err = tpl.convert()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(tpl.render())
+	wantAll(t, got, "RELAY: ${SERVER_DOMAIN:?The name or address this server is reached at}:21117", "JWT_SECRET: ${SERVICE_PASSWORD_64_JWT_SECRET}", `- "31117:21117"`)
+
+	// A token is not a secret, and without ports the name is nobody's.
+	for name, toml := range map[string]string{
+		"token": "[variables]\napi_token = \"${jwt}\"\n[config]\nenv = [\"TOKEN=${api_token}\"]\n",
+		"name":  "[variables]\nother_domain = \"${domain}\"\n[config]\nenv = [\"TOKEN=${other_domain}\"]\n",
+	} {
+		dir := filepath.Join(t.TempDir(), name)
+		write(t, dir, "meta.json", `{"id":"x","name":"X","description":"X.","links":{"website":"https://x.example"},"tags":[]}`)
+		write(t, dir, "template.toml", toml)
+		write(t, dir, "docker-compose.yml", "services:\n  web:\n    image: example/x:1\n    environment:\n      TOKEN: ${TOKEN}\n")
+		if _, err := readDokploy(dir); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }
 

@@ -109,6 +109,7 @@ type dokploy struct {
 	vars  map[string]string
 	bound map[string]string // a variable that is a service's address: its endpoint
 	only  string            // the endpoint, when the blueprint has just one
+	ports bool              // the Compose file publishes ports of the server
 	uses  map[string]int    // how often template.toml refers to a variable
 	done  map[string]string
 	busy  map[string]bool
@@ -189,6 +190,11 @@ func (d *dokploy) token(tok, ctx string) (string, bool) {
 		if d.only != "" {
 			return "${SERVICE_FQDN_" + d.only + "}", true
 		}
+		// Beside ports of the server, a name that nothing is routed to is
+		// the server's own, which only the person knows.
+		if d.ports {
+			return "${" + magicID(ctx) + ":?The name or address this server is reached at}", true
+		}
 		d.fail("it names an address that no service is routed to (%s)", ctx)
 		return "", true
 	case "password":
@@ -220,7 +226,15 @@ func (d *dokploy) token(tok, ctx string) (string, bool) {
 			v += "_EMAIL"
 		}
 		return "${" + v + ":?Set an email address}", true
-	case "uuid", "jwt", "timestamp", "timestampms", "timestamps", "randomPort":
+	case "jwt":
+		// A variable named a secret is a key that tokens are signed with,
+		// not a token: any long random text is one.
+		if strings.Contains(strings.ToLower(ctx), "secret") {
+			return "${SERVICE_PASSWORD_64_" + d.id(ctx) + "}", true
+		}
+		d.fail("it needs a generated value musdash has no equal of: ${%s}", name)
+		return "", true
+	case "uuid", "timestamp", "timestampms", "timestamps", "randomPort":
 		d.fail("it needs a generated value musdash has no equal of: ${%s}", name)
 		return "", true
 	}
@@ -310,6 +324,16 @@ func readDokploy(dir string) (*tmpl, error) {
 	services := mapGet(t.Root, "services")
 	if !isMap(services) {
 		return t, fmt.Errorf("its Compose file has no services")
+	}
+	for _, name := range mapKeys(services) {
+		if ports := mapGet(mapGet(services, name), "ports"); isSeq(ports) {
+			for _, n := range ports.Content {
+				if p, ok := readPort(n); ok {
+					_, kept := p.kept(nil)
+					d.ports = d.ports || kept
+				}
+			}
+		}
 	}
 
 	// Addresses first: a variable that is a service's host name stands for

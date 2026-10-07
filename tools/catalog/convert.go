@@ -44,6 +44,10 @@ type converter struct {
 	ports    map[string]int // the first TCP port of its container a service published
 	// published says a service published a port of any kind.
 	published bool
+	// srcPorts are the "ports" of each service as its source wrote them,
+	// and kept is how many of them the template publishes (ports.go).
+	srcPorts map[string]*yaml.Node
+	kept     int
 }
 
 // convert changes a template into one musdash's rules accept. An error is
@@ -55,7 +59,7 @@ func (t *tmpl) convert() error {
 			mapDel(root, k)
 		}
 	}
-	c := &converter{t: t, services: mapGet(root, "services"), volumes: map[string]bool{}, ports: map[string]int{}}
+	c := &converter{t: t, services: mapGet(root, "services"), volumes: map[string]bool{}, ports: map[string]int{}, srcPorts: map[string]*yaml.Node{}}
 	if !isMap(c.services) || len(c.services.Content) == 0 {
 		return fmt.Errorf("its Compose file has no services")
 	}
@@ -90,6 +94,7 @@ func (t *tmpl) convert() error {
 		if ports := mapDel(svc, "ports"); isSeq(ports) {
 			// UDP counts: it is how a game is reached.
 			c.published = c.published || len(ports.Content) > 0
+			c.srcPorts[name] = ports
 			for _, p := range ports.Content {
 				if n := containerPort(p); n > 0 && c.ports[name] == 0 {
 					c.ports[name] = n
@@ -116,10 +121,12 @@ func (t *tmpl) convert() error {
 	if err := c.endpoints(); err != nil {
 		return err
 	}
+	c.publish()
 	if err := c.oneShots(); err != nil {
 		return err
 	}
 	t.Published = c.published
+	t.Ports = c.kept
 	t.Addressed = addressRE.MatchString(c.text())
 	c.passwords()
 	return nil
@@ -626,6 +633,7 @@ func (c *converter) placeEndpoints() (again bool, err error) {
 		port     int
 		mentions map[string]bool // the services that name it
 		ported   map[string]bool // those that name it with its port
+		declared map[string]bool // those that list it alone in their environment
 	}
 	found := map[string]*endpoint{}
 	for _, service := range mapKeys(c.services) {
@@ -639,8 +647,11 @@ func (c *converter) placeEndpoints() (again bool, err error) {
 				}
 				e := found[id]
 				if e == nil {
-					e = &endpoint{mentions: map[string]bool{}, ported: map[string]bool{}}
+					e = &endpoint{mentions: map[string]bool{}, ported: map[string]bool{}, declared: map[string]bool{}}
 					found[id] = e
+				}
+				if declares(n, m[0]) {
+					e.declared[service] = true
 				}
 				e.mentions[service] = true
 				if port > 0 {
@@ -681,8 +692,15 @@ func (c *converter) placeEndpoints() (again bool, err error) {
 				owner = service
 			}
 		}
-		if owner == "" && len(e.ported) == 1 {
-			for service := range e.ported {
+		// Coolify gives an address to the service that lists its variable
+		// alone in its environment; the others only read it. Without such
+		// a line, to the one that names it with a port.
+		placed := e.declared
+		if len(placed) != 1 {
+			placed = e.ported
+		}
+		if owner == "" && len(placed) == 1 {
+			for service := range placed {
 				owner = service
 			}
 			// Only Coolify's rule places it: it takes the service's name.
@@ -702,9 +720,17 @@ func (c *converter) placeEndpoints() (again bool, err error) {
 		// The header's port is the template's own word for where its one
 		// address goes. What the service published first may be something
 		// else (SSH before the web port).
-		port := 0
-		if bare == 1 {
+		// Where a service's port is written down by hand, that is it.
+		port := servicePorts[c.t.Key][owner]
+		if port == 0 && bare == 1 {
 			port = c.t.Port
+			// Unless another address names that port already: then the
+			// header spoke of that one, and of this one nothing is known.
+			for _, other := range ids {
+				if other != id && found[other].port == port && c.plainOwner(other, found[other].mentions) != owner {
+					port = 0
+				}
+			}
 		}
 		if port == 0 {
 			port = c.ports[owner]
@@ -978,6 +1004,11 @@ func (c *converter) passwords() {
 			regexp.MustCompile(`(--requirepass[ =]|--password[ =]|--pass[ =]|PGPASSWORD=|--masterauth[ =])` + q + `($|[\s"'])`),
 		}
 	}
+	// And in a file the template carries: quoted, as what a line says the
+	// password is (pwd: "…" in the script that makes a database's user).
+	inFile := func(literal string) *regexp.Regexp {
+		return regexp.MustCompile(`((?i:pwd|password|passwd|pass)["']?\s*[:=]\s*["'])` + regexp.QuoteMeta(literal) + `(["'])`)
+	}
 	taken := map[string]bool{}
 	scalars(c.t.Root, func(n *yaml.Node) {
 		for _, m := range regexp.MustCompile(`SERVICE_PASSWORD_[A-Z0-9_]*[A-Z0-9]`).FindAllString(n.Value, -1) {
@@ -990,6 +1021,9 @@ func (c *converter) passwords() {
 			for _, re := range inside(literal) {
 				uses += len(re.FindAllStringIndex(n.Value, -1))
 			}
+		})
+		values(c.configs, func(n *yaml.Node) {
+			uses += len(inFile(literal).FindAllStringIndex(n.Value, -1))
 		})
 		login := appLogin.MatchString(keys[literal])
 		// One place, and not a sign-in of the app's own: left alone.
@@ -1013,10 +1047,10 @@ func (c *converter) passwords() {
 		// see above. So everything is looked at before anything is changed.
 		placed := true
 		for _, file := range sortedKeys(c.t.files) {
-			placed = placed && !word(literal).MatchString(c.t.files[file])
+			placed = placed && !word(literal).MatchString(inFile(literal).ReplaceAllString(c.t.files[file], "${1}${2}"))
 		}
 		scalars(c.configs, func(n *yaml.Node) {
-			placed = placed && !word(literal).MatchString(n.Value)
+			placed = placed && !word(literal).MatchString(inFile(literal).ReplaceAllString(n.Value, "${1}${2}"))
 		})
 		rewrite := func(apply bool) {
 			for _, service := range mapKeys(c.services) {
@@ -1065,9 +1099,38 @@ func (c *converter) passwords() {
 			continue
 		}
 		rewrite(true)
+		// Compose fills variables in a file's content too.
+		values(c.configs, func(n *yaml.Node) {
+			if strings.Contains(n.Value, literal) {
+				setValue(n, inFile(literal).ReplaceAllString(n.Value, "${1}"+strings.ReplaceAll(reference, "$", "$$")+"${2}"))
+			}
+		})
 		for _, p := range places[literal] {
 			setValue(p.node, p.key+reference)
 			p.node.Style = 0
 		}
 	}
+}
+
+// declares reports whether a scalar is a line of an environment that names
+// the variable and nothing else: "- SERVICE_URL_API", which is how a
+// Coolify template says whose address it is.
+func declares(n *yaml.Node, variable string) bool {
+	return n.Value == variable
+}
+
+// plainOwner is the service an address belongs to by musdash's own
+// reading: the one it is named after, or the only one that mentions it.
+func (c *converter) plainOwner(id string, mentions map[string]bool) string {
+	for _, service := range mapKeys(c.services) {
+		if normalName(service) == id {
+			return service
+		}
+	}
+	if len(mentions) == 1 {
+		for service := range mentions {
+			return service
+		}
+	}
+	return ""
 }

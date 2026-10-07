@@ -25,3 +25,5 @@ dokploy/anythingllm	it needs the capability SYS_ADMIN, which a stack may not hav
 dokploy/cloudflare-ddns	it uses the server's own network (network_mode: host)
 # Tried for real (TestCatalogueWithDocker) and found not to start, as its makers wrote it:
 coolify/hoppscotch	its migration job fails as written: it runs "pnpx prisma migrate deploy", and the Prisma that command downloads today has no "migrate"
+coolify/swetrix	it needs the capability SYS_NICE, which a stack may not have
+coolify/neon-ws-proxy	as written it relays a visitor to any address (ALLOW_ADDR_REGEX=.*), and a template gives it a public one
