@@ -123,6 +123,10 @@ func (d *dokploy) fail(format string, args ...any) {
 	}
 }
 
+// bareRef is a value that is one variable and nothing else, with no
+// default.
+var bareRef = regexp.MustCompile(`^\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))$`)
+
 var tokenRE = regexp.MustCompile(`\$\{([^${}]+)\}`)
 
 func magicID(s string) string {
@@ -434,6 +438,17 @@ func readDokploy(dir string) (*tmpl, error) {
 			if _, ok := values[r.Name]; ok {
 				return inPlace(r.Name), true
 			}
+			// A blueprint that reads one of its variables in the Compose
+			// file directly, with no line for it in the .env file, means
+			// that variable. Unfilled, a secret made for the app would be
+			// empty.
+			if _, ok := d.vars[r.Name]; ok && r.Op == "" {
+				v := d.variable(r.Name)
+				if strings.ContainsAny(v, "$}\n") {
+					return v, true
+				}
+				return "${" + r.Name + ":-" + v + "}", true
+			}
 			return "", false
 		}))
 	}
@@ -445,16 +460,37 @@ func readDokploy(dir string) (*tmpl, error) {
 			continue
 		}
 		environment := mapGet(svc, "environment")
-		// "- NAME" and "NAME:" take the value from the .env file.
+		// "- NAME" and "NAME:" take the value from the .env file. So does
+		// a name the .env file sets whose line here reads a variable that
+		// nothing sets ("ADMIN_PASSWORD: ${ADMIN_PASS}" beside
+		// ADMIN_PASSWORD in the .env file): the blueprint means the value
+		// it made, and the line as written would hand the app an empty
+		// one, which for a password is the app's own default.
+		unset := func(value string) bool {
+			m := bareRef.FindStringSubmatch(strings.Trim(value, `"'`))
+			if m == nil {
+				return false
+			}
+			// A generated value or an address is what an earlier step
+			// put there.
+			name := m[1] + m[2]
+			_, set := values[name]
+			return !set && !strings.HasPrefix(name, "SERVICE_")
+		}
 		if isSeq(environment) {
 			for _, item := range environment.Content {
-				if _, ok := values[item.Value]; ok && isStr(item) {
-					setValue(item, item.Value+"="+inPlace(item.Value))
+				if !isStr(item) {
+					continue
+				}
+				k, v, has := strings.Cut(item.Value, "=")
+				if _, ok := values[k]; ok && (!has || unset(v)) {
+					setValue(item, k+"="+inPlace(k))
 				}
 			}
 		} else if isMap(environment) {
 			for i := 0; i+1 < len(environment.Content); i += 2 {
-				if _, ok := values[environment.Content[i].Value]; ok && isNull(environment.Content[i+1]) {
+				v := environment.Content[i+1]
+				if _, ok := values[environment.Content[i].Value]; ok && (isNull(v) || isStr(v) && unset(v.Value)) {
 					environment.Content[i+1] = str(inPlace(environment.Content[i].Value))
 				}
 			}

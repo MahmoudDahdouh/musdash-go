@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -258,7 +259,7 @@ func (c *converter) publish() {
 				continue
 			}
 			out, ok := p.kept(web)
-			if !ok {
+			if !ok || slices.Contains(closedPorts[c.t.Key][name], p.target) {
 				continue
 			}
 			// Two services of a template cannot have one port of the

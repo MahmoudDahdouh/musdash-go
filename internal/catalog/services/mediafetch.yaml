@@ -14,13 +14,13 @@ services:
       - mediafetch_data:/data/downloads
     environment:
       - PORT=3002
-      - BASIC_AUTH_USER=${BASIC_AUTH_USER:-}
-      - BASIC_AUTH_PASS=${BASIC_AUTH_PASS:-}
-      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
-      - OUTPUT_DIR=${OUTPUT_DIR:-}
-      - MAX_CONCURRENT_JOBS=${MAX_CONCURRENT_JOBS:-}
-      - JOB_TIMEOUT_MS=${JOB_TIMEOUT_MS:-}
-      - VERSION_CHECK_TTL_MS=${VERSION_CHECK_TTL_MS:-}
+      - BASIC_AUTH_USER=${BASIC_AUTH_USER:-admin}
+      - BASIC_AUTH_PASS=${BASIC_AUTH_PASS:?Set a password to sign in with}
+      - PUBLIC_BASE_URL=${SERVICE_URL_MEDIAFETCH}
+      - OUTPUT_DIR=${OUTPUT_DIR:-/data/downloads}
+      - MAX_CONCURRENT_JOBS=${MAX_CONCURRENT_JOBS:-2}
+      - JOB_TIMEOUT_MS=${JOB_TIMEOUT_MS:-600000}
+      - VERSION_CHECK_TTL_MS=${VERSION_CHECK_TTL_MS:-21600000}
       - SERVICE_FQDN_MEDIAFETCH_3002
 volumes:
   mediafetch_data:

@@ -9,9 +9,9 @@ services:
     image: linkstackorg/linkstack:latest
     environment:
       TZ: "Europe/Berlin"
-      SERVER_ADMIN: "${admin_email:-}"
-      HTTP_SERVER_NAME: "${main_domain:-}"
-      HTTPS_SERVER_NAME: "${main_domain:-}"
+      SERVER_ADMIN: "${ADMIN_EMAIL:?Set an email address}"
+      HTTP_SERVER_NAME: "${SERVICE_FQDN_LINKSTACK}"
+      HTTPS_SERVER_NAME: "${SERVICE_FQDN_LINKSTACK}"
       LOG_LEVEL: "info"
       PHP_MEMORY_LIMIT: "256M"
       UPLOAD_MAX_FILESIZE: "8M"
@@ -24,7 +24,7 @@ services:
   mysql:
     image: mysql:8
     environment:
-      MYSQL_ROOT_PASSWORD: ${mysql_root_password:-}
+      MYSQL_ROOT_PASSWORD: ${SERVICE_PASSWORD_MYSQL_ROOT_PASSWORD}
     volumes:
       - mysql-data:/var/lib/mysql
     restart: unless-stopped

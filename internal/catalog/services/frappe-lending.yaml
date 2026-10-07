@@ -407,7 +407,7 @@ services:
       - apps:/home/frappe/frappe-bench/apps
     environment:
       SITE_NAME: ${SITE_NAME:-frappe.lending}
-      MAIN_DOMAIN: ${main_domain:-}
+      MAIN_DOMAIN: ${SERVICE_FQDN_FRONTEND}
       ADMIN_PASSWORD: ${SERVICE_PASSWORD_ADMIN_PASSWORD}
       DB_HOST: ${DB_HOST:-db}
       DB_PORT: "${DB_PORT:-3306}"

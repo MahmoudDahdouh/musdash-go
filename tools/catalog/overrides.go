@@ -54,3 +54,11 @@ var aboutOverrides = map[string]string{
 var docsOverrides = map[string]string{
 	"palworld": "https://github.com/thijsvanloef/palworld-server-docker",
 }
+
+// closedPorts are ports a source published that a template does not, by
+// template and service: what listens there takes commands from anyone who
+// reaches it, and the services beside it reach it on the stack's network.
+var closedPorts = map[string]map[string][]string{
+	// rtpengine's control interface, which has no sign-in.
+	"fonoster": {"rtpengine": {"8080"}},
+}

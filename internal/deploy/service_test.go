@@ -46,6 +46,17 @@ func (e *env) newServiceWith(template, name, composeText string, connect bool, t
 	host := func(endpoint string) (string, bool) {
 		return strings.ToLower(strings.ReplaceAll(endpoint, "_", "-")) + "." + name + ".example.test", false
 	}
+	// What the form held is stored when the service is made, as the page
+	// does: the step after it stores only when it generated a value.
+	if len(typed) > 0 {
+		sealed, err := e.d.SealServiceVariables(typed)
+		if err == nil {
+			err = e.db.SetServiceVariables(ctx, s.ID, sealed)
+		}
+		if err != nil {
+			e.t.Fatal(err)
+		}
+	}
 	if err := e.d.PrepareService(ctx, s, typed, host); err != nil {
 		e.t.Fatal(err)
 	}

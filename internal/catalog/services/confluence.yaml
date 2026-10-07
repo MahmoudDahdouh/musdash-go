@@ -12,9 +12,9 @@ services:
     volumes:
       - confluence-data:/var/atlassian/application-data/confluence
     environment:
-      - JVM_MINIMUM_MEMORY=${JVM_MIN_MEM:-}
-      - JVM_MAXIMUM_MEMORY=${JVM_MAX_MEM:-}
-      - CATALINA_CONNECTOR_PROXYNAME=${DOMAIN:-}
+      - JVM_MINIMUM_MEMORY=${JVM_MIN_MEM:-2048m}
+      - JVM_MAXIMUM_MEMORY=${JVM_MAX_MEM:-4096m}
+      - CATALINA_CONNECTOR_PROXYNAME=${SERVICE_FQDN_CONFLUENCE}
       - CATALINA_CONNECTOR_SCHEME=http
       - CATALINA_CONNECTOR_SECURE=true
       - SERVICE_FQDN_CONFLUENCE_8090

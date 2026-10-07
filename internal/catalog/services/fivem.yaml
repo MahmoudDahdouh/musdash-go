@@ -11,8 +11,8 @@ services:
     tty: true
     stdin_open: true
     environment:
-      - LICENSE_KEY=${license_key:-}
-      - RCON_PASSWORD=${rcon_password:-}
+      - LICENSE_KEY=${SERVICE_PASSWORD_LICENSE_KEY}
+      - RCON_PASSWORD=${SERVICE_PASSWORD_RCON_PASSWORD}
       - NO_DEFAULT_CONFIG=${NO_DEFAULT_CONFIG:-}
       - SERVICE_FQDN_FIVEM_40120
     volumes:

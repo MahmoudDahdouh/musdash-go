@@ -11,7 +11,7 @@ services:
       - "12345"
     environment:
       DATABASE_URL: postgresql://tianji:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/tianji
-      JWT_SECRET: ${jwt_secret:-}
+      JWT_SECRET: ${SERVICE_PASSWORD_JWT_SECRET}
       ALLOW_REGISTER: "false"
       ALLOW_OPENAPI: "true"
       SERVICE_FQDN_TIANJI_12345:

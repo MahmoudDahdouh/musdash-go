@@ -594,6 +594,60 @@ services:
 	}
 }
 
+// A blueprint whose Compose line reads a variable that nothing sets, where
+// its .env file sets the line's own name, means the value it made. Left as
+// written the app would get an empty password, which is its default one.
+func TestDokployEnvironmentLineWithAnUnsetVariable(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "pics")
+	write(t, dir, "meta.json", `{"id":"pics","name":"Pics","description":"Pictures.","links":{"website":"https://pics.example"},"tags":["media"]}`)
+	write(t, dir, "template.toml", `[variables]
+main_domain = "${domain}"
+admin_password = "${password:32}"
+jwt_secret = "${jwt:jwt_secret}"
+
+[config]
+mounts = []
+[[config.domains]]
+serviceName = "pics"
+port = 8080
+host = "${main_domain}"
+
+[config.env]
+"PICS_ADMIN_PASSWORD" = "${admin_password}"
+"PICS_JWT_SECRET" = "${jwt_secret}"
+"PICS_MODE" = "fast"
+`)
+	// And a variable of the blueprint read in the Compose file directly.
+	write(t, dir, "docker-compose.yml", `services:
+  pics:
+    image: example/pics:1
+    environment:
+      PICS_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      PICS_JWT_SECRET: "${JWT_SECRET}"
+      PICS_MODE: ${MODE:-slow}
+      PICS_OTHER: ${OTHER}
+      SESSION_KEY: ${jwt_secret}
+  worker:
+    image: example/pics:1
+    environment:
+      - PICS_ADMIN_PASSWORD=$ADMIN_PASSWORD
+`)
+	tpl, err := readDokploy(dir)
+	if err == nil {
+		err = tpl.convert()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(tpl.render())
+	wantAll(t, got, "PICS_ADMIN_PASSWORD: ${SERVICE_PASSWORD_ADMIN_PASSWORD}", "PICS_JWT_SECRET: ${SERVICE_PASSWORD_64_JWT_SECRET}",
+		"- PICS_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN_PASSWORD}",
+		// A line with a default of its own, and one the .env file does
+		// not name, are the Compose file's.
+		"PICS_MODE: ${MODE:-slow}", "PICS_OTHER: ${OTHER:-}", "SESSION_KEY: ${SERVICE_PASSWORD_64_JWT_SECRET}")
+	wantNone(t, got, "${ADMIN_PASSWORD", "${JWT_SECRET")
+}
+
 // A JWT secret is a key; and beside ports of the server, a host name that
 // no service is routed to is the server's own.
 func TestDokployHelpersOfAServiceWithPorts(t *testing.T) {

@@ -461,3 +461,33 @@ mail servers (Stalwart, Mailu, Poste.io) and AdGuard Home would be whole.
   database with the generated password: its port answers either way.
 - Not started: the other six new ones (ConvertX's image is several
   gigabytes), and the templates that only gained ports.
+
+**Review of the second pass's code**
+
+A reader of the pushed commits found two things, and following the first
+one up found the same mistake in templates of the first pass.
+
+- *Picsur's administrator password and its token secret were empty.* The
+  blueprint's Compose file reads `${ADMIN_PASSWORD}`, its `.env` file sets
+  `PICSUR_ADMIN_PASSWORD`, and nothing sets the first: the line was given an
+  empty default, and an app with an empty password uses its own default
+  one. Two rules now: an environment line whose own name the `.env` file
+  sets, and that reads a variable nothing sets, takes the blueprint's value;
+  and a variable of `[variables]` that the Compose file reads directly is
+  that variable. Run over everything, this also filled in Tianji's token
+  secret, GeoServer's and MediaFetch's sign-in (asked for on the form),
+  LinkStack's database root password, FiveM's RCON password, and addresses
+  and memory limits of four more. Nine templates changed.
+- *Fonoster published rtpengine's control port*, which takes commands
+  without a sign-in. A source's port can now be closed by hand
+  (`closedPorts`): the services beside it still reach it.
+- *The test that starts templates did not store what a form holds* unless a
+  value was also generated; the page does. Found when MediaFetch, which
+  only asks, was started.
+
+Started again after these: Picsur and LinkStack come up and answer.
+MediaFetch has no image for this machine's processor. Tianji does not
+answer on its first start here: its migration runs before PostgreSQL
+accepts connections, since the blueprint waits for the container and not
+for the database. That is its makers' file and the kind of thing "not
+checked" above is about; a second deployment finds the database up.

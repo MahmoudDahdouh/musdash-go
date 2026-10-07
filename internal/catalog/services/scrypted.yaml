@@ -9,7 +9,7 @@ services:
     image: ghcr.io/koush/scrypted:latest
     environment:
       - SCRYPTED_WEBHOOK_UPDATE_AUTHORIZATION=${SERVICE_PASSWORD_SCRYPTED_WEBHOOK_UPDATE_AUTHORIZATION}
-      - SCRYPTED_WEBHOOK_UPDATE=http://${main_domain:-}:10444/v1/update
+      - SCRYPTED_WEBHOOK_UPDATE=${SERVICE_URL_SCRYPTED}:10444/v1/update
       - SERVICE_FQDN_SCRYPTED_11080
     volumes:
       - scrypted-scrypted-volume:/server/volume

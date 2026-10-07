@@ -129,7 +129,6 @@ services:
       PUBLIC_IP: ${RTPENGINE_PUBLIC_IP:-CHANGE_ME_TO_HOST_IP}
     ports:
       - "10000-10100:10000-10100/udp"
-      - "8080:8080"
   asterisk:
     image: fonoster/asterisk:20
     restart: unless-stopped
