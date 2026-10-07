@@ -404,10 +404,11 @@ type NewResource struct {
 	Env       db.Environment
 	Engines   []catalog.DBTemplate
 	Templates []catalog.ServiceTemplate
-	// HasApp and HasKey say whether the team has a GitHub App and a deploy
-	// key: the two ways into a private repository.
-	HasApp bool
-	HasKey bool
+	// HasApp, HasGitLab and HasKey say whether the team has a GitHub App,
+	// a GitLab source and a deploy key: the ways into a private repository.
+	HasApp    bool
+	HasGitLab bool
+	HasKey    bool
 }
 
 func (v NewResource) base() string { return "/projects/" + v.Project.ID + "/e/" + v.Env.ID }
@@ -430,6 +431,13 @@ func gitHubAppText(has bool) string {
 		return "Choose a repository through your GitHub App. A push deploys it, with nothing to set up in the repository."
 	}
 	return "Connect a GitHub App under Sources first. It reads private repositories and deploys on every push."
+}
+
+func gitLabText(has bool) string {
+	if has {
+		return "Choose a repository your GitLab token can read, on gitlab.com or your own instance."
+	}
+	return "Connect GitLab under Sources first, with an access token. It reads private repositories on gitlab.com or your own instance."
 }
 
 func deployKeyText(has bool) string {
@@ -469,7 +477,7 @@ func kindGroup(title, about string) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 163, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 171, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -482,7 +490,7 @@ func kindGroup(title, about string) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(about)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 164, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 172, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -583,6 +591,10 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.privateRepo("app", v.HasApp), Icon: "github", Title: "Private repository, with a GitHub App", Text: gitHubAppText(v.HasApp), Compact: true, Search: "private repository github app git"}).Render(ctx, templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.privateRepo("gitlab", v.HasGitLab), Icon: "gitlab", Title: "Private repository, with GitLab", Text: gitLabText(v.HasGitLab), Compact: true, Search: "private repository gitlab token git"}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

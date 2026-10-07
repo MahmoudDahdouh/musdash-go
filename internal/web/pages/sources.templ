@@ -10,63 +10,139 @@ func installURL(g db.GitSource) string {
 	return "https://github.com/apps/" + g.Slug + "/installations/new"
 }
 
-templ Sources(s ui.Shell, sources []db.GitSource, appForm ui.Form) {
+// SourceKind names a source's kind, as the pages and the Git forms say it.
+func SourceKind(g db.GitSource) string {
+	if g.Kind == db.GitSourceGitLab {
+		return "GitLab"
+	}
+	return "GitHub App"
+}
+
+func sourceIcon(g db.GitSource) string {
+	if g.Kind == db.GitSourceGitLab {
+		return "gitlab"
+	}
+	return "github"
+}
+
+// sourceAccount is who a source acts as: a GitHub App's slug, or the user
+// of a GitLab token on its instance.
+func sourceAccount(g db.GitSource) string {
+	if g.Kind != db.GitSourceGitLab {
+		return g.Slug
+	}
+	host := source.GitLabHost(g.BaseURL)
+	if g.Slug == "" {
+		return host
+	}
+	return g.Slug + " on " + host
+}
+
+// reposPath is where a source's repository picker asks for its list.
+func reposPath(g db.GitSource) string {
+	if g.Kind == db.GitSourceGitLab {
+		return "/sources/gitlab/" + g.ID + "/repos"
+	}
+	return "/sources/github/" + g.ID + "/repos"
+}
+
+func removeSourcePath(g db.GitSource) string {
+	if g.Kind == db.GitSourceGitLab {
+		return "/sources/gitlab/" + g.ID + "/delete"
+	}
+	return "/sources/github/" + g.ID + "/delete"
+}
+
+func removeSourceAsk(g db.GitSource) templ.Attributes {
+	if g.Kind == db.GitSourceGitLab {
+		return ui.Ask("Remove the GitLab source "+g.Name+"?", "musdash forgets the instance and its token: nothing can be deployed through it any more. The token itself keeps working until you revoke it on GitLab. A source that apps still deploy through is not removed.", "Remove source", true)
+	}
+	return ui.Ask("Remove the GitHub App "+g.Name+"?", "musdash forgets the App: nothing can be deployed through it any more. The App itself stays on GitHub until you delete it there. An App that apps still deploy through is not removed.", "Remove App", true)
+}
+
+// addSourceMenu is the button a source is added with: it opens a menu of
+// the hosts, and each host opens the dialog its own process starts from.
+// end says the button is at the end of a row.
+templ addSourceMenu(end bool) {
+	@ui.Menu(ui.MenuProps{ID: "new-source", Label: "Add source", Class: "btn btn-primary", End: end, Button: addSourceButton()}) {
+		@ui.MenuItem(ui.MenuItemProps{Label: "GitHub", Icon: "github", Opens: "new-github-app"})
+		@ui.MenuItem(ui.MenuItemProps{Label: "GitLab", Icon: "gitlab", Opens: "new-gitlab"})
+	}
+}
+
+templ addSourceButton() {
+	@ui.Icon("plus")
+	Add source
+	@ui.Icon("chevron-down")
+}
+
+// Sources is the team's Git sources in one table. appForm and gitlabForm
+// are the two dialogs a source is added with: the one that was sent and
+// refused comes back open.
+templ Sources(s ui.Shell, sources []db.GitSource, appForm, gitlabForm ui.Form) {
 	@ui.Layout(s) {
-		@ui.PageHeader("Sources", "How musdash reads your private repositories. Public repositories need nothing here.")
-		<div class="grid max-w-3xl gap-6">
+		@ui.PageHeader("Sources", "How musdash reads your private repositories on GitHub and GitLab. Public repositories need nothing here.") {
+			if s.Admin && len(sources) > 0 {
+				@addSourceMenu(true)
+			}
+		}
+		if len(sources) == 0 && s.Admin {
+			@ui.EmptyState(ui.EmptyProps{Icon: "git-branch", Title: "No source yet", Text: "Connect GitHub or GitLab to deploy from private repositories. A GitHub App also deploys on every push."}) {
+				@addSourceMenu(false)
+			}
+		} else if len(sources) == 0 {
+			@ui.EmptyState(ui.EmptyProps{Icon: "git-branch", Title: "No source yet", Text: "An Admin can connect GitHub or GitLab."})
+		} else {
 			<section class="card">
-				<div class="card-head">
-					<div>
-						<h2 class="card-title">GitHub Apps</h2>
-						<p class="muted text-sm">A GitHub App gives musdash read access to the repositories you choose, and tells it when you push.</p>
-					</div>
-					if s.Admin && len(sources) > 0 {
-						@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "new-github-app"}) {
-							New GitHub App
-						}
-					}
-				</div>
-				if len(sources) > 0 {
-					<div class="rows">
-						for _, g := range sources {
-							<div class="row">
-								@ui.Icon("github", "text-ink-mute")
-								<div class="min-w-0 flex-1">
-									<p class="truncate font-semibold">{ g.Name }</p>
-									<a class="fact truncate text-ink-mute" href={ templ.SafeURL(g.HTMLURL) } target="_blank" rel="noopener">{ g.Slug }</a>
-								</div>
+				@ui.Table("Name", "Type", "Account", "") {
+					for _, g := range sources {
+						<tr>
+							<td>
+								<span class="inline-flex items-center gap-2">
+									@ui.Icon(sourceIcon(g), "text-ink-mute")
+									<span class="font-semibold">{ g.Name }</span>
+								</span>
+							</td>
+							<td>
+								@ui.Badge(SourceKind(g), ui.ToneNeutral)
+							</td>
+							<td>
+								<a class="fact break-all" href={ templ.SafeURL(g.HTMLURL) } target="_blank" rel="noopener">{ sourceAccount(g) }</a>
+							</td>
+							<td class="text-right">
 								if s.Admin {
-									@ui.LinkButton(installURL(g), ui.ButtonProps{Small: true, Icon: "external", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener"}}) {
-										Choose repositories
-									}
-									<form method="post" action={ templ.SafeURL("/sources/github/" + g.ID + "/delete") }>
-										@ui.CSRF(s.CSRF)
-										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the GitHub App "+g.Name+"?", "musdash forgets the App: nothing can be deployed through it any more. The App itself stays on GitHub until you delete it there. An App that apps still deploy through is not removed.", "Remove App", true)}) {
-											Remove
+									<div class="flex flex-wrap justify-end gap-2">
+										if g.Kind == db.GitSourceGitHubApp {
+											@ui.LinkButton(installURL(g), ui.ButtonProps{Small: true, Icon: "external", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener"}}) {
+												Choose repositories
+											}
 										}
-									</form>
+										<form method="post" action={ templ.SafeURL(removeSourcePath(g)) }>
+											@ui.CSRF(s.CSRF)
+											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: removeSourceAsk(g)}) {
+												Remove
+											}
+										</form>
+									</div>
 								}
-							</div>
-						}
-					</div>
-				} else if s.Admin {
-					@ui.EmptyState(ui.EmptyProps{Icon: "github", Title: "No GitHub App yet", Text: "Create one to deploy from private repositories, and on every push.", Size: ui.EmptySmall}) {
-						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: "new-github-app"}) {
-							New GitHub App
-						}
+							</td>
+						</tr>
 					}
-				} else {
-					@ui.EmptyState(ui.EmptyProps{Icon: "github", Title: "No GitHub App yet", Text: "An Admin can create one.", Size: ui.EmptySmall})
 				}
 			</section>
-			if s.Admin {
-				@ui.FormDialog(ui.DialogProps{ID: "new-github-app", Title: "New GitHub App", Description: "Creating the App takes two steps on GitHub: confirm its name, then choose which repositories it may read. You come back here in between.", Action: "/sources/github", CSRF: s.CSRF, Submit: "Create GitHub App", Open: !appForm.OK()}) {
-					@ui.TextField(appForm, "App name", "Shown on GitHub. It must be unique across GitHub.", ui.InputProps{ID: "name", Required: true, Attrs: templ.Attributes{"maxlength": "34"}})
-					@ui.TextField(appForm, "Organisation", "Leave empty to create the App under your own account.", ui.InputProps{ID: "organization", Mono: true, Placeholder: "acme"})
-					@ui.TextField(appForm, "This dashboard's address", "GitHub sends you back here, and sends push events here. It must be reachable from the internet for pushes to deploy.", ui.InputProps{ID: "base", Mono: true, Required: true})
-				}
+		}
+		if s.Admin {
+			@ui.FormDialog(ui.DialogProps{ID: "new-github-app", Title: "New GitHub App", Description: "A GitHub App gives musdash read access to the repositories you choose, and tells it when you push. Creating it takes two steps on GitHub: confirm its name, then choose which repositories it may read. You come back here in between.", Action: "/sources/github", CSRF: s.CSRF, Submit: "Create GitHub App", Open: !appForm.OK()}) {
+				@ui.TextField(appForm, "App name", "Shown on GitHub. It must be unique across GitHub.", ui.InputProps{ID: "name", Required: true, Attrs: templ.Attributes{"maxlength": "34"}})
+				@ui.TextField(appForm, "Organisation", "Leave empty to create the App under your own account.", ui.InputProps{ID: "organization", Mono: true, Placeholder: "acme"})
+				@ui.TextField(appForm, "This dashboard's address", "GitHub sends you back here, and sends push events here. It must be reachable from the internet for pushes to deploy.", ui.InputProps{ID: "base", Mono: true, Required: true})
 			}
-		</div>
+			@ui.FormDialog(ui.DialogProps{ID: "new-gitlab", Title: "Connect GitLab", Description: "musdash reads your repositories with an access token, which is stored encrypted and not shown again. GitLab does not report pushes through a token: to deploy on every push, give the app a webhook afterwards, with a secret made under Keys & tokens.", Action: "/sources/gitlab", CSRF: s.CSRF, Submit: "Connect GitLab", Open: !gitlabForm.OK()}) {
+				@ui.TextField(gitlabForm, "Name", "What you call it here, such as Work GitLab.", ui.InputProps{ID: "gitlab-name", Name: "gitlab_name", Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
+				@ui.TextField(gitlabForm, "GitLab address", "https://gitlab.com, or the address of your own instance.", ui.InputProps{ID: "gitlab-base", Name: "gitlab_base", Mono: true, Required: true})
+				@ui.TextField(gitlabForm, "Access token", "A personal, group or project access token with the read_api and read_repository scopes. In GitLab: Preferences, Access tokens.", ui.InputProps{ID: "gitlab-token", Name: "gitlab_token", Type: "password", Mono: true, Required: true, Autocomplete: "off"})
+			}
+		}
 	}
 }
 
@@ -98,23 +174,37 @@ templ GitHubHandoff(s ui.Shell, name, action, manifest string) {
 	}
 }
 
+// RepoPick is what a source's repository picker is answered with.
+type RepoPick struct {
+	Repos []source.RepoInfo
+	// Base is the address the repositories are under, without a slash at
+	// its end: https://github.com, or a GitLab instance.
+	Base string
+	// None is said when the source can read no repository; Problem, when
+	// its list could not be had.
+	None    string
+	Problem string
+}
+
 // RepoList is what the repository picker (ui.Picker) loads when it is first
 // opened. Choosing a repository fills the repository field of the form the
 // picker is in.
-templ RepoList(repos []source.RepoInfo, problem string) {
-	if problem != "" {
-		@ui.MenuNote(problem, true)
-	} else if len(repos) == 0 {
-		@ui.MenuNote("This App is not installed on any repository yet. Use Choose repositories on the Sources page.", false)
+templ RepoList(v RepoPick) {
+	if v.Problem != "" {
+		@ui.MenuNote(v.Problem, true)
+	} else if len(v.Repos) == 0 {
+		@ui.MenuNote(v.None, false)
 	} else {
-		for _, repo := range repos {
-			@ui.PickerOption("repo", "https://github.com/"+repo.FullName, repo.FullName) {
+		for _, repo := range v.Repos {
+			@ui.PickerOption("repo", v.Base+"/"+repo.FullName, repo.FullName) {
 				@ui.Icon("git-branch", "text-ink-mute")
 				<span class="fact min-w-0 flex-1 break-all">{ repo.FullName }</span>
 				if repo.Private {
 					@ui.Badge("Private", ui.ToneNeutral)
 				}
-				<span class="muted text-xs">{ repo.DefaultBranch }</span>
+				if repo.DefaultBranch != "" {
+					<span class="muted text-xs">{ repo.DefaultBranch }</span>
+				}
 			}
 		}
 	}

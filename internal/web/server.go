@@ -45,6 +45,9 @@ type Server struct {
 
 	// GitHub is the client for GitHub's API. Nil uses github.com.
 	GitHub *source.GitHub
+	// GitLab is the client for a GitLab instance's API. Nil uses one that
+	// connects only where netguard allows.
+	GitLab *source.GitLab
 
 	logins *auth.Limiter
 	// accounts counts attempts at one account's password and second step.
@@ -85,6 +88,9 @@ func (s *Server) Handler() http.Handler {
 	s.apiAddrs = auth.NewLimiter(apiPerMinuteByAddress, time.Minute)
 	if s.GitHub == nil {
 		s.GitHub = source.NewGitHub()
+	}
+	if s.GitLab == nil {
+		s.GitLab = source.NewGitLab()
 	}
 	s.hookBodies = make(chan struct{}, 1)
 	s.hashing = make(chan struct{}, 2)
@@ -274,7 +280,10 @@ func (s *Server) Handler() http.Handler {
 	handle("GET /sources/github/callback", admin, s.githubCallback)
 	handle("GET /sources/github/installed", member, s.githubInstalled)
 	handle("GET /sources/github/{id}/repos", member, s.githubRepos)
-	handle("POST /sources/github/{id}/delete", admin, s.githubDelete)
+	handle("POST /sources/github/{id}/delete", admin, s.sourceDelete)
+	handle("POST /sources/gitlab", admin, s.gitlabCreate)
+	handle("GET /sources/gitlab/{id}/repos", member, s.gitlabRepos)
+	handle("POST /sources/gitlab/{id}/delete", admin, s.sourceDelete)
 	handle("POST /sources/keys", admin, s.sshKeyCreate)
 	handle("POST /sources/keys/{id}/delete", admin, s.sshKeyDelete)
 

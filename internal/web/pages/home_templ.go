@@ -409,7 +409,7 @@ func homeStart(v HomeView) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = homeStep(v.Totals.Sources > 0, "Connect GitHub (optional)", "To deploy from private repositories and on every push. Public repositories and Docker images need nothing.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = homeStep(v.Totals.Sources > 0, "Connect GitHub or GitLab (optional)", "To deploy from private repositories. Public repositories and Docker images need nothing.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

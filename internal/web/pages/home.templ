@@ -163,7 +163,7 @@ templ homeStart(v HomeView) {
 				}
 			}
 			if v.Admin {
-				@homeStep(v.Totals.Sources > 0, "Connect GitHub (optional)", "To deploy from private repositories and on every push. Public repositories and Docker images need nothing.") {
+				@homeStep(v.Totals.Sources > 0, "Connect GitHub or GitLab (optional)", "To deploy from private repositories. Public repositories and Docker images need nothing.") {
 					if v.Totals.Sources == 0 {
 						@ui.LinkButton("/sources", ui.ButtonProps{Small: true, Icon: "git-branch"}) {
 							Sources

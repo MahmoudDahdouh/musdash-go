@@ -8,13 +8,22 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 )
 
-// GitSource is a connection to a Git host. Today that is a GitHub App.
+// The kinds of source.
+const (
+	GitSourceGitHubApp = "github_app"
+	GitSourceGitLab    = "gitlab"
+)
+
+// GitSource is a connection to a Git host: a GitHub App, or an access token
+// of a GitLab instance.
 type GitSource struct {
-	ID            string
-	TeamID        string
-	Name          string
-	Kind          string
-	AppID         int64
+	ID     string
+	TeamID string
+	Name   string
+	Kind   string
+	// A GitHub App's own.
+	AppID int64
+	// Slug is the App's slug, or the GitLab user the token acts as.
 	Slug          string
 	HTMLURL       string
 	ClientID      string
@@ -23,25 +32,37 @@ type GitSource struct {
 	WebhookSecret string // sealed
 	State         string
 	CreatedAt     int64
+	// A GitLab source's own: the instance, as https://host[:port], and the
+	// token.
+	BaseURL string
+	Token   string // sealed
 }
 
-// Ready reports whether GitHub has returned the App's credentials. A row
-// that is not ready is a manifest flow a person started and has not
-// finished.
-func (g GitSource) Ready() bool { return g.AppID != 0 }
+// Ready reports whether the source can be used. A GitHub App is not until
+// GitHub has returned its credentials: before that the row is a manifest
+// flow a person started and has not finished. A GitLab source is whole
+// from the start.
+func (g GitSource) Ready() bool { return g.Kind != GitSourceGitHubApp || g.AppID != 0 }
 
-const gitSourceColumns = `id, team_id, name, kind, app_id, slug, html_url, client_id, client_secret, private_key, webhook_secret, state, created_at`
+// ReportsPushes says the source tells musdash about pushes itself, so what
+// deploys through it needs no webhook of its own. Only a GitHub App does.
+func (g GitSource) ReportsPushes() bool { return g.Kind == GitSourceGitHubApp }
+
+const gitSourceColumns = `id, team_id, name, kind, app_id, slug, html_url, client_id, client_secret, private_key, webhook_secret, state, created_at, base_url, token`
+
+// gitSourceReady is Ready as a condition on a row of git_sources.
+const gitSourceReady = `(app_id <> 0 OR kind <> 'github_app')`
 
 func scanGitSource(row interface{ Scan(...any) error }) (GitSource, error) {
 	var g GitSource
-	err := row.Scan(&g.ID, &g.TeamID, &g.Name, &g.Kind, &g.AppID, &g.Slug, &g.HTMLURL, &g.ClientID, &g.ClientSecret, &g.PrivateKey, &g.WebhookSecret, &g.State, &g.CreatedAt)
+	err := row.Scan(&g.ID, &g.TeamID, &g.Name, &g.Kind, &g.AppID, &g.Slug, &g.HTMLURL, &g.ClientID, &g.ClientSecret, &g.PrivateKey, &g.WebhookSecret, &g.State, &g.CreatedAt, &g.BaseURL, &g.Token)
 	return g, notFound(err)
 }
 
 // StartGitSource records a manifest flow that is about to be sent to
 // GitHub. state ties GitHub's redirect back to this row and this team.
 func (d *DB) StartGitSource(ctx context.Context, teamID, name, state string) (GitSource, error) {
-	g := GitSource{ID: secret.RandomID(), TeamID: teamID, Name: name, Kind: "github_app", State: state, CreatedAt: now()}
+	g := GitSource{ID: secret.RandomID(), TeamID: teamID, Name: name, Kind: GitSourceGitHubApp, State: state, CreatedAt: now()}
 	_, err := d.ExecContext(ctx, `INSERT INTO git_sources (id, team_id, name, kind, state, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		g.ID, g.TeamID, g.Name, g.Kind, g.State, g.CreatedAt)
 	return g, err
@@ -54,7 +75,7 @@ func (d *DB) PendingGitSource(ctx context.Context, teamID, state string) (GitSou
 		return GitSource{}, ErrNotFound
 	}
 	return scanGitSource(d.QueryRowContext(ctx, `SELECT `+gitSourceColumns+` FROM git_sources
-		WHERE team_id = ? AND state = ? AND app_id = 0`, teamID, state))
+		WHERE team_id = ? AND state = ? AND NOT `+gitSourceReady, teamID, state))
 }
 
 // FinishGitSource stores the credentials GitHub returned. Secret fields
@@ -62,8 +83,21 @@ func (d *DB) PendingGitSource(ctx context.Context, teamID, state string) (GitSou
 func (d *DB) FinishGitSource(ctx context.Context, g GitSource) error {
 	return affected(d.ExecContext(ctx, `UPDATE git_sources SET name = ?, app_id = ?, slug = ?, html_url = ?, client_id = ?,
 			client_secret = ?, private_key = ?, webhook_secret = ?, state = ''
-		WHERE id = ? AND team_id = ? AND app_id = 0`,
+		WHERE id = ? AND team_id = ? AND NOT `+gitSourceReady,
 		g.Name, g.AppID, g.Slug, g.HTMLURL, g.ClientID, g.ClientSecret, g.PrivateKey, g.WebhookSecret, g.ID, g.TeamID))
+}
+
+// CreateGitLabSource records a GitLab instance and the token musdash reads
+// it with. The token must already be sealed. user is who the token acts
+// as, for the page; the caller has checked what it holds.
+func (d *DB) CreateGitLabSource(ctx context.Context, teamID, name, baseURL, user, sealedToken string) (GitSource, error) {
+	g := GitSource{ID: secret.RandomID(), TeamID: teamID, Name: name, Kind: GitSourceGitLab, Slug: user, HTMLURL: baseURL, BaseURL: baseURL, Token: sealedToken, CreatedAt: now()}
+	if user != "" {
+		g.HTMLURL = baseURL + "/" + user
+	}
+	_, err := d.ExecContext(ctx, `INSERT INTO git_sources (id, team_id, name, kind, slug, html_url, base_url, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		g.ID, g.TeamID, g.Name, g.Kind, g.Slug, g.HTMLURL, g.BaseURL, g.Token, g.CreatedAt)
+	return g, err
 }
 
 // GitSource loads one source, scoped to the team.
@@ -79,7 +113,7 @@ func (d *DB) GitSourceByID(ctx context.Context, id string) (GitSource, error) {
 // ListGitSources returns the team's connected sources. Unfinished manifest
 // flows are left out.
 func (d *DB) ListGitSources(ctx context.Context, teamID string) ([]GitSource, error) {
-	rows, err := d.QueryContext(ctx, `SELECT `+gitSourceColumns+` FROM git_sources WHERE team_id = ? AND app_id <> 0 ORDER BY created_at, rowid`, teamID)
+	rows, err := d.QueryContext(ctx, `SELECT `+gitSourceColumns+` FROM git_sources WHERE team_id = ? AND `+gitSourceReady+` ORDER BY created_at, rowid`, teamID)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +148,7 @@ func (d *DB) DeleteGitSource(ctx context.Context, teamID, id string) error {
 
 // DeleteStaleGitSources removes manifest flows that were never finished.
 func (d *DB) DeleteStaleGitSources(ctx context.Context, olderThan int64) error {
-	_, err := d.ExecContext(ctx, `DELETE FROM git_sources WHERE app_id = 0 AND created_at < ?`, olderThan)
+	_, err := d.ExecContext(ctx, `DELETE FROM git_sources WHERE NOT `+gitSourceReady+` AND created_at < ?`, olderThan)
 	return err
 }
 

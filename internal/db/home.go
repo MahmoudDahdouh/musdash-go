@@ -135,7 +135,7 @@ func (d *DB) TeamTotals(ctx context.Context, teamID string) (Totals, error) {
 		SELECT (SELECT count(*) FROM projects WHERE team_id = ?1),
 		       (SELECT count(*) FROM `+placed+` r JOIN projects p ON p.id = r.project_id WHERE p.team_id = ?1),
 		       (SELECT count(*) FROM `+placed+` r JOIN projects p ON p.id = r.project_id WHERE p.team_id = ?1 AND r.status = ?2),
-		       (SELECT count(*) FROM git_sources WHERE team_id = ?1 AND app_id <> 0)`, teamID, AppRunning).
+		       (SELECT count(*) FROM git_sources WHERE team_id = ?1 AND `+gitSourceReady+`)`, teamID, AppRunning).
 		Scan(&t.Projects, &t.Resources, &t.Running, &t.Sources)
 	return t, err
 }

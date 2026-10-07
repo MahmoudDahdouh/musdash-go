@@ -230,6 +230,67 @@ func TestGitHubAppTokenStaysOutOfCommandLines(t *testing.T) {
 	}
 }
 
+// A GitLab source clones over HTTPS with its token in git's environment,
+// scoped to its own instance, and reads no repository anywhere else.
+func TestGitLabTokenStaysOutOfCommandLines(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	rec := &gitEnvRecorder{}
+	e.fake.Handle = rec.handle
+	// No test asks GitHub for a token: a GitLab source has its own.
+	tokens := &stubTokens{token: "unused"}
+	e.d.Tokens = tokens
+
+	sealed, _ := e.d.Box.SealString("test.SuperSecretAccessToken")
+	src, err := e.db.CreateGitLabSource(ctx, e.team, "work", "https://git.example.com:8443", "ada", sealed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Entered in SSH form, in a nested group: still HTTPS, at the
+	// instance's own port.
+	e.gitApp(func(a *db.App) { a.GitSourceID = src.ID; a.RepoURL = "git@git.example.com:acme/platform/shop.git" })
+
+	dep := e.deploy()
+	if dep.Status != db.DeploySuccess {
+		t.Fatalf("%s %q", dep.Status, dep.Error)
+	}
+	if len(tokens.calls) != 0 {
+		t.Fatalf("GitHub was asked for a token: %v", tokens.calls)
+	}
+	calls := strings.Join(e.fake.Calls(), "\n")
+	if !strings.Contains(calls, "-- https://git.example.com:8443/acme/platform/shop.git ") {
+		t.Fatalf("clone address:\n%s", calls)
+	}
+	encoded := base64.StdEncoding.EncodeToString([]byte("oauth2:test.SuperSecretAccessToken"))
+	for _, secret := range []string{"test.SuperSecretAccessToken", encoded} {
+		if strings.Contains(calls, secret) {
+			t.Fatal("the token appeared on a command line")
+		}
+		if strings.Contains(e.log(dep), secret) {
+			t.Fatal("the token appeared in the deployment log")
+		}
+	}
+	env := strings.Join(rec.envs["git clone"], "\n")
+	if !strings.Contains(env, "GIT_CONFIG_KEY_0=http.https://git.example.com:8443/.extraHeader") || !strings.Contains(env, "GIT_CONFIG_VALUE_0=Authorization: Basic "+encoded) {
+		t.Fatalf("git environment: %q", rec.envs["git clone"])
+	}
+
+	// The token goes to its own instance only, whatever the app's row says.
+	if _, err := e.db.Exec(`UPDATE apps SET repo_url = 'https://github.com/acme/shop' WHERE git_source_id = ?`, src.ID); err != nil {
+		t.Fatal(err)
+	}
+	before := len(e.fake.Calls())
+	dep = e.deploy()
+	if dep.Status != db.DeployFailed || !strings.Contains(dep.Error, "can only read repositories on git.example.com, not github.com") {
+		t.Fatalf("%s %q", dep.Status, dep.Error)
+	}
+	for _, call := range e.fake.Calls()[before:] {
+		if strings.HasPrefix(call, "git clone") {
+			t.Fatalf("a repository on another host was cloned: %s", call)
+		}
+	}
+}
+
 func TestDeployKeyIsWrittenPrivateAndRemoved(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()

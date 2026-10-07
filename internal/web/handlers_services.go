@@ -526,7 +526,7 @@ func (s *Server) serviceWebhookSecret(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	s.newHookSecret(w, r, serviceKeyOwner(v.Service, ""))
+	s.newHookSecret(w, r, serviceKeyOwner(v.Service, "", s.pushSources(r)))
 }
 
 // serviceDeployToken creates, replaces or revokes the service's deploy
@@ -541,13 +541,13 @@ func (s *Server) serviceDeployToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.PostFormValue("revoke") == "1" {
-		s.revokeDeployToken(w, r, serviceKeyOwner(v.Service, ""))
+		s.revokeDeployToken(w, r, serviceKeyOwner(v.Service, "", s.pushSources(r)))
 		return
 	}
 	if s.sentBefore(w, r, pages.TokensPath) {
 		return
 	}
-	s.newDeployToken(w, r, serviceKeyOwner(v.Service, ""))
+	s.newDeployToken(w, r, serviceKeyOwner(v.Service, "", s.pushSources(r)))
 }
 
 func (s *Server) serviceCompose(w http.ResponseWriter, r *http.Request) {

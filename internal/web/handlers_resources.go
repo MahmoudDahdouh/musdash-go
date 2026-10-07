@@ -162,8 +162,11 @@ func (s *Server) resourceNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v := pages.NewResource{Project: p, Env: env, Engines: catalog.Databases(), Templates: catalog.Services()}
+	for _, g := range choices.Sources {
+		v.HasApp = v.HasApp || g.Kind == db.GitSourceGitHubApp
+		v.HasGitLab = v.HasGitLab || g.Kind == db.GitSourceGitLab
+	}
 	for _, a := range choices.Access {
-		v.HasApp = v.HasApp || strings.HasPrefix(a.Value, "source:")
 		v.HasKey = v.HasKey || strings.HasPrefix(a.Value, "key:")
 	}
 	shell := s.shell(w, r, "Add resource", "projects", envCrumbs(p, env, ui.Crumb{Label: "Add resource"})...)
@@ -171,16 +174,24 @@ func (s *Server) resourceNew(w http.ResponseWriter, r *http.Request) {
 }
 
 // preferredAccess turns the kind of access a tile of the Add resource page
-// asked for ("app", "key") into the first of the team's that is of that
-// kind, as the Git form names it. "" when there is none, or nothing was
-// asked: the form then starts at its first option.
+// asked for ("app", "gitlab", "key") into the first of the team's that is
+// of that kind, as the Git form names it. "" when there is none, or nothing
+// was asked: the form then starts at its first option.
 func preferredAccess(r *http.Request, c pages.GitChoices) string {
-	prefix := map[string]string{"app": "source:", "key": "key:"}[r.URL.Query().Get("access")]
-	if prefix == "" {
+	asked := r.URL.Query().Get("access")
+	if kind := map[string]string{"app": db.GitSourceGitHubApp, "gitlab": db.GitSourceGitLab}[asked]; kind != "" {
+		for _, g := range c.Sources {
+			if g.Kind == kind {
+				return "source:" + g.ID
+			}
+		}
+		return ""
+	}
+	if asked != "key" {
 		return ""
 	}
 	for _, a := range c.Access {
-		if strings.HasPrefix(a.Value, prefix) {
+		if strings.HasPrefix(a.Value, "key:") {
 			return a.Value
 		}
 	}

@@ -120,10 +120,11 @@ type NewResource struct {
 	Env       db.Environment
 	Engines   []catalog.DBTemplate
 	Templates []catalog.ServiceTemplate
-	// HasApp and HasKey say whether the team has a GitHub App and a deploy
-	// key: the two ways into a private repository.
-	HasApp bool
-	HasKey bool
+	// HasApp, HasGitLab and HasKey say whether the team has a GitHub App,
+	// a GitLab source and a deploy key: the ways into a private repository.
+	HasApp    bool
+	HasGitLab bool
+	HasKey    bool
 }
 
 func (v NewResource) base() string { return "/projects/" + v.Project.ID + "/e/" + v.Env.ID }
@@ -146,6 +147,13 @@ func gitHubAppText(has bool) string {
 		return "Choose a repository through your GitHub App. A push deploys it, with nothing to set up in the repository."
 	}
 	return "Connect a GitHub App under Sources first. It reads private repositories and deploys on every push."
+}
+
+func gitLabText(has bool) string {
+	if has {
+		return "Choose a repository your GitLab token can read, on gitlab.com or your own instance."
+	}
+	return "Connect GitLab under Sources first, with an access token. It reads private repositories on gitlab.com or your own instance."
 }
 
 func deployKeyText(has bool) string {
@@ -181,6 +189,7 @@ templ ResourceNew(s ui.Shell, v NewResource) {
 					@ui.Tiles("Kinds of app", true) {
 						@ui.Tile(ui.TileProps{Href: v.base() + "/apps/new?source=git", Icon: "git-branch", Title: "Public repository", Text: "Build from a public Git repository on any host.", Compact: true, Search: "public repository git github gitlab bitbucket gitea dockerfile nixpacks railpack static"})
 						@ui.Tile(ui.TileProps{Href: v.privateRepo("app", v.HasApp), Icon: "github", Title: "Private repository, with a GitHub App", Text: gitHubAppText(v.HasApp), Compact: true, Search: "private repository github app git"})
+						@ui.Tile(ui.TileProps{Href: v.privateRepo("gitlab", v.HasGitLab), Icon: "gitlab", Title: "Private repository, with GitLab", Text: gitLabText(v.HasGitLab), Compact: true, Search: "private repository gitlab token git"})
 						@ui.Tile(ui.TileProps{Href: v.privateRepo("key", v.HasKey), Icon: "key", Title: "Private repository, with a deploy key", Text: deployKeyText(v.HasKey), Compact: true, Search: "private repository deploy key ssh git gitlab bitbucket gitea"})
 						@ui.Tile(ui.TileProps{Href: v.base() + "/apps/new", Icon: "box", Title: "Docker image", Text: "Run an image from a registry, such as nginx:alpine or ghcr.io/you/app:1.4.", Compact: true, Search: "docker image registry container"})
 					}

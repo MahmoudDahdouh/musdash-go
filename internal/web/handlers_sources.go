@@ -44,24 +44,34 @@ func validBase(raw string) (string, bool) {
 	return u.Scheme + "://" + u.Host, true
 }
 
-func (s *Server) renderSources(w http.ResponseWriter, r *http.Request, status int, appForm ui.Form) {
+// sourceForms is the state of the two dialogs of the Sources page: the
+// one that was sent and refused comes back open.
+type sourceForms struct {
+	app    ui.Form // New GitHub App
+	gitlab ui.Form // Connect GitLab
+}
+
+func (s *Server) renderSources(w http.ResponseWriter, r *http.Request, status int, f sourceForms) {
 	teamID := sessionFrom(r).TeamID
 	sources, err := s.DB.ListGitSources(r.Context(), teamID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if _, ok := appForm.Values["base"]; !ok {
-		appForm.Set("base", s.publicBase(r))
+	if _, ok := f.app.Values["base"]; !ok {
+		f.app.Set("base", s.publicBase(r))
 	}
-	if _, ok := appForm.Values["name"]; !ok {
-		appForm.Set("name", "musdash-"+secret.RandomID()[:6])
+	if _, ok := f.app.Values["name"]; !ok {
+		f.app.Set("name", "musdash-"+secret.RandomID()[:6])
 	}
-	s.render(w, r, status, pages.Sources(s.shell(w, r, "Sources", "sources"), sources, appForm))
+	if _, ok := f.gitlab.Values["gitlab_base"]; !ok {
+		f.gitlab.Set("gitlab_base", "https://gitlab.com")
+	}
+	s.render(w, r, status, pages.Sources(s.shell(w, r, "Sources", "sources"), sources, f.app, f.gitlab))
 }
 
 func (s *Server) sourcesPage(w http.ResponseWriter, r *http.Request) {
-	s.renderSources(w, r, http.StatusOK, ui.Form{})
+	s.renderSources(w, r, http.StatusOK, sourceForms{})
 }
 
 // githubManifest is the document GitHub creates an App from.
@@ -100,7 +110,7 @@ func (s *Server) githubStart(w http.ResponseWriter, r *http.Request) {
 		f.Fail("base", "Enter this dashboard's address, such as https://musdash.example.com.")
 	}
 	if !f.OK() {
-		s.renderSources(w, r, http.StatusUnprocessableEntity, f)
+		s.renderSources(w, r, http.StatusUnprocessableEntity, sourceForms{app: f})
 		return
 	}
 
@@ -191,46 +201,126 @@ func (s *Server) githubInstalled(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, "/sources")
 }
 
-func (s *Server) githubDelete(w http.ResponseWriter, r *http.Request) {
-	err := s.DB.DeleteGitSource(r.Context(), sessionFrom(r).TeamID, r.PathValue("id"))
+// gitlabCreate connects a GitLab instance: an address and an access token,
+// which GitLab is asked about before anything is stored. The token is the
+// person's own and is never sent back: not in a refused form, not on the
+// page.
+func (s *Server) gitlabCreate(w http.ResponseWriter, r *http.Request) {
+	var f ui.Form
+	name := strings.TrimSpace(r.PostFormValue("gitlab_name"))
+	rawBase := strings.TrimSpace(r.PostFormValue("gitlab_base"))
+	token := strings.TrimSpace(r.PostFormValue("gitlab_token"))
+	f.Set("gitlab_name", name)
+	f.Set("gitlab_base", rawBase)
+
+	if name == "" || len(name) > 60 || strings.ContainsAny(name, "\r\n\x00") {
+		f.Fail("gitlab_name", "Enter a name, up to 60 characters.")
+	}
+	base, ok := source.GitLabBase(rawBase)
+	if !ok {
+		f.Fail("gitlab_base", "Enter the address of the GitLab instance, such as https://gitlab.com or https://gitlab.example.com. It must be https, with nothing after the host.")
+	}
+	if !source.ValidGitLabToken(token) {
+		f.Fail("gitlab_token", "Enter the access token as GitLab showed it.")
+	}
+	var user string
+	if f.OK() {
+		// Asked before anything is stored: a wrong token, or an address
+		// that is no GitLab, is said while the person is still here.
+		var err error
+		if user, err = s.GitLab.User(r.Context(), base, token); err != nil {
+			f.Fail("gitlab_token", sentence(err))
+		}
+	}
+	if !f.OK() {
+		s.renderSources(w, r, http.StatusUnprocessableEntity, sourceForms{gitlab: f})
+		return
+	}
+	sealed, err := s.Box.SealString(token)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if _, err := s.DB.CreateGitLabSource(r.Context(), sessionFrom(r).TeamID, name, base, user, sealed); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	setFlash(w, r, ui.ToneOK, "GitLab connected. Its repositories can now be chosen when you add an app.")
+	redirect(w, r, "/sources")
+}
+
+// sourceDelete forgets a source of either kind, unless something still
+// deploys through it.
+func (s *Server) sourceDelete(w http.ResponseWriter, r *http.Request) {
+	teamID := sessionFrom(r).TeamID
+	src, err := s.DB.GitSource(r.Context(), teamID, r.PathValue("id"))
+	if err == nil {
+		err = s.DB.DeleteGitSource(r.Context(), teamID, src.ID)
+	}
 	switch {
 	case errors.Is(err, db.ErrNotFound):
 		s.notFound(w, r)
 		return
 	case errors.Is(err, db.ErrInUse):
-		setFlash(w, r, ui.ToneDanger, "An app still deploys through this GitHub App. Change or delete that app first.")
+		setFlash(w, r, ui.ToneDanger, "An app or a service still deploys through "+src.Name+". Change or delete it first.")
 	case err != nil:
 		s.fail(w, r, err)
 		return
+	case src.Kind == db.GitSourceGitLab:
+		setFlash(w, r, ui.ToneOK, "Removed from musdash. The access token itself still works until you revoke it on GitLab.")
 	default:
 		setFlash(w, r, ui.ToneOK, "Removed from musdash. To delete the App itself, use its settings page on GitHub.")
 	}
 	redirect(w, r, "/sources")
 }
 
-// githubRepos lists the repositories a GitHub App can reach, as a fragment
-// the New app form loads on request.
-func (s *Server) githubRepos(w http.ResponseWriter, r *http.Request) {
+// loadRepoSource fetches the source a repository list is asked of, which
+// must be of the kind the address names. Anything else is not found.
+func (s *Server) loadRepoSource(w http.ResponseWriter, r *http.Request, kind string) (db.GitSource, bool) {
 	src, err := s.DB.GitSource(r.Context(), sessionFrom(r).TeamID, r.PathValue("id"))
-	if errors.Is(err, db.ErrNotFound) {
+	if errors.Is(err, db.ErrNotFound) || (err == nil && src.Kind != kind) {
 		http.NotFound(w, r)
-		return
+		return src, false
 	}
 	if err != nil {
 		s.fail(w, r, err)
+		return src, false
+	}
+	return src, true
+}
+
+// githubRepos lists the repositories a GitHub App can reach, as a fragment
+// the New app form loads on request.
+func (s *Server) githubRepos(w http.ResponseWriter, r *http.Request) {
+	src, ok := s.loadRepoSource(w, r, db.GitSourceGitHubApp)
+	if !ok {
 		return
 	}
+	list := pages.RepoPick{Base: "https://github.com", None: "This App is not installed on any repository yet. Use Choose repositories on the Sources page."}
 	key, err := s.Box.Open(src.PrivateKey)
 	if err != nil {
-		s.render(w, r, http.StatusOK, pages.RepoList(nil, "The App's key cannot be decrypted. Was the master key changed?"))
+		list.Problem = "The App's key cannot be decrypted. Was the master key changed?"
+	} else if list.Repos, err = s.GitHub.Repositories(r.Context(), src.AppID, key); err != nil {
+		list.Problem = "GitHub did not return the repositories: " + err.Error()
+	}
+	s.render(w, r, http.StatusOK, pages.RepoList(list))
+}
+
+// gitlabRepos lists the projects a GitLab source's token can read, as the
+// same fragment.
+func (s *Server) gitlabRepos(w http.ResponseWriter, r *http.Request) {
+	src, ok := s.loadRepoSource(w, r, db.GitSourceGitLab)
+	if !ok {
 		return
 	}
-	repos, err := s.GitHub.Repositories(r.Context(), src.AppID, key)
+	list := pages.RepoPick{Base: src.BaseURL, None: "This token is not a member of any project. Type the repository's address instead."}
+	token, err := s.Box.OpenString(src.Token)
 	if err != nil {
-		s.render(w, r, http.StatusOK, pages.RepoList(nil, "GitHub did not return the repositories: "+err.Error()))
-		return
+		list.Problem = "The token cannot be decrypted. Was the master key changed?"
+	} else if list.Repos, err = s.GitLab.Projects(r.Context(), src.BaseURL, token); err != nil {
+		list.Problem = sentence(err)
 	}
-	s.render(w, r, http.StatusOK, pages.RepoList(repos, ""))
+	s.render(w, r, http.StatusOK, pages.RepoList(list))
 }
 
 func (s *Server) sshKeyCreate(w http.ResponseWriter, r *http.Request) {

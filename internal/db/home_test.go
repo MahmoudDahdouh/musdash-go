@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -227,6 +228,63 @@ func TestActiveProjectsAndTotals(t *testing.T) {
 	}
 	if tot, _ = d.TeamTotals(ctx, h.team); tot.Sources != 1 {
 		t.Fatalf("sources: %+v", tot)
+	}
+	// A GitLab source has no App id and counts from the start.
+	if _, err := d.CreateGitLabSource(ctx, h.team, "work", "https://gitlab.example.com", "ada", "sealed"); err != nil {
+		t.Fatal(err)
+	}
+	if tot, _ = d.TeamTotals(ctx, h.team); tot.Sources != 2 {
+		t.Fatalf("sources with a GitLab one: %+v", tot)
+	}
+}
+
+// A GitLab source is whole when it is made: it is listed, it is nobody's
+// unfinished manifest flow, and the clean-up of those leaves it alone.
+func TestGitLabSourceIsNeverPending(t *testing.T) {
+	ctx := context.Background()
+	d := openTest(t)
+	h := newHomeTeams(t, d)
+	lab, err := d.CreateGitLabSource(ctx, h.team, "work", "https://gitlab.example.com:8443", "ada", "sealed-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, _ := d.StartGitSource(ctx, h.team, "half-made", "state-1")
+	// The row carries a state of its own in no column, but ask as the
+	// clean-up and the callback would.
+	if _, err := d.Exec(`UPDATE git_sources SET state = 'state-2' WHERE id = ?`, lab.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.PendingGitSource(ctx, h.team, "state-2"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a GitLab source was found as a pending manifest flow: %v", err)
+	}
+	if got, err := d.PendingGitSource(ctx, h.team, "state-1"); err != nil || got.ID != pending.ID {
+		t.Fatalf("the pending GitHub App: %+v, %v", got, err)
+	}
+	list, err := d.ListGitSources(ctx, h.team)
+	if err != nil || len(list) != 1 || list[0].ID != lab.ID {
+		t.Fatalf("listed: %+v, %v", list, err)
+	}
+	got := list[0]
+	if got.Kind != GitSourceGitLab || !got.Ready() || got.ReportsPushes() || got.BaseURL != "https://gitlab.example.com:8443" ||
+		got.Slug != "ada" || got.HTMLURL != "https://gitlab.example.com:8443/ada" || got.Token != "sealed-token" {
+		t.Fatalf("the GitLab source: %+v", got)
+	}
+	if err := d.DeleteStaleGitSources(ctx, now()+10); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.GitSource(ctx, h.team, lab.ID); err != nil {
+		t.Fatalf("the clean-up of unfinished GitHub Apps removed a GitLab source: %v", err)
+	}
+	if _, err := d.GitSourceByID(ctx, pending.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("the unfinished GitHub App was not cleaned up: %v", err)
+	}
+	// Another team does not see it.
+	if _, err := d.GitSource(ctx, h.other, lab.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("another team loaded the source: %v", err)
+	}
+	// A kind the table does not know is refused by the table itself.
+	if _, err := d.Exec(`INSERT INTO git_sources (id, team_id, name, kind, created_at) VALUES ('x', ?, 'x', 'bitbucket', 1)`, h.team); err == nil {
+		t.Fatal("a source of an unknown kind was stored")
 	}
 }
 

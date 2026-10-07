@@ -84,26 +84,44 @@ func (s *Server) keyOwners(r *http.Request) ([]pages.KeyOwner, error) {
 		return nil, err
 	}
 	out := make([]pages.KeyOwner, 0, len(apps)+len(services))
+	reporting := s.pushSources(r)
 	for _, a := range apps {
-		out = append(out, appKeyOwner(a, where(a.EnvironmentID)))
+		out = append(out, appKeyOwner(a, where(a.EnvironmentID), reporting))
 	}
 	for _, m := range services {
 		// Only a service from a repository is deployed from outside.
 		if m.FromGit() {
-			out = append(out, serviceKeyOwner(m, where(m.EnvironmentID)))
+			out = append(out, serviceKeyOwner(m, where(m.EnvironmentID), reporting))
 		}
 	}
 	return out, nil
 }
 
-func appKeyOwner(a db.App, where string) pages.KeyOwner {
-	return pages.KeyOwner{Kind: db.KindApp, ID: a.ID, Name: a.Name, Where: where, HasToken: a.DeployTokenHash != "",
-		Git: a.Source == db.SourceGit, ViaApp: a.GitSourceID != "", HasSecret: a.WebhookSecret != ""}
+// pushSources is the ids of the team's sources that report pushes
+// themselves: its GitHub Apps. What deploys through one of them needs no
+// webhook of its own; what deploys through a GitLab source does. A list
+// that cannot be read is an empty one: a webhook secret is then offered to
+// something that does not need it, which harms nothing.
+func (s *Server) pushSources(r *http.Request) map[string]bool {
+	sources, err := s.DB.ListGitSources(r.Context(), sessionFrom(r).TeamID)
+	if err != nil {
+		s.Log.Error("list sources", "route", logRoute(r), "err", err)
+	}
+	out := make(map[string]bool, len(sources))
+	for _, g := range sources {
+		out[g.ID] = g.ReportsPushes()
+	}
+	return out
 }
 
-func serviceKeyOwner(m db.Service, where string) pages.KeyOwner {
+func appKeyOwner(a db.App, where string, reporting map[string]bool) pages.KeyOwner {
+	return pages.KeyOwner{Kind: db.KindApp, ID: a.ID, Name: a.Name, Where: where, HasToken: a.DeployTokenHash != "",
+		Git: a.Source == db.SourceGit, ViaApp: reporting[a.GitSourceID], HasSecret: a.WebhookSecret != ""}
+}
+
+func serviceKeyOwner(m db.Service, where string, reporting map[string]bool) pages.KeyOwner {
 	return pages.KeyOwner{Kind: db.KindService, ID: m.ID, Name: m.Name, Where: where, HasToken: m.DeployTokenHash != "",
-		Git: true, ViaApp: m.GitSourceID != "", HasSecret: m.WebhookSecret != ""}
+		Git: true, ViaApp: reporting[m.GitSourceID], HasSecret: m.WebhookSecret != ""}
 }
 
 func (s *Server) keysPage(w http.ResponseWriter, r *http.Request) {
@@ -255,12 +273,12 @@ func (s *Server) showHookSecret(w http.ResponseWriter, r *http.Request, owner pa
 
 func (s *Server) appWebhookShow(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadApp(w, r); ok {
-		s.showHookSecret(w, r, appKeyOwner(v.App, ""), v.App.WebhookSecret)
+		s.showHookSecret(w, r, appKeyOwner(v.App, "", s.pushSources(r)), v.App.WebhookSecret)
 	}
 }
 
 func (s *Server) serviceWebhookShow(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadService(w, r); ok {
-		s.showHookSecret(w, r, serviceKeyOwner(v.Service, ""), v.Service.WebhookSecret)
+		s.showHookSecret(w, r, serviceKeyOwner(v.Service, "", s.pushSources(r)), v.Service.WebhookSecret)
 	}
 }

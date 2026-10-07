@@ -524,11 +524,11 @@ func gitRepoFields(f ui.Form, c GitChoices, app db.App) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Field(ui.FieldProps{Label: "Read the repository through", For: "access", Hint: "Private repositories need a GitHub App or, on any host (GitLab, Bitbucket, Gitea), a deploy key. A GitHub App is added under Sources, a key under Keys & tokens.", Error: f.E("access")}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Field(ui.FieldProps{Label: "Read the repository through", For: "access", Hint: "Private repositories need a GitHub App, a GitLab token or, on any host (Bitbucket, Gitea), a deploy key. GitHub and GitLab are connected under Sources, a key is added under Keys & tokens.", Error: f.E("access")}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = ui.TextField(f, "Repository", "For example https://github.com/acme/shop, or with a deploy key git@github.com:acme/shop.git or git@gitlab.com:group/shop.git.", ui.InputProps{ID: "repo", Mono: true, Required: true, Value: app.RepoURL, Placeholder: "https://github.com/acme/shop"}).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.TextField(f, "Repository", "For example https://github.com/acme/shop or https://gitlab.com/group/shop, or with a deploy key git@github.com:acme/shop.git.", ui.InputProps{ID: "repo", Mono: true, Required: true, Value: app.RepoURL, Placeholder: "https://github.com/acme/shop"}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -538,7 +538,7 @@ func gitRepoFields(f ui.Form, c GitChoices, app db.App) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			for _, g := range c.Sources {
-				templ_7745c5c3_Err = ui.Picker(ui.PickerProps{ID: "repos-" + g.ID, Label: "Choose from " + g.Name, Icon: "git-branch", Filter: "Find a repository", Src: "/sources/github/" + g.ID + "/repos"}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Picker(ui.PickerProps{ID: "repos-" + g.ID, Label: "Choose from " + g.Name, Icon: "git-branch", Filter: "Find a repository", Src: reposPath(g)}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

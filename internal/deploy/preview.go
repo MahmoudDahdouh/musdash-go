@@ -267,7 +267,9 @@ func (d *Deployer) announce(ctx context.Context, app db.App, text string) {
 		return
 	}
 	src, err := d.DB.GitSourceByID(ctx, app.GitSourceID)
-	if err != nil {
+	// The comment is written as a GitHub App; no other kind of source has
+	// the means.
+	if err != nil || src.Kind != db.GitSourceGitHubApp {
 		return
 	}
 	key, err := d.Box.Open(src.PrivateKey)

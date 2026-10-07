@@ -57,7 +57,10 @@ func (d *Deployer) cloneAccess(ctx context.Context, r runner.Runner, app db.App,
 	case app.GitSourceID != "":
 		src, err := d.DB.GitSourceByID(ctx, app.GitSourceID)
 		if err != nil {
-			return "", nil, fmt.Errorf("the GitHub App this app deploys through no longer exists")
+			return "", nil, fmt.Errorf("the source this app deploys through no longer exists")
+		}
+		if src.Kind == db.GitSourceGitLab {
+			return d.gitLabAccess(src, repo, env)
 		}
 		key, err := d.Box.Open(src.PrivateKey)
 		if err != nil {
@@ -117,8 +120,37 @@ func (d *Deployer) cloneAccess(ctx context.Context, r runner.Runner, app db.App,
 	return repo.URL, append(env, d.extraGitEnv...), nil
 }
 
+// gitLabAccess is cloneAccess for a GitLab source: over HTTPS, with the
+// source's token.
+func (d *Deployer) gitLabAccess(src db.GitSource, repo source.Repo, env []string) (string, []string, error) {
+	token, err := d.Box.OpenString(src.Token)
+	if err != nil {
+		return "", nil, fmt.Errorf("the GitLab token cannot be decrypted: was the master key changed?")
+	}
+	// The address is checked again here, though the form that stored it
+	// did: it becomes the scope of the header below.
+	base, ok := source.GitLabBase(src.BaseURL)
+	if !ok {
+		return "", nil, fmt.Errorf("the GitLab source %q has an address that cannot be used", src.Name)
+	}
+	// The token is that instance's; it is sent there and nowhere else,
+	// whatever address the app was saved with.
+	if host := source.GitLabHost(base); repo.Host != host {
+		return "", nil, fmt.Errorf("the GitLab source %q can only read repositories on %s, not %s", src.Name, host, repo.Host)
+	}
+	// Over HTTPS whatever form the address was entered in, and the header
+	// is scoped to the one instance, as a GitHub App's is.
+	base += "/"
+	env = append(env,
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=http."+base+".extraHeader",
+		"GIT_CONFIG_VALUE_0="+source.GitLabAuthHeader(token),
+	)
+	return base + repo.FullName() + ".git", env, nil
+}
+
 // clone fetches one branch of a repository into checkout and returns the
-// commit it got. access says how to authenticate: only its GitHub App and
+// commit it got. access says how to authenticate: only its source and
 // deploy key are looked at. workDir is a private directory for a deploy
 // key, which the caller removes.
 func (d *Deployer) clone(ctx context.Context, r runner.Runner, access db.App, repo source.Repo, branch, workDir, checkout string, log *Log) (string, error) {

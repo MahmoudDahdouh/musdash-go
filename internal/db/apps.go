@@ -86,7 +86,7 @@ type App struct {
 	BaseDir        string
 	PublishDir     string
 	SPAFallback    bool
-	GitSourceID    string // the GitHub App to clone through, if any
+	GitSourceID    string // the source (a GitHub App, a GitLab token) to clone through, if any
 	SSHKeyID       string // the deploy key to clone with, if any
 	AutoDeploy     bool
 	WebhookSecret  string // sealed

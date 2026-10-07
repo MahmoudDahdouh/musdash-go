@@ -15,7 +15,7 @@ The full design is in [docs/spec.md](docs/spec.md). Each phase has an implementa
 |---|---|---|
 | 0 | Skeleton: accounts, projects, job queue, design system, memory test | Done |
 | 1 | Deploy Docker images with domains, HTTPS, storage, live logs and rolling updates | Done |
-| 2 | Deploy from Git: Dockerfile and static builds, GitHub App, deploy keys, push webhooks, deploy token | Done |
+| 2 | Deploy from Git: Dockerfile and static builds, GitHub App, GitLab token, deploy keys, push webhooks, deploy token | Done |
 | 3 | Databases: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, KeyDB, Dragonfly, ClickHouse | Done |
 | 4 | Services: Docker Compose stacks from a catalogue (n8n, WordPress, Ghost, Uptime Kuma, MinIO, Cloudflare Tunnel), your own file, or a Git repository | Done |
 | 5 | Operations: scheduled database backups with S3 copies, retention and restore; scheduled commands; notifications; Docker clean-up | Done |
@@ -135,6 +135,7 @@ An app can be built from a repository instead of pulling an image. Step 1 above 
 |---|---|
 | Public | Its `https://` address, nothing to set up |
 | Private, on GitHub | A GitHub App: create one under **Sources**, then install it on the repositories |
+| Private, on GitLab | An access token: connect GitLab under **Sources** with a personal, group or project token that has the `read_api` and `read_repository` scopes. gitlab.com or your own instance, over HTTPS |
 | Private, anywhere | A deploy key: generate one under **Sources** and add its public half to the repository |
 
 Four build packs:
@@ -150,6 +151,7 @@ Neither builder is installed on a server. The first build that needs one makes a
 A push deploys the app when auto-deploy is on:
 
 - Through a GitHub App, pushes arrive on their own; nothing to add.
+- Through a GitLab source they do not: a token only reads. Add the webhook as below.
 - Otherwise add a webhook to the repository. On the **Keys & tokens** page, under **API Tokens**, **Webhook secret** makes the secret for an app or a service; its row has the address and shows the secret, and the page says where each host wants them.
 
 | Host | The secret goes in | Events to send |
@@ -209,7 +211,7 @@ To publish a port that is not HTTP (a mail server, a game server), use an ordina
 
 ### Stacks from a Git repository
 
-A service also takes a Compose file that lives in a repository ("Compose file in a Git repository"), read through the same GitHub Apps and deploy keys as apps. At every deployment musdash clones the branch, reads the file in the sandbox with only the checkout in view, and applies the same checks as to a pasted file. Differences from a pasted stack:
+A service also takes a Compose file that lives in a repository ("Compose file in a Git repository"), read through the same GitHub Apps, GitLab sources and deploy keys as apps. At every deployment musdash clones the branch, reads the file in the sandbox with only the checkout in view, and applies the same checks as to a pasted file. Differences from a pasted stack:
 
 - `build:` is allowed for contexts inside the repository. Images are built with `docker compose build`, one build at a time per server, and named by musdash.
 - Files of the repository can be mounted into containers (`./nginx.conf:/etc/nginx/nginx.conf`). They are mounted read-only, and a path that is a symbolic link in the repository is refused. Data that a container writes belongs in a named volume.

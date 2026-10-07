@@ -26,7 +26,7 @@ func (s *Server) gitChoices(r *http.Request) (pages.GitChoices, error) {
 	}
 	c.Sources = sources
 	for _, g := range sources {
-		c.Access = append(c.Access, pages.AccessOption{Value: "source:" + g.ID, Label: "GitHub App: " + g.Name})
+		c.Access = append(c.Access, pages.AccessOption{Value: "source:" + g.ID, Label: pages.SourceKind(g) + ": " + g.Name})
 	}
 	for _, k := range keys {
 		c.Access = append(c.Access, pages.AccessOption{Value: "key:" + k.ID, Label: "Deploy key: " + k.Name})
@@ -69,8 +69,9 @@ func parseRepoForm(r *http.Request, f *ui.Form, c pages.GitChoices, app *db.App)
 		f.Fail("repo", "A deploy key needs the SSH form of the address, such as git@"+repo.Host+":"+repo.FullName()+".git.")
 	case app.SSHKeyID == "" && app.GitSourceID == "" && repo.SSH:
 		f.Fail("repo", "An SSH address needs a deploy key. Choose one above, or use the https:// address of a public repository.")
-	case app.GitSourceID != "" && repo.Host != "github.com":
-		f.Fail("repo", "A GitHub App can only read repositories on github.com.")
+	case app.GitSourceID != "" && repo.Host != sourceHost(c, app.GitSourceID):
+		// A source's credentials are its own host's, and go nowhere else.
+		f.Fail("repo", pages.SourceKind(chosenSource(c, app.GitSourceID))+" "+chosenSource(c, app.GitSourceID).Name+" can only read repositories on "+sourceHost(c, app.GitSourceID)+".")
 	default:
 		app.RepoName = strings.ToLower(repo.FullName())
 	}
@@ -81,6 +82,26 @@ func parseRepoForm(r *http.Request, f *ui.Form, c pages.GitChoices, app *db.App)
 	}
 	app.AutoDeploy = r.PostFormValue("auto_deploy") == "1"
 	f.Set("auto_deploy", map[bool]string{true: "1", false: "0"}[app.AutoDeploy])
+}
+
+// chosenSource is the source of the team with this id, among the ones the
+// form offered.
+func chosenSource(c pages.GitChoices, id string) db.GitSource {
+	for _, g := range c.Sources {
+		if g.ID == id {
+			return g
+		}
+	}
+	return db.GitSource{}
+}
+
+// sourceHost is the one host a source reads repositories on: github.com
+// for a GitHub App, its own instance for a GitLab source.
+func sourceHost(c pages.GitChoices, id string) string {
+	if g := chosenSource(c, id); g.Kind == db.GitSourceGitLab {
+		return source.GitLabHost(g.BaseURL)
+	}
+	return "github.com"
 }
 
 // insideRepo is the message for a path that must lie in the repository.
@@ -194,7 +215,7 @@ func (s *Server) appWebhookSecret(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.newHookSecret(w, r, appKeyOwner(v.App, ""))
+	s.newHookSecret(w, r, appKeyOwner(v.App, "", s.pushSources(r)))
 }
 
 // appBuildServer chooses the server a Git app's image is built on.
@@ -229,11 +250,11 @@ func (s *Server) appDeployToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.PostFormValue("revoke") == "1" {
-		s.revokeDeployToken(w, r, appKeyOwner(v.App, ""))
+		s.revokeDeployToken(w, r, appKeyOwner(v.App, "", s.pushSources(r)))
 		return
 	}
 	if s.sentBefore(w, r, pages.TokensPath) {
 		return
 	}
-	s.newDeployToken(w, r, appKeyOwner(v.App, ""))
+	s.newDeployToken(w, r, appKeyOwner(v.App, "", s.pushSources(r)))
 }
