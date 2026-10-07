@@ -137,6 +137,7 @@ Colours are in `internal/web/assets/colors.css` in two layers: `--palette-*` hol
 - The look follows GitHub Primer's light theme, written as our own tokens and classes; nothing of Primer's is imported. Page and cards are both white and told apart by a border; `sunk` grey is the frame (sidebar, card head and foot, a resting button). Hover on something with no fill of its own uses `veil`, so it works on either. Controls are 32px (28px small), text is 14px, labels are semibold, and there is no bold and no uppercase label.
 - Controls use component classes from `@layer components` (`.btn .btn-primary`, `.field`, `.input`, `.card`, …) so markup carries one class per control, not a utility pile. Extend these and the `ui` components rather than styling per page.
 - Machine facts (domains, image tags, ports, hashes, logs) use the mono stack. State is always written as text as well as colour.
+- A state in a pill has an icon as well: the tone's, turning (`animate-spin`) while something is in progress. A pill is always `ui.Pill` (a tone), `ui.StatePill` or `ui.StatusPill` (a state) or `ui.JobPill` (a deployment, backup or run, whose "running" means in progress), never a `<span class="pill">` of a page's own, which would have no icon. Badges have none.
 - Tailwind scans only `internal/web/ui`, `internal/web/pages` and `static/app.js` (`source(none)` plus explicit `@source` lines); classes used elsewhere will not be generated.
 
 ## Workflow conventions

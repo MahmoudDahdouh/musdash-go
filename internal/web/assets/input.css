@@ -755,7 +755,7 @@
   .rail[data-state="building"]::before,
   .rail[data-state="queued"]::before,
   .rail[data-state="starting"]::before {
-    background: var(--color-brand-500);
+    background: var(--color-warn-mark);
     animation: rail-pulse 1.4s ease-in-out infinite;
   }
   .rail[data-state="degraded"]::before,
@@ -772,14 +772,15 @@
     }
   }
 
-  /* Pill: a state written out, with a dot. A tint with a border of its own
-     hue, so it holds its shape on canvas and on sunk. */
+  /* Pill: a state written out, with an icon that says the same (ui.Pill).
+     A tint with a border of its own hue, so it holds its shape on canvas
+     and on sunk. */
   .pill {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     height: 20px;
-    padding: 0 7px;
+    padding: 0 7px 0 5px;
     border: 1px solid var(--color-idle-line);
     border-radius: var(--radius-full);
     font-size: var(--text-xs);
@@ -789,48 +790,36 @@
     background: var(--color-idle-soft);
     color: var(--color-ink-mute);
   }
-  .pill::before {
-    content: "";
-    width: 6px;
-    height: 6px;
-    border-radius: var(--radius-full);
-    background: var(--color-idle);
+  /* At this size a stroke of 2 is a hairline. */
+  .pill .icon {
+    width: 12px;
+    height: 12px;
+    stroke-width: 2.5;
   }
   .pill-ok {
     background: var(--color-ok-soft);
     border-color: var(--color-ok-line);
     color: var(--color-ok);
   }
-  .pill-ok::before {
-    background: var(--color-ok);
-  }
-  .pill-busy {
-    background: var(--color-info-soft);
-    border-color: var(--color-info-line);
-    color: var(--color-info);
-  }
-  .pill-busy::before {
-    background: var(--color-info);
-    animation: rail-pulse 1.4s ease-in-out infinite;
-  }
+  /* In progress is not settled yet, so it has the colour of a warning; the
+     icon, which turns, is what tells the two apart. */
+  .pill-busy,
   .pill-warn {
     background: var(--color-warn-soft);
     border-color: var(--color-warn-line);
     color: var(--color-warn);
   }
-  .pill-warn::before {
-    background: var(--color-warn-mark);
+  .pill-busy .icon,
+  .pill-warn .icon {
+    color: var(--color-warn-mark);
   }
   .pill-danger {
     background: var(--color-danger-soft);
     border-color: var(--color-danger-line);
     color: var(--color-danger);
   }
-  .pill-danger::before {
-    background: var(--color-danger);
-  }
 
-  /* Badge: a plain label with no dot, outlined and unfilled so a row of
+  /* Badge: a plain label with no icon, outlined and unfilled so a row of
      them stays quieter than the one pill beside it. */
   .badge {
     display: inline-flex;

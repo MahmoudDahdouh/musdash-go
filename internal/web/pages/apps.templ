@@ -373,7 +373,7 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 								<p class="mt-1 text-sm text-danger">{ last.Error }</p>
 							}
 						</div>
-						@ui.StatusPill(last.Status)
+						@ui.JobPill(last.Status)
 						@ui.Icon("chevron-right", "text-ink-mute")
 					</a>
 				}
@@ -396,7 +396,7 @@ templ AppDeployments(s ui.Shell, v AppView, list []db.Deployment) {
 							<td>{ ui.StateLabel(d.Trigger) }</td>
 							<td>
 								<span class="flex flex-wrap items-center gap-2">
-									@ui.StatusPill(d.Status)
+									@ui.JobPill(d.Status)
 									if v.serving(d) {
 										@ui.Badge("Serving", ui.ToneOK)
 									}
@@ -444,7 +444,7 @@ templ DeploymentStatus(appID string, d db.Deployment) {
 			hx-swap="outerHTML"
 		}
 	>
-		@ui.StatusPill(d.Status)
+		@ui.JobPill(d.Status)
 		<span class="fact">{ orDefault(d.Image, "building from "+ui.StateLabel(d.Trigger)) }</span>
 		<span class="muted text-sm">{ ui.Ago(d.CreatedAt) }</span>
 		if took := ui.Took(d.StartedAt, d.FinishedAt); took != "" {

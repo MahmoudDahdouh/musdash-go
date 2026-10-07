@@ -29,7 +29,7 @@ import templruntime "github.com/a-h/templ/runtime"
 // View, eye-off is ViewOffSlash, search is Search01, unfold is UnfoldMore,
 // github is Github, archive is Archive02, code is SourceCode, more is
 // MoreHorizontal, variable is Variable, shield is Shield01, webhook is
-// Webhook, rocket is Rocket01.
+// Webhook, rocket is Rocket01, loading is Loading03, minus is MinusSign.
 func Icon(name string, class ...string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -329,8 +329,18 @@ func Icon(name string, class ...string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+		case "loading":
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "<path d=\"M12 3V6\"></path> <path d=\"M12 18V21\"></path> <path d=\"M21 12L18 12\"></path> <path d=\"M6 12L3 12\"></path> <path d=\"M18.3635 5.63672L16.2422 7.75804\"></path> <path d=\"M7.75804 16.2422L5.63672 18.3635\"></path> <path d=\"M18.3635 18.3635L16.2422 16.2422\"></path> <path d=\"M7.75804 7.75804L5.63672 5.63672\"></path>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		case "minus":
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<path d=\"M20 12L4 12\"></path>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -365,7 +375,7 @@ func Mark(class string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<svg class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<svg class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -378,7 +388,7 @@ func Mark(class string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><rect width=\"24\" height=\"24\" rx=\"6\" class=\"fill-brand-600\"></rect> <path d=\"M7 16.5v-5.25a2.5 2.5 0 0 1 5 0v5.25m0-5.25a2.5 2.5 0 0 1 5 0v5.25\" fill=\"none\" class=\"stroke-white\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><rect width=\"24\" height=\"24\" rx=\"6\" class=\"fill-brand-600\"></rect> <path d=\"M7 16.5v-5.25a2.5 2.5 0 0 1 5 0v5.25m0-5.25a2.5 2.5 0 0 1 5 0v5.25\" fill=\"none\" class=\"stroke-white\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

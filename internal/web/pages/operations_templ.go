@@ -538,7 +538,7 @@ func BackupList(csrf string, v DatabaseView, b BackupsView) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = ui.StatusPill(m.Status).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.JobPill(m.Status).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -1150,7 +1150,7 @@ func AppTasks(s ui.Shell, v AppView, rows []TaskRow, f ui.Form) templ.Component 
 								return templ_7745c5c3_Err
 							}
 						} else {
-							templ_7745c5c3_Err = ui.StatusPill(row.Last.Status).Render(ctx, templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = ui.JobPill(row.Last.Status).Render(ctx, templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -1730,7 +1730,7 @@ func TaskRuns(v AppView, t db.Task, runs []db.TaskRun, shown string) templ.Compo
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = ui.StatusPill(r.Status).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.JobPill(r.Status).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

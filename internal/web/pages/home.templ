@@ -80,16 +80,6 @@ func eventLabel(e db.Event) string {
 	return ui.StateLabel(e.Status)
 }
 
-func eventPill(e db.Event) string {
-	switch e.Status {
-	case db.DeploySuccess:
-		return "pill pill-ok"
-	case db.DeployFailed:
-		return "pill pill-danger"
-	}
-	return "pill pill-busy"
-}
-
 // eventCommit is a deployment's commit, shortened, or "".
 func eventCommit(e db.Event) string {
 	if e.Kind != db.EventDeployment || len(e.Detail) < 7 {
@@ -238,7 +228,7 @@ templ homeActivity(v HomeView) {
 							</p>
 						</div>
 						<span class="muted hidden text-sm whitespace-nowrap sm:inline">{ ui.Ago(e.At) }</span>
-						<span class={ eventPill(e) }>{ eventLabel(e) }</span>
+						@ui.StatePill(eventState(e), eventLabel(e))
 						@ui.Icon("chevron-right", "text-ink-mute")
 					</a>
 				}
@@ -295,7 +285,7 @@ templ homeServers(v HomeView) {
 						if h.Server.Kind == db.ServerLocal {
 							@ui.Badge("This machine", ui.ToneBrand)
 						} else {
-							<span class={ serverStateClass(h.Server) }>{ serverStateLabel(h.Server) }</span>
+							@ui.Pill(serverTone(h.Server), serverStateLabel(h.Server))
 						}
 					</div>
 					if len(h.Meters) > 0 {

@@ -45,16 +45,16 @@ func serverStateLabel(s db.Server) string {
 	return "Not checked yet"
 }
 
-func serverStateClass(s db.Server) string {
+func serverTone(s db.Server) string {
 	switch s.Status {
 	case db.ServerOK:
-		return "pill pill-ok"
+		return ui.ToneOK
 	case db.ServerProblem:
-		return "pill pill-warn"
+		return ui.ToneWarn
 	case db.ServerUnreachable:
-		return "pill pill-danger"
+		return ui.ToneDanger
 	}
-	return "pill"
+	return ui.ToneNeutral
 }
 
 func keyOptions(keys []db.SSHKey) []ui.Option {
@@ -114,19 +114,19 @@ templ localServerCard(s ui.Shell, info ServerInfo, f ui.Form) {
 				<dt>Docker</dt>
 				<dd>
 					if info.DockerVersion != "" {
-						<span class="pill pill-ok">Running</span>
+						@ui.Pill(ui.ToneOK, "Running")
 						<span class="fact ml-2">{ info.DockerVersion }</span>
 					} else {
-						<span class="pill pill-danger">Not reachable</span>
+						@ui.Pill(ui.ToneDanger, "Not reachable")
 						<span class="ml-2 text-sm text-danger">{ info.DockerError }</span>
 					}
 				</dd>
 				<dt>Proxy</dt>
 				<dd>
 					if info.ProxyRunning {
-						<span class="pill pill-ok">Running</span>
+						@ui.Pill(ui.ToneOK, "Running")
 					} else {
-						<span class="pill pill-warn">Not running</span>
+						@ui.Pill(ui.ToneWarn, "Not running")
 						<span class="muted ml-2 text-sm">Domains are not served until it starts: <span class="code">musdash proxy</span></span>
 					}
 				</dd>
@@ -181,7 +181,7 @@ templ remoteServerCard(s ui.Shell, info ServerInfo) {
 			<div class="flex flex-wrap items-center gap-2.5">
 				@ui.Icon("server", "text-ink-mute")
 				<h2 class="card-title">{ info.Server.Name }</h2>
-				<span class={ serverStateClass(info.Server) }>{ serverStateLabel(info.Server) }</span>
+				@ui.Pill(serverTone(info.Server), serverStateLabel(info.Server))
 			</div>
 			if s.Admin {
 				<form method="post" action={ templ.SafeURL("/servers/" + info.Server.ID + "/check") }>
@@ -237,9 +237,9 @@ templ remoteServerCard(s ui.Shell, info ServerInfo) {
 				<dt>Proxy</dt>
 				<dd>
 					if info.Server.Proxy == db.ProxyInstalled {
-						<span class="pill pill-ok">Installed</span>
+						@ui.Pill(ui.ToneOK, "Installed")
 					} else {
-						<span class="pill pill-warn">Not installed</span>
+						@ui.Pill(ui.ToneWarn, "Not installed")
 						<span class="muted ml-2 text-sm">Domains of apps on this server are not served until it is.</span>
 					}
 				</dd>

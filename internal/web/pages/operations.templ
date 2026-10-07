@@ -198,7 +198,7 @@ templ BackupList(csrf string, v DatabaseView, b BackupsView) {
 							<span class="muted">· { ui.StateLabel(m.Trigger) }</span>
 						</td>
 						<td>
-							@ui.StatusPill(m.Status)
+							@ui.JobPill(m.Status)
 							if m.Error != "" {
 								<p class="muted mt-1 max-w-md break-words text-sm">{ m.Error }</p>
 							}
@@ -317,7 +317,7 @@ templ AppTasks(s ui.Shell, v AppView, rows []TaskRow, f ui.Form) {
 									if row.Last == nil {
 										<span class="muted">Never</span>
 									} else {
-										@ui.StatusPill(row.Last.Status)
+										@ui.JobPill(row.Last.Status)
 										<span class="muted">{ ui.Ago(row.Last.StartedAt) }</span>
 									}
 								</td>
@@ -462,7 +462,7 @@ templ TaskRuns(v AppView, t db.Task, runs []db.TaskRun, shown string) {
 						<td class="whitespace-nowrap">{ ui.Ago(r.StartedAt) }</td>
 						<td>{ ui.StateLabel(r.Trigger) }</td>
 						<td>
-							@ui.StatusPill(r.Status)
+							@ui.JobPill(r.Status)
 							if r.Error != "" {
 								<p class="muted mt-1 max-w-md break-words text-sm">{ r.Error }</p>
 							}

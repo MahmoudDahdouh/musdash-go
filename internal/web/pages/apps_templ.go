@@ -1200,7 +1200,7 @@ func AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) t
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = ui.StatusPill(last.Status).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.JobPill(last.Status).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1326,7 +1326,7 @@ func AppDeployments(s ui.Shell, v AppView, list []db.Deployment) templ.Component
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = ui.StatusPill(d.Status).Render(ctx, templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.JobPill(d.Status).Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -1467,7 +1467,7 @@ func DeploymentStatus(appID string, d db.Deployment) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = ui.StatusPill(d.Status).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.JobPill(d.Status).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -52,8 +52,9 @@ func TestHomeFollowsAnInstall(t *testing.T) {
 			t.Errorf("Home after the first deployment lacks %q", want)
 		}
 	}
-	if strings.Contains(page, "Getting started") || strings.Contains(page, `hx-get="/home/live`) {
-		t.Fatal("the steps stayed, or the page keeps asking although nothing is in progress")
+	// With nothing wrong, Home says nothing about attention at all.
+	if strings.Contains(page, "Getting started") || strings.Contains(page, `id="home-attention"`) || strings.Contains(page, "Nothing needs attention") || strings.Contains(page, `hx-get="/home/live`) {
+		t.Fatal("the steps stayed, a note about attention is shown, or the page keeps asking although nothing is in progress")
 	}
 
 	// The app stops on its own.

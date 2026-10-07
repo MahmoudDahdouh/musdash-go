@@ -143,9 +143,9 @@ templ twoStepCard(s ui.Shell, v AccountView, f ui.Form) {
 				<div class="flex flex-wrap items-center gap-2.5">
 					<h2 class="card-title">Two-step sign-in</h2>
 					if v.TwoStep {
-						<span class="pill pill-ok">On</span>
+						@ui.Pill(ui.ToneOK, "On")
 					} else {
-						<span class="pill">Off</span>
+						@ui.Pill(ui.ToneNeutral, "Off")
 					}
 				</div>
 				<p class="muted text-sm">After your password, signing in asks for a code from an authenticator app on your phone. A stolen password is then not enough.</p>

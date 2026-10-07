@@ -377,6 +377,9 @@ const (
 	ToneDanger  = "danger"
 )
 
+// ToneBusy is a pill's alone: something is in progress.
+const ToneBusy = "busy"
+
 templ Badge(text, tone string) {
 	<span class={ "badge", templ.KV("badge-"+tone, tone != "") }>{ text }</span>
 }
@@ -386,13 +389,50 @@ templ Badge(text, tone string) {
 func stateTone(state string) string {
 	switch state {
 	case "running", "healthy", "success", "done":
-		return "pill-ok"
+		return ToneOK
 	case "deploying", "building", "queued", "starting", "restarting":
-		return "pill-busy"
+		return ToneBusy
 	case "degraded", "unhealthy":
-		return "pill-warn"
+		return ToneWarn
 	case "failed", "error", "exited":
-		return "pill-danger"
+		return ToneDanger
+	}
+	return ToneNeutral
+}
+
+// toneIcon is the icon a pill of a tone shows, so that a state is told by
+// its shape as well as its colour.
+func toneIcon(tone string) string {
+	switch tone {
+	case ToneOK:
+		return "check"
+	case ToneBusy:
+		return "loading"
+	case ToneWarn:
+		return "alert"
+	case ToneDanger:
+		return "x"
+	}
+	return "minus"
+}
+
+// stateIcon is the icon of a state's pill: its tone's, but for two.
+// Waiting in the queue is not work in progress, so it does not turn, and
+// stopped on request is a state of its own, not the lack of one.
+func stateIcon(state string) string {
+	switch state {
+	case "queued":
+		return "clock"
+	case "stopped":
+		return "stop"
+	}
+	return toneIcon(stateTone(state))
+}
+
+// pillIconClass turns the icon of work in progress.
+func pillIconClass(icon string) string {
+	if icon == "loading" {
+		return "animate-spin"
 	}
 	return ""
 }
@@ -412,9 +452,37 @@ func StateLabel(state string) string {
 	return strings.ToUpper(state[:1]) + strings.ReplaceAll(state[1:], "_", " ")
 }
 
-// StatusPill writes a state out in words with a coloured dot.
+templ pill(tone, icon, text string, class []string) {
+	<span class={ "pill", templ.KV("pill-"+tone, tone != ""), class }>
+		@Icon(icon, pillIconClass(icon))
+		{ text }
+	</span>
+}
+
+// Pill writes something out in a tone, with the tone's icon. Every pill
+// is one of these three, so none is drawn without its icon.
+templ Pill(tone, text string, class ...string) {
+	@pill(tone, toneIcon(tone), text, class)
+}
+
+// StatePill is the pill of a state under words of the page's own.
+templ StatePill(state, text string, class ...string) {
+	@pill(stateTone(state), stateIcon(state), text, class)
+}
+
+// StatusPill writes a state out in words, with its icon.
 templ StatusPill(state string) {
-	<span class={ "pill", stateTone(state) }>{ StateLabel(state) }</span>
+	@StatePill(state, StateLabel(state))
+}
+
+// JobPill is the pill of a deployment, a backup or a run. "running" says of
+// those that they are in progress, which is not what it says of an app.
+templ JobPill(status string) {
+	if status == "running" {
+		@pill(ToneBusy, toneIcon(ToneBusy), StateLabel(status), nil)
+	} else {
+		@StatusPill(status)
+	}
 }
 
 // Tab is one entry of a Tabs bar.
