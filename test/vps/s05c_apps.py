@@ -1,7 +1,7 @@
 from lib import *
-c = owner_client(); st = state(); aid = st["web"]; host = f"t-web.{HOST}.sslip.io"
+c = owner_client(); st = state(); aid = st["web"]; host = f"t-nginx2.{HOST}.sslip.io"
 def settings(**kw):
-    base = dict(name="t-web", image="nginx:alpine", port="80", memory_mb="", cpus="", health_path="/", health_cmd="", health_timeout="30", start_command="", docker_options="")
+    base = dict(name="t-nginx2", image="nginx:alpine", port="80", memory_mb="", cpus="", health_path="/", health_cmd="", health_timeout="30", start_command="", docker_options="")
     base.update(kw)
     return c.submit(f"/apps/{aid}/settings", action=f"/apps/{aid}/settings", **base)
 def redeploy():
@@ -11,7 +11,7 @@ def cont():
 
 # S5.11 environment variables
 SECRET = "S3cr3t-Value-" + secret_suffix if False else "S3cr3t-Value-4711"
-r = c.submit(f"/apps/{aid}/environment", action=f"/apps/{aid}/environment", vars=f"PLAIN_VAR=hello world\nSECRET_TOKEN={SECRET}\n# a comment\nWITH_EQUALS=a=b=c\nEMPTY=\n")
+r = c.submit(f"/apps/{aid}/environment/edit", action=f"/apps/{aid}/environment", vars=f"PLAIN_VAR=hello world\nSECRET_TOKEN={SECRET}\n# a comment\nWITH_EQUALS=a=b=c\nEMPTY=\n")
 check("S5.11a", SECRET not in c.get(f"/apps/{aid}/environment").text and SECRET not in r.text, "secret value not shown back on the environment page", sev="S1", evidence="")
 res = redeploy(); cid = cont()
 env = shout(f"docker exec {cid} printenv | grep -E 'PLAIN_VAR|SECRET_TOKEN|WITH_EQUALS|EMPTY'")
@@ -29,7 +29,7 @@ check("S5.11e", all(x.endswith(":0") for x in out.split()), "secret sealed in SQ
 
 # S5.12 storage: file mount and volume
 c.submit(f"/apps/{aid}/storage", action=f"/apps/{aid}/storage", kind="file", source="", target="/usr/share/nginx/html/hello.txt", content="hello-from-musdash\n")
-c.submit(f"/apps/{aid}/storage", action=f"/apps/{aid}/storage", kind="volume", source="t-web-data", target="/data")
+c.submit(f"/apps/{aid}/storage", action=f"/apps/{aid}/storage", kind="volume", source="t-nginx2-data", target="/data")
 res = redeploy(); time.sleep(2)
 out = vcurl("http://127.0.0.1/hello.txt", host)
 check("S5.12a", res == "success" and "hello-from-musdash" in out, f"file written in the UI is served from the container: {out[:60]!r}")

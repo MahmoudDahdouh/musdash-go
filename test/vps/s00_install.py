@@ -1,7 +1,7 @@
 from lib import *
 
 rc, out = sh("systemctl is-active musdash-server musdash-proxy; id musdash; /usr/local/bin/musdash version; ls -la /usr/local/bin/musdash")
-check("S0.1", out.count("active") >= 2 and "inactive" not in out and "adffb82" in out and "uid=" in out, "services active, user exists, version adffb82", evidence=out)
+check("S0.1", out.count("active") >= 2 and "inactive" not in out and "d84c23f" in out and "uid=" in out, "services active, user exists, version d84c23f", evidence=out)
 
 out = shout("ss -tlnpH | awk '{print $4, $6}'")
 ports = {l.split()[0].rsplit(":", 1)[1] for l in out.splitlines() if l.split()[0].startswith(("0.0.0.0", "*", "[::]"))}

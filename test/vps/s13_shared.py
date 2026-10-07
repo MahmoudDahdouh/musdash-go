@@ -1,6 +1,6 @@
 from lib import *
 c = owner_client(); st = state(); pid = st["proj"]; env = st["env"]; web = st["web"]; who = st["who"]
-sid = "ttd6yamy3cmb"
+sid = "aogcm2ifyxaz"
 c.submit("/team/variables", action="/team/variables", vars="TEAMV=team-val-1\n")
 c.submit(f"/projects/{pid}/variables", action=f"/projects/{pid}/variables", vars="PROJV=proj-val-2\n")
 c.submit(f"/environments/{env}/variables", action=f"/environments/{env}/variables", vars="ENVV=env-val-3\n")

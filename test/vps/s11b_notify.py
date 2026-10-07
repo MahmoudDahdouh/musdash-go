@@ -1,7 +1,7 @@
 from lib import *
 c = owner_client(); st = state(); pid = st["proj"]; env = st["env"]
 r = c.submit(f"/projects/{pid}/apps/new?env={env}", action=f"/projects/{pid}/apps", name="t-sink", image="mendhak/http-https-echo:latest", port="8080", domain=f"t-sink.{HOST}.sslip.io", deploy=True)
-sink = re.findall(r"/apps/([a-z2-7]{12})", r.text)[0]; dep = re.findall(r"/deployments/([a-z2-7]{12})", r.url or r.text)[0]
+sink = re.search(r"/apps/([a-z2-7]{12})", r.url).group(1); dep = re.search(r"/deployments/([a-z2-7]{12})", r.url).group(1)
 save_state(sink=sink)
 check("S11.0", dep_wait(c, sink, dep, 400) == "success", "webhook sink app deployed (mendhak/http-https-echo)")
 time.sleep(3)

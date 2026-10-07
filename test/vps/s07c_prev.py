@@ -2,7 +2,7 @@ from lib import *
 import hmac, hashlib
 c = owner_client(); st = state(); g = st["git"]; web = st["web"]; path = f"/webhooks/git/{g}"
 REPO = "crccheck/docker-hello-world"
-SEC = re.findall(r'data-copy="([^"]+)"', c.get(f"/apps/{g}/settings").text)[1]
+SEC = re.search(r'data-copy="([^"]+)"', c.get(f"/apps/{g}/webhook-secret").text).group(1)
 def sig(b): return "sha256=" + hmac.new(SEC.encode(), b, hashlib.sha256).hexdigest()
 def hook(b): return Client().request("POST", path, raw=b, headers={"Content-Type": "application/json", "X-Hub-Signature-256": sig(b), "X-GitHub-Event": "pull_request"})
 SEC = SEC

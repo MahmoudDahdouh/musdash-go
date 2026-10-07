@@ -10,7 +10,7 @@ c.submit("/account", action="/account/profile", name="Test Owner", email=o["emai
 
 # S2.10 API token (create before password change so we can test that S2.2 ends it)
 def make_token(cl, name, ability="read", expires="90", pw=PW):
-    r = cl.submit("/account", action="/account/tokens", token_name=name, token_ability=ability, token_expires=expires, token_password=pw)
+    r = cl.submit("/keys", action="/account/tokens", token_name=name, token_ability=ability, token_expires=expires, token_password=pw)
     m = re.search(r"msd_[A-Za-z0-9_\-]{10,}", r.text)
     return m.group(0) if m else None, r
 tok, r = make_token(c, "t-read", "read")

@@ -4,7 +4,7 @@ c = owner_client(); st = state(); g = st["git"]; web = st["web"]
 REPO = "crccheck/docker-hello-world"; SHA = "a" * 40
 def deps(app): return len(set(re.findall(r"/deployments/([a-z2-7]{12})", c.get(f"/apps/{app}/deployments").text)))
 def secret():
-    return re.findall(r'data-copy="([^"]+)"', c.get(f"/apps/{g}/settings").text)[1]
+    return re.search(r'data-copy="([^"]+)"', c.get(f"/apps/{g}/webhook-secret").text).group(1)
 def settled(t=120):
     return wait_for(lambda: "Running" in re.sub("<[^>]+>", " ", c.get(f"/apps/{g}").text)[:600] or "Failed" in re.sub("<[^>]+>", " ", c.get(f"/apps/{g}").text)[:600], t, 3)
 SEC = secret()

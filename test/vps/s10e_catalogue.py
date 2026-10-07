@@ -4,8 +4,8 @@ c = owner_client(); st = state(); pid = st["proj"]; env = st["env"]; R = Client(
 exec(open("s10a_services.py").read().split("REFUSE = {")[0].split("def new_service")[0])
 def svc_page(sid): return c.get(f"/services/{sid}").text
 def create(tpl, name, **vars):
-    r, forms = c.forms(f"/projects/{pid}/services/new?env={env}&template={tpl}")
-    f = c.find_form(forms, f"/projects/{pid}/services")
+    r, forms = c.forms(f"/projects/{pid}/e/{env}/services/new?template={tpl}")
+    f = c.find_form(forms, f"/projects/{pid}/e/{env}/services")
     r = c.post_form(f, name=name, connect_env=False, deploy=True, **vars)
     m = re.search(r"/services/([a-z2-7]{12})", r.url or "") or re.search(r"/services/([a-z2-7]{12})", r.text); return m.group(1) if m else None, r
 def state_of(sid): return (R.get(f"/api/v1/services/{sid}").json() or {}).get("status")

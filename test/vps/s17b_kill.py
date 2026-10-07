@@ -1,6 +1,5 @@
 from lib import *
 c = owner_client(); st = state(); web = st["web"]; db = st["pg"]; R = Client(token=ensure_tokens(c)["read_token"])
-sh("docker network rm musdash-fqsgt2yeg2g3 >/dev/null 2>&1")
 host = f"t-web.{HOST}.sslip.io"
 # S17.1 kill -9 the control plane in the middle of a deploy
 d = deploy(c, web); time.sleep(2.5)

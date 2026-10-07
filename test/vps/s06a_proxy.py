@@ -1,9 +1,10 @@
 from lib import *
 c = owner_client(); st = state(); pid = st["proj"]; env = st["env"]; web = st["web"]
 H = f"t-web.{HOST}.sslip.io"
-r = c.submit(f"/projects/{pid}/apps/new?env={env}", action=f"/projects/{pid}/apps", name="t-who", image="traefik/whoami:latest", port="80", domain="", deploy=True)
-who = re.findall(r"/apps/([a-z2-7]{12})", r.text)[0]; save_state(who=who)
-dep = re.findall(r"/deployments/([a-z2-7]{12})", r.url or r.text)[0]
+from lib_d import *
+r = new_app(c, "t-who", source="image", image="traefik/whoami:latest", port="80", domain=False)
+who = re.search(r"/apps/([a-z2-7]{12})", r.url).group(1); save_state(who=who)
+dep = re.search(r"/deployments/([a-z2-7]{12})", r.url).group(1)
 check("S6.0", dep_wait(c, who, dep) == "success", "t-who (traefik/whoami) deployed")
 def dom(app, host, **kw):
     return c.submit(f"/apps/{app}/settings", action=f"/apps/{app}/domains", host=host, **kw)

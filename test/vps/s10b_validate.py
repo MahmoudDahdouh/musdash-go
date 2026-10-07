@@ -5,8 +5,8 @@ def flashmsg(rr):
     ck = re.search(r"musdash_flash=([^;]*)", rr.headers.get("set-cookie", ""))
     return base64.urlsafe_b64decode(ck.group(1) + "=" * (-len(ck.group(1)) % 4)).decode() if ck else ""
 def create(name, compose, variables="", deploy=False):
-    forms = parse_forms(c.get(f"/projects/{P}/services/new?env={E}&template=custom", follow=True).text)
-    f = [x for x in forms if x["action"] == f"/projects/{P}/services"][0]
+    forms = parse_forms(c.get(f"/projects/{P}/e/{E}/services/new?template=custom", follow=True).text)
+    f = [x for x in forms if x["action"] == f"/projects/{P}/e/{E}/services"][0]
     rr = c.post_form(f, follow=False, name=name, compose=compose, variables=variables, deploy=deploy)
     return rr, flashmsg(rr)
 def svc_exists(name):

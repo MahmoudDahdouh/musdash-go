@@ -139,6 +139,35 @@ def parse_forms(html):
     p = FormParser(); p.feed(html); return p.forms
 
 
+def _compat(page, action):
+    """The 2026-10 UI redesign moved pages the first run's scripts used; map the old addresses to the new ones."""
+    m = re.match(r"^/projects/([a-z2-7]+)/(apps|databases|services)/new\?env=([a-z2-7]+)(.*)$", page)
+    if m:
+        pid, kind, env, rest = m.groups()
+        q = rest.lstrip("&")
+        page = f"/projects/{pid}/e/{env}/{kind}/new" + (("?" + q) if q else "")
+        if action == f"/projects/{pid}/{kind}":
+            action = f"/projects/{pid}/e/{env}/{kind}"
+    if action and re.match(r"^/apps/[a-z2-7]+/environment$", action) and page == action:
+        page = action + "/edit"
+    if action and re.match(r"^/(team|projects/[a-z2-7]+|environments/[a-z2-7]+|servers/[a-z2-7]+)/variables$", action) and page == action:
+        page = action + "/edit"
+    if action == "/projects" and page == "/projects/new":
+        page = "/projects"
+    if action == "/account/tokens" and page in ("/account", "/keys"):
+        page = "/keys/tokens"  # the API Tokens tab of the Keys page
+    return page, action
+
+
+def _compat_fields(action, over):
+    """Scripts written for the one-ability token form: "read" is the Read box,
+    "deploy" what that ability could do (read, write, deploy)."""
+    if action == "/account/tokens" and "token_ability" in over:
+        deploy = over.pop("token_ability") == "deploy"
+        over.update(perm_read=True, perm_write=deploy, perm_deploy=deploy)
+    return over
+
+
 class Client:
     def __init__(self, base=BASE, token=None, timeout=60):
         u = urllib.parse.urlparse(base)
@@ -218,6 +247,8 @@ class Client:
     def submit(self, page, action=None, has=None, follow=True, submit=None, **over):
         """GET page, find a form, post its fields with overrides. Returns Resp.
         Overrides: name=value. Checkbox: True/False. Use name__ for names with dots/dashes via dict in over['_o']."""
+        page, action = _compat(page, action)
+        over = _compat_fields(action, over)
         r, forms = self.forms(page)
         f = self.find_form(forms, action, has)
         if f is None:
@@ -354,7 +385,7 @@ def ensure_tokens(c=None):
         t = st.get(key)
         if t and Client(token=t).get("/api/v1/me").status == 200:
             out[key] = t; continue
-        r = c.submit("/account", action="/account/tokens", token_name="api-" + ability + str(int(time.time()) % 10000), token_ability=ability, token_expires="never", token_password=st["owner"]["password"])
+        r = c.submit("/keys", action="/account/tokens", token_name="api-" + ability + str(int(time.time()) % 10000), token_ability=ability, token_expires="never", token_password=st["owner"]["password"])
         out[key] = re.search(r"msd_[A-Za-z0-9_\-]{10,}", r.text).group(0)
     save_state(**out); return out
 
