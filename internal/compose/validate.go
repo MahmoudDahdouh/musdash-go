@@ -385,7 +385,13 @@ func (c *checker) logging(v any) {
 
 func (c *checker) deploy(v any) {
 	d := asMap(v)
-	c.onlyKeys("deploy", d, "resources", "replicas", "restart_policy", "labels")
+	// Compose writes an empty "placement" into every deploy block of the
+	// normalised form. One that names no constraint places nothing.
+	if p, ok := d["placement"].(map[string]any); !ok || len(p) > 0 {
+		c.onlyKeys("deploy", d, "resources", "replicas", "restart_policy", "labels")
+	} else {
+		c.onlyKeys("deploy", d, "resources", "replicas", "restart_policy", "labels", "placement")
+	}
 	if d["replicas"] != nil && toInt(d["replicas"]) != 1 {
 		c.fail("\"deploy.replicas\" must be 1: a stack runs one container per service")
 	}

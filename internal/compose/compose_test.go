@@ -64,7 +64,7 @@ const allowed = `{
       "security_opt": ["no-new-privileges:true"],
       "sysctls": {"net.core.somaxconn": "1024"},
       "logging": {"driver": "json-file", "options": {"max-size": "10m"}},
-      "deploy": {"replicas": 1, "resources": {"limits": {"cpus": 0.5, "memory": "536870912"}}},
+      "deploy": {"replicas": 1, "resources": {"limits": {"cpus": 0.5, "memory": "536870912"}}, "placement": {}},
       "network_mode": "",
       "networks": {"default": null, "back": {"aliases": ["site"]}},
       "configs": [{"source": "site", "target": "/etc/nginx/conf.d/default.conf"}],
@@ -186,6 +186,7 @@ func TestValidateRefuses(t *testing.T) {
 		{"cpu_shares", `262144`, `"cpu_shares" is not allowed`},
 		{"deploy", `{"replicas": 5}`, `"deploy.replicas" must be 1`},
 		{"deploy", `{"placement": {"constraints": ["node.role==manager"]}}`, `deploy: the option "placement"`},
+		{"deploy", `{"placement": {}, "mode": "global"}`, `deploy: the option "mode"`},
 		{"deploy", `{"resources": {"reservations": {"devices": [{"capabilities": ["gpu"]}]}}}`, `the option "devices"`},
 		{"scale", `3`, `"scale" must be 1`},
 		// Ports.
