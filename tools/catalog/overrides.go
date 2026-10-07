@@ -62,3 +62,13 @@ var closedPorts = map[string]map[string][]string{
 	// rtpengine's control interface, which has no sign-in.
 	"fonoster": {"rtpengine": {"8080"}},
 }
+
+// generatedAlone are passwords that stand in one place of a template and
+// are generated all the same, by template and variable: it was checked that
+// no image of the template has the written one as its default, so nothing
+// is locked out.
+var generatedAlone = map[string][]string{
+	// The app is pointed at the database by hand, in its own pages, by
+	// whoever reads the password under Variables.
+	"geoserver": {"POSTGRES_PASSWORD"},
+}

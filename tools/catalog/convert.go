@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -958,7 +959,8 @@ func (c *converter) passwords() {
 		// For the app's own sign-in, a default is what the password is
 		// until somebody sets another. For anything else a variable is the
 		// person's to fill in (a mail server's password), default or not.
-		if m := withDefault.FindStringSubmatch(value); m != nil && appLogin.MatchString(key) {
+		alone := slices.Contains(generatedAlone[c.t.Key], key)
+		if m := withDefault.FindStringSubmatch(value); m != nil && (appLogin.MatchString(key) || alone) {
 			value = m[1]
 		}
 		if !passwordKey.MatchString(key) || boolish(value) || strings.Contains(value, "$") || len(value) < 3 {
@@ -1026,8 +1028,9 @@ func (c *converter) passwords() {
 			uses += len(inFile(literal).FindAllStringIndex(n.Value, -1))
 		})
 		login := appLogin.MatchString(keys[literal])
-		// One place, and not a sign-in of the app's own: left alone.
-		if uses < 2 && !login {
+		// One place, and not a sign-in of the app's own: left alone,
+		// unless it is known by hand that nothing else holds it.
+		if uses < 2 && !login && !slices.Contains(generatedAlone[c.t.Key], keys[literal]) {
 			continue
 		}
 		base := regexp.MustCompile(`(?i)_*(PASSWORD|PASSWD|PASS)$`).ReplaceAllString(keys[literal], "")

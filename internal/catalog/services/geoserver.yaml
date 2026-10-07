@@ -22,7 +22,7 @@ services:
     image: postgis/postgis:17-3.4
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres_secure}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
       - POSTGRES_DB=${POSTGRES_DB:-gis}
     volumes:
       - postgis-data:/var/lib/postgresql/data
