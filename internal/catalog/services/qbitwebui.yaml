@@ -1,0 +1,26 @@
+# name: qBittorrent Web UI
+# about: A modern web interface for managing multiple qBittorrent instances. Built with React, Hono, and Bun.
+# docs: https://github.com/Maciejonos/qbitwebui#readme
+# website: https://github.com/Maciejonos/qbitwebui
+# categories: media
+# source: dokploy
+services:
+  qbitwebui:
+    image: ghcr.io/maciejonos/qbitwebui:latest
+    restart: unless-stopped
+    environment:
+      - ENCRYPTION_KEY=${SERVICE_PASSWORD_ENCRYPTION_KEY}
+      - PORT=${PORT:-3000}
+      - DATABASE_PATH=${DATABASE_PATH:-/data/qbitwebui.db}
+      - SALT_PATH=${SALT_PATH:-/data/.salt}
+      - SERVICE_FQDN_QBITWEBUI_3000
+    volumes:
+      - qbitwebui_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+volumes:
+  qbitwebui_data:

@@ -1,0 +1,27 @@
+# name: Docling Serve
+# about: Running Docling as an API service for document processing and conversion with AI-powered capabilities.
+# docs: https://github.com/docling-project/docling-serve/blob/main/docs/README.md
+# website: https://github.com/docling-project/docling-serve
+# categories: devtools, ai, docs
+# source: dokploy
+services:
+  docling-serve:
+    image: quay.io/docling-project/docling-serve:latest
+    restart: unless-stopped
+    expose:
+      - 5001
+    environment:
+      - DOCLING_SERVE_ENABLE_UI=1
+      - DOCLING_SERVE_HOST=0.0.0.0
+      - DOCLING_SERVE_PORT=5001
+      - SERVICE_FQDN_DOCLING_SERVE_5001
+    volumes:
+      - docling-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+volumes:
+  docling-data:

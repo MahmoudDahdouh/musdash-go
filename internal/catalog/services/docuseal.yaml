@@ -1,0 +1,20 @@
+# name: DocuSeal
+# about: Document Signing for Everyone free forever for individuals, extensible for businesses and developers.
+# docs: https://www.docuseal.co/
+# categories: productivity, docs
+# source: coolify
+services:
+  docuseal:
+    image: docuseal/docuseal:latest
+    environment:
+      - SERVICE_URL_DOCUSEAL_3000
+      - HOST=${SERVICE_URL_DOCUSEAL}
+    volumes:
+      - docuseal-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000"]
+      interval: 5s
+      timeout: 20s
+      retries: 10
+volumes:
+  docuseal-data:

@@ -1,0 +1,108 @@
+# name: n8n Queue Mode
+# about: n8n running in queue mode for high-throughput production workloads: the main instance handles the editor and webhooks while a scalable pool of…
+# docs: https://docs.n8n.io/hosting/scaling/queue-mode/
+# website: https://n8n.io/
+# categories: automation, backend
+# source: dokploy
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES_USER}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-n8n}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SERVICE_USER_POSTGRES_USER} -d ${POSTGRES_DB:-n8n}"]
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${SERVICE_PASSWORD_REDIS_PASSWORD}
+    environment:
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      start_period: 20s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  n8n:
+    image: n8nio/n8n:2.30.4
+    restart: unless-stopped
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-n8n}
+      - DB_POSTGRESDB_USER=${SERVICE_USER_POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS_PASSWORD}
+      - QUEUE_HEALTH_CHECK_ACTIVE=true
+      - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
+      - N8N_ENCRYPTION_KEY=${SERVICE_BASE64_N8N_ENCRYPTION_KEY}
+      - N8N_HOST=${SERVICE_FQDN_N8N}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_PROXY_HOPS=1
+      - NODE_ENV=production
+      - N8N_WEBHOOK_URL=${SERVICE_URL_N8N}/
+      - N8N_EDITOR_BASE_URL=${SERVICE_URL_N8N}/
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Berlin}
+      - N8N_SECURE_COOKIE=false
+      - SERVICE_FQDN_N8N_5678
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:5678/healthz"]
+      start_period: 60s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  n8n-worker:
+    image: n8nio/n8n:2.30.4
+    restart: unless-stopped
+    command: worker
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-n8n}
+      - DB_POSTGRESDB_USER=${SERVICE_USER_POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS_PASSWORD}
+      - QUEUE_HEALTH_CHECK_ACTIVE=true
+      - N8N_ENCRYPTION_KEY=${SERVICE_BASE64_N8N_ENCRYPTION_KEY}
+      - NODE_ENV=production
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Berlin}
+    depends_on:
+      n8n:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:5678/healthz"]
+      start_period: 60s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+volumes:
+  postgres_data:
+  redis_data:
+  n8n_data:

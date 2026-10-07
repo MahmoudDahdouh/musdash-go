@@ -1,0 +1,22 @@
+# name: Anubis
+# about: Anubis is a bot protector, It will block bots from accessing your website.
+# docs: https://anubis.techaro.lol/docs/
+# website: https://anubis.techaro.lol
+# categories: security
+# source: dokploy
+services:
+  anubis:
+    image: ghcr.io/techarohq/anubis:latest
+    restart: unless-stopped
+    expose:
+      - "8923"
+    environment:
+      - TARGET=${TARGET:-YOURLOCALHOST:PORT}
+      - BIND=:8923
+      - COOKIE_DOMAIN=${SERVICE_FQDN_ANUBIS}
+      - DIFFICULTY=${DIFFICULTY:-5}
+      - OG_PASSTHROUGH=${OG_PASSTHROUGH:-true}
+      - OG_EXPIRY_TIME=${OG_EXPIRY_TIME:-1h}
+      - OG_CACHE_CONSIDER_HOST=${OG_CACHE_CONSIDER_HOST:-true}
+      - SERVE_ROBOTS_TXT=${SERVE_ROBOTS_TXT:-false}
+      - SERVICE_FQDN_ANUBIS_8923

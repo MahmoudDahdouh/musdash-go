@@ -1,0 +1,47 @@
+# name: Windshift
+# about: Self-hosted work management platform with projects, tasks, sprints, and team collaboration.
+# docs: https://windshift.sh/docs
+# website: https://windshift.sh/
+# categories: productivity
+# source: dokploy
+services:
+  windshift:
+    image: ghcr.io/windshiftapp/windshift:v0.8.5
+    restart: unless-stopped
+    environment:
+      - BASE_URL=${SERVICE_URL_WINDSHIFT}
+      - PORT=8080
+      - USE_PROXY=true
+      - SSO_SECRET=${SERVICE_HEX_64_SSO_SECRET}
+      - ATTACHMENT_PATH=/data/attachments
+      - DB_TYPE=postgres
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-windshift}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-windshift}
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+      - SERVICE_FQDN_WINDSHIFT_8080
+    volumes:
+      - windshift-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:17.4
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-windshift}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-windshift}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+volumes:
+  windshift-data:
+  postgres-data:

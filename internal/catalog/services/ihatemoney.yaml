@@ -1,0 +1,40 @@
+# name: I Hate Money
+# about: I Hate Money is a web application for managing shared expenses among groups of people.
+# docs: https://ihatemoney.readthedocs.io/
+# website: https://ihatemoney.org/
+# categories: finance
+# source: dokploy
+services:
+  ihatemoney:
+    image: ihatemoney/ihatemoney:latest
+    environment:
+      - DEBUG=False
+      - ACTIVATE_DEMO_PROJECT=True
+      - ACTIVATE_ADMIN_DASHBOARD=False
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - ALLOW_PUBLIC_PROJECT_CREATION=True
+      - BABEL_DEFAULT_TIMEZONE=UTC
+      - GREENLET_TEST_CPP=no
+      - MAIL_DEFAULT_SENDER=Budget manager <admin@example.com>
+      - MAIL_PASSWORD=${SERVICE_PASSWORD_MAIL_PASSWORD}
+      - MAIL_PORT=25
+      - MAIL_SERVER=localhost
+      - MAIL_USE_SSL=False
+      - MAIL_USE_TLS=False
+      - MAIL_USERNAME=${SERVICE_USER_MAIL_USERNAME}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRET_KEY}
+      - SESSION_COOKIE_SECURE=True
+      - SHOW_ADMIN_EMAIL=True
+      - SQLALCHEMY_DATABASE_URI=sqlite:////database/ihatemoney.db
+      - SQLALCHEMY_TRACK_MODIFICATIONS=False
+      - APPLICATION_ROOT=/
+      - ENABLE_CAPTCHA=False
+      - LEGAL_LINK=
+      - PORT=8000
+      - PUID=0
+      - PGID=0
+      - SERVICE_FQDN_IHATEMONEY_8000
+    volumes:
+      - ihatemoney-sqlite-db:/database
+volumes:
+  ihatemoney-sqlite-db:

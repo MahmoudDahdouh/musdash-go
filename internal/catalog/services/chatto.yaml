@@ -1,0 +1,33 @@
+# name: Chatto (single binary)
+# about: A fully-featured real-time chat application for teams and communities.
+# docs: https://docs.chatto.run
+# website: https://chatto.run
+# categories: communication
+# source: dokploy
+services:
+  chatto:
+    image: ghcr.io/chattocorp/chatto:0.4
+    restart: unless-stopped
+    expose:
+      - "4000"
+    environment:
+      CHATTO_WEBSERVER_URL: ${SERVICE_URL_CHATTO}
+      CHATTO_WEBSERVER_PORT: "4000"
+      CHATTO_WEBSERVER_COOKIE_SIGNING_SECRET: ${SERVICE_HEX_64_COOKIE_SECRET}
+      CHATTO_CORE_SECRET_KEY: ${SERVICE_HEX_64_CORE_SECRET}
+      CHATTO_CORE_ASSETS_SIGNING_SECRET: ${SERVICE_HEX_64_ASSETS_SECRET}
+      CHATTO_NATS_EMBEDDED_ENABLED: true
+      CHATTO_NATS_EMBEDDED_DATA_DIR: /data
+      CHATTO_OWNERS_EMAILS: ${OWNER_EMAIL:?Set an email address}
+      CHATTO_SMTP_ENABLED: ${CHATTO_SMTP_ENABLED:-false}
+      CHATTO_SMTP_HOST: ${CHATTO_SMTP_HOST:-}
+      CHATTO_SMTP_PORT: ${CHATTO_SMTP_PORT:-587}
+      CHATTO_SMTP_TLS: ${CHATTO_SMTP_TLS:-mandatory}
+      CHATTO_SMTP_USERNAME: ${CHATTO_SMTP_USERNAME:-}
+      CHATTO_SMTP_PASSWORD: ${CHATTO_SMTP_PASSWORD:-}
+      CHATTO_SMTP_FROM: ${CHATTO_SMTP_FROM:-}
+      SERVICE_FQDN_CHATTO_4000:
+    volumes:
+      - chatto-data:/data
+volumes:
+  chatto-data:

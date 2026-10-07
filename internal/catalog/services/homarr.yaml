@@ -1,0 +1,19 @@
+# name: Homarr
+# about: A sleek, modern dashboard that puts all your apps and services in one place with Docker integration.
+# docs: https://homarr.dev/docs/getting-started/installation/docker
+# website: https://homarr.dev/
+# categories: home, monitoring
+# source: dokploy
+services:
+  homarr:
+    image: ghcr.io/homarr-labs/homarr:latest
+    restart: unless-stopped
+    volumes:
+      - homarr_appdata:/appdata
+    environment:
+      - SECRET_ENCRYPTION_KEY=${SERVICE_HEX_64_SECRET_KEY}
+      - SERVICE_FQDN_HOMARR_7575
+    expose:
+      - 7575
+volumes:
+  homarr_appdata:

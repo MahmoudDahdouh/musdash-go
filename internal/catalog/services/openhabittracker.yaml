@@ -1,0 +1,21 @@
+# name: OpenHabitTracker
+# about: Take notes, plan tasks and track habits - free, ad-free, open source, with all data on your own server.
+# website: https://openhabittracker.net
+# categories: productivity, docs, home
+# source: dokploy
+services:
+  openhabittracker:
+    image: jinjinov/openhabittracker:latest
+    expose:
+      - '8080'
+    environment:
+      AppSettings__UserName: ${OHT_USERNAME:-admin}
+      AppSettings__Email: ${OHT_EMAIL:-admin@example.com}
+      AppSettings__Password: ${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      AppSettings__JwtSecret: ${SERVICE_BASE64_64_JWT_SECRET}
+      SERVICE_FQDN_OPENHABITTRACKER_8080:
+    volumes:
+      - openhabittracker-data:/app/.OpenHabitTracker
+    restart: unless-stopped
+volumes:
+  openhabittracker-data:

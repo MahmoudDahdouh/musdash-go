@@ -1,0 +1,23 @@
+# name: Heimdall
+# about: Heimdall is a dashboard for managing and organizing your server applications.
+# docs: https://github.com/linuxserver/Heimdall
+# categories: productivity, home
+# source: coolify
+services:
+  heimdall:
+    image: lscr.io/linuxserver/heimdall:latest
+    environment:
+      - SERVICE_URL_HEIMDALL
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+      - SERVICE_FQDN_HEIMDALL_80
+    volumes:
+      - heimdall-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80"]
+      interval: 2s
+      timeout: 10s
+      retries: 15
+volumes:
+  heimdall-config:

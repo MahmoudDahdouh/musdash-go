@@ -1,0 +1,50 @@
+# name: AdventureLog
+# about: AdventureLog is an open-source activity tracker with maps, journaling, and Strava integration.
+# docs: https://adventurelog.app/docs/intro/adventurelog_overview.html
+# website: https://adventurelog.app/
+# categories: home
+# source: dokploy
+services:
+  web:
+    image: ghcr.io/seanmorley15/adventurelog-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      PUBLIC_SERVER_URL: ${SERVICE_FQDN_SERVER}
+      ORIGIN: ${SERVICE_URL_WEB}
+      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-Infinity}
+      SERVICE_FQDN_WEB_3000:
+  db:
+    image: postgis/postgis:16-3.5
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-adventure}
+      POSTGRES_USER: ${POSTGRES_USER:-adventure}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+  server:
+    image: ghcr.io/seanmorley15/adventurelog-backend:latest
+    restart: unless-stopped
+    depends_on:
+      - db
+    volumes:
+      - adventurelog_media:/code/media/
+    environment:
+      PGHOST: ${PGHOST:-db}
+      POSTGRES_DB: ${POSTGRES_DB:-adventure}
+      POSTGRES_USER: ${POSTGRES_USER:-adventure}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      SECRET_KEY: ${SERVICE_PASSWORD_SECRET_KEY}
+      DJANGO_ADMIN_USERNAME: ${DJANGO_ADMIN_USERNAME:-admin}
+      DJANGO_ADMIN_PASSWORD: ${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      DJANGO_ADMIN_EMAIL: ${ADMIN_EMAIL:?Set an email address}
+      DEBUG: ${DEBUG:-False}
+      CSRF_TRUSTED_ORIGINS: ${SERVICE_URL_SERVER},${SERVICE_URL_WEB}
+      FRONTEND_URL: ${SERVICE_URL_WEB}
+      PUBLIC_URL: ${SERVICE_URL_SERVER}
+      SERVICE_FQDN_SERVER_80:
+volumes:
+  postgres_data:
+  adventurelog_media:

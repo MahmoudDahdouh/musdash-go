@@ -1,0 +1,29 @@
+# name: Calibre-Web
+# about: Calibre-web is a web app providing a clean interface for browsing, reading and downloading eBooks.
+# docs: https://github.com/linuxserver/docker-calibre-web
+# categories: media
+# source: coolify
+services:
+  calibre-web:
+    image: lscr.io/linuxserver/calibre-web:latest
+    environment:
+      - SERVICE_URL_CALIBRE_8083
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-Etc/UTC}
+      - 'DOCKER_MODS=${DOCKER_MODS:-linuxserver/mods:universal-calibre}'
+    volumes:
+      - calibre_web_data:/config
+      - calibre_library:/books
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - 'http://127.0.0.1:8083'
+      interval: 5s
+      timeout: 20s
+      retries: 10
+volumes:
+  calibre_library:
+  calibre_web_data:

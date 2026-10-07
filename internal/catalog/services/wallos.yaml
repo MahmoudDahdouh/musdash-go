@@ -1,0 +1,21 @@
+# name: Wallos
+# about: Wallos is a self-hosted subscription tracking application that helps you manage and monitor your subscriptions, providing insights into your spending…
+# docs: https://github.com/ellite/wallos?tab=readme-ov-file#getting-started
+# website: https://wallosapp.com
+# categories: finance
+# source: dokploy
+services:
+  wallos:
+    image: bellamy/wallos:latest
+    expose:
+      - '80'
+    environment:
+      TZ: 'Europe/Paris'
+      SERVICE_FQDN_WALLOS_80:
+    volumes:
+      - wallos_db:/var/www/html/db
+      - wallos_logos:/var/www/html/images/uploads/logos
+    restart: unless-stopped
+volumes:
+  wallos_db:
+  wallos_logos:

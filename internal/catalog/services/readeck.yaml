@@ -1,0 +1,26 @@
+# name: Readeck
+# about: Simple web application that lets you save the precious readable content of web pages you like and want to keep forever.
+# docs: https://readeck.org/en/docs/
+# categories: productivity
+# source: coolify
+services:
+  readeck:
+    image: codeberg.org/readeck/readeck:latest
+    environment:
+      - SERVICE_URL_READECK
+      - READECK_USE_X_FORWARDED=${READECK_USE_X_FORWARDED:-true}
+      - SERVICE_FQDN_READECK_8000
+    volumes:
+      - readeck_data:/readeck
+    healthcheck:
+      test:
+        - CMD
+        - /bin/readeck
+        - healthcheck
+        - '-config'
+        - config.toml
+      interval: 30s
+      timeout: 2s
+      retries: 3
+volumes:
+  readeck_data:

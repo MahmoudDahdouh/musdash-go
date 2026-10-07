@@ -1,0 +1,32 @@
+# name: Flatnotes
+# about: A self-hosted, modern note-taking web app that saves your notes as plain text Markdown files.
+# docs: https://github.com/dullage/flatnotes
+# website: https://flatnotes.io
+# categories: docs, productivity
+# source: dokploy
+services:
+  flatnotes:
+    image: dullage/flatnotes:latest
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      FLATNOTES_AUTH_TYPE: ${FLATNOTES_AUTH_TYPE:-password}
+      FLATNOTES_USERNAME: ${SERVICE_USER_USERNAME}
+      FLATNOTES_PASSWORD: ${SERVICE_PASSWORD_PASSWORD}
+      FLATNOTES_SECRET_KEY: ${SERVICE_PASSWORD_SECRET_KEY}
+      FLATNOTES_SESSION_EXPIRY_DAYS: ${FLATNOTES_SESSION_EXPIRY_DAYS:-30}
+      FLATNOTES_TOTP_KEY: ${FLATNOTES_TOTP_KEY:-}
+      FLATNOTES_PATH_PREFIX: ${FLATNOTES_PATH_PREFIX:-}
+      FLATNOTES_QUICK_ACCESS_HIDE: ${FLATNOTES_QUICK_ACCESS_HIDE:-false}
+      FLATNOTES_QUICK_ACCESS_TITLE: ${FLATNOTES_QUICK_ACCESS_TITLE:-RECENTLY MODIFIED}
+      FLATNOTES_QUICK_ACCESS_TERM: ${FLATNOTES_QUICK_ACCESS_TERM:-*}
+      FLATNOTES_QUICK_ACCESS_SORT: ${FLATNOTES_QUICK_ACCESS_SORT:-lastModified}
+      FLATNOTES_QUICK_ACCESS_LIMIT: ${FLATNOTES_QUICK_ACCESS_LIMIT:-4}
+      SERVICE_FQDN_FLATNOTES_8080:
+    expose:
+      - 8080
+    volumes:
+      - flatnotes-data:/data
+volumes:
+  flatnotes-data:

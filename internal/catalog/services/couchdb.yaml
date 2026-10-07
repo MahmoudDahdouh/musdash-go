@@ -1,0 +1,20 @@
+# name: CouchDB
+# about: CouchDB is a document-oriented NoSQL database that excels at replication and horizontal scaling.
+# docs: https://docs.couchdb.org/en/stable/
+# website: https://couchdb.apache.org/
+# categories: database, storage
+# source: dokploy
+services:
+  couchdb:
+    image: couchdb:latest
+    expose:
+      - '5984'
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+    environment:
+      - COUCHDB_USER=${SERVICE_PASSWORD_USERNAME}
+      - COUCHDB_PASSWORD=${SERVICE_PASSWORD_PASSWORD}
+      - SERVICE_FQDN_COUCHDB_5984
+    restart: unless-stopped
+volumes:
+  couchdb-data:

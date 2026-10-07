@@ -1,0 +1,38 @@
+# name: Seanime
+# about: A self-hosted anime streaming platform.
+# docs: https://seanime.app/docs
+# website: https://seanime.app/
+# categories: media
+# source: dokploy
+services:
+  seanime-init:
+    image: busybox:1.37.0
+    user: "0:0"
+    volumes:
+      - seanime-init-seanime-config:/mnt/config
+      - seanime-init-anime:/mnt/anime
+      - seanime-init-downloads:/mnt/downloads
+    command: ["sh", "-c", "chown -R 1000:1000 /mnt/config && find /mnt/config -type d -exec chmod 755 {} + && find /mnt/config -type f -exec chmod 644 {} +"]
+    restart: "no"
+  seanime:
+    image: umagistr/seanime:v3.6.1-rootless
+    depends_on:
+      seanime-init:
+        condition: service_completed_successfully
+    environment:
+      - SEANIME_SERVER_HOST=0.0.0.0
+      - SERVICE_FQDN_SEANIME_43211
+    expose:
+      - "43211"
+    volumes:
+      - seanime-seanime-config:/home/seanime/.config/Seanime
+      - seanime-anime:/anime
+      - seanime-downloads:/downloads
+    restart: unless-stopped
+volumes:
+  seanime-anime:
+  seanime-downloads:
+  seanime-init-anime:
+  seanime-init-downloads:
+  seanime-init-seanime-config:
+  seanime-seanime-config:

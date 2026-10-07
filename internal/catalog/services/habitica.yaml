@@ -1,0 +1,57 @@
+# name: Habitica
+# about: Habitica is a free habit and productivity app that treats your real life like a game.
+# docs: https://habitica.fandom.com/wiki/Setting_up_Habitica_Locally
+# website: https://habitica.com/
+# categories: productivity, home
+# source: dokploy
+services:
+  server:
+    image: docker.io/awinterstein/habitica-server:latest
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_DB_URI: "mongodb://${MONGO_HABITICA_USER:-habitica}:${SERVICE_PASSWORD_MONGO_HABITICA_PASSWORD}@mongo/habitica?authSource=habitica"
+      INVITE_ONLY: "${INVITE_ONLY:-false}"
+      EMAIL_SERVER_URL: "${EMAIL_SERVER_URL:-mail.example.com}"
+      EMAIL_SERVER_PORT: "${EMAIL_SERVER_PORT:-587}"
+      EMAIL_SERVER_AUTH_USER: "${EMAIL_SERVER_AUTH_USER:-mail_user}"
+      EMAIL_SERVER_AUTH_PASSWORD: "${SERVICE_PASSWORD_MAIL_PASSWORD}"
+      ADMIN_EMAIL: "no-reply@${SERVICE_FQDN_CLIENT}"
+  client:
+    image: docker.io/awinterstein/habitica-client:latest
+    restart: unless-stopped
+    depends_on:
+      - server
+    expose:
+      - "80"
+    environment:
+      - SERVICE_FQDN_CLIENT_80
+  mongo:
+    image: docker.io/mongo:latest
+    restart: unless-stopped
+    command: >
+      bash -c "
+
+        echo \"${SERVICE_BASE64_128_MONGO_KEY}\" > /etc/mongo-keyfile &&
+        chown 999:999 /etc/mongo-keyfile &&
+        chmod 400 /etc/mongo-keyfile &&
+        exec docker-entrypoint.sh mongod --replSet rs --bind_ip_all --port 27017 --keyFile /etc/mongo-keyfile
+      "
+
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ADMIN_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${SERVICE_PASSWORD_MONGO_ADMIN_PASSWORD}
+      MONGO_KEYFILE_CONTENT: ${SERVICE_BASE64_128_MONGO_KEY}
+      MONGO_HABITICA_USER: ${MONGO_HABITICA_USER:-habitica}
+      MONGO_HABITICA_PASSWORD: ${SERVICE_PASSWORD_MONGO_HABITICA_PASSWORD}
+    healthcheck:
+      test: "mongosh --port 27017 --quiet -u \"${MONGO_ADMIN_USER:-admin}\" -p \"${SERVICE_PASSWORD_MONGO_ADMIN_PASSWORD}\" --authenticationDatabase admin --eval \"\n  try {\n    // 1. Hostname Fix\n    const config = rs.conf();\n    const currentHost = require('os').hostname() + ':27017';\n    if (config.members[0].host !== currentHost) {\n      config.members[0].host = currentHost;\n      rs.reconfig(config, { force: true });\n    }\n\n    // 2. User Creation Logic\n    const targetDb = db.getSiblingDB('habitica');\n    const hUser = process.env.MONGO_HABITICA_USER;\n    const hPass = process.env.MONGO_HABITICA_PASSWORD;\n\n    // We can only check/create users if we are Primary\n    if (rs.isMaster().ismaster) {\n      if (!targetDb.getUser(hUser)) {\n        print('Creating missing user ' + hUser + '...');\n        targetDb.createUser({ user: hUser, pwd: hPass, roles: ['readWrite'] });\n      }\n      // SUCCESS: User exists and we are Primary\n      quit(0);\n    } else {\n      // We are not Primary yet (still electing), so we cannot confirm user exists.\n      // Fail the check so the dependent app waits.\n      print('Waiting for Primary state...');\n      quit(1);\n    }\n  } catch (err) {\n    // If not initialized, initiate and FAIL this check so we wait for the next cycle\n    try { \n      rs.initiate({ _id: 'rs', members: [{ _id: 0, host: require('os').hostname() + ':27017' }] }); \n    } catch (e) {}\n    quit(1);\n  }\n\"\n"
+      interval: 5s
+      timeout: 10s
+      retries: 20
+    volumes:
+      - habitica-mongo-data:/data/db
+volumes:
+  habitica-mongo-data:

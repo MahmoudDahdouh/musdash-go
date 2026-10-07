@@ -1,0 +1,20 @@
+# name: WordPress without a database
+# about: WordPress is open source software you can use to create a beautiful website, blog, or app.
+# docs: https://wordpress.org
+# categories: cms
+# source: coolify
+services:
+  wordpress:
+    image: wordpress:latest
+    volumes:
+      - wordpress-files:/var/www/html
+    environment:
+      - SERVICE_URL_WORDPRESS
+      - SERVICE_FQDN_WORDPRESS_80
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1"]
+      interval: 2s
+      timeout: 10s
+      retries: 10
+volumes:
+  wordpress-files:

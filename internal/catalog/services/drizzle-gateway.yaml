@@ -1,0 +1,16 @@
+# name: Drizzle Gateway
+# about: Free self-hosted Drizzle Studio on steroids.
+# docs: https://gateway.drizzle.team/
+# categories: devtools, networking, backend
+# source: coolify
+services:
+  drizzle-gateway:
+    image: ghcr.io/drizzle-team/gateway:latest
+    environment:
+      - SERVICE_URL_DRIZZLE_4983
+      - STORE_PATH=/app
+      - MASTERPASS=$SERVICE_PASSWORD_DRIZZLE
+    volumes:
+      - drizzle-gateway-data:/app
+volumes:
+  drizzle-gateway-data:

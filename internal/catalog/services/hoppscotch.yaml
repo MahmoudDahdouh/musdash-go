@@ -1,0 +1,66 @@
+# name: Hoppscotch (AIO + Migrations)
+# about: Hoppscotch Community Edition (All-in-One) with automatic database migrations. Includes backend, frontend, and admin under unified subpath routing.
+# docs: https://docs.hoppscotch.io/documentation/self-host/community-edition/install-and-build
+# website: https://hoppscotch.io/
+# categories: devtools, backend
+# source: dokploy
+services:
+  hoppscotch:
+    image: hoppscotch/hoppscotch:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - 80
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-hoppscotch}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-hoppscotch}"
+      DATA_ENCRYPTION_KEY: "${SERVICE_PASSWORD_ENCRYPTION_KEY}"
+      HOPP_AIO_ALTERNATE_PORT: "${HOPP_AIO_ALTERNATE_PORT:-80}"
+      WHITELISTED_ORIGINS: "${SERVICE_URL_HOPPSCOTCH},${SERVICE_URL_HOPPSCOTCH},app://hoppscotch"
+      VITE_BASE_URL: "${SERVICE_URL_HOPPSCOTCH}"
+      VITE_SHORTCODE_BASE_URL: "${SERVICE_URL_HOPPSCOTCH}"
+      VITE_ADMIN_URL: "${SERVICE_URL_HOPPSCOTCH}/admin"
+      VITE_BACKEND_GQL_URL: "${SERVICE_URL_HOPPSCOTCH}/backend/graphql"
+      VITE_BACKEND_WS_URL: "wss://${SERVICE_FQDN_HOPPSCOTCH}/backend/graphql"
+      VITE_BACKEND_API_URL: "${SERVICE_URL_HOPPSCOTCH}/backend/v1"
+      VITE_APP_TOS_LINK: "${VITE_APP_TOS_LINK:-https://docs.hoppscotch.io/support/terms}"
+      VITE_APP_PRIVACY_POLICY_LINK: "${VITE_APP_PRIVACY_POLICY_LINK:-https://docs.hoppscotch.io/support/privacy}"
+      ENABLE_SUBPATH_BASED_ACCESS: "true"
+      SERVICE_FQDN_HOPPSCOTCH_80:
+    volumes:
+      - hoppscotch-data:/app/data
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    expose:
+      - 5432
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-hoppscotch}"
+      POSTGRES_USER: "${POSTGRES_USER:-hoppscotch}"
+      POSTGRES_PASSWORD: "${SERVICE_PASSWORD_DB_PASSWORD}"
+    volumes:
+      - hoppscotch-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hoppscotch} -d ${POSTGRES_DB:-hoppscotch}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  migrate:
+    image: hoppscotch/hoppscotch:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Running database migrations..."
+        pnpm dlx prisma migrate deploy && echo "Migration complete!"
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-hoppscotch}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-hoppscotch}"
+    restart: "no"
+volumes:
+  hoppscotch-data:
+  hoppscotch-postgres:

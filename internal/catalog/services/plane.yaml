@@ -1,0 +1,362 @@
+# name: Plane
+# about: Open source project management — alternative to Jira, Linear, Asana.
+# docs: https://docs.plane.so/
+# website: https://plane.so
+# categories: productivity
+# source: dokploy
+services:
+  plane-web:
+    image: makeplane/plane-frontend:${APP_RELEASE:-v1.3.1}
+    restart: unless-stopped
+    depends_on:
+      plane-api:
+        condition: service_started
+      plane-worker:
+        condition: service_started
+    networks:
+      default:
+        aliases:
+          - web
+  plane-space:
+    image: makeplane/plane-space:${APP_RELEASE:-v1.3.1}
+    restart: unless-stopped
+    depends_on:
+      plane-api:
+        condition: service_started
+      plane-worker:
+        condition: service_started
+      plane-web:
+        condition: service_started
+    networks:
+      default:
+        aliases:
+          - space
+  plane-admin:
+    image: makeplane/plane-admin:${APP_RELEASE:-v1.3.1}
+    restart: unless-stopped
+    depends_on:
+      plane-api:
+        condition: service_started
+      plane-web:
+        condition: service_started
+    networks:
+      default:
+        aliases:
+          - admin
+  plane-live:
+    image: makeplane/plane-live:${APP_RELEASE:-v1.3.1}
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://plane-api:8000}
+      LIVE_SERVER_SECRET_KEY: ${SERVICE_BASE64_64_LIVE_SECRET_KEY}
+      REDIS_HOST: ${REDIS_HOST:-plane-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_URL: ${REDIS_URL:-redis://plane-redis:6379/}
+    depends_on:
+      plane-api:
+        condition: service_started
+      plane-web:
+        condition: service_started
+    networks:
+      default:
+        aliases:
+          - live
+  plane-api:
+    image: makeplane/plane-backend:${APP_RELEASE:-v1.3.1}
+    restart: unless-stopped
+    command: ./bin/docker-entrypoint-api.sh
+    volumes:
+      - logs_api:/code/plane/logs
+    environment:
+      WEB_URL: ${SERVICE_URL_PROXY}
+      DEBUG: ${DEBUG:-0}
+      CORS_ALLOWED_ORIGINS: ${SERVICE_URL_PROXY}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      USE_MINIO: ${USE_MINIO:-1}
+      DATABASE_URL: postgresql://plane:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@plane-db:5432/plane
+      SECRET_KEY: ${SERVICE_BASE64_64_SECRET_KEY}
+      AMQP_URL: amqp://plane:${SERVICE_PASSWORD_RABBITMQ_PASSWORD}@plane-mq:5672/plane
+      API_KEY_RATE_LIMIT: ${API_KEY_RATE_LIMIT:-60/minute}
+      MINIO_ENDPOINT_SSL: ${MINIO_ENDPOINT_SSL:-0}
+      LIVE_SERVER_SECRET_KEY: ${SERVICE_BASE64_64_LIVE_SECRET_KEY}
+      WEBHOOK_ALLOWED_IPS: ${WEBHOOK_ALLOWED_IPS:-}
+      WEBHOOK_ALLOWED_HOSTS: ${WEBHOOK_ALLOWED_HOSTS:-}
+      PGHOST: ${PGHOST:-plane-db}
+      PGDATABASE: ${PGDATABASE:-plane}
+      POSTGRES_USER: ${POSTGRES_USER:-plane}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-plane}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      PGDATA: ${PGDATA:-/var/lib/postgresql/data}
+      REDIS_HOST: ${REDIS_HOST:-plane-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_URL: ${REDIS_URL:-redis://plane-redis:6379/}
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-access-key}
+      MINIO_ROOT_PASSWORD: ${SERVICE_PASSWORD_MINIO_PASSWORD}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-access-key}
+      AWS_SECRET_ACCESS_KEY: ${SERVICE_PASSWORD_MINIO_PASSWORD}
+      AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-http://plane-minio:9000}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      APP_DOMAIN: ${SERVICE_FQDN_PROXY}
+      FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-5242880}
+      BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-private_ranges}
+    depends_on:
+      plane-db:
+        condition: service_healthy
+      plane-redis:
+        condition: service_healthy
+      plane-mq:
+        condition: service_healthy
+      plane-migrator:
+        condition: service_completed_successfully
+    networks:
+      default:
+        aliases:
+          - api
+  plane-worker:
+    image: makeplane/plane-backend:${APP_RELEASE:-v1.3.1}
+    restart: unless-stopped
+    command: ./bin/docker-entrypoint-worker.sh
+    volumes:
+      - logs_worker:/code/plane/logs
+    environment:
+      WEB_URL: ${SERVICE_URL_PROXY}
+      DEBUG: ${DEBUG:-0}
+      CORS_ALLOWED_ORIGINS: ${SERVICE_URL_PROXY}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      USE_MINIO: ${USE_MINIO:-1}
+      DATABASE_URL: postgresql://plane:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@plane-db:5432/plane
+      SECRET_KEY: ${SERVICE_BASE64_64_SECRET_KEY}
+      AMQP_URL: amqp://plane:${SERVICE_PASSWORD_RABBITMQ_PASSWORD}@plane-mq:5672/plane
+      API_KEY_RATE_LIMIT: ${API_KEY_RATE_LIMIT:-60/minute}
+      MINIO_ENDPOINT_SSL: ${MINIO_ENDPOINT_SSL:-0}
+      LIVE_SERVER_SECRET_KEY: ${SERVICE_BASE64_64_LIVE_SECRET_KEY}
+      WEBHOOK_ALLOWED_IPS: ${WEBHOOK_ALLOWED_IPS:-}
+      WEBHOOK_ALLOWED_HOSTS: ${WEBHOOK_ALLOWED_HOSTS:-}
+      PGHOST: ${PGHOST:-plane-db}
+      PGDATABASE: ${PGDATABASE:-plane}
+      POSTGRES_USER: ${POSTGRES_USER:-plane}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-plane}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      PGDATA: ${PGDATA:-/var/lib/postgresql/data}
+      REDIS_HOST: ${REDIS_HOST:-plane-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_URL: ${REDIS_URL:-redis://plane-redis:6379/}
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-access-key}
+      MINIO_ROOT_PASSWORD: ${SERVICE_PASSWORD_MINIO_PASSWORD}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-access-key}
+      AWS_SECRET_ACCESS_KEY: ${SERVICE_PASSWORD_MINIO_PASSWORD}
+      AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-http://plane-minio:9000}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      APP_DOMAIN: ${SERVICE_FQDN_PROXY}
+      FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-5242880}
+      BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-private_ranges}
+    depends_on:
+      plane-db:
+        condition: service_healthy
+      plane-redis:
+        condition: service_healthy
+      plane-mq:
+        condition: service_healthy
+      plane-migrator:
+        condition: service_completed_successfully
+  plane-beat-worker:
+    image: makeplane/plane-backend:${APP_RELEASE:-v1.3.1}
+    restart: unless-stopped
+    command: ./bin/docker-entrypoint-beat.sh
+    volumes:
+      - logs_beat-worker:/code/plane/logs
+    environment:
+      WEB_URL: ${SERVICE_URL_PROXY}
+      DEBUG: ${DEBUG:-0}
+      CORS_ALLOWED_ORIGINS: ${SERVICE_URL_PROXY}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      USE_MINIO: ${USE_MINIO:-1}
+      DATABASE_URL: postgresql://plane:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@plane-db:5432/plane
+      SECRET_KEY: ${SERVICE_BASE64_64_SECRET_KEY}
+      AMQP_URL: amqp://plane:${SERVICE_PASSWORD_RABBITMQ_PASSWORD}@plane-mq:5672/plane
+      API_KEY_RATE_LIMIT: ${API_KEY_RATE_LIMIT:-60/minute}
+      MINIO_ENDPOINT_SSL: ${MINIO_ENDPOINT_SSL:-0}
+      LIVE_SERVER_SECRET_KEY: ${SERVICE_BASE64_64_LIVE_SECRET_KEY}
+      WEBHOOK_ALLOWED_IPS: ${WEBHOOK_ALLOWED_IPS:-}
+      WEBHOOK_ALLOWED_HOSTS: ${WEBHOOK_ALLOWED_HOSTS:-}
+      PGHOST: ${PGHOST:-plane-db}
+      PGDATABASE: ${PGDATABASE:-plane}
+      POSTGRES_USER: ${POSTGRES_USER:-plane}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-plane}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      PGDATA: ${PGDATA:-/var/lib/postgresql/data}
+      REDIS_HOST: ${REDIS_HOST:-plane-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_URL: ${REDIS_URL:-redis://plane-redis:6379/}
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-access-key}
+      MINIO_ROOT_PASSWORD: ${SERVICE_PASSWORD_MINIO_PASSWORD}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-access-key}
+      AWS_SECRET_ACCESS_KEY: ${SERVICE_PASSWORD_MINIO_PASSWORD}
+      AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-http://plane-minio:9000}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      APP_DOMAIN: ${SERVICE_FQDN_PROXY}
+      FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-5242880}
+      BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-private_ranges}
+    depends_on:
+      plane-db:
+        condition: service_healthy
+      plane-redis:
+        condition: service_healthy
+      plane-mq:
+        condition: service_healthy
+      plane-migrator:
+        condition: service_completed_successfully
+  plane-migrator:
+    image: makeplane/plane-backend:${APP_RELEASE:-v1.3.1}
+    restart: on-failure
+    command: ./bin/docker-entrypoint-migrator.sh
+    volumes:
+      - logs_migrator:/code/plane/logs
+    environment:
+      WEB_URL: ${SERVICE_URL_PROXY}
+      DEBUG: ${DEBUG:-0}
+      CORS_ALLOWED_ORIGINS: ${SERVICE_URL_PROXY}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      USE_MINIO: ${USE_MINIO:-1}
+      DATABASE_URL: postgresql://plane:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@plane-db:5432/plane
+      SECRET_KEY: ${SERVICE_BASE64_64_SECRET_KEY}
+      AMQP_URL: amqp://plane:${SERVICE_PASSWORD_RABBITMQ_PASSWORD}@plane-mq:5672/plane
+      API_KEY_RATE_LIMIT: ${API_KEY_RATE_LIMIT:-60/minute}
+      MINIO_ENDPOINT_SSL: ${MINIO_ENDPOINT_SSL:-0}
+      LIVE_SERVER_SECRET_KEY: ${SERVICE_BASE64_64_LIVE_SECRET_KEY}
+      WEBHOOK_ALLOWED_IPS: ${WEBHOOK_ALLOWED_IPS:-}
+      WEBHOOK_ALLOWED_HOSTS: ${WEBHOOK_ALLOWED_HOSTS:-}
+      PGHOST: ${PGHOST:-plane-db}
+      PGDATABASE: ${PGDATABASE:-plane}
+      POSTGRES_USER: ${POSTGRES_USER:-plane}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-plane}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      PGDATA: ${PGDATA:-/var/lib/postgresql/data}
+      REDIS_HOST: ${REDIS_HOST:-plane-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_URL: ${REDIS_URL:-redis://plane-redis:6379/}
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-access-key}
+      MINIO_ROOT_PASSWORD: ${SERVICE_PASSWORD_MINIO_PASSWORD}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-access-key}
+      AWS_SECRET_ACCESS_KEY: ${SERVICE_PASSWORD_MINIO_PASSWORD}
+      AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-http://plane-minio:9000}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      APP_DOMAIN: ${SERVICE_FQDN_PROXY}
+      FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-5242880}
+      BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-private_ranges}
+    depends_on:
+      plane-db:
+        condition: service_healthy
+      plane-redis:
+        condition: service_healthy
+  plane-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    command: postgres -c 'max_connections=1000'
+    environment:
+      PGHOST: ${PGHOST:-plane-db}
+      PGDATABASE: ${PGDATABASE:-plane}
+      POSTGRES_USER: ${POSTGRES_USER:-plane}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-plane}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      PGDATA: ${PGDATA:-/var/lib/postgresql/data}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-plane} -d ${POSTGRES_DB:-plane}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+  plane-redis:
+    image: valkey/valkey:7.2.11-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+  plane-mq:
+    image: rabbitmq:3.13.6-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-plane-mq}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-plane}
+      RABBITMQ_DEFAULT_PASS: ${SERVICE_PASSWORD_RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-plane}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-plane}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+  plane-minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: server /export --console-address ":9090"
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-access-key}
+      MINIO_ROOT_PASSWORD: ${SERVICE_PASSWORD_MINIO_PASSWORD}
+    volumes:
+      - uploads:/export
+  proxy:
+    image: makeplane/plane-proxy:${APP_RELEASE:-v1.3.1}
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      APP_DOMAIN: ${SERVICE_FQDN_PROXY}
+      FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-5242880}
+      BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-private_ranges}
+      SERVICE_FQDN_PROXY_80:
+    volumes:
+      - proxy_config:/config
+      - proxy_data:/data
+    depends_on:
+      plane-web:
+        condition: service_started
+      plane-api:
+        condition: service_started
+      plane-space:
+        condition: service_started
+      plane-admin:
+        condition: service_started
+      plane-live:
+        condition: service_started
+volumes:
+  pgdata:
+  redisdata:
+  uploads:
+  rabbitmq_data:
+  logs_api:
+  logs_worker:
+  logs_beat-worker:
+  logs_migrator:
+  proxy_config:
+  proxy_data:

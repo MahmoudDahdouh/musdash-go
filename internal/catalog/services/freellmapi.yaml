@@ -1,0 +1,27 @@
+# name: FreeLLMAPI
+# about: FreeLLMAPI aggregates free tiers from 29 LLM providers into a single OpenAI-compatible endpoint with smart routing, automatic failover, per-key rate…
+# docs: https://github.com/tashfeenahmed/freellmapi/blob/main/docs/install.md
+# website: https://freellmapi.co
+# categories: ai, networking, devtools
+# source: dokploy
+services:
+  freellmapi:
+    image: ghcr.io/tashfeenahmed/freellmapi:v0.8.4
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-3001}
+      ENCRYPTION_KEY: ${SERVICE_HEX_64_ENCRYPTION_KEY}
+      SERVICE_FQDN_FREELLMAPI_3001:
+    expose:
+      - 3001
+    volumes:
+      - freellmapi-data:/app/server/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/ping').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1));"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+volumes:
+  freellmapi-data:

@@ -1,0 +1,71 @@
+# name: PostgreSQL + pgAdmin
+# about: PostgreSQL 18 Alpine with pgAdmin 4 web UI, persistent volumes and healthchecks for easy database administration.
+# docs: https://www.pgadmin.org/docs/
+# website: https://www.postgresql.org/
+# categories: database
+# source: dokploy
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES_USER}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    expose:
+      - "5432"
+  pgadmin:
+    image: dpage/pgadmin4:9.17
+    restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -c
+      - cp /pgadmin4/pgpass /var/lib/pgadmin/pgpass && chmod 600 /var/lib/pgadmin/pgpass && exec /entrypoint.sh
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:?Set an email address}
+      - PGADMIN_DEFAULT_PASSWORD=${SERVICE_PASSWORD_PGADMIN_PASSWORD}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+      - PGADMIN_SERVER_JSON_FILE=/pgadmin4/servers.json
+      - SERVICE_FQDN_PGADMIN_80
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    configs:
+      - source: pgadmin-servers-json
+        target: /pgadmin4/servers.json
+      - source: pgadmin-pgpass
+        target: /pgadmin4/pgpass
+volumes:
+  postgres-data:
+  pgadmin-data:
+configs:
+  pgadmin-servers-json:
+    content: |
+      {
+        "Servers": {
+          "1": {
+            "Name": "PostgreSQL",
+            "Group": "Servers",
+            "Host": "postgres",
+            "Port": 5432,
+            "MaintenanceDB": "postgres",
+            "Username": "${SERVICE_USER_POSTGRES_USER}",
+            "PassFile": "/var/lib/pgadmin/pgpass",
+            "SSLMode": "prefer"
+          }
+        }
+      }
+  pgadmin-pgpass:
+    content: |
+      postgres:5432:*:${SERVICE_USER_POSTGRES_USER}:${SERVICE_PASSWORD_POSTGRES_PASSWORD}

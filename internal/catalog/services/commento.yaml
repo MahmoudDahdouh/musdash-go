@@ -1,0 +1,24 @@
+# name: Commento
+# about: Commento is a comments widget designed to enhance the interaction on your website.
+# docs: https://commento.io/
+# categories: communication, cms
+# source: dokploy
+services:
+  commento:
+    image: registry.gitlab.com/commento/commento:v1.8.0
+    expose:
+      - "8080"
+    environment:
+      - COMMENTO_ORIGIN=${SERVICE_URL_COMMENTO}
+      - COMMENTO_POSTGRES=postgres://postgres:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/postgres?sslmode=disable
+      - SERVICE_FQDN_COMMENTO_8080
+    depends_on:
+      - postgres
+  postgres:
+    image: postgres:11
+    environment:
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+volumes:
+  postgres-data:

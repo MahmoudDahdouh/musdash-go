@@ -1,0 +1,20 @@
+# name: Scrypted
+# about: Scrypted is a home automation platform that integrates with various smart home devices and provides NVR capabilities for video surveillance.
+# docs: https://docs.scrypted.app/
+# website: https://www.scrypted.app/
+# categories: home
+# source: dokploy
+services:
+  scrypted:
+    image: ghcr.io/koush/scrypted:latest
+    environment:
+      - SCRYPTED_WEBHOOK_UPDATE_AUTHORIZATION=${SERVICE_PASSWORD_SCRYPTED_WEBHOOK_UPDATE_AUTHORIZATION}
+      - SCRYPTED_WEBHOOK_UPDATE=http://${main_domain:-}:10444/v1/update
+      - SERVICE_FQDN_SCRYPTED_11080
+    volumes:
+      - scrypted-scrypted-volume:/server/volume
+    restart: unless-stopped
+    logging:
+      driver: "none"
+volumes:
+  scrypted-scrypted-volume:

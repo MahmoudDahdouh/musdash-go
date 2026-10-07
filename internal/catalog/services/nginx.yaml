@@ -1,0 +1,21 @@
+# name: Nginx
+# about: Nginx is an High performance web server.
+# docs: https://nginx.org/en/docs/
+# website: https://nginx.org/
+# categories: networking
+# source: dokploy
+services:
+  nginx:
+    image: nginx:latest
+    restart: unless-stopped
+    expose:
+      - 80
+      - 443
+    volumes:
+      - nginx-config:/etc/nginx
+      - nginx-html:/usr/share/nginx/html
+    environment:
+      - SERVICE_FQDN_NGINX_80
+volumes:
+  nginx-config:
+  nginx-html:

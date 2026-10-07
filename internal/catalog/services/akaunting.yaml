@@ -1,0 +1,49 @@
+# name: Akaunting
+# about: Akaunting is a self-hosted, open-source accounting app for small businesses.
+# docs: https://akaunting.com/docs
+# website: https://akaunting.com
+# categories: finance
+# source: dokploy
+services:
+  akaunting:
+    image: docker.io/akaunting/akaunting:latest
+    restart: unless-stopped
+    depends_on:
+      akaunting-db:
+        condition: service_healthy
+    environment:
+      APP_URL: ${SERVICE_FQDN_AKAUNTING}
+      LOCALE: ${LOCALE:-en-US}
+      DB_HOST: akaunting-db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-akaunting}
+      DB_USERNAME: ${DB_USERNAME:-admin}
+      DB_PASSWORD: ${SERVICE_PASSWORD_MYSQL_PASSWORD}
+      DB_PREFIX: ${SERVICE_HEX_16_DB_PREFIX}_
+      COMPANY_NAME: ${COMPANY_NAME:-My Company}
+      COMPANY_EMAIL: ${COMPANY_EMAIL:?Set an email address}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set an email address}
+      ADMIN_PASSWORD: ${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      SERVICE_FQDN_AKAUNTING_80:
+    expose:
+      - "80"
+    volumes:
+      - akaunting-data:/var/www/html
+  akaunting-db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-akaunting}
+      MYSQL_USER: ${MYSQL_USER:-admin}
+      MYSQL_PASSWORD: ${SERVICE_PASSWORD_MYSQL_PASSWORD}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - akaunting-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  akaunting-data:
+  akaunting-db:

@@ -1,0 +1,292 @@
+# name: Frappe LMS
+# about: Easy to use, open source learning management system to structure courses and reach out to learners, built on the Frappe Framework.
+# docs: https://docs.frappe.io/learning
+# website: https://frappe.io/learning
+# categories: home
+# source: dokploy
+services:
+  backend:
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        until [[ -f "sites/${SERVICE_FQDN_FRONTEND}/.create-site-done" ]]; do
+
+          echo "Waiting for site ${SERVICE_FQDN_FRONTEND} to be created (first boot takes a few minutes)";
+          sleep 5;
+        done; exec /home/frappe/frappe-bench/env/bin/gunicorn --chdir=/home/frappe/frappe-bench/sites --bind=0.0.0.0:8000 --threads=4 --workers=2 --worker-class=gthread --worker-tmp-dir=/dev/shm --timeout=120 --preload frappe.app:application
+
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    healthcheck:
+      test: ["CMD", "wait-for-it", "127.0.0.1:8000"]
+      interval: 2s
+      timeout: 10s
+      retries: 30
+      start_period: 600s
+    image: ${IMAGE_NAME:-ghcr.io/frappe/lms}:${VERSION:-v2.52.0}
+    deploy:
+      restart_policy:
+        condition: always
+  frontend:
+    command:
+      - nginx-entrypoint.sh
+    depends_on:
+      backend:
+        condition: service_started
+      websocket:
+        condition: service_started
+    environment:
+      BACKEND: backend:8000
+      FRAPPE_SITE_NAME_HEADER: ${FRAPPE_SITE_NAME_HEADER:-}
+      SOCKETIO: websocket:9000
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      SERVICE_FQDN_FRONTEND_8080:
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    healthcheck:
+      test: ["CMD", "wait-for-it", "127.0.0.1:8080"]
+      interval: 2s
+      timeout: 30s
+      retries: 30
+    image: ${IMAGE_NAME:-ghcr.io/frappe/lms}:${VERSION:-v2.52.0}
+    deploy:
+      restart_policy:
+        condition: always
+  queue-default:
+    command:
+      - bench
+      - worker
+      - --queue
+      - default
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    healthcheck:
+      test: ["CMD", "wait-for-it", "redis-queue:6379"]
+      interval: 2s
+      timeout: 10s
+      retries: 30
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+    image: ${IMAGE_NAME:-ghcr.io/frappe/lms}:${VERSION:-v2.52.0}
+    deploy:
+      restart_policy:
+        condition: always
+  queue-long:
+    command:
+      - bench
+      - worker
+      - --queue
+      - long
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    healthcheck:
+      test: ["CMD", "wait-for-it", "redis-queue:6379"]
+      interval: 2s
+      timeout: 10s
+      retries: 30
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+    image: ${IMAGE_NAME:-ghcr.io/frappe/lms}:${VERSION:-v2.52.0}
+    deploy:
+      restart_policy:
+        condition: always
+  queue-short:
+    command:
+      - bench
+      - worker
+      - --queue
+      - short
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    healthcheck:
+      test: ["CMD", "wait-for-it", "redis-queue:6379"]
+      interval: 2s
+      timeout: 10s
+      retries: 30
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+    image: ${IMAGE_NAME:-ghcr.io/frappe/lms}:${VERSION:-v2.52.0}
+    deploy:
+      restart_policy:
+        condition: always
+  scheduler:
+    healthcheck:
+      test: ["CMD", "wait-for-it", "redis-queue:6379"]
+      interval: 2s
+      timeout: 10s
+      retries: 30
+    command:
+      - bench
+      - schedule
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    image: ${IMAGE_NAME:-ghcr.io/frappe/lms}:${VERSION:-v2.52.0}
+    deploy:
+      restart_policy:
+        condition: always
+  websocket:
+    healthcheck:
+      test: ["CMD", "wait-for-it", "websocket:9000"]
+      interval: 2s
+      timeout: 10s
+      retries: 30
+    command:
+      - node
+      - /home/frappe/frappe-bench/apps/frappe/socketio.js
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    image: ${IMAGE_NAME:-ghcr.io/frappe/lms}:${VERSION:-v2.52.0}
+    deploy:
+      restart_policy:
+        condition: always
+  configurator:
+    deploy:
+      restart_policy:
+        condition: none
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        echo "[configurator] starting"; if [[ $${REGENERATE_APPS_TXT} == "1" ]]; then
+
+          echo "[configurator] regenerating sites/apps.txt";
+          ls -1 apps > sites/apps.txt;
+        fi; existing_db_host=$$(grep -hs '^' sites/common_site_config.json | jq -r ".db_host // empty" 2>/dev/null || true); if [[ -n "$${existing_db_host}" ]]; then
+
+          echo "[configurator] common_site_config.json already configured, skipping";
+          exit 0;
+        fi; echo "[configurator] applying bench global config"; bench set-config -g db_host $$DB_HOST; bench set-config -gp db_port $$DB_PORT; bench set-config -g redis_cache "redis://$$REDIS_CACHE"; bench set-config -g redis_queue "redis://$$REDIS_QUEUE"; bench set-config -g redis_socketio "redis://$$REDIS_SOCKETIO"; bench set-config -gp socketio_port $$SOCKETIO_PORT; echo "[configurator] done";
+
+    environment:
+      DB_HOST: "${DB_HOST:-db}"
+      DB_PORT: "3306"
+      REDIS_CACHE: redis-cache:6379
+      REDIS_QUEUE: redis-queue:6379
+      REDIS_SOCKETIO: redis-socketio:6379
+      SOCKETIO_PORT: "9000"
+      REGENERATE_APPS_TXT: "${REGENERATE_APPS_TXT:-1}"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    image: ${IMAGE_NAME:-ghcr.io/frappe/lms}:${VERSION:-v2.52.0}
+    restart: "no"
+  create-site:
+    deploy:
+      restart_policy:
+        condition: none
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        wait-for-it -t 300 $${DB_HOST}:$${DB_PORT}; wait-for-it -t 120 redis-cache:6379; wait-for-it -t 120 redis-queue:6379; export start=`date +%s`; until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] && \
+
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && \
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
+        do
+
+          echo "Waiting for sites/common_site_config.json to be created";
+          sleep 5;
+          if (( `date +%s`-start > 120 )); then
+            echo "could not find sites/common_site_config.json with required keys";
+            exit 1
+          fi
+        done; echo "sites/common_site_config.json found"; [[ -d "sites/${SERVICE_FQDN_FRONTEND}" ]] && echo "${SERVICE_FQDN_FRONTEND} already exists" && touch sites/${SERVICE_FQDN_FRONTEND}/.create-site-done && exit 0; sed -i "s/^required_apps.*/required_apps = []/" apps/lms/lms/hooks.py; bench new-site --mariadb-user-host-login-scope='%' --admin-password=$${ADMIN_PASSWORD} --db-root-username=root --db-root-password=$${DB_ROOT_PASSWORD} $${INSTALL_APP_ARGS} $${SITE_NAME} || exit 1; if [[ $${ENABLE_SCHEDULER} == "1" ]]; then
+
+          bench --site $${SITE_NAME} enable-scheduler;
+        else
+
+          echo "Skipping scheduler enable";
+        fi; bench --site $${SITE_NAME} clear-cache; touch sites/$${SITE_NAME}/.create-site-done;
+
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    environment:
+      SITE_NAME: ${SERVICE_FQDN_FRONTEND}
+      ADMIN_PASSWORD: ${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: "${DB_PORT:-3306}"
+      DB_ROOT_PASSWORD: ${SERVICE_PASSWORD_DB_ROOT_PASSWORD}
+      INSTALL_APP_ARGS: ${INSTALL_APP_ARGS:---install-app lms}
+      ENABLE_SCHEDULER: "${ENABLE_SCHEDULER:-1}"
+    image: ${IMAGE_NAME:-ghcr.io/frappe/lms}:${VERSION:-v2.52.0}
+  migration:
+    deploy:
+      restart_policy:
+        condition: none
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        curl -f -H "Host: ${SERVICE_FQDN_FRONTEND}" http://frontend:8080/api/method/ping || { echo "Site not reachable yet, skipping migration"; exit 0; }; bench --site all set-config -p maintenance_mode 1; bench --site all set-config -p pause_scheduler 1; bench --site all migrate; bench --site all set-config -p maintenance_mode 0; bench --site all set-config -p pause_scheduler 0;
+
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    image: ${IMAGE_NAME:-ghcr.io/frappe/lms}:${VERSION:-v2.52.0}
+  db:
+    image: mariadb:${DB_VERSION:-11.8.6}
+    deploy:
+      restart_policy:
+        condition: always
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 120s
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+    environment:
+      - MARIADB_ROOT_PASSWORD=${SERVICE_PASSWORD_DB_ROOT_PASSWORD}
+    volumes:
+      - db-data:/var/lib/mysql
+  redis-cache:
+    deploy:
+      restart_policy:
+        condition: always
+    image: redis:6.2-alpine
+    volumes:
+      - redis-cache-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+  redis-queue:
+    deploy:
+      restart_policy:
+        condition: always
+    image: redis:6.2-alpine
+    volumes:
+      - redis-queue-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+  redis-socketio:
+    deploy:
+      restart_policy:
+        condition: always
+    image: redis:6.2-alpine
+    volumes:
+      - redis-socketio-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+volumes:
+  db-data:
+  redis-cache-data:
+  redis-queue-data:
+  redis-socketio-data:
+  sites:

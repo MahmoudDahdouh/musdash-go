@@ -1,0 +1,35 @@
+# name: TimescaleDB
+# about: TimescaleDB is an open-source time-series database packaged as a PostgreSQL extension, optimized for fast ingest and real-time analytics with…
+# docs: https://docs.timescale.com/
+# website: https://www.tigerdata.com/
+# categories: database, analytics
+# source: dokploy
+# connect: true
+services:
+  timescaledb:
+    image: timescale/timescaledb:2.26.4-pg17
+    restart: unless-stopped
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: ${SERVICE_USER_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-timescaledb}
+      TIMESCALEDB_TELEMETRY: ${TIMESCALEDB_TELEMETRY:-off}
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    configs:
+      - source: timescaledb-001-create-timescaledb-sql
+        target: /docker-entrypoint-initdb.d/001_create_timescaledb.sql
+volumes:
+  timescaledb-data:
+configs:
+  timescaledb-001-create-timescaledb-sql:
+    content: |
+      CREATE EXTENSION IF NOT EXISTS timescaledb;

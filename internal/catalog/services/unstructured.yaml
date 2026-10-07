@@ -1,0 +1,20 @@
+# name: Unstructured
+# about: Unstructured provides a platform and tools to ingest and process unstructured documents for Retrieval Augmented Generation (RAG) and model fine-tuning.
+# docs: https://github.com/Unstructured-IO/unstructured-api?tab=readme-ov-file#--general-pre-processing-pipeline-for-documents
+# categories: ai, automation, analytics
+# source: coolify
+services:
+  unstructured:
+    image: "downloads.unstructured.io/unstructured-io/unstructured-api:latest"
+    environment:
+      - SERVICE_URL_UNSTRUCTURED_8000
+      - "UNSTRUCTURED_API_KEY=${SERVICE_PASSWORD_APIKEY}"
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - "-qO-"
+        - "http://0.0.0.0:8000/healthcheck"
+      interval: 5s
+      timeout: 30s
+      retries: 10

@@ -1,0 +1,18 @@
+# name: Spacedrive
+# about: Spacedrive is a cross-platform file manager.
+# docs: https://www.spacedrive.com/docs/product/getting-started/introduction
+# website: https://spacedrive.com/
+# categories: storage
+# source: dokploy
+services:
+  server:
+    image: ghcr.io/spacedriveapp/spacedrive/server:latest
+    expose:
+      - 8080
+    environment:
+      - SD_AUTH=${SD_USERNAME:-admin}:${SERVICE_PASSWORD_SECRET_KEY}
+      - SERVICE_FQDN_SERVER_8080
+    volumes:
+      - server-var-spacedrive:/var/spacedrive
+volumes:
+  server-var-spacedrive:

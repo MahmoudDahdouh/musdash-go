@@ -1,0 +1,21 @@
+# name: Baikal
+# about: Baikal is a lightweight, self-hosted CalDAV and CardDAV server that enables users to manage calendars and contacts efficiently.
+# docs: https://sabre.io/baikal/install/
+# website: https://sabre.io/baikal/
+# categories: productivity
+# source: dokploy
+services:
+  baikal:
+    image: ckulka/baikal:nginx-php8.2
+    restart: unless-stopped
+    expose:
+      - 80
+    environment:
+      - TZ=UTC
+      - SERVICE_FQDN_BAIKAL_80
+    volumes:
+      - config:/var/www/baikal/config
+      - data:/var/www/baikal/Specific
+volumes:
+  config:
+  data:

@@ -1,0 +1,38 @@
+# name: Calcom
+# about: Calcom is a open source alternative to Calendly that allows to create scheduling and booking services.
+# docs: https://cal.com/docs
+# website: https://cal.com/
+# categories: automation, business
+# source: dokploy
+services:
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+      - calcom-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=db
+      - DATABASE_URL=postgres://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/db
+  calcom:
+    image: calcom/cal.com:v6.2.0
+    depends_on:
+      - postgres
+    environment:
+      - NEXTAUTH_SECRET=${SERVICE_BASE64_NEXTAUTH_SECRET}
+      - CALENDSO_ENCRYPTION_KEY=${SERVICE_BASE64_CALCOM_ENCRYPTION_KEY}
+      - DATABASE_URL=postgres://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/db
+      - DATABASE_DIRECT_URL=postgres://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/db
+      - DATABASE_HOST=postgres:5432
+      - NEXT_PUBLIC_WEBAPP_URL=${SERVICE_URL_CALCOM}
+      - ALLOWED_HOSTNAMES="${SERVICE_FQDN_CALCOM}"
+      - NEXTAUTH_URL=${SERVICE_URL_CALCOM}/api/auth
+      - NEXT_PUBLIC_DISABLE_SIGNUP=${DISABLE_SIGNUP:-true}
+      - EMAIL_SERVER_HOST=${SMTP_SERVER:-}
+      - EMAIL_SERVER_PORT=${SMTP_PORT:-}
+      - EMAIL_SERVER_USER=${EMAIL_SERVER_USER:-}
+      - EMAIL_SERVER_PASSWORD=${SMTP_PASSWORD:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - SERVICE_FQDN_CALCOM_3000
+volumes:
+  calcom-data:

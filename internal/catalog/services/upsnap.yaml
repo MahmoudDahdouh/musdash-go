@@ -1,0 +1,29 @@
+# name: Upsnap
+# about: Upsnap is a simple network device monitor and dashboard built on PocketBase.
+# docs: https://github.com/seriousm4x/upsnap#readme
+# website: https://github.com/seriousm4x/upsnap
+# categories: networking, monitoring, home
+# source: dokploy
+services:
+  upsnap:
+    image: ghcr.io/seriousm4x/upsnap:5
+    restart: unless-stopped
+    expose:
+      - 8090
+    volumes:
+      - upsnap-data:/app/pb_data
+    environment:
+      - TZ=${TZ:-Europe/Berlin}
+      - UPSNAP_INTERVAL=${UPSNAP_INTERVAL:-*/10 * * * * *}
+      - UPSNAP_SCAN_RANGE=${UPSNAP_SCAN_RANGE:-192.168.1.0/24}
+      - UPSNAP_SCAN_TIMEOUT=${UPSNAP_SCAN_TIMEOUT:-500ms}
+      - UPSNAP_PING_PRIVILEGED=${UPSNAP_PING_PRIVILEGED:-true}
+      - UPSNAP_WEBSITE_TITLE=${UPSNAP_WEBSITE_TITLE:-Upsnap Network Monitor}
+      - SERVICE_FQDN_UPSNAP_8090
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8090/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+volumes:
+  upsnap-data:

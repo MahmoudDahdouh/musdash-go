@@ -1,0 +1,36 @@
+# name: Alarik
+# about: Alarik is a high-performance, S3-compatible object storage.
+# docs: https://alarik.io/docs
+# website: https://alarik.io/
+# categories: storage
+# source: dokploy
+services:
+  alarik:
+    image: ghcr.io/achtungsoftware/alarik:latest
+    restart: unless-stopped
+    volumes:
+      - alarik-storage:/app/Storage
+    environment:
+      - API_BASE_URL=${SERVICE_URL_ALARIK}
+      - CONSOLE_BASE_URL=${SERVICE_URL_CONSOLE}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-alarik}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - JWT=${SERVICE_BASE64_64_JWT}
+      - ALLOW_ACCOUNT_CREATION=${ALLOW_ACCOUNT_CREATION:-false}
+      - SERVICE_FQDN_ALARIK_8080
+    expose:
+      - 8080
+  console:
+    image: ghcr.io/achtungsoftware/alarik-console:latest
+    restart: unless-stopped
+    environment:
+      - NUXT_PUBLIC_API_BASE_URL=${SERVICE_URL_ALARIK}
+      - NUXT_PUBLIC_CONSOLE_BASE_URL=${SERVICE_URL_CONSOLE}
+      - NUXT_PUBLIC_ALLOW_ACCOUNT_CREATION=${ALLOW_ACCOUNT_CREATION:-false}
+      - SERVICE_FQDN_CONSOLE_3000
+    expose:
+      - 3000
+    depends_on:
+      - alarik
+volumes:
+  alarik-storage:

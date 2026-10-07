@@ -1,0 +1,43 @@
+# name: Kener
+# about: Kener is an open-source status page system for monitoring and alerting.
+# docs: https://kener.ing/docs/
+# website: https://kener.ing/
+# categories: monitoring
+# source: dokploy
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    expose:
+      - 6379
+  kener:
+    image: rajnandan1/kener:4.1.1
+    environment:
+      - TZ=${TZ:-Etc/UTC}
+      - KENER_SECRET_KEY=${SERVICE_PASSWORD_64_KENER_SECRET_KEY}
+      - ORIGIN=${ORIGIN:-http://localhost:3000}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - DATABASE_URL=${DATABASE_URL:-sqlite://./database/kener.sqlite.db}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - RESEND_SENDER_EMAIL=${RESEND_SENDER_EMAIL:-}
+      - SERVICE_FQDN_KENER_3000
+    expose:
+      - 3000
+    volumes:
+      - data:/app/database
+      - kener-uploads:/app/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  data:
+  redis_data:
+  kener-uploads:

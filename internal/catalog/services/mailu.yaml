@@ -1,0 +1,254 @@
+# name: Mailu
+# about: Full-featured open-source mail server as a set of Docker containers: SMTP (Postfix), IMAP (Dovecot), Rspamd antispam, admin UI with DKIM management…
+# docs: https://mailu.io/2024.06/
+# website: https://mailu.io/
+# categories: email
+# source: dokploy
+services:
+  front:
+    image: ghcr.io/mailu/nginx:2024.06
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${SERVICE_PASSWORD_SECRET_KEY}
+      - DOMAIN=${SERVICE_FQDN_FRONT}
+      - HOSTNAMES=${SERVICE_FQDN_FRONT}
+      - POSTMASTER=admin
+      - TLS_FLAVOR=mail-letsencrypt
+      - SUBNET=${SUBNET:-172.16.0.0/12}
+      - ADMIN=true
+      - WEBMAIL=roundcube
+      - API=false
+      - WEBDAV=none
+      - ANTIVIRUS=none
+      - SCAN_MACROS=false
+      - PORTS=25,80,443,465,587,993,4190
+      - MESSAGE_SIZE_LIMIT=50000000
+      - FULL_TEXT_SEARCH=en
+      - WEBROOT_REDIRECT=/webmail
+      - WEB_ADMIN=/admin
+      - WEB_WEBMAIL=/webmail
+      - SITENAME=Mailu
+      - WEBSITE=https://mailu.io
+      - REAL_IP_FROM=${SUBNET:-172.16.0.0/12}
+      - REAL_IP_HEADER=X-Forwarded-For
+      - INITIAL_ADMIN_ACCOUNT=${INITIAL_ADMIN_ACCOUNT:-admin}
+      - INITIAL_ADMIN_DOMAIN=${SERVICE_FQDN_FRONT}
+      - INITIAL_ADMIN_PW=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - INITIAL_ADMIN_MODE=ifmissing
+      - SERVICE_FQDN_FRONT_80
+    dns:
+      - "1.1.1.1"
+      - "8.8.8.8"
+    volumes:
+      - mailu-certs:/certs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -m3 -skfLo /dev/null http://127.0.0.1:10204/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      - admin
+  admin:
+    image: ghcr.io/mailu/admin:2024.06
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${SERVICE_PASSWORD_SECRET_KEY}
+      - DOMAIN=${SERVICE_FQDN_FRONT}
+      - HOSTNAMES=${SERVICE_FQDN_FRONT}
+      - POSTMASTER=admin
+      - TLS_FLAVOR=mail-letsencrypt
+      - SUBNET=${SUBNET:-172.16.0.0/12}
+      - ADMIN=true
+      - WEBMAIL=roundcube
+      - API=false
+      - WEBDAV=none
+      - ANTIVIRUS=none
+      - SCAN_MACROS=false
+      - PORTS=25,80,443,465,587,993,4190
+      - MESSAGE_SIZE_LIMIT=50000000
+      - FULL_TEXT_SEARCH=en
+      - WEBROOT_REDIRECT=/webmail
+      - WEB_ADMIN=/admin
+      - WEB_WEBMAIL=/webmail
+      - SITENAME=Mailu
+      - WEBSITE=https://mailu.io
+      - REAL_IP_FROM=${SUBNET:-172.16.0.0/12}
+      - REAL_IP_HEADER=X-Forwarded-For
+      - INITIAL_ADMIN_ACCOUNT=${INITIAL_ADMIN_ACCOUNT:-admin}
+      - INITIAL_ADMIN_DOMAIN=${SERVICE_FQDN_FRONT}
+      - INITIAL_ADMIN_PW=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - INITIAL_ADMIN_MODE=ifmissing
+    dns:
+      - "1.1.1.1"
+      - "8.8.8.8"
+    volumes:
+      - mailu-data:/data
+      - mailu-dkim:/dkim
+    depends_on:
+      - redis
+  imap:
+    image: ghcr.io/mailu/dovecot:2024.06
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${SERVICE_PASSWORD_SECRET_KEY}
+      - DOMAIN=${SERVICE_FQDN_FRONT}
+      - HOSTNAMES=${SERVICE_FQDN_FRONT}
+      - POSTMASTER=admin
+      - TLS_FLAVOR=mail-letsencrypt
+      - SUBNET=${SUBNET:-172.16.0.0/12}
+      - ADMIN=true
+      - WEBMAIL=roundcube
+      - API=false
+      - WEBDAV=none
+      - ANTIVIRUS=none
+      - SCAN_MACROS=false
+      - PORTS=25,80,443,465,587,993,4190
+      - MESSAGE_SIZE_LIMIT=50000000
+      - FULL_TEXT_SEARCH=en
+      - WEBROOT_REDIRECT=/webmail
+      - WEB_ADMIN=/admin
+      - WEB_WEBMAIL=/webmail
+      - SITENAME=Mailu
+      - WEBSITE=https://mailu.io
+      - REAL_IP_FROM=${SUBNET:-172.16.0.0/12}
+      - REAL_IP_HEADER=X-Forwarded-For
+      - INITIAL_ADMIN_ACCOUNT=${INITIAL_ADMIN_ACCOUNT:-admin}
+      - INITIAL_ADMIN_DOMAIN=${SERVICE_FQDN_FRONT}
+      - INITIAL_ADMIN_PW=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - INITIAL_ADMIN_MODE=ifmissing
+    dns:
+      - "1.1.1.1"
+      - "8.8.8.8"
+    volumes:
+      - mailu-mail:/mail
+    depends_on:
+      - front
+  smtp:
+    image: ghcr.io/mailu/postfix:2024.06
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${SERVICE_PASSWORD_SECRET_KEY}
+      - DOMAIN=${SERVICE_FQDN_FRONT}
+      - HOSTNAMES=${SERVICE_FQDN_FRONT}
+      - POSTMASTER=admin
+      - TLS_FLAVOR=mail-letsencrypt
+      - SUBNET=${SUBNET:-172.16.0.0/12}
+      - ADMIN=true
+      - WEBMAIL=roundcube
+      - API=false
+      - WEBDAV=none
+      - ANTIVIRUS=none
+      - SCAN_MACROS=false
+      - PORTS=25,80,443,465,587,993,4190
+      - MESSAGE_SIZE_LIMIT=50000000
+      - FULL_TEXT_SEARCH=en
+      - WEBROOT_REDIRECT=/webmail
+      - WEB_ADMIN=/admin
+      - WEB_WEBMAIL=/webmail
+      - SITENAME=Mailu
+      - WEBSITE=https://mailu.io
+      - REAL_IP_FROM=${SUBNET:-172.16.0.0/12}
+      - REAL_IP_HEADER=X-Forwarded-For
+      - INITIAL_ADMIN_ACCOUNT=${INITIAL_ADMIN_ACCOUNT:-admin}
+      - INITIAL_ADMIN_DOMAIN=${SERVICE_FQDN_FRONT}
+      - INITIAL_ADMIN_PW=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - INITIAL_ADMIN_MODE=ifmissing
+    dns:
+      - "1.1.1.1"
+      - "8.8.8.8"
+    volumes:
+      - mailu-mailqueue:/queue
+    depends_on:
+      - front
+  antispam:
+    image: ghcr.io/mailu/rspamd:2024.06
+    restart: unless-stopped
+    hostname: antispam
+    environment:
+      - SECRET_KEY=${SERVICE_PASSWORD_SECRET_KEY}
+      - DOMAIN=${SERVICE_FQDN_FRONT}
+      - HOSTNAMES=${SERVICE_FQDN_FRONT}
+      - POSTMASTER=admin
+      - TLS_FLAVOR=mail-letsencrypt
+      - SUBNET=${SUBNET:-172.16.0.0/12}
+      - ADMIN=true
+      - WEBMAIL=roundcube
+      - API=false
+      - WEBDAV=none
+      - ANTIVIRUS=none
+      - SCAN_MACROS=false
+      - PORTS=25,80,443,465,587,993,4190
+      - MESSAGE_SIZE_LIMIT=50000000
+      - FULL_TEXT_SEARCH=en
+      - WEBROOT_REDIRECT=/webmail
+      - WEB_ADMIN=/admin
+      - WEB_WEBMAIL=/webmail
+      - SITENAME=Mailu
+      - WEBSITE=https://mailu.io
+      - REAL_IP_FROM=${SUBNET:-172.16.0.0/12}
+      - REAL_IP_HEADER=X-Forwarded-For
+      - INITIAL_ADMIN_ACCOUNT=${INITIAL_ADMIN_ACCOUNT:-admin}
+      - INITIAL_ADMIN_DOMAIN=${SERVICE_FQDN_FRONT}
+      - INITIAL_ADMIN_PW=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - INITIAL_ADMIN_MODE=ifmissing
+    dns:
+      - "1.1.1.1"
+      - "8.8.8.8"
+    volumes:
+      - mailu-filter:/var/lib/rspamd
+    depends_on:
+      - front
+      - redis
+  webmail:
+    image: ghcr.io/mailu/webmail:2024.06
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${SERVICE_PASSWORD_SECRET_KEY}
+      - DOMAIN=${SERVICE_FQDN_FRONT}
+      - HOSTNAMES=${SERVICE_FQDN_FRONT}
+      - POSTMASTER=admin
+      - TLS_FLAVOR=mail-letsencrypt
+      - SUBNET=${SUBNET:-172.16.0.0/12}
+      - ADMIN=true
+      - WEBMAIL=roundcube
+      - API=false
+      - WEBDAV=none
+      - ANTIVIRUS=none
+      - SCAN_MACROS=false
+      - PORTS=25,80,443,465,587,993,4190
+      - MESSAGE_SIZE_LIMIT=50000000
+      - FULL_TEXT_SEARCH=en
+      - WEBROOT_REDIRECT=/webmail
+      - WEB_ADMIN=/admin
+      - WEB_WEBMAIL=/webmail
+      - SITENAME=Mailu
+      - WEBSITE=https://mailu.io
+      - REAL_IP_FROM=${SUBNET:-172.16.0.0/12}
+      - REAL_IP_HEADER=X-Forwarded-For
+      - INITIAL_ADMIN_ACCOUNT=${INITIAL_ADMIN_ACCOUNT:-admin}
+      - INITIAL_ADMIN_DOMAIN=${SERVICE_FQDN_FRONT}
+      - INITIAL_ADMIN_PW=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - INITIAL_ADMIN_MODE=ifmissing
+    dns:
+      - "1.1.1.1"
+      - "8.8.8.8"
+    volumes:
+      - mailu-webmail:/data
+    depends_on:
+      - front
+      - imap
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    volumes:
+      - mailu-redis:/data
+volumes:
+  mailu-certs:
+  mailu-data:
+  mailu-dkim:
+  mailu-mail:
+  mailu-mailqueue:
+  mailu-filter:
+  mailu-webmail:
+  mailu-redis:

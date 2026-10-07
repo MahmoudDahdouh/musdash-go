@@ -1,0 +1,46 @@
+# name: Hi.events
+# about: Hi.Events is a self-hosted event management and ticket selling platform that allows you to create, manage and promote events easily.
+# docs: https://hi.events/docs
+# website: https://hi.events/
+# categories: business
+# source: dokploy
+services:
+  all-in-one:
+    image: daveearley/hi.events-all-in-one:v1.9.0-beta
+    restart: always
+    environment:
+      - VITE_FRONTEND_URL=${SERVICE_URL_ALL_IN_ONE}
+      - APP_FRONTEND_URL=${SERVICE_URL_ALL_IN_ONE}
+      - VITE_API_URL_CLIENT=${SERVICE_URL_ALL_IN_ONE}/api
+      - VITE_API_URL_SERVER=http://localhost:80/api
+      - VITE_STRIPE_PUBLISHABLE_KEY=${VITE_STRIPE_PUBLISHABLE_KEY:-}
+      - LOG_CHANNEL=stderr
+      - QUEUE_CONNECTION=sync
+      - MAIL_MAILER=array
+      - APP_KEY=${SERVICE_PASSWORD_APP_KEY}
+      - JWT_SECRET=${SERVICE_PASSWORD_JWT_SECRET}
+      - FILESYSTEM_PUBLIC_DISK=public
+      - FILESYSTEM_PRIVATE_DISK=local
+      - APP_CDN_URL=${SERVICE_URL_ALL_IN_ONE}/storage
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hievents}:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hievents}
+      - MAIL_MAILER=${MAIL_MAILER:-}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME:-}
+      - SERVICE_FQDN_ALL_IN_ONE_80
+    depends_on:
+      - postgres
+  postgres:
+    image: elestio/postgres:16
+    restart: always
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-hievents}
+      - POSTGRES_USER=${POSTGRES_USER:-hievents}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+    volumes:
+      - pg_hi-events_data:/var/lib/postgresql/data
+volumes:
+  pg_hi-events_data:

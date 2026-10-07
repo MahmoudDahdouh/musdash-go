@@ -1,0 +1,36 @@
+# name: Peppermint
+# about: Peppermint is a modern, open-source API development platform that helps you build, test and document your APIs.
+# docs: https://docs.peppermint.sh/
+# website: https://peppermint.sh/
+# categories: devtools, docs
+# source: dokploy
+services:
+  peppermint-postgres:
+    image: postgres:latest
+    restart: always
+    volumes:
+      - peppermint-postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: peppermint
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: peppermint
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U peppermint"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  peppermint-app:
+    image: pepperlabs/peppermint:latest
+    restart: always
+    depends_on:
+      peppermint-postgres:
+        condition: service_healthy
+    environment:
+      DB_USERNAME: "peppermint"
+      DB_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      DB_HOST: "peppermint-postgres"
+      SECRET: ${SERVICE_BASE64_SECRET}
+      SERVICE_FQDN_PEPPERMINT_APP_3000:
+      SERVICE_FQDN_PEPPERMINT_APP_P5003_5003:
+volumes:
+  peppermint-postgres-data:

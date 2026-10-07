@@ -1,0 +1,19 @@
+# name: IT Tools
+# about: IT Tools is a self-hosted solution for managing various IT tasks.
+# docs: https://github.com/corentinth/it-tools
+# categories: devtools
+# source: coolify
+services:
+  it-tools:
+    image: corentinth/it-tools:latest
+    environment:
+      - SERVICE_URL_ITTOOLS_80
+    volumes:
+      - it-tools-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+volumes:
+  it-tools-data:

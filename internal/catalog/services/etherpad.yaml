@@ -1,0 +1,49 @@
+# name: Etherpad
+# about: Etherpad is a real-time collaborative text editor that allows multiple users to edit documents simultaneously.
+# docs: https://github.com/ether/etherpad-lite/wiki
+# website: https://etherpad.org/
+# categories: productivity, docs
+# source: dokploy
+services:
+  app:
+    user: "0:0"
+    image: etherpad/etherpad:latest
+    tty: true
+    stdin_open: true
+    volumes:
+      - app-plugins:/opt/etherpad-lite/src/plugin_packages
+      - app-etherpad-var:/opt/etherpad-lite/var
+    depends_on:
+      - postgres
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      ADMIN_PASSWORD: ${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      DB_CHARSET: ${DB_CHARSET:-utf8mb4}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_NAME: ${DB_NAME:-etherpad}
+      DB_PASS: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_TYPE: ${DB_TYPE:-postgres}
+      DB_USER: ${DB_USER:-admin}
+      DEFAULT_PAD_TEXT: ${DEFAULT_PAD_TEXT:-}
+      DISABLE_IP_LOGGING: ${DISABLE_IP_LOGGING:-false}
+      SOFFICE: ${SOFFICE:-null}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+      SERVICE_FQDN_APP_9001:
+    restart: always
+    expose:
+      - 9001
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-etherpad}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    restart: always
+    volumes:
+      - postgres-postgres-data:/var/lib/postgresql/data/pgdata
+volumes:
+  app-etherpad-var:
+  app-plugins:
+  postgres-postgres-data:

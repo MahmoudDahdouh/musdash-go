@@ -1,0 +1,25 @@
+# name: Ackee
+# about: Ackee is a self-hosted analytics tool for your website.
+# docs: https://docs.ackee.electerious.com/
+# website: https://ackee.electerious.com/
+# categories: analytics
+# source: dokploy
+services:
+  ackee:
+    image: electerious/ackee:3.4.2
+    expose:
+      - "3000"
+    environment:
+      - ACKEE_USERNAME=${ACKEE_USERNAME:-default}
+      - ACKEE_PASSWORD=${SERVICE_PASSWORD_ACKEE_PASSWORD}
+      - ACKEE_MONGODB=mongodb://mongo:${SERVICE_PASSWORD_MONGO_INITDB_ROOT_PASSWORD}@mongo:27017
+      - SERVICE_FQDN_ACKEE_3000
+  mongo:
+    image: mongo:4
+    environment:
+      - MONGO_INITDB_ROOT_PASSWORD=${SERVICE_PASSWORD_MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_ROOT_USERNAME=mongo
+    volumes:
+      - mongo-data:/data/db
+volumes:
+  mongo-data:

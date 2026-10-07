@@ -1,0 +1,41 @@
+# name: Unleash
+# about: Open-source feature management platform.
+# docs: https://docs.getunleash.io/
+# website: https://www.getunleash.io/
+# categories: devtools
+# source: dokploy
+services:
+  unleash:
+    image: unleashorg/unleash-server:7.4.0
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgres://${DB_USER:-unleash}:${SERVICE_PASSWORD_DB_PASSWORD}@db/${DB_NAME:-unleash}"
+      DATABASE_SSL: "false"
+      LOG_LEVEL: "warn"
+      SERVICE_FQDN_UNLEASH_4242:
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:4242/health || exit 1
+      interval: 1s
+      timeout: 1m
+      retries: 5
+      start_period: 15s
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${DB_NAME:-unleash}"
+      POSTGRES_USER: "${DB_USER:-unleash}"
+      POSTGRES_PASSWORD: "${SERVICE_PASSWORD_DB_PASSWORD}"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "--username=${DB_USER:-unleash}", "--host=127.0.0.1", "--port=5432"]
+      interval: 2s
+      timeout: 1m
+      retries: 5
+      start_period: 10s
+volumes:
+  db_data:

@@ -1,0 +1,20 @@
+# name: Lobe Chat
+# about: An open-source, modern-design AI chat framework.
+# docs: https://github.com/lobehub/lobe-chat?tab=readme-ov-file#b-deploying-with-docker
+# categories: ai, communication
+# source: coolify
+services:
+  lobe-chat:
+    image: "lobehub/lobe-chat:1.135.5"
+    environment:
+      - SERVICE_URL_LOBECHAT_3210
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_PROXY_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - ACCESS_CODE=${SERVICE_PASSWORD_ACCESSCODE}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "wget -qO- http://localhost:3210/ || exit 1"
+      interval: 5s
+      timeout: 20s
+      retries: 10

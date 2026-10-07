@@ -1,0 +1,39 @@
+# name: Letterfeed
+# about: Convert email newsletters into RSS feeds.
+# docs: https://github.com/leonmuscoden/letterfeed
+# categories: email, productivity
+# source: dokploy
+services:
+  backend:
+    image: ghcr.io/leonmuscoden/letterfeed-backend:latest
+    restart: unless-stopped
+    environment:
+      LETTERFEED_APP_BASE_URL: ${SERVICE_URL_FRONTEND}
+      LETTERFEED_BACKEND_URL: ${LETTERFEED_BACKEND_URL:-http://backend:8000}
+      LETTERFEED_DATABASE_URL: ${LETTERFEED_DATABASE_URL:-sqlite:////data/letterfeed.db}
+      LETTERFEED_IMAP_SERVER: ${LETTERFEED_IMAP_SERVER:-}
+      LETTERFEED_IMAP_USERNAME: ${LETTERFEED_IMAP_USERNAME:-}
+      LETTERFEED_IMAP_PASSWORD: ${LETTERFEED_IMAP_PASSWORD:-}
+      LETTERFEED_SEARCH_FOLDER: ${LETTERFEED_SEARCH_FOLDER:-INBOX}
+      LETTERFEED_MOVE_TO_FOLDER: ${LETTERFEED_MOVE_TO_FOLDER:-}
+      LETTERFEED_MARK_AS_READ: ${LETTERFEED_MARK_AS_READ:-true}
+      LETTERFEED_EMAIL_CHECK_INTERVAL: ${LETTERFEED_EMAIL_CHECK_INTERVAL:-15}
+      LETTERFEED_AUTO_ADD_NEW_SENDERS: ${LETTERFEED_AUTO_ADD_NEW_SENDERS:-false}
+      LETTERFEED_SECRET_KEY: ${SERVICE_PASSWORD_64_SECRET_KEY}
+      LETTERFEED_AUTH_USERNAME: ${LETTERFEED_AUTH_USERNAME:-admin}
+      LETTERFEED_AUTH_PASSWORD: ${SERVICE_PASSWORD_AUTH_PASSWORD}
+    volumes:
+      - letterfeed_data:/data
+  frontend:
+    image: ghcr.io/leonmuscoden/letterfeed-frontend:latest
+    restart: unless-stopped
+    environment:
+      LETTERFEED_APP_BASE_URL: ${SERVICE_URL_FRONTEND}
+      LETTERFEED_BACKEND_URL: ${LETTERFEED_BACKEND_URL:-http://backend:8000}
+      SERVICE_FQDN_FRONTEND_3000:
+    expose:
+      - 3000
+    depends_on:
+      - backend
+volumes:
+  letterfeed_data:

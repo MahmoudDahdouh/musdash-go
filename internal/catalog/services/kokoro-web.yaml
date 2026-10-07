@@ -1,0 +1,18 @@
+# name: Kokoro Web
+# about: Kokoro Web provides an interface for text-to-speech using advanced AI voice synthesis.
+# docs: https://github.com/eduardolat/kokoro-web#readme
+# website: https://github.com/eduardolat/kokoro-web
+# categories: ai
+# source: dokploy
+services:
+  kokoro-web:
+    image: ghcr.io/eduardolat/kokoro-web:latest
+    restart: unless-stopped
+    environment:
+      - KW_SECRET_API_KEY=${SERVICE_PASSWORD_API_KEY}
+      - KW_PUBLIC_NO_TRACK=${KW_PUBLIC_NO_TRACK:-false}
+      - SERVICE_FQDN_KOKORO_WEB_3000
+    volumes:
+      - kokoro-cache:/kokoro/cache
+volumes:
+  kokoro-cache:

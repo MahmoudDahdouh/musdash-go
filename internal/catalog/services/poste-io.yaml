@@ -1,0 +1,20 @@
+# name: Poste.io
+# about: Complete mail server solution with SMTP, IMAP, POP3, antispam, antivirus, web administration and webmail client.
+# docs: https://poste.io/doc/
+# website: https://poste.io/
+# categories: email, security
+# source: dokploy
+services:
+  mailserver:
+    image: analogic/poste.io:latest
+    restart: unless-stopped
+    hostname: mail.${DOMAIN:-}
+    environment:
+      - TZ=${TZ:-UTC}
+      - HTTPS=OFF
+      - HTTP_PORT=8080
+      - SERVICE_FQDN_MAILSERVER_8080
+    volumes:
+      - poste-data:/data
+volumes:
+  poste-data:

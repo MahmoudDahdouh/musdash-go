@@ -1,0 +1,24 @@
+# name: Ampache
+# about: Ampache is a web-based audio/video streaming application and file manager allowing you to access your music & videos from anywhere, using almost any…
+# docs: https://github.com/ampache/ampache/wiki
+# website: https://ampache.org/
+# categories: media
+# source: dokploy
+services:
+  ampache:
+    image: ampache/ampache:latest
+    restart: unless-stopped
+    expose:
+      - 80
+    volumes:
+      - config:/var/www/config
+      - log:/var/log/ampache
+      - mysql:/var/lib/mysql
+      - ampache-media:/media
+    environment:
+      - SERVICE_FQDN_AMPACHE_80
+volumes:
+  config:
+  log:
+  mysql:
+  ampache-media:

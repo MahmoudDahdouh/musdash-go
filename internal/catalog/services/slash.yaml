@@ -1,0 +1,19 @@
+# name: Slash
+# about: An open source, self-hosted links shortener and sharing platform.
+# docs: https://github.com/yourselfhosted/slash
+# categories: productivity, business, storage
+# source: coolify
+services:
+  slash:
+    image: yourselfhosted/slash:latest
+    environment:
+      - SERVICE_URL_SLASH_5231
+    volumes:
+      - slash-data:/var/opt/slash
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:5231"]
+      interval: 2s
+      timeout: 10s
+      retries: 15
+volumes:
+  slash-data:

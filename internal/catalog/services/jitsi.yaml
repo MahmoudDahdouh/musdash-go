@@ -1,0 +1,101 @@
+# name: Jitsi Meet
+# about: Jitsi Meet is an open-source video conferencing platform for secure, self-hosted meetings.
+# docs: https://jitsi.github.io/handbook/docs/devops-guide/devops-guide-docker
+# website: https://jitsi.org/jitsi-meet/
+# categories: communication
+# source: dokploy
+services:
+  web:
+    image: jitsi/web:${JITSI_IMAGE_VERSION:-unstable}
+    restart: unless-stopped
+    depends_on:
+      - prosody
+    volumes:
+      - jitsiWebConfig:/config
+      - jitsiWebTranscripts:/usr/share/jitsi-meet/transcripts
+    environment:
+      - PUBLIC_URL=${SERVICE_URL_WEB}
+      - TZ=${TZ:-UTC}
+      - XMPP_DOMAIN=${XMPP_DOMAIN:-meet.jitsi}
+      - XMPP_AUTH_DOMAIN=${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      - XMPP_BOSH_URL_BASE=${XMPP_BOSH_URL_BASE:-http://prosody:5280}
+      - XMPP_MUC_DOMAIN=${XMPP_MUC_DOMAIN:-muc.meet.jitsi}
+      - XMPP_GUEST_DOMAIN=${XMPP_GUEST_DOMAIN:-guest.meet.jitsi}
+      - XMPP_RECORDER_DOMAIN=${XMPP_RECORDER_DOMAIN:-recorder.meet.jitsi}
+      - ENABLE_AUTH=${ENABLE_AUTH:-0}
+      - ENABLE_GUESTS=${ENABLE_GUESTS:-1}
+      - ENABLE_LETSENCRYPT=${ENABLE_LETSENCRYPT:-0}
+      - ENABLE_HTTP_REDIRECT=${ENABLE_HTTP_REDIRECT:-0}
+      - ENABLE_XMPP_WEBSOCKET=${ENABLE_XMPP_WEBSOCKET:-1}
+      - ENABLE_COLIBRI_WEBSOCKET=${ENABLE_COLIBRI_WEBSOCKET:-1}
+      - DISABLE_HTTPS=${DISABLE_HTTPS:-1}
+      - JICOFO_AUTH_USER=${JICOFO_AUTH_USER:-focus}
+      - JVB_AUTH_USER=${JVB_AUTH_USER:-jvb}
+      - JICOFO_AUTH_PASSWORD=${SERVICE_PASSWORD_JICOFO_AUTH_PASSWORD}
+      - JVB_AUTH_PASSWORD=${SERVICE_PASSWORD_JVB_AUTH_PASSWORD}
+      - SERVICE_FQDN_WEB_8000
+  prosody:
+    image: jitsi/prosody:${JITSI_IMAGE_VERSION:-unstable}
+    restart: unless-stopped
+    volumes:
+      - jitsiProsodyConfig:/config
+      - jitsiProsodyPlugins:/prosody-plugins-custom
+    environment:
+      - TZ=${TZ:-UTC}
+      - XMPP_DOMAIN=${XMPP_DOMAIN:-meet.jitsi}
+      - XMPP_AUTH_DOMAIN=${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      - XMPP_MUC_DOMAIN=${XMPP_MUC_DOMAIN:-muc.meet.jitsi}
+      - XMPP_GUEST_DOMAIN=${XMPP_GUEST_DOMAIN:-guest.meet.jitsi}
+      - XMPP_RECORDER_DOMAIN=${XMPP_RECORDER_DOMAIN:-recorder.meet.jitsi}
+      - JICOFO_AUTH_USER=${JICOFO_AUTH_USER:-focus}
+      - JVB_AUTH_USER=${JVB_AUTH_USER:-jvb}
+      - JICOFO_AUTH_PASSWORD=${SERVICE_PASSWORD_JICOFO_AUTH_PASSWORD}
+      - JVB_AUTH_PASSWORD=${SERVICE_PASSWORD_JVB_AUTH_PASSWORD}
+      - JICOFO_COMPONENT_SECRET=${SERVICE_PASSWORD_JICOFO_COMPONENT_SECRET}
+      - JWT_APP_ID=${JWT_APP_ID:-}
+      - JWT_APP_SECRET=${JWT_APP_SECRET:-}
+      - ENABLE_AUTH=${ENABLE_AUTH:-0}
+      - ENABLE_GUESTS=${ENABLE_GUESTS:-1}
+  jicofo:
+    image: jitsi/jicofo:${JITSI_IMAGE_VERSION:-unstable}
+    restart: unless-stopped
+    depends_on:
+      - prosody
+    volumes:
+      - jitsiJicofoConfig:/config
+    environment:
+      - TZ=${TZ:-UTC}
+      - XMPP_DOMAIN=${XMPP_DOMAIN:-meet.jitsi}
+      - XMPP_AUTH_DOMAIN=${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      - XMPP_MUC_DOMAIN=${XMPP_MUC_DOMAIN:-muc.meet.jitsi}
+      - XMPP_INTERNAL_MUC_DOMAIN=${XMPP_INTERNAL_MUC_DOMAIN:-internal-muc.meet.jitsi}
+      - JICOFO_AUTH_USER=${JICOFO_AUTH_USER:-focus}
+      - JICOFO_AUTH_PASSWORD=${SERVICE_PASSWORD_JICOFO_AUTH_PASSWORD}
+      - JICOFO_COMPONENT_SECRET=${SERVICE_PASSWORD_JICOFO_COMPONENT_SECRET}
+      - JVB_BREWERY_MUC=${JVB_BREWERY_MUC:-jvbbrewery}
+  jvb:
+    image: jitsi/jvb:${JITSI_IMAGE_VERSION:-unstable}
+    restart: unless-stopped
+    depends_on:
+      - prosody
+    expose:
+      - 10000
+    volumes:
+      - jitsiJvbConfig:/config
+    environment:
+      - TZ=${TZ:-UTC}
+      - XMPP_AUTH_DOMAIN=${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      - XMPP_INTERNAL_MUC_DOMAIN=${XMPP_INTERNAL_MUC_DOMAIN:-internal-muc.meet.jitsi}
+      - JVB_AUTH_USER=${JVB_AUTH_USER:-jvb}
+      - JVB_AUTH_PASSWORD=${SERVICE_PASSWORD_JVB_AUTH_PASSWORD}
+      - JVB_BREWERY_MUC=${JVB_BREWERY_MUC:-jvbbrewery}
+      - JVB_PORT=${JVB_PORT:-10000}
+      - JVB_ADVERTISE_IPS=${JVB_ADVERTISE_IPS:-}
+      - PUBLIC_URL=${SERVICE_URL_WEB}
+volumes:
+  jitsiWebConfig:
+  jitsiWebTranscripts:
+  jitsiProsodyConfig:
+  jitsiProsodyPlugins:
+  jitsiJicofoConfig:
+  jitsiJvbConfig:

@@ -1,0 +1,28 @@
+# name: Parseable
+# about: Fast observability and log analytics platform on object storage.
+# docs: https://www.parseable.com/docs
+# website: https://www.parseable.com/
+# categories: monitoring, analytics
+# source: dokploy
+services:
+  parseable:
+    image: parseable/parseable:v1.6.0
+    command: parseable local-store
+    restart: unless-stopped
+    volumes:
+      - parseable-staging:/parseable/staging
+      - parseable-data:/parseable/data
+    environment:
+      - P_ADDR=0.0.0.0:8000
+      - P_USERNAME=${SERVICE_USER_PARSEABLE_USERNAME}
+      - P_PASSWORD=${SERVICE_PASSWORD_PARSEABLE_PASSWORD}
+      - P_STAGING_DIR=/parseable/staging
+      - P_FS_DIR=/parseable/data
+      - SERVICE_FQDN_PARSEABLE_8000
+    expose:
+      - 8000
+      - 8001
+      - 8002
+volumes:
+  parseable-staging:
+  parseable-data:

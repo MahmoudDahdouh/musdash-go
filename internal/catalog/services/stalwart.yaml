@@ -1,0 +1,23 @@
+# name: Stalwart
+# about: Modern mail server platform.
+# docs: https://stalw.art/docs/
+# categories: email, communication
+# source: coolify
+services:
+  stalwart:
+    image: 'stalwartlabs/stalwart:v0.16.13'
+    environment:
+      - SERVICE_URL_STALWART_8080
+    expose:
+      - '8080'
+    volumes:
+      - 'stalwart-mail:/etc/stalwart'
+      - 'stalwart-data:/var/lib/stalwart'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+volumes:
+  stalwart-data:
+  stalwart-mail:

@@ -1,0 +1,49 @@
+# name: Aptabase
+# about: Aptabase is a self-hosted web analytics platform that lets you track website traffic and user behavior.
+# docs: https://github.com/aptabase/aptabase/blob/main/README.md
+# website: https://aptabase.com/
+# categories: analytics
+# source: dokploy
+services:
+  aptabase_db:
+    image: postgres:15-alpine
+    restart: always
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: aptabase
+      POSTGRES_PASSWORD: sTr0NGp4ssw0rd
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aptabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  aptabase_events_db:
+    image: clickhouse/clickhouse-server:23.8.16.16-alpine
+    restart: always
+    volumes:
+      - events-db-data:/var/lib/clickhouse
+    environment:
+      CLICKHOUSE_USER: aptabase
+      CLICKHOUSE_PASSWORD: sTr0NGp4ssw0rd
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8123 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  aptabase:
+    image: ghcr.io/aptabase/aptabase:main
+    restart: always
+    environment:
+      BASE_URL: ${SERVICE_URL_APTABASE}
+      AUTH_SECRET: ${SERVICE_BASE64_AUTH_SECRET}
+      DATABASE_URL: Server=aptabase_db;Port=5432;User Id=aptabase;Password=sTr0NGp4ssw0rd;Database=aptabase
+      CLICKHOUSE_URL: Host=aptabase_events_db;Port=8123;Username=aptabase;Password=sTr0NGp4ssw0rd
+      SERVICE_FQDN_APTABASE_8080:
+volumes:
+  db-data:
+  events-db-data:

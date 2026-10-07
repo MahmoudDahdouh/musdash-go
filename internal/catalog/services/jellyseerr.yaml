@@ -1,0 +1,18 @@
+# name: Jellyseerr
+# about: Jellyseerr is a media request and discovery manager for Jellyfin, Plex, and Emby users.
+# docs: https://docs.jellyseerr.dev/
+# categories: media
+# source: dokploy
+services:
+  jellyseerr:
+    image: fallenbagel/jellyseerr:2.7.3
+    restart: unless-stopped
+    volumes:
+      - jellyseerr_config:/app/config
+    environment:
+      LOG_LEVEL: info
+      SERVICE_FQDN_JELLYSEERR_5055:
+    expose:
+      - "5055"
+volumes:
+  jellyseerr_config:

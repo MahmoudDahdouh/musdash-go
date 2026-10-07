@@ -1,0 +1,28 @@
+# name: Crawl4AI
+# about: Crawl4AI is a modern AI-powered web crawler with support for screenshots, PDFs, JavaScript execution, and LLM-based extraction.
+# docs: https://github.com/unclecode/crawl4ai#readme
+# website: https://crawl4ai.com
+# categories: automation, ai, devtools
+# source: dokploy
+services:
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    restart: unless-stopped
+    shm_size: 1g
+    expose:
+      - 11235
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai/gpt-4o-mini}
+      - OPENAI_API_KEY=${SERVICE_PASSWORD_64_OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - GEMINI_API_TOKEN=${GEMINI_API_TOKEN:-}
+      - SERVICE_FQDN_CRAWL4AI_11235
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11235/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

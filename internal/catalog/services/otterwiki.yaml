@@ -1,0 +1,16 @@
+# name: Otter Wiki
+# about: An Otter Wiki is a simple, lightweight, and fast wiki engine built with Python and Flask.
+# docs: https://github.com/redimp/otterwiki/wiki
+# website: https://otterwiki.com/
+# categories: docs
+# source: dokploy
+services:
+  otterwiki:
+    image: redimp/otterwiki:2
+    restart: unless-stopped
+    volumes:
+      - otterwiki-data:/app-data
+    environment:
+      - SERVICE_FQDN_OTTERWIKI_80
+volumes:
+  otterwiki-data:

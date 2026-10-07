@@ -1,0 +1,66 @@
+The service templates in services/ whose header has no "source" line were
+written for musdash.
+
+The others were made by tools/catalog from the templates of two other
+projects. services.SOURCES lists, for each, which. A template's header says
+it too: "# source: coolify" or "# source: dokploy".
+
+"source: coolify" is a template of Coolify
+(https://github.com/coollabsio/coolify, templates/compose), which is
+licensed under the Apache License, Version 2.0. A copy of that licence is in
+services.APACHE-2.0.
+
+"source: dokploy" is a blueprint of Dokploy's templates
+(https://github.com/Dokploy/templates, blueprints), which are licensed under
+the MIT License below.
+
+Changed here, by tools/catalog, whose source says how and why:
+
+- The header of comments is musdash's: a name, the catalogue's line about
+  the service (the source's, cut to a sentence), where to read about it, its
+  categories and its source. The source's other comments are removed.
+- A Dokploy blueprint's template.toml is applied to its Compose file: the
+  values Dokploy generates become musdash's magic variables
+  (SERVICE_PASSWORD_*, SERVICE_BASE64_*, SERVICE_HEX_*, SERVICE_USER_*), a
+  service that gets a domain gets SERVICE_FQDN_<SERVICE>_<PORT>, and a file
+  Dokploy writes next to the stack becomes a "configs" entry with its
+  content.
+- Coolify's generated values are renamed to the musdash variable that
+  generates the same kind of value (its SERVICE_BASE64_* is musdash's
+  SERVICE_PASSWORD_*, its SERVICE_REALBASE64_* is SERVICE_BASE64_*), and a
+  file it writes from "content:" becomes a "configs" entry.
+- What only the source's platform reads is removed (ports, container_name,
+  exclude_from_hc, its proxy's labels), a directory next to the Compose file
+  or on the server becomes a named volume, every named volume is declared,
+  an external network becomes the stack's own, and an image with no tag gets
+  ":latest".
+- A variable with no default gets an empty one, as both platforms start a
+  stack with it; a service that does a job and ends is waited for by another
+  with "service_completed_successfully"; a password written out in the file
+  becomes a generated one where the file shows every place it is used.
+
+Each service's name and logo are its owner's.
+
+----------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2024 Dokploy and Carlos Ortiz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

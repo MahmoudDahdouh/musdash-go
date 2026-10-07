@@ -1,0 +1,57 @@
+# name: Superset (Unofficial)
+# about: Data visualization and data exploration platform.
+# docs: https://superset.apache.org/docs/intro
+# website: https://superset.apache.org
+# categories: analytics, database
+# source: dokploy
+services:
+  superset:
+    image: amancevice/superset:6.0.0
+    restart: unless-stopped
+    depends_on:
+      - superset_postgres
+      - superset_redis
+    environment:
+      SECRET_KEY: ${SERVICE_PASSWORD_SECRET_KEY}
+      MAPBOX_API_KEY: ${MAPBOX_API_KEY:-}
+      POSTGRES_USER: ${POSTGRES_USER:-superset}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-superset}
+      REDIS_PASSWORD: ${SERVICE_PASSWORD_REDIS_PASSWORD}
+      POSTGRES_HOST: superset_postgres
+      REDIS_HOST: superset_redis
+      SERVICE_FQDN_SUPERSET_8088:
+    configs:
+      - source: superset-superset-superset-config-py
+        target: /etc/superset/superset_config.py
+  superset_postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-superset}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-superset}
+    volumes:
+      - superset_postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  superset_redis:
+    image: redis:8
+    restart: unless-stopped
+    volumes:
+      - superset_redis_data:/data
+    command: redis-server --requirepass ${SERVICE_PASSWORD_REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+volumes:
+  superset_postgres_data:
+  superset_redis_data:
+configs:
+  superset-superset-superset-config-py:
+    content: "\"\"\"\nFor more configuration options, see:\n- https://superset.apache.org/docs/configuration/configuring-superset\n\"\"\"\n\nimport os\n\nSECRET_KEY = os.getenv(\"SECRET_KEY\")\nMAPBOX_API_KEY = os.getenv(\"MAPBOX_API_KEY\", \"\")\n\nCACHE_CONFIG = {\n  \"CACHE_TYPE\": \"RedisCache\",\n  \"CACHE_DEFAULT_TIMEOUT\": 300,\n  \"CACHE_KEY_PREFIX\": \"superset_\",\n  \"CACHE_REDIS_HOST\": \"redis\",\n  \"CACHE_REDIS_PORT\": 6379,\n  \"CACHE_REDIS_DB\": 1,\n  \"CACHE_REDIS_URL\": f\"redis://:{os.getenv('REDIS_PASSWORD')}@{os.getenv('REDIS_HOST')}:6379/1\",\n}\n\nFILTER_STATE_CACHE_CONFIG = {**CACHE_CONFIG, \"CACHE_KEY_PREFIX\": \"superset_filter_\"}\nEXPLORE_FORM_DATA_CACHE_CONFIG = {**CACHE_CONFIG, \"CACHE_KEY_PREFIX\": \"superset_explore_form_\"}\n\nSQLALCHEMY_TRACK_MODIFICATIONS = True\nSQLALCHEMY_DATABASE_URI = f\"postgresql+psycopg2://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:5432/{os.getenv('POSTGRES_DB')}\"\n\n# Uncomment if you want to load example data (using \"superset load_examples\") at the\n# same location as your metadata postgresql instance. Otherwise, the default sqlite\n# will be used, which will not persist in volume when restarting superset by default.\n#SQLALCHEMY_EXAMPLES_URI = SQLALCHEMY_DATABASE_URI \n"

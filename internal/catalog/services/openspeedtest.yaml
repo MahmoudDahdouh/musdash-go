@@ -1,0 +1,14 @@
+# name: OpenSpeedTest
+# about: OpenSpeedTest is a 100% browser-based HTML5 network performance estimation tool for accurately measuring network speed.
+# docs: https://github.com/openspeedtest/Speed-Test/wiki
+# website: https://openspeedtest.com/
+# categories: networking, devtools, monitoring
+# source: dokploy
+services:
+  openspeedtest:
+    image: openspeedtest/latest:latest
+    restart: unless-stopped
+    expose:
+      - 3000
+    environment:
+      - SERVICE_FQDN_OPENSPEEDTEST_3000

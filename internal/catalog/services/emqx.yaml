@@ -1,0 +1,30 @@
+# name: EMQX
+# about: A scalable and reliable MQTT broker for AI, IoT, IIoT and connected vehicles.
+# docs: https://docs.emqx.com
+# website: https://www.emqx.com
+# categories: home, backend
+# source: dokploy
+services:
+  emqx:
+    image: emqx/emqx-enterprise:6.0.1
+    hostname: node1.emqx.com
+    environment:
+      EMQX_NODE_NAME: emqx@node1.emqx.com
+      SERVICE_FQDN_EMQX_18083:
+      SERVICE_FQDN_EMQX_P8083_8083:
+    expose:
+      - 1883
+      - 8083
+      - 18083
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx_ctl", "status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  emqx_data:
+  emqx_log:

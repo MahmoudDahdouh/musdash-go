@@ -1,0 +1,18 @@
+# name: DumbPad
+# about: DumbPad is a simple, self-hosted notepad service with PIN protection and no database required.
+# docs: https://github.com/dumbwareio/dumbpad
+# website: https://dumbware.io/DumbPad/
+# categories: docs
+# source: dokploy
+services:
+  dumbpad:
+    image: dumbwareio/dumbpad:latest
+    restart: unless-stopped
+    expose:
+      - 3000
+    volumes:
+      - dumbpad-data:/app/data
+    environment:
+      - SERVICE_FQDN_DUMBPAD_3000
+volumes:
+  dumbpad-data:

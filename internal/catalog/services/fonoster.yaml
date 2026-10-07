@@ -1,0 +1,380 @@
+# name: Fonoster
+# about: Fonoster is an open-source alternative to Twilio. A complete telephony stack for building voice applications with SIP, WebRTC, and PSTN connectivity.
+# docs: https://docs.fonoster.com/
+# website: https://fonoster.com/
+# categories: communication
+# source: dokploy
+services:
+  dashboard:
+    image: fonoster/dashboard:0.15.15
+    restart: unless-stopped
+    expose:
+      - 3030
+    environment:
+      - SERVER_DASHBOARD_SESSION_SECRET=${SERVICE_PASSWORD_64_DASHBOARD_SESSION_SECRET}
+      - SERVICE_FQDN_DASHBOARD_3030
+  apiserver:
+    image: fonoster/apiserver:0.15.15
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - APISERVER_APP_URL=${SERVICE_URL_DASHBOARD}
+      - APISERVER_ASTERISK_ARI_PROXY_URL=${APISERVER_ASTERISK_ARI_PROXY_URL:-http://asterisk:8088}
+      - APISERVER_ASTERISK_ARI_SECRET=${SERVICE_PASSWORD_ARI_SECRET}
+      - APISERVER_ASTERISK_ARI_USERNAME=${APISERVER_ASTERISK_ARI_USERNAME:-ari}
+      - APISERVER_AUTHZ_SERVICE_ENABLED=${APISERVER_AUTHZ_SERVICE_ENABLED:-false}
+      - APISERVER_AUTHZ_SERVICE_HOST=${APISERVER_AUTHZ_SERVICE_HOST:-fnauthz}
+      - APISERVER_AUTHZ_SERVICE_METHODS=${APISERVER_AUTHZ_SERVICE_METHODS:-/fonoster.calls.v1beta2.Calls/CreateCall,/fonoster.identity.v1beta2.Identity/CreateWorkspace}
+      - APISERVER_AUTHZ_SERVICE_PORT=${APISERVER_AUTHZ_SERVICE_PORT:-50071}
+      - APISERVER_CLOAK_ENCRYPTION_KEY=${SERVICE_BASE64_CLOAK_ENCRYPTION_KEY}
+      - APISERVER_DATABASE_URL=postgresql://postgres:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/fonoster
+      - APISERVER_IDENTITY_DATABASE_URL=postgresql://postgres:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/fnidentity
+      - APISERVER_IDENTITY_ISSUER=${SERVICE_URL_DASHBOARD}
+      - APISERVER_IDENTITY_CONTACT_VERIFICATION_REQUIRED=${APISERVER_IDENTITY_CONTACT_VERIFICATION_REQUIRED:-false}
+      - APISERVER_IDENTITY_TWO_FACTOR_AUTHENTICATION_REQUIRED=${APISERVER_IDENTITY_TWO_FACTOR_AUTHENTICATION_REQUIRED:-false}
+      - APISERVER_IDENTITY_WORKSPACE_INVITE_EXPIRATION=${APISERVER_IDENTITY_WORKSPACE_INVITE_EXPIRATION:-1d}
+      - APISERVER_IDENTITY_WORKSPACE_INVITE_FAIL_URL=${SERVICE_URL_DASHBOARD}/invite-fail
+      - APISERVER_IDENTITY_WORKSPACE_INVITE_URL=${SERVICE_URL_DASHBOARD}:8449/api/identity/accept-invite
+      - APISERVER_IDENTITY_OAUTH2_GITHUB_CLIENT_ID=${APISERVER_IDENTITY_OAUTH2_GITHUB_CLIENT_ID:-}
+      - APISERVER_IDENTITY_OAUTH2_GITHUB_CLIENT_SECRET=${APISERVER_IDENTITY_OAUTH2_GITHUB_CLIENT_SECRET:-}
+      - APISERVER_IDENTITY_OAUTH2_GITHUB_ENABLED=${APISERVER_IDENTITY_OAUTH2_GITHUB_ENABLED:-false}
+      - APISERVER_INFLUXDB_INIT_ORG=${APISERVER_INFLUXDB_INIT_ORG:-fonoster}
+      - APISERVER_INFLUXDB_INIT_PASSWORD=${SERVICE_PASSWORD_INFLUXDB_PASSWORD}
+      - APISERVER_INFLUXDB_INIT_TOKEN=${SERVICE_PASSWORD_64_INFLUXDB_TOKEN}
+      - APISERVER_INFLUXDB_INIT_USERNAME=${APISERVER_INFLUXDB_INIT_USERNAME:-influxdb}
+      - APISERVER_INFLUXDB_URL=${APISERVER_INFLUXDB_URL:-http://influxdb:8086}
+      - APISERVER_LOGS_FORMAT=${APISERVER_LOGS_FORMAT:-json}
+      - APISERVER_LOGS_LEVEL=${APISERVER_LOGS_LEVEL:-verbose}
+      - APISERVER_LOGS_TRANSPORT=${APISERVER_LOGS_TRANSPORT:-none}
+      - APISERVER_NATS_URL=${APISERVER_NATS_URL:-nats://nats:4222}
+      - APISERVER_OWNER_EMAIL=admin@${SERVICE_FQDN_DASHBOARD}
+      - APISERVER_OWNER_NAME=${APISERVER_OWNER_NAME:-Admin User}
+      - APISERVER_OWNER_PASSWORD=${SERVICE_PASSWORD_API_SERVER_OWNER_PASSWORD}
+      - APISERVER_ROOT_DOMAIN=${SERVICE_FQDN_DASHBOARD}
+      - APISERVER_SMTP_AUTH_PASS=${APISERVER_SMTP_AUTH_PASS:-secret}
+      - APISERVER_SMTP_AUTH_USER=postmaster@${SERVICE_FQDN_DASHBOARD}
+      - APISERVER_SMTP_HOST=${APISERVER_SMTP_HOST:-your-smtp-server}
+      - APISERVER_SMTP_PORT=${APISERVER_SMTP_PORT:-587}
+      - APISERVER_SMTP_SECURE=${APISERVER_SMTP_SECURE:-true}
+      - APISERVER_SMTP_SENDER=Fonoster Info <info@${SERVICE_FQDN_DASHBOARD}>
+      - APISERVER_SIGNALING_SERVER=ws://${SERVICE_FQDN_DASHBOARD}:5062
+      - APISERVER_TWILIO_ACCOUNT_SID=${APISERVER_TWILIO_ACCOUNT_SID:-}
+      - APISERVER_TWILIO_AUTH_TOKEN=${APISERVER_TWILIO_AUTH_TOKEN:-}
+      - APISERVER_TWILIO_PHONE_NUMBER=${APISERVER_TWILIO_PHONE_NUMBER:-}
+    expose:
+      - 50051
+    configs:
+      - source: apiserver-config-keys-gitkeep
+        target: /opt/fonoster/keys/.gitkeep
+      - source: apiserver-config-keys-public-pem
+        target: /opt/fonoster/keys/public.pem
+      - source: apiserver-config-integrations-json
+        target: /opt/fonoster/integrations.json
+  autopilot:
+    image: fonoster/autopilot:0.15.15
+    restart: unless-stopped
+    expose:
+      - 50061
+    environment:
+      - AUTOPILOT_AWS_S3_ACCESS_KEY_ID=${AUTOPILOT_AWS_S3_ACCESS_KEY_ID:-}
+      - AUTOPILOT_AWS_S3_ENDPOINT=${AUTOPILOT_AWS_S3_ENDPOINT:-}
+      - AUTOPILOT_AWS_S3_REGION=${AUTOPILOT_AWS_S3_REGION:-us-east-1}
+      - AUTOPILOT_AWS_S3_SECRET_ACCESS_KEY=${AUTOPILOT_AWS_S3_SECRET_ACCESS_KEY:-}
+      - AUTOPILOT_CONVERSATION_PROVIDER=${AUTOPILOT_CONVERSATION_PROVIDER:-api}
+      - AUTOPILOT_KNOWLEDGE_BASE_ENABLED=${AUTOPILOT_KNOWLEDGE_BASE_ENABLED:-false}
+      - AUTOPILOT_LOGS_FORMAT=${AUTOPILOT_LOGS_FORMAT:-none}
+      - AUTOPILOT_LOGS_LEVEL=${AUTOPILOT_LOGS_LEVEL:-verbose}
+      - AUTOPILOT_LOGS_TRANSPORT=${AUTOPILOT_LOGS_TRANSPORT:-none}
+      - AUTOPILOT_OPENAI_API_KEY=${AUTOPILOT_OPENAI_API_KEY:-}
+      - AUTOPILOT_UNSTRUCTURED_API_KEY=${AUTOPILOT_UNSTRUCTURED_API_KEY:-}
+      - AUTOPILOT_UNSTRUCTURED_API_URL=${AUTOPILOT_UNSTRUCTURED_API_URL:-}
+    configs:
+      - source: autopilot-config-integrations-json
+        target: /opt/fonoster/integrations.json
+  routr:
+    image: fonoster/routr-one:2.13.13
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/routr
+      EXTERNAL_ADDRS: ${ROUTR_EXTERNAL_ADDRS:-CHANGE_ME_TO_HOST_IP}
+      LOGS_FORMAT: ${ROUTR_LOGS_FORMAT:-none}
+      LOGS_LEVEL: ${ROUTR_LOGS_LEVEL:-verbose}
+      LOGS_TRANSPORT: ${ROUTR_LOGS_TRANSPORT:-none}
+      NATS_PUBLISHER_ENABLED: "true"
+      NATS_PUBLISHER_URL: ${ROUTR_NATS_PUBLISHER_URL:-nats://nats:4222}
+      RTPENGINE_HOST: ${ROUTR_RTPENGINE_HOST:-rtpengine}
+      START_INTERNAL_DB: "false"
+      CONNECT_VERIFIER_PUBLIC_KEY_PATH: /etc/routr/keys/public.pem
+    expose:
+      - 51907
+      - 51908
+    configs:
+      - source: routr-config-keys-public-pem
+        target: /etc/routr/keys/public.pem
+  rtpengine:
+    image: fonoster/rtpengine:0.3.17
+    restart: unless-stopped
+    platform: linux/x86_64
+    environment:
+      PORT_MAX: ${RTPENGINE_PORT_MAX:-20000}
+      PORT_MIN: ${RTPENGINE_PORT_MIN:-10000}
+      PUBLIC_IP: ${RTPENGINE_PUBLIC_IP:-CHANGE_ME_TO_HOST_IP}
+  asterisk:
+    image: fonoster/asterisk:20
+    restart: unless-stopped
+    environment:
+      ARI_PROXY_URL: ${ASTERISK_ARI_PROXY_URL:-http://asterisk:8088}
+      ARI_SECRET: ${SERVICE_PASSWORD_ASTERISK_ARI_SECRET}
+      ARI_USERNAME: ${ASTERISK_ARI_USERNAME:-ari}
+      CODECS: ${ASTERISK_CODECS:-g722,ulaw,alaw}
+      DTMF_MODE: ${ASTERISK_DTMF_MODE:-auto_info}
+      RTP_PORT_END: ${ASTERISK_RTP_PORT_END:-20000}
+      RTP_PORT_START: ${ASTERISK_RTP_PORT_START:-10000}
+      SIPPROXY_HOST: ${ASTERISK_SIPPROXY_HOST:-CHANGE_ME_TO_HOST_IP}
+      SIPPROXY_PORT: ${ASTERISK_SIPPROXY_PORT:-5060}
+      SIPPROXY_SECRET: ${SERVICE_PASSWORD_ASTERISK_SIPPROXY_SECRET}
+      SIPPROXY_USERNAME: ${ASTERISK_SIPPROXY_USERNAME:-voice}
+    expose:
+      - 6060
+  postgres:
+    image: postgres:16.10-alpine3.22
+    restart: unless-stopped
+    environment:
+      PGTZ: UTC
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-fonoster}
+      TZ: UTC
+    expose:
+      - 5432
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fonoster}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    configs:
+      - source: postgres-config-init-db-sh
+        target: /docker-entrypoint-initdb.d/init-db.sh
+        mode: 0555
+  influxdb:
+    image: influxdb:2.7
+    restart: unless-stopped
+    expose:
+      - 8086
+    environment:
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${SERVICE_PASSWORD_64_INFLUXDB_TOKEN}
+      DOCKER_INFLUXDB_INIT_BUCKET: calls
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_INIT_ORG:-fonoster}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${SERVICE_PASSWORD_INFLUXDB_PASSWORD}
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_INIT_USERNAME:-influxdb}
+    volumes:
+      - influxdb:/var/lib/influxdb2
+  nats:
+    image: nats:2.11.8
+    restart: unless-stopped
+    expose:
+      - 4222
+  envoy:
+    image: envoyproxy/envoy:v1.35.0
+    restart: unless-stopped
+    command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml"]
+    configs:
+      - source: envoy-config-envoy-yaml
+        target: /etc/envoy/envoy.yaml
+      - source: envoy-config-init-db-sh
+        target: /etc/envoy/init-db.sh
+        mode: 0555
+      - source: envoy-config-integrations-json
+        target: /etc/envoy/integrations.json
+      - source: envoy-config-keys-gitkeep
+        target: /etc/envoy/keys/.gitkeep
+      - source: envoy-config-keys-public-pem
+        target: /etc/envoy/keys/public.pem
+volumes:
+  db:
+  influxdb:
+configs:
+  apiserver-config-keys-gitkeep:
+    content: |-
+      # Placeholder - RSA keys need to be generated manually after deployment
+  apiserver-config-keys-public-pem:
+    content: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyVvQZ8v3xq7p8BmXdS3C
+      G9fk654bAbl30tsqq4h9d3N4F11hlue8bGAY=
+      -----END PUBLIC KEY-----
+  apiserver-config-integrations-json:
+    content: |
+      {
+        "integrations": []
+      }
+  autopilot-config-integrations-json:
+    content: |
+      {
+        "integrations": []
+      }
+  routr-config-keys-public-pem:
+    content: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyVvQZ8v3xq7p8BmXdS3C
+      G9fk654bAbl30tsqq4h9d3N4F11hlue8bGAY=
+      -----END PUBLIC KEY-----
+  postgres-config-init-db-sh:
+    content: |
+      #!/bin/bash
+      set -e
+
+      # Create additional databases (ignore error if they already exist)
+      psql -v ON_ERROR_STOP=0 --username "$$POSTGRES_USER" --dbname "$$POSTGRES_DB" <<-EOSQL
+          CREATE DATABASE fnidentity;
+          CREATE DATABASE routr;
+      EOSQL
+
+      # Grant privileges
+      psql -v ON_ERROR_STOP=1 --username "$$POSTGRES_USER" --dbname "$$POSTGRES_DB" <<-EOSQL
+          GRANT ALL PRIVILEGES ON DATABASE fnidentity TO $$POSTGRES_USER;
+          GRANT ALL PRIVILEGES ON DATABASE routr TO $$POSTGRES_USER;
+      EOSQL
+  envoy-config-envoy-yaml:
+    content: |
+      # Envoy configuration without tls for development and testing.
+      # Do not use this configuration in production. Please check the docs for examples using tls.
+      static_resources:
+        listeners:
+          - name: listener_http
+            address:
+              socket_address: { address: 0.0.0.0, port_value: 8449 }
+            filter_chains:
+              - filters:
+                - name: envoy.filters.network.http_connection_manager
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                    codec_type: auto
+                    stat_prefix: ingress_http
+                    route_config:
+                      name: local_route
+                      virtual_hosts:
+                        - name: local_service
+                          domains: ["*"]
+                          routes:
+                            - match:
+                                prefix: "/api"
+                              route:
+                                cluster: apiserver-cluster-http
+                                timeout: 0s
+                            - match:
+                                prefix: "/"
+                                headers:
+                                  - name: "content-type"
+                                    safe_regex_match:
+                                      google_re2: {}
+                                      regex: "^(application/grpc|application/grpc-web-text)$$"
+                              route:
+                                cluster: apiserver-cluster
+                                timeout: 0s
+                                max_stream_duration:
+                                  grpc_timeout_header_max: 0s
+                            - match:
+                                prefix: "/"
+                              route:
+                                cluster: dashboard-cluster
+                                timeout: 0s
+                          cors:
+                            allow_origin_string_match:
+                              - prefix: "*"
+                            allow_methods: GET, PUT, DELETE, POST, OPTIONS
+                            allow_headers: token,accesskeyid,keep-alive,user-agent,cache-control,content-type,content-transfer-encoding,x-accept-content-transfer-encoding,x-accept-response-streaming,x-user-agent,x-grpc-web,grpc-timeout
+                            max_age: "1728000"
+                            expose_headers: grpc-status,grpc-message
+                    http_filters:
+                      - name: envoy.filters.http.grpc_web
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
+                      - name: envoy.filters.http.cors
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
+                      - name: envoy.filters.http.router
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+        clusters:
+          - name: apiserver-cluster
+            type: logical_dns
+            connect_timeout: 20s
+            http2_protocol_options: {}
+            lb_policy: round_robin
+            load_assignment:
+              cluster_name: apiserver-cluster
+              endpoints:
+                - lb_endpoints:
+                    - endpoint:
+                        address:
+                          socket_address:
+                            address: apiserver
+                            port_value: 50051
+
+          - name: apiserver-cluster-http
+            type: logical_dns
+            connect_timeout: 20s
+            lb_policy: round_robin
+            load_assignment:
+              cluster_name: apiserver-cluster-http
+              endpoints:
+                - lb_endpoints:
+                    - endpoint:
+                        address:
+                          socket_address:
+                            address: apiserver
+                            port_value: 9876
+
+          - name: dashboard-cluster
+            type: logical_dns
+            connect_timeout: 20s
+            lb_policy: round_robin
+            load_assignment:
+              cluster_name: dashboard-cluster
+              endpoints:
+                - lb_endpoints:
+                    - endpoint:
+                        address:
+                          socket_address:
+                            address: dashboard
+                            port_value: 3030
+  envoy-config-init-db-sh:
+    content: |
+      #!/bin/bash
+      set -e
+
+      # Create additional databases (ignore error if they already exist)
+      psql -v ON_ERROR_STOP=0 --username "$$POSTGRES_USER" --dbname "$$POSTGRES_DB" <<-EOSQL
+          CREATE DATABASE fnidentity;
+          CREATE DATABASE routr;
+      EOSQL
+
+      # Grant privileges
+      psql -v ON_ERROR_STOP=1 --username "$$POSTGRES_USER" --dbname "$$POSTGRES_DB" <<-EOSQL
+          GRANT ALL PRIVILEGES ON DATABASE fnidentity TO $$POSTGRES_USER;
+          GRANT ALL PRIVILEGES ON DATABASE routr TO $$POSTGRES_USER;
+      EOSQL
+  envoy-config-integrations-json:
+    content: |
+      {
+        "integrations": []
+      }
+  envoy-config-keys-gitkeep:
+    content: |-
+      # Placeholder - RSA keys need to be generated manually after deployment
+  envoy-config-keys-public-pem:
+    content: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyVvQZ8v3xq7p8BmXdS3C
+      G9fk654bAbl30tsqq4h9d3N4F11hlue8bGAY=
+      -----END PUBLIC KEY-----

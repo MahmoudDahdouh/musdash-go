@@ -1,0 +1,19 @@
+# name: Owncast
+# about: Owncast is a self-hosted live video streaming and chat server for use with existing broadcasting software.
+# docs: https://owncast.online/docs/
+# website: https://owncast.online/
+# categories: media, communication
+# source: dokploy
+services:
+  owncast:
+    image: owncast/owncast:latest
+    restart: unless-stopped
+    volumes:
+      - owncast-data:/app/data
+    expose:
+      - 8080
+      - 1935
+    environment:
+      - SERVICE_FQDN_OWNCAST_8080
+volumes:
+  owncast-data:

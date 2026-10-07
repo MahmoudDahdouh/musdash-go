@@ -1,0 +1,20 @@
+# name: FileGator
+# about: FileGator is a simple self-hosted web file manager with multi-user support.
+# docs: https://docs.filegator.io/
+# website: https://filegator.io/
+# categories: storage
+# source: dokploy
+services:
+  filegator:
+    image: filegator/filegator:v7.14.3
+    restart: unless-stopped
+    volumes:
+      - filegator_repository:/var/www/filegator/repository
+      - filegator_private:/var/www/filegator/private
+    expose:
+      - "8080"
+    environment:
+      - SERVICE_FQDN_FILEGATOR_8080
+volumes:
+  filegator_repository:
+  filegator_private:

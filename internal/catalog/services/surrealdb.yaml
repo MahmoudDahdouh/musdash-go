@@ -1,0 +1,20 @@
+# name: SurrealDB
+# about: SurrealDB is a native, open-source, multi-model database that lets you store and manage data across relational, document, graph, time-series, vector…
+# docs: https://surrealdb.com/docs/surrealdb
+# website: https://surrealdb.com
+# categories: database
+# source: dokploy
+services:
+  surrealdb:
+    image: surrealdb/surrealdb:v2.3.10
+    environment:
+      SURREAL_USER: ${SERVICE_USER_SURREALDB_USER}
+      SURREAL_PASS: ${SERVICE_PASSWORD_SURREALDB_PASSWORD}
+      SERVICE_FQDN_SURREALDB_8000:
+    volumes:
+      - db_data:/usr/app/data
+    user: root
+    command: start rocksdb:/db_data/data.db
+    pull_policy: always
+volumes:
+  db_data:

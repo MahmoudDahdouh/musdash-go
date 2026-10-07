@@ -1,0 +1,23 @@
+# name: RabbitMQ
+# about: With tens of thousands of users, RabbitMQ is one of the most popular open source message brokers.
+# docs: https://www.rabbitmq.com/documentation.html
+# categories: communication, backend
+# source: coolify
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    hostname: "rabbitmq"
+    environment:
+      - SERVICE_URL_RABBITMQ_15672
+      - RABBITMQ_DEFAULT_USER=$SERVICE_USER_RABBITMQ
+      - RABBITMQ_DEFAULT_PASS=$SERVICE_PASSWORD_RABBITMQ
+      - PORT=${PORT:-5672}
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 30s
+      retries: 10
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq/
+volumes:
+  rabbitmq-data:

@@ -1,0 +1,22 @@
+# name: Checkcle
+# about: Checkcle is a security and compliance tool by Operacle, providing insights into system configuration and runtime checks.
+# docs: https://github.com/Operacle/checkcle#readme
+# website: https://operacle.com/
+# categories: security, monitoring
+# source: dokploy
+services:
+  checkcle:
+    image: operacle/checkcle:latest
+    restart: unless-stopped
+    expose:
+      - 8090
+    volumes:
+      - checkcle-data:/mnt/pb_data
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 8192
+    environment:
+      - SERVICE_FQDN_CHECKCLE_8090
+volumes:
+  checkcle-data:

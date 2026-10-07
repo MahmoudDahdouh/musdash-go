@@ -1,0 +1,48 @@
+# name: FileRun
+# about: FileRun is a self-hosted file manager and file sharing platform.
+# docs: https://docs.filerun.com/docker
+# website: https://filerun.com/
+# categories: storage
+# source: dokploy
+services:
+  filerun-init:
+    image: busybox:1.37
+    restart: "no"
+    command: chown -R 1001:1001 /var/www/html /user-files
+    volumes:
+      - filerun-html:/var/www/html
+      - filerun-user-files:/user-files
+  filerun:
+    image: filerun/filerun:latest
+    restart: unless-stopped
+    depends_on:
+      filerun-init:
+        condition: service_completed_successfully
+      db:
+        condition: service_started
+    environment:
+      FR_DB_HOST: db
+      FR_DB_PORT: 3306
+      FR_DB_NAME: ${MYSQL_DATABASE:-filerun}
+      FR_DB_USER: ${MYSQL_USER:-filerun}
+      FR_DB_PASS: ${SERVICE_PASSWORD_MYSQL_PASSWORD}
+      SERVICE_FQDN_FILERUN_80:
+    volumes:
+      - filerun-html:/var/www/html
+      - filerun-user-files:/user-files
+  db:
+    image: mariadb:12.2
+    restart: unless-stopped
+    command: --old-mode=NO_PROGRESS_INFO
+    environment:
+      MARIADB_ROOT_PASSWORD: ${SERVICE_PASSWORD_MARIADB_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER:-filerun}
+      MYSQL_PASSWORD: ${SERVICE_PASSWORD_MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-filerun}
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - filerun-db:/var/lib/mysql
+volumes:
+  filerun-html:
+  filerun-user-files:
+  filerun-db:

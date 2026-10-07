@@ -1,0 +1,22 @@
+# name: LibreDB Studio
+# about: The modern, AI-powered open-source SQL IDE. Query PostgreSQL, MySQL, Oracle, SQL Server, SQLite, MongoDB and Redis from your browser.
+# docs: https://libredb.org/
+# categories: database
+# source: dokploy
+services:
+  libredb-studio:
+    image: ghcr.io/libredb/libredb-studio:0.9.59
+    restart: unless-stopped
+    environment:
+      - ADMIN_EMAIL=admin@libredb.org
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - USER_EMAIL=user@libredb.org
+      - USER_PASSWORD=${USER_PASSWORD:-}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - STORAGE_PROVIDER=sqlite
+      - STORAGE_SQLITE_PATH=/app/data/libredb-storage.db
+      - SERVICE_FQDN_LIBREDB_STUDIO_3000
+    volumes:
+      - libredb-data:/app/data
+volumes:
+  libredb-data:

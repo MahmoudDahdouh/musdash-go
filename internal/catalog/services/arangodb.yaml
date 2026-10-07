@@ -1,0 +1,19 @@
+# name: ArangoDB
+# about: ArangoDB is a native multi-model database with flexible data models for documents, graphs, and key-values.
+# docs: https://www.arangodb.com/docs/
+# website: https://www.arangodb.com/
+# categories: database
+# source: dokploy
+services:
+  arangodb:
+    image: arangodb:3.12.4
+    restart: unless-stopped
+    expose:
+      - 8529
+    environment:
+      - ARANGO_ROOT_PASSWORD=${SERVICE_PASSWORD_ARANGO_PASSWORD}
+      - SERVICE_FQDN_ARANGODB_8529
+    volumes:
+      - data:/var/lib/arangodb3
+volumes:
+  data:

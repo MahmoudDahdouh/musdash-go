@@ -1,0 +1,15 @@
+# name: Gitingest
+# about: Gitingest is an application that supports Prometheus metrics, Sentry integration, and S3-backed storage.
+# docs: https://github.com/coderamp-labs/gitingest#readme
+# website: https://gitingest.com
+# categories: ai, devtools
+# source: dokploy
+services:
+  gitingest:
+    image: elestio/gitingest:${SOFTWARE_VERSION_TAG:-latest}
+    restart: unless-stopped
+    expose:
+      - 8000
+    environment:
+      - ALLOWED_HOSTS=${SERVICE_FQDN_GITINGEST}
+      - SERVICE_FQDN_GITINGEST_8000

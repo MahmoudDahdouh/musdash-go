@@ -1,0 +1,18 @@
+# name: Directory Lister
+# about: Directory Lister is a simple PHP application that lists the contents of any web-accessible directory and allows navigation there within.
+# docs: https://docs.directorylister.com/
+# website: https://www.directorylister.com/
+# categories: storage
+# source: dokploy
+services:
+  directory-lister:
+    image: directorylister/directorylister:latest
+    restart: unless-stopped
+    expose:
+      - 80
+    volumes:
+      - directory-lister-data:/data
+    environment:
+      - SERVICE_FQDN_DIRECTORY_LISTER_80
+volumes:
+  directory-lister-data:

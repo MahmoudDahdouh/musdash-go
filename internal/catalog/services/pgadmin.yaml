@@ -1,0 +1,22 @@
+# name: pgAdmin
+# about: pgAdmin is a web-based database management tool for administering your PostgreSQL databases through a user-friendly interface.
+# docs: https://www.pgadmin.org/docs/pgadmin4/latest/container_deployment.html
+# categories: database
+# source: coolify
+services:
+  pgadmin:
+    image: 'dpage/pgadmin4:latest'
+    environment:
+      - SERVICE_URL_PGADMIN
+      - 'PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:?}'
+      - 'PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:?}'
+      - SERVICE_FQDN_PGADMIN_80
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/login"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+volumes:
+  pgadmin-data:

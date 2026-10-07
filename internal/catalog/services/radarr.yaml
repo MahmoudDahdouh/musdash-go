@@ -1,0 +1,23 @@
+# name: Radarr
+# about: Radarr⁠ - A fork of Sonarr to work with movies à la Couchpotato.
+# docs: https://hub.docker.com/r/linuxserver/radarr
+# categories: media
+# source: coolify
+services:
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    environment:
+      - SERVICE_URL_RADARR_7878
+      - _APP_URL=$SERVICE_URL_RADARR
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - radarr-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7878/ping"]
+      interval: 2s
+      timeout: 10s
+      retries: 15
+volumes:
+  radarr-config:

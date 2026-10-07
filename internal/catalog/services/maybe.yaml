@@ -1,0 +1,45 @@
+# name: Maybe
+# about: Maybe is a self-hosted finance tracking application designed to simplify budgeting and expenses.
+# docs: https://github.com/maybe-finance/maybe/blob/main/docs/hosting/docker.md
+# website: https://maybe.finance/
+# categories: finance
+# source: dokploy
+services:
+  app:
+    image: ghcr.io/maybe-finance/maybe:sha-68c570eed8810fd59b5b33cca51bbad5eabb4cb4
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://maybe:${SERVICE_PASSWORD_POSTGRES}@db:5432/maybe
+      SECRET_KEY_BASE: ${SERVICE_BASE64_64_SECRET_KEY_BASE}
+      SELF_HOSTED: true
+      SYNTH_API_KEY: ${SERVICE_BASE64_SYNTH_API_KEY}
+      RAILS_FORCE_SSL: "false"
+      RAILS_ASSUME_SSL: "false"
+      GOOD_JOB_EXECUTION_MODE: async
+      SERVICE_FQDN_APP_3000:
+    depends_on:
+      db:
+        condition: service_healthy
+    configs:
+      - source: app-uploads
+        target: /app/uploads
+  db:
+    image: postgres:16
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: maybe
+      POSTGRES_USER: maybe
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+volumes:
+  db-data:
+configs:
+  app-uploads:
+    content: |-
+      This is where user uploads will be stored

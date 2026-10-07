@@ -1,0 +1,41 @@
+# name: CodeX Docs
+# about: CodeX is a comprehensive platform that brings together passionate engineers, designers, and specialists to create high-quality open-source projects.
+# docs: https://docs.codex.so
+# website: https://codex.so
+# categories: docs, devtools, productivity
+# source: dokploy
+services:
+  codex:
+    image: ghcr.io/codex-team/codex.docs:v2.2
+    expose:
+      - "3000"
+    environment:
+      - APP_CONFIG_database_driver=mongodb
+      - APP_CONFIG_database_mongodb_uri=mongodb://mongo:${SERVICE_PASSWORD_MONGO_PASSWORD}@mongo:27017
+      - APP_CONFIG_auth_password=${SERVICE_PASSWORD_AUTH_PASSWORD}
+      - APP_CONFIG_auth_secret=${SERVICE_PASSWORD_AUTH_SECRET}
+      - SERVICE_FQDN_CODEX_3000
+    volumes:
+      - uploads:/usr/src/app/uploads
+      - db:/usr/src/app/db
+    depends_on:
+      - mongo
+    configs:
+      - source: codex-docs-config-yaml
+        target: /usr/src/app/docs-config.yaml
+  mongo:
+    image: mongo:4
+    environment:
+      - MONGO_INITDB_ROOT_PASSWORD=${SERVICE_PASSWORD_MONGO_PASSWORD}
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME:-mongo}
+    volumes:
+      - mongo-data:/data/db
+volumes:
+  uploads:
+  db:
+  mongo-data:
+configs:
+  codex-docs-config-yaml:
+    content: |
+      # Custom Config, view Here https://github.com/codex-team/codex.docs/blob/main/docs-config.yaml
+      # Can Also Be configured with ENV, see here https://docs.codex.so/configuration#override-properties-with-environment-variables

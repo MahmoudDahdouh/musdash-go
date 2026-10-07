@@ -1,0 +1,14 @@
+# name: Proxyscotch
+# about: A simple proxy server created for https://hoppscotch.io - CORS proxy.
+# docs: https://github.com/hoppscotch/proxyscotch
+# categories: networking
+# source: coolify
+services:
+  proxyscotch:
+    image: hoppscotch/proxyscotch:v0.1.4
+    environment:
+      - SERVICE_URL_PROXYSCOTCH_9159
+      - PROXYSCOTCH_TOKEN=${SERVICE_PASSWORD_TOKEN}
+      - PROXYSCOTCH_ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+      - PROXYSCOTCH_BANNED_OUTPUTS=${BANNED_OUTPUTS:-}
+      - PROXYSCOTCH_BANNED_DESTS=${BANNED_DESTS:-}

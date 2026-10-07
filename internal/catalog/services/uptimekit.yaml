@@ -1,0 +1,94 @@
+# name: Uptimekit
+# about: The modern open-source status page and monitoring solution.
+# docs: https://docs.uptimekit.dev/
+# website: https://uptimekit.dev/
+# categories: monitoring
+# source: dokploy
+services:
+  dash:
+    image: ghcr.io/uptimekit/dash:latest
+    environment:
+      - DATABASE_URL=postgresql://postgres:${SERVICE_PASSWORD_DB_PASSWORD}@db:5432/uptimekit
+      - CLICKHOUSE_URL=http://clickhouse:8123
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=${SERVICE_PASSWORD_CLICKHOUSE_PASSWORD}
+      - REDIS_URL=redis://redis:6379
+      - BETTER_AUTH_SECRET=${SERVICE_BASE64_64_SECRET_BASE}
+      - BETTER_AUTH_URL=${SERVICE_URL_DASH}
+      - NEXT_PUBLIC_URL=${SERVICE_URL_DASH}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - SERVICE_FQDN_DASH_3000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "IP=$$(hostname -i | awk '{print $$1}'); wget -qO- \"http://$$IP:3000/api/health\" >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: always
+  status-page:
+    image: ghcr.io/uptimekit/status-page:latest
+    environment:
+      - DATABASE_URL=postgresql://postgres:${SERVICE_PASSWORD_DB_PASSWORD}@db:5432/uptimekit
+      - CLICKHOUSE_URL=http://clickhouse:8123
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=${SERVICE_PASSWORD_CLICKHOUSE_PASSWORD}
+      - REDIS_URL=redis://redis:6379
+      - BETTER_AUTH_SECRET=${SERVICE_BASE64_64_SECRET_BASE}
+      - BETTER_AUTH_URL=${SERVICE_URL_DASH}
+      - NEXT_PUBLIC_URL=${SERVICE_URL_DASH}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - SERVICE_FQDN_STATUS_PAGE_3001
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      clickhouse:
+        condition: service_started
+      dash:
+        condition: service_healthy
+    restart: always
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_DB_PASSWORD}
+      POSTGRES_DB: uptimekit
+    volumes:
+      - db_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d uptimekit"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: always
+  redis:
+    image: redis:8.0-alpine
+    volumes:
+      - redis_data:/data
+    restart: always
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    environment:
+      CLICKHOUSE_DB: uptimekit
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ${SERVICE_PASSWORD_CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    user: "root"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    restart: always
+volumes:
+  db_data:
+  clickhouse_data:
+  redis_data:

@@ -1,0 +1,41 @@
+# name: Kaneo
+# about: Kaneo - an open source project management platform focused on simplicity and efficiency. Self-host it, customize it, make it yours.
+# docs: https://kaneo.app/docs/
+# website: https://kaneo.app/
+# categories: productivity
+# source: dokploy
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${KANEO_DB:-kaneo}
+      POSTGRES_USER: ${SERVICE_USER_KANEO_DB_USER}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_KANEO_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+  backend:
+    image: ghcr.io/usekaneo/api:latest
+    environment:
+      JWT_ACCESS: ${SERVICE_HEX_64_KANEO_JWT_ACCESS}
+      DATABASE_URL: "postgresql://${SERVICE_USER_KANEO_DB_USER}:${SERVICE_PASSWORD_KANEO_DB_PASSWORD}@postgres:5432/${KANEO_DB:-kaneo}"
+      SERVICE_FQDN_BACKEND_1337:
+    expose:
+      - 1337
+    depends_on:
+      postgres:
+        condition: service_started
+    restart: unless-stopped
+  frontend:
+    image: ghcr.io/usekaneo/web:latest
+    environment:
+      KANEO_API_URL: "${SERVICE_URL_BACKEND}"
+      SERVICE_FQDN_FRONTEND_5173:
+    expose:
+      - 5173
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+volumes:
+  postgres_data:

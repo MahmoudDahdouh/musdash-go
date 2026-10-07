@@ -1,0 +1,23 @@
+# name: FiveM Server
+# about: A modded GTA V multiplayer server with optional txAdmin web interface for easy server management.
+# docs: https://docs.fivem.net/docs/server-manual/
+# website: https://fivem.net/
+# categories: games
+# source: dokploy
+services:
+  fivem:
+    image: spritsail/fivem:latest
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    environment:
+      - LICENSE_KEY=${license_key:-}
+      - RCON_PASSWORD=${rcon_password:-}
+      - NO_DEFAULT_CONFIG=${NO_DEFAULT_CONFIG:-}
+      - SERVICE_FQDN_FIVEM_40120
+    volumes:
+      - fivem_config:/config
+      - fivem_txdata:/txData
+volumes:
+  fivem_config:
+  fivem_txdata:

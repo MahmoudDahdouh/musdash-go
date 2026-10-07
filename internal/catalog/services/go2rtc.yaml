@@ -1,0 +1,20 @@
+# name: go2rtc
+# about: Ultimate camera streaming application with support for dozens formats and protocols.
+# docs: https://go2rtc.org/
+# categories: media, communication
+# source: dokploy
+services:
+  go2rtc:
+    image: alexxit/go2rtc:1.9.14
+    restart: unless-stopped
+    expose:
+      - 1984
+      - 8554
+      - 8555
+    environment:
+      - TZ=${TZ:-}
+      - SERVICE_FQDN_GO2RTC_1984
+    volumes:
+      - go2rtc-config:/config
+volumes:
+  go2rtc-config:

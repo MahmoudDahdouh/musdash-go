@@ -1,0 +1,20 @@
+# name: Jupyter Notebook Python
+# about: Jupyter Notebook is an open-source web application that allows you to create and share documents that contain live code, equations, visualizations…
+# docs: https://jupyter.org/
+# categories: devtools, analytics
+# source: coolify
+services:
+  jupyter-notebook-python:
+    image: quay.io/jupyter/base-notebook:latest
+    environment:
+      - SERVICE_URL_JUPYTER_8888
+    volumes:
+      - jupyter-notebook-python-home-jovyan-work:/home/jovyan/work
+    command: start-notebook.sh
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8888/"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+volumes:
+  jupyter-notebook-python-home-jovyan-work:

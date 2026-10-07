@@ -1,0 +1,20 @@
+# name: linkding
+# about: A self-hosted bookmark manager designed to be minimal, fast, and easy to set up.
+# docs: https://linkding.link/
+# categories: rss
+# source: coolify
+services:
+  linkding:
+    image: sissbruecker/linkding:latest
+    volumes:
+      - 'linkding_data:/etc/linkding/data'
+    environment:
+      - SERVICE_URL_LINKDING_9090
+      - LD_SUPERUSER_NAME=${SERVICE_USER_LINKDING}
+      - LD_SUPERUSER_PASSWORD=${SERVICE_PASSWORD_LINKDING}
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/9090' || exit 1"]
+      interval: 5s
+      timeout: 5s
+volumes:
+  linkding_data:

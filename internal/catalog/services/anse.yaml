@@ -1,0 +1,20 @@
+# name: Anse
+# about: Anse is an open-source alternative to ChatGPT web UI, supporting OpenAI-compatible APIs.
+# docs: https://github.com/ddiu8081/anse#readme
+# website: https://anse.app/
+# categories: ai
+# source: dokploy
+services:
+  anse-demo:
+    image: ddiu8081/anse:latest
+    restart: always
+    expose:
+      - 3000
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://api.openai.com}
+      - HEAD_SCRIPTS=${HEAD_SCRIPTS:-}
+      - SECRET_KEY=${SERVICE_PASSWORD_SECRET_KEY}
+      - SITE_PASSWORD=${SERVICE_PASSWORD_SITE_PASSWORD}
+      - OPENAI_API_MODEL=${OPENAI_API_MODEL:-gpt-4o-mini}
+      - SERVICE_FQDN_ANSE_DEMO_3000

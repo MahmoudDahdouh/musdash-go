@@ -1,0 +1,33 @@
+# name: ClassicPress
+# about: ClassicPress is a community-led open source content management system for creators.
+# docs: https://docs.classicpress.net/
+# website: https://www.classicpress.net/
+# categories: cms
+# source: dokploy
+services:
+  classicpress:
+    image: classicpress/classicpress:php8.3-apache
+    expose:
+      - "80"
+    environment:
+      - WORDPRESS_DB_HOST=db
+      - WORDPRESS_DB_USER=wordpress
+      - WORDPRESS_DB_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - WORDPRESS_DB_NAME=wordpress
+      - SERVICE_FQDN_CLASSICPRESS_80
+    volumes:
+      - wordpress-data:/var/www/html
+    depends_on:
+      - db
+  db:
+    image: mariadb:10.6
+    environment:
+      - MYSQL_DATABASE=wordpress
+      - MYSQL_USER=wordpress
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_DB_ROOT_PASSWORD}
+    volumes:
+      - db-data:/var/lib/mysql
+volumes:
+  wordpress-data:
+  db-data:

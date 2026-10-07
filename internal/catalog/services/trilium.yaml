@@ -1,0 +1,18 @@
+# name: Trilium
+# about: Trilium Notes is a hierarchical note taking application with focus on building large personal knowledge bases.
+# docs: https://github.com/zadam/trilium/wiki/
+# website: https://github.com/zadam/trilium
+# categories: productivity
+# source: dokploy
+services:
+  trilium:
+    image: zadam/trilium:latest
+    expose:
+      - 8080
+    restart: always
+    volumes:
+      - trilium-home-node-trilium-data-backup:/home/node/trilium-data/backup
+    environment:
+      - SERVICE_FQDN_TRILIUM_8080
+volumes:
+  trilium-home-node-trilium-data-backup:

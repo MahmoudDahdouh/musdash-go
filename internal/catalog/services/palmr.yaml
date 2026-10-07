@@ -1,0 +1,21 @@
+# name: Palmr
+# about: Palmr the open-source, self-hosted alternative to WeTransfer. Share files securely, without tracking or limitations.
+# docs: https://palmr.kyantech.com.br/docs/3.0-beta
+# website: https://palmr.kyantech.com.br/
+# categories: storage
+# source: dokploy
+services:
+  palmr:
+    image: kyantech/palmr:latest
+    environment:
+      - ENABLE_S3=false
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - SERVICE_FQDN_PALMR_5487
+    expose:
+      - "5487"
+      - "3333"
+    volumes:
+      - palmr_data:/app/server
+    restart: unless-stopped
+volumes:
+  palmr_data:

@@ -1,0 +1,45 @@
+# name: Velix API
+# about: Self-hosted WhatsApp API with multi-instance support, webhooks, n8n node, and Chatwoot integration.
+# docs: https://github.com/paulolinder/velix-api#readme
+# website: https://velix.dev
+# categories: communication, devtools, ai
+# source: dokploy
+services:
+  velix-api:
+    image: ghcr.io/paulolinder/velix-api:0.1.0
+    restart: always
+    environment:
+      - DATABASE_URL=postgres://postgres:${SERVICE_PASSWORD_DB_PASSWORD}@postgres:5432/velix?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT_SECRET}
+      - HTTP_PORT=8080
+      - APP_ENV=production
+      - LOG_LEVEL=info
+      - MEDIA_STORAGE_PATH=/data/media
+      - ENGINE_STORE_PATH=/data/instances
+      - ENGINE_AUTO_RECONNECT=true
+      - ENGINE_MAX_INSTANCES=200
+      - REGISTRATION_ENABLED=false
+      - SERVICE_FQDN_VELIX_API_8080
+    volumes:
+      - velix-data:/data
+    depends_on:
+      - postgres
+      - redis
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      - POSTGRES_DB=velix
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis-data:/data
+volumes:
+  velix-data:
+  postgres-data:
+  redis-data:

@@ -1,0 +1,76 @@
+# name: Automatisch
+# about: Automatisch is a powerful, self-hosted workflow automation tool designed for connecting your apps and automating repetitive tasks.
+# docs: https://automatisch.io/docs
+# categories: automation
+# source: dokploy
+services:
+  automatisch:
+    image: automatischio/automatisch:0.15.0
+    restart: unless-stopped
+    environment:
+      - HOST=${SERVICE_FQDN_AUTOMATISCH}
+      - PROTOCOL=http
+      - PORT=3000
+      - API_URL=${SERVICE_URL_AUTOMATISCH}
+      - WEB_APP_URL=${SERVICE_URL_AUTOMATISCH}
+      - APP_ENV=production
+      - REDIS_HOST=automatisch-redis
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS_PASSWORD}
+      - POSTGRES_HOST=automatisch-postgres
+      - POSTGRES_DATABASE=automatisch
+      - POSTGRES_USERNAME=postgres
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - ENCRYPTION_KEY=${SERVICE_PASSWORD_ENCRYPTION_KEY}
+      - WEBHOOK_SECRET_KEY=${SERVICE_PASSWORD_WEBHOOK_SECRET_KEY}
+      - APP_SECRET_KEY=${SERVICE_PASSWORD_APP_SECRET_KEY}
+      - SERVICE_FQDN_AUTOMATISCH_3000
+    volumes:
+      - storage:/automatisch/storage
+    depends_on:
+      automatisch-postgres:
+        condition: service_healthy
+      automatisch-redis:
+        condition: service_started
+  automatisch-worker:
+    image: automatischio/automatisch:0.15.0
+    restart: unless-stopped
+    environment:
+      - APP_ENV=production
+      - REDIS_HOST=automatisch-redis
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS_PASSWORD}
+      - POSTGRES_HOST=automatisch-postgres
+      - POSTGRES_DATABASE=automatisch
+      - POSTGRES_USERNAME=postgres
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - ENCRYPTION_KEY=${SERVICE_PASSWORD_ENCRYPTION_KEY}
+      - WEBHOOK_SECRET_KEY=${SERVICE_PASSWORD_WEBHOOK_SECRET_KEY}
+      - APP_SECRET_KEY=${SERVICE_PASSWORD_APP_SECRET_KEY}
+      - WORKER=true
+    volumes:
+      - storage:/automatisch/storage
+    depends_on:
+      - automatisch
+  automatisch-postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - POSTGRES_DB=automatisch
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d automatisch"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  automatisch-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${SERVICE_PASSWORD_REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+volumes:
+  storage:
+  postgres_data:
+  redis_data:

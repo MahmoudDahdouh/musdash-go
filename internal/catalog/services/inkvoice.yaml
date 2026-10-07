@@ -1,0 +1,25 @@
+# name: Inkvoice
+# about: Open-source invoicing for freelancers and small teams: invoices, online payments (Stripe & PayPal), expenses, multi-currency and reports.
+# docs: https://docs.inkvoice.app
+# website: https://inkvoice.app
+# categories: finance
+# source: dokploy
+services:
+  inkvoice:
+    image: ghcr.io/pigontech/inkvoice:0.1.0
+    restart: unless-stopped
+    environment:
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASS=${SERVICE_PASSWORD_ADMIN_PASS}
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT_SECRET}
+      - DATABASE_PATH=/app/data/invoice.db
+      - PORT=3000
+      - HOST=0.0.0.0
+      - COOKIE_SECURE=false
+      - SERVICE_FQDN_INKVOICE_3000
+    volumes:
+      - inkvoice-data:/app/data
+    expose:
+      - 3000
+volumes:
+  inkvoice-data:

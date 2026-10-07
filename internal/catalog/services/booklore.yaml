@@ -1,0 +1,44 @@
+# name: Booklore
+# about: Booklore is an application for managing and serving book-related data, backed by a MariaDB database.
+# docs: https://github.com/booklore-app/BookLore/tree/develop/docs
+# website: https://github.com/booklore-app/BookLore
+# categories: media
+# source: dokploy
+services:
+  booklore:
+    image: ghcr.io/booklore-app/booklore:${BOOKLORE_IMAGE_TAG:-latest}
+    environment:
+      - DATABASE_URL=jdbc:mariadb://mariadb:3306/${MYSQL_DATABASE:-booklore}
+      - DATABASE_USERNAME=${MYSQL_USER:-booklore}
+      - DATABASE_PASSWORD=${SERVICE_PASSWORD_APP_PASSWORD}
+      - SERVICE_FQDN_BOOKLORE_6060
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    expose:
+      - 6060
+    volumes:
+      - booklore-data:/app/data
+      - booklore-books:/books
+  mariadb:
+    image: lscr.io/linuxserver/mariadb:latest
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Etc/UTC}
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-booklore}
+      - MYSQL_USER=${MYSQL_USER:-booklore}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_APP_PASSWORD}
+    volumes:
+      - mariadb-config:/config
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  booklore-data:
+  booklore-books:
+  mariadb-config:

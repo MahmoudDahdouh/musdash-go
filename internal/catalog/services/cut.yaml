@@ -1,0 +1,37 @@
+# name: Cut
+# about: A tiny, self-hosted URL shortener — short links that are entirely yours, with per-link passwords, expiries, and click limits.
+# docs: https://github.com/MendyLanda/cut#readme
+# website: https://github.com/MendyLanda/cut
+# categories: business
+# source: dokploy
+services:
+  cut:
+    image: ghcr.io/mendylanda/cut:latest
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - REDIS_URL=redis://redis:6379
+      - SERVICE_FQDN_CUT_3000
+    expose:
+      - 3000
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory-policy noeviction
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  redis-data:

@@ -1,0 +1,42 @@
+# name: YOURLS
+# about: YOURLS (Your Own URL Shortener) is a set of PHP scripts that will allow you to run your own URL shortening service (a la TinyURL or Bitly).
+# docs: https://yourls.org/#documentation
+# website: https://yourls.org/
+# categories: business
+# source: dokploy
+services:
+  yourls-app:
+    image: yourls:1.9.2
+    environment:
+      YOURLS_SITE: ${SERVICE_URL_YOURLS_APP}
+      YOURLS_USER: ${YOURLS_ADMIN_USER:-admin}
+      YOURLS_PASS: ${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      YOURLS_DB_HOST: yourls-mysql
+      YOURLS_DB_USER: yourls
+      YOURLS_DB_PASS: ${SERVICE_PASSWORD_MYSQL_PASSWORD}
+      YOURLS_DB_NAME: yourls
+      SERVICE_FQDN_YOURLS_APP_80:
+    volumes:
+      - yourls-data:/var/www/html
+    depends_on:
+      yourls-mysql:
+        condition: service_healthy
+    restart: always
+  yourls-mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: ${SERVICE_PASSWORD_MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: yourls
+      MYSQL_USER: yourls
+      MYSQL_PASSWORD: ${SERVICE_PASSWORD_MYSQL_PASSWORD}
+    volumes:
+      - yourls-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+volumes:
+  yourls-data:
+  yourls-mysql-data:

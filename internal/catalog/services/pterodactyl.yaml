@@ -1,0 +1,49 @@
+# name: Pterodactyl
+# about: A free, open-source game server management panel.
+# docs: https://pterodactyl.io/project/introduction.html
+# website: https://pterodactyl.io
+# categories: games
+# source: dokploy
+services:
+  database:
+    image: mariadb:10.5
+    restart: always
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - "pterodb:/var/lib/mysql"
+    environment:
+      MYSQL_DATABASE: "panel"
+      MYSQL_USER: "pterodactyl"
+      MYSQL_PASSWORD: ${SERVICE_PASSWORD_DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${SERVICE_PASSWORD_DB_ROOT_PASSWORD}
+  cache:
+    image: redis:alpine
+    restart: always
+  panel:
+    image: ghcr.io/pterodactyl/panel:latest
+    restart: always
+    volumes:
+      - "pterovar:/app/var/"
+      - "pteronginx:/etc/nginx/http.d/"
+      - "pterocerts:/etc/letsencrypt/"
+      - "pterologs:/app/storage/logs"
+    environment:
+      APP_ENV: "production"
+      APP_ENVIRONMENT_ONLY: "false"
+      CACHE_DRIVER: ${CACHE_DRIVER:-redis}
+      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
+      QUEUE_DRIVER: ${QUEUE_DRIVER:-redis}
+      REDIS_HOST: ${REDIS_HOST:-cache}
+      DB_HOST: ${DB_HOST:-database}
+      DB_PASSWORD: ${SERVICE_PASSWORD_DB_PASSWORD}
+      DB_PORT: ${DB_PORT:-3306}
+      MYSQL_PASSWORD: ${SERVICE_PASSWORD_DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${SERVICE_PASSWORD_DB_ROOT_PASSWORD}
+      DB_CONNECTION: "mysql"
+      SERVICE_FQDN_PANEL_80:
+volumes:
+  pterodb:
+  pterovar:
+  pteronginx:
+  pterocerts:
+  pterologs:

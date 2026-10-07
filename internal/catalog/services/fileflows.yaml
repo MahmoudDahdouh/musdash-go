@@ -1,0 +1,30 @@
+# name: FileFlows
+# about: FileFlows can drastically reduce your files, up to 90%, saving you space and money.
+# docs: https://fileflows.com/docs/
+# categories: media
+# source: coolify
+services:
+  fileflows:
+    image: revenz/fileflows:latest
+    environment:
+      - SERVICE_URL_FILEFLOWS_5000
+      - _APP_URL=$SERVICE_URL_FILEFLOWS
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-America/Toronto}
+      - SERVICE_FQDN_FILEFLOWS_5000
+    volumes:
+      - fileflows_temp:/temp
+      - fileflows_configs:/app/Data
+      - fileflows_logs:/app/Logs
+      - fileflows_common:/app/common
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/system/version"]
+      interval: 2s
+      timeout: 10s
+      retries: 15
+volumes:
+  fileflows_common:
+  fileflows_configs:
+  fileflows_logs:
+  fileflows_temp:

@@ -1,0 +1,49 @@
+# name: Discord Tickets
+# about: An open-source Discord bot for creating and managing support ticket channels.
+# docs: https://discordtickets.app/self-hosting/installation/docker/
+# website: https://discordtickets.app
+# categories: communication, support
+# source: dokploy
+services:
+  tickets-postgres:
+    image: mysql:8
+    restart: unless-stopped
+    volumes:
+      - tickets-mysql-data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-tickets}
+      MYSQL_PASSWORD: ${SERVICE_PASSWORD_MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${SERVICE_PASSWORD_MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER:-tickets}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${MYSQL_USER:-tickets}", "-p${SERVICE_PASSWORD_MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  tickets-app:
+    image: eartharoid/discord-tickets:4.0.21
+    depends_on:
+      tickets-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - tickets-app-data:/home/container/user
+    tty: true
+    stdin_open: true
+    environment:
+      DB_CONNECTION_URL: mysql://${MYSQL_USER:-tickets}:${SERVICE_PASSWORD_MYSQL_PASSWORD}@tickets-postgres/${MYSQL_DATABASE:-tickets}
+      DISCORD_SECRET: ${DISCORD_SECRET:-}
+      DISCORD_TOKEN: ${DISCORD_TOKEN:-}
+      ENCRYPTION_KEY: ${SERVICE_PASSWORD_64_ENCRYPTION_KEY}
+      DB_PROVIDER: mysql
+      HTTP_EXTERNAL: ${SERVICE_URL_TICKETS_APP}
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 8169
+      HTTP_TRUST_PROXY: "true"
+      PUBLIC_BOT: "false"
+      PUBLISH_COMMANDS: "true"
+      SUPER: ${SUPER_USERS:-YOUR_DISCORD_USER_ID}
+      SERVICE_FQDN_TICKETS_APP_8169:
+volumes:
+  tickets-mysql-data:
+  tickets-app-data:

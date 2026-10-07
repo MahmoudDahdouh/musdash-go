@@ -1,0 +1,18 @@
+# name: DumbBudget
+# about: DumbBudget is a simple, self-hosted budget tracking service with PIN protection and no database required.
+# docs: https://github.com/DumbWareio/DumbBudget/blob/main/README.md
+# website: https://dumbware.io/DumbBudget
+# categories: finance
+# source: dokploy
+services:
+  dumbbudget:
+    image: dumbwareio/dumbbudget:latest
+    restart: unless-stopped
+    expose:
+      - 3000
+    volumes:
+      - dumbbudget-data:/app/data
+    environment:
+      - SERVICE_FQDN_DUMBBUDGET_3000
+volumes:
+  dumbbudget-data:

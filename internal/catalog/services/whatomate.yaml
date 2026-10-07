@@ -1,0 +1,106 @@
+# name: Whatomate
+# about: Modern, open-source WhatsApp Business Platform with real-time chat, chatbot automation, bulk campaigns, template management, and voice calling via…
+# docs: https://shridarpatil.github.io/whatomate/
+# website: https://whatomate.io/
+# categories: communication, automation, business
+# source: dokploy
+services:
+  whatomate:
+    image: shridh0r/whatomate:0.1.1-beta-0.16.1
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - TZ=Etc/UTC
+      - SERVICE_FQDN_WHATOMATE_8080
+    volumes:
+      - whatomate-uploads:/app/uploads
+    command: ["server", "-migrate", "-config", "/app/config.toml"]
+    configs:
+      - source: whatomate-config-toml
+        target: /app/config.toml
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=whatomate
+      - POSTGRES_PASSWORD=whatomate
+      - POSTGRES_DB=whatomate
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U whatomate -d whatomate"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - whatomate-postgres-data:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - whatomate-redis-data:/data
+volumes:
+  whatomate-uploads:
+  whatomate-postgres-data:
+  whatomate-redis-data:
+configs:
+  whatomate-config-toml:
+    content: |
+      [app]
+      name = "Whatomate"
+      environment = "staging"
+      debug = false
+      encryption_key = "${SERVICE_PASSWORD_ENCRYPTION_KEY}"
+
+      [server]
+      host = "0.0.0.0"
+      port = 8080
+      read_timeout = 30
+      write_timeout = 30
+      base_path = ""
+      allowed_origins = ""
+
+      [database]
+      host = "db"
+      port = 5432
+      user = "whatomate"
+      password = "whatomate"
+      name = "whatomate"
+      ssl_mode = "disable"
+      max_open_conns = 25
+      max_idle_conns = 5
+      conn_max_lifetime = 300
+
+      [redis]
+      host = "redis"
+      port = 6379
+      username = ""
+      password = ""
+      db = 0
+      tls = false
+
+      [jwt]
+      secret = "${SERVICE_PASSWORD_64_JWT_SECRET}"
+      access_expiry_mins = 15
+      refresh_expiry_days = 1
+
+      [storage]
+      type = "local"
+      local_path = "./uploads"
+
+      [whatsapp]
+      webhook_verify_token = "${SERVICE_PASSWORD_WEBHOOK_VERIFY_TOKEN}"
+      api_version = "v24.0"
+      base_url = "https://graph.facebook.com"
+
+      [default_admin]
+      email = "admin@admin.com"
+      password = "admin"
+      full_name = "Admin"

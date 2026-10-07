@@ -1,0 +1,52 @@
+# name: InvoiceShelf
+# about: InvoiceShelf is a self-hosted open source invoicing system for freelancers and small businesses.
+# docs: https://github.com/InvoiceShelf/invoiceshelf#readme
+# website: https://invoiceshelf.com
+# categories: finance, business
+# source: dokploy
+services:
+  invoiceshelf-postgres:
+    image: postgres:15
+    volumes:
+      - invoiceshelf-postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - POSTGRES_USER=${DB_USERNAME:-invoiceshelf}
+      - POSTGRES_DB=${DB_DATABASE:-invoiceshelf}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-invoiceshelf}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  invoiceshelf-app:
+    image: invoiceshelf/invoiceshelf:nightly
+    volumes:
+      - invoiceshelf-storage:/var/www/html/storage
+    environment:
+      - PHP_TZ=UTC
+      - TIMEZONE=UTC
+      - APP_NAME=InvoiceShelf
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=${SERVICE_URL_INVOICESHELF_APP}
+      - DB_CONNECTION=pgsql
+      - DB_HOST=invoiceshelf-postgres
+      - DB_PORT=5432
+      - DB_DATABASE=${DB_DATABASE:-invoiceshelf}
+      - DB_USERNAME=${DB_USERNAME:-invoiceshelf}
+      - DB_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - CACHE_STORE=file
+      - SESSION_DRIVER=file
+      - SESSION_LIFETIME=120
+      - SESSION_ENCRYPT=true
+      - SESSION_PATH=/
+      - SESSION_DOMAIN=${SERVICE_FQDN_INVOICESHELF_APP}
+      - SANCTUM_STATEFUL_DOMAINS=${SERVICE_FQDN_INVOICESHELF_APP}
+      - STARTUP_DELAY=10
+      - SERVICE_FQDN_INVOICESHELF_APP_8080
+    depends_on:
+      invoiceshelf-postgres:
+        condition: service_healthy
+volumes:
+  invoiceshelf-postgres-data:
+  invoiceshelf-storage:

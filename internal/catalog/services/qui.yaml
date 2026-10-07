@@ -1,0 +1,17 @@
+# name: qui
+# about: A fast, modern web interface for qBittorrent. Manage multiple qBittorrent instances from a single, lightweight application built by autobrr.
+# docs: https://getqui.com
+# categories: media
+# source: dokploy
+services:
+  qui:
+    image: ghcr.io/autobrr/qui:latest
+    restart: unless-stopped
+    expose:
+      - "7476"
+    volumes:
+      - qui-config:/config
+    environment:
+      - SERVICE_FQDN_QUI_7476
+volumes:
+  qui-config:

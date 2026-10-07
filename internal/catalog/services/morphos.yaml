@@ -1,0 +1,24 @@
+# name: Morphos
+# about: Morphos is a lightweight service for distributed operations and orchestration.
+# docs: https://github.com/danvergara/morphos-server#readme
+# website: https://github.com/danvergara/morphos-server
+# categories: automation
+# source: dokploy
+services:
+  morphos-server:
+    image: ghcr.io/danvergara/morphos-server:latest
+    restart: unless-stopped
+    expose:
+      - 8080
+    volumes:
+      - morphos-server-morphos-upload:/upload:rw
+    healthcheck:
+      test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/8080' || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    environment:
+      - SERVICE_FQDN_MORPHOS_SERVER_8080
+volumes:
+  morphos-server-morphos-upload:

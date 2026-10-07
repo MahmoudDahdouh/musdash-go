@@ -1,0 +1,33 @@
+# name: TREK
+# about: A minimalist, self-hosted trip planner with Kanban-style task boards, budgets, packing lists, interactive maps, real-time collaboration, and OIDC…
+# docs: https://github.com/mauriceboe/TREK/wiki
+# website: https://github.com/mauriceboe/TREK
+# categories: home, productivity
+# source: dokploy
+services:
+  trek:
+    image: mauriceboe/trek:3.3.0
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - ENCRYPTION_KEY=${SERVICE_PASSWORD_64_ENCRYPTION_KEY}
+      - TZ=${TZ:-UTC}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - APP_URL=${SERVICE_URL_TREK}
+      - ALLOWED_ORIGINS=${SERVICE_URL_TREK}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:?Set an email address}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - SERVICE_FQDN_TREK_3000
+    volumes:
+      - trek-data:/app/data
+      - trek-uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+volumes:
+  trek-data:
+  trek-uploads:

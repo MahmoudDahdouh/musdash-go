@@ -1,0 +1,47 @@
+# name: Paperclip
+# about: Paperclip is an open-source control plane for managing teams of AI agents, goals, budgets, tickets, and recurring work.
+# docs: https://docs.paperclip.ing/
+# website: https://paperclip.ing/
+# categories: ai, automation
+# source: dokploy
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: paperclip
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: paperclip
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperclip -d paperclip"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+  paperclip:
+    image: ghcr.io/paperclipai/paperclip:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3100"
+      SERVE_UI: "true"
+      DATABASE_URL: postgres://paperclip:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/paperclip
+      BETTER_AUTH_SECRET: ${SERVICE_PASSWORD_64_BETTER_AUTH_SECRET}
+      PAPERCLIP_HOME: /paperclip
+      PAPERCLIP_INSTANCE_ID: default
+      PAPERCLIP_CONFIG: /paperclip/instances/default/config.json
+      PAPERCLIP_DEPLOYMENT_MODE: ${PAPERCLIP_DEPLOYMENT_MODE:-authenticated}
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: ${PAPERCLIP_DEPLOYMENT_EXPOSURE:-private}
+      PAPERCLIP_PUBLIC_URL: ${SERVICE_URL_PAPERCLIP}
+      SERVICE_FQDN_PAPERCLIP_3100:
+    expose:
+      - "3100"
+    volumes:
+      - paperclip-data:/paperclip
+volumes:
+  postgres-data:
+  paperclip-data:

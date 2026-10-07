@@ -1,0 +1,102 @@
+# name: PowerSync
+# about: PowerSync is a sync engine for local-first apps. Syncs PostgreSQL data to mobile devices and browsers with real-time replication.
+# docs: https://docs.powersync.com/
+# website: https://www.powersync.com/
+# categories: storage, database, backend
+# source: dokploy
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    command: ["postgres", "-c", "wal_level=logical"]
+    environment:
+      POSTGRES_USER: powersync
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: powersync
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U powersync -d powersync"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    configs:
+      - source: postgres-init-powersync-sql
+        target: /docker-entrypoint-initdb.d/init-powersync.sql
+  powersync:
+    image: journeyapps/powersync-service:1.21.0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/powersync.yaml
+      NODE_OPTIONS: --max-old-space-size=1000
+      SERVICE_FQDN_POWERSYNC_8080:
+    command: ["start", "-r", "unified"]
+    configs:
+      - source: powersync-powersync-yaml
+        target: /config/powersync.yaml
+volumes:
+  postgres-data:
+configs:
+  postgres-init-powersync-sql:
+    content: |
+      -- Separate database for PowerSync bucket storage.
+      CREATE DATABASE powersync_storage OWNER powersync;
+
+      -- Demo table synced by the default sync rules.
+      CREATE TABLE lists (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        name text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+
+      INSERT INTO lists (name) VALUES ('Welcome to PowerSync');
+
+      -- Publication used by PowerSync logical replication.
+      CREATE PUBLICATION powersync FOR ALL TABLES;
+  powersync-powersync-yaml:
+    content: |
+      telemetry:
+        disable_telemetry_sharing: true
+
+      # Replication source: the bundled Postgres (wal_level=logical).
+      # Point this at your own database to sync real data.
+      replication:
+        connections:
+          - type: postgresql
+            uri: postgresql://powersync:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/powersync
+            sslmode: disable
+
+      # Bucket storage. Must be a different database than the replication source.
+      storage:
+        type: postgresql
+        uri: postgresql://powersync:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/powersync_storage
+        sslmode: disable
+
+      port: 8080
+
+      # Sync rules: syncs the demo "lists" table to all clients.
+      # Edit these for your own schema: https://docs.powersync.com/usage/sync-rules
+      sync_rules:
+        content: |
+          bucket_definitions:
+            global:
+              data:
+                - SELECT * FROM lists
+
+      client_auth:
+        # HS256 key for signing development tokens.
+        # See https://docs.powersync.com/installation/authentication-setup/custom
+        jwks:
+          keys:
+            - kty: oct
+              alg: HS256
+              kid: powersync-dev
+              k: ${SERVICE_PASSWORD_64_JWKS_KEY}
+        audience: ["powersync"]
+
+      api:
+        tokens:
+          - ${SERVICE_PASSWORD_ADMIN_TOKEN}

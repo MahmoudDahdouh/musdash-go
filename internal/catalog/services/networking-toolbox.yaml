@@ -1,0 +1,23 @@
+# name: Networking Toolbox
+# about: A collection of handy networking utilities by Lissy93, packaged as a self-hostable web app.
+# docs: https://github.com/lissy93/networking#readme
+# website: https://github.com/lissy93/networking
+# categories: networking, devtools
+# source: dokploy
+services:
+  app:
+    image: lissy93/networking-toolbox:latest
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+      HOST: ${HOST:-0.0.0.0}
+      SERVICE_FQDN_APP_3000:
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

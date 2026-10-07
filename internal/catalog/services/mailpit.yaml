@@ -1,0 +1,30 @@
+# name: Mailpit
+# about: Email & SMTP testing tool with API for developers.
+# docs: https://mailpit.axllent.org/docs/
+# categories: email, devtools
+# source: coolify
+services:
+  mailpit:
+    image: axllent/mailpit:latest
+    volumes:
+      - "mailpit-data:/data"
+    environment:
+      - SERVICE_URL_MAILPIT_8025
+      - MP_MAX_MESSAGES=5000
+      - MP_DATABASE=/data/mailpit.db
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+      - MP_UI_AUTH_FILE=/data/htpasswd
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 20s
+      retries: 10
+    configs:
+      - source: mailpit-htpasswd
+        target: /data/htpasswd
+volumes:
+  mailpit-data:
+configs:
+  mailpit-htpasswd:
+    content: "\n"

@@ -1,0 +1,22 @@
+# name: ArchiveBox
+# about: ArchiveBox is a self-hosted internet archiving solution for saving websites, media, and documents.
+# docs: https://docs.archivebox.io/
+# website: https://archivebox.io/
+# categories: storage, productivity
+# source: dokploy
+services:
+  archivebox:
+    image: archivebox/archivebox:latest
+    restart: unless-stopped
+    command: server --quick-init 0.0.0.0:8000
+    environment:
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      PUBLIC_INDEX: ${PUBLIC_INDEX:-True}
+      PUBLIC_SNAPSHOTS: ${PUBLIC_SNAPSHOTS:-True}
+      SERVICE_FQDN_ARCHIVEBOX_8000:
+    volumes:
+      - archivebox_data:/data
+    expose:
+      - "8000"
+volumes:
+  archivebox_data:

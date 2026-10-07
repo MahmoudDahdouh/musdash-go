@@ -17,7 +17,7 @@ The full design is in [docs/spec.md](docs/spec.md). Each phase has an implementa
 | 1 | Deploy Docker images with domains, HTTPS, storage, live logs and rolling updates | Done |
 | 2 | Deploy from Git: Dockerfile and static builds, GitHub App, GitLab token, deploy keys, push webhooks, deploy token | Done |
 | 3 | Databases: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, KeyDB, Dragonfly, ClickHouse | Done |
-| 4 | Services: Docker Compose stacks from a catalogue (n8n, WordPress, Ghost, Uptime Kuma, MinIO, Cloudflare Tunnel), your own file, or a Git repository | Done |
+| 4 | Services: Docker Compose stacks from a catalogue of more than 600 (the services Coolify and Dokploy offer, by category), your own file, or a Git repository | Done |
 | 5 | Operations: scheduled database backups with S3 copies, retention and restore; scheduled commands; notifications; Docker clean-up | Done |
 | 6 | More servers: deploy to machines reached over SSH, each with its own proxy; build on one server and run on another | Done |
 | 7 | Deploy polish: rollback, domains by path, a password in front of a domain, a preview for every pull request | Done |
@@ -194,7 +194,18 @@ Switch it on under the app's Settings. Each pull request into the app's branch t
 
 ## Services
 
-A service is a stack of containers described by a Docker Compose file. **Add resource** on a project page offers a small catalogue of services and "Your own Compose file".
+A service is a stack of containers described by a Docker Compose file. **Add resource** offers a catalogue of more than 600 services, "Your own Compose file" and a Compose file in a Git repository.
+
+The catalogue is sorted into categories (AI, Analytics, Databases, Monitoring, Storage and so on); a service can be in up to three. The chips above the list narrow it to one category, and the field beside them finds a service by name or by what it does. Both work together.
+
+Six of the templates were written for musdash (n8n, WordPress, Ghost, Uptime Kuma, MinIO, Cloudflare Tunnel) and are started for real by its tests. The rest are the templates of [Coolify](https://coolify.io/services) and [Dokploy](https://github.com/Dokploy/templates), turned into musdash's form by `tools/catalog` (the licences and what was changed are in `internal/catalog/services.LICENSE`). What to know about those:
+
+- Each is held to the same rules as a file of your own, and the tests load every one the way a deployment does. They are not each started: a template is its makers' Compose file, and one that does not come up says why on its Deployments page, where its Compose file can be changed.
+- A template publishes no port. What a service offers besides its web address (SSH for a Git server, MQTT, a game's own port) is added with a `ports:` entry in its Compose tab, as below.
+- A value its makers left for you to set (an API key, a mail server) starts empty. It is listed under Variables.
+- A dozen keep a database password their makers wrote into the file, where the other end of it is the image's own default. Such a password is reachable only inside the stack's network.
+- A template asks on its form for what only you can give it: an address to sign in with, or the password of the app's first account where its makers had written one into the file for everybody.
+- About 110 services of the two catalogues are not there. Most need what a stack may not have (the Docker socket, the server's own network or directories, extra capabilities); some are reached on a port of their own rather than a web address (a game server, a VPN). `docs/catalogue-left-out.md` lists each with the reason.
 
 - Give a service of the stack a web address by adding `SERVICE_FQDN_<NAME>_<PORT>` to its environment: `NAME` is the Compose service, `PORT` the port it listens on. musdash gives it a domain (a generated one at first; change it under Settings) and routes it.
 - `SERVICE_URL_<NAME>` is the same address with its scheme, `SERVICE_HTTPS_<NAME>` is `true` or `false`.
@@ -414,13 +425,19 @@ Starts each of the eight engines in turn and waits for its health check. It down
 MUSDASH_DOCKER_TEST=1 go test ./internal/compose ./internal/deploy -run 'Sandbox|Catalogue|TestServiceWithDocker' -v
 ```
 
-Loads Compose files in the sandbox (including ones that try to read files of the server, and every catalogue template), then runs a two-container stack through deploy, redeploy, stop and delete.
+Loads Compose files in the sandbox (including ones that try to read files of the server, and every catalogue template, which takes several minutes: there are more than 600), then runs a two-container stack through deploy, redeploy, stop and delete.
 
 ```bash
 MUSDASH_DOCKER_TEST_SERVICES=1 go test ./internal/deploy -run TestCatalogueWithDocker -v -timeout 90m
 ```
 
-Installs the catalogue's templates for real, fetches each web address, redeploys and deletes. `MUSDASH_SERVICES=wordpress,minio` limits it to those.
+Installs the six templates written for musdash for real, fetches each web address, redeploys and deletes. `MUSDASH_SERVICES=wordpress,umami` installs just those, which is how one of the imported templates is tried.
+
+```bash
+cd tools/catalog && go run . -coolify ~/src/coolify -dokploy ~/src/dokploy-templates -icons ~/src/selfhst-icons
+```
+
+Makes the imported part of the catalogue again from checkouts of Coolify, Dokploy's templates and the selfh.st icons. It is a Go module of its own (it needs a YAML parser, which musdash does without) and no part of the binary. Run the sandbox test afterwards; what it refuses goes into `tools/catalog/rejected.txt`.
 
 ## Memory
 

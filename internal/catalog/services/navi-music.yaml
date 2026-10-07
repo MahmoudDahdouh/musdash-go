@@ -1,0 +1,23 @@
+# name: NaviMusic
+# about: A Discord music bot that plays YouTube and Spotify tracks and playlists in voice channels.
+# docs: https://github.com/andre-carbajal/NaviMusic#configuration
+# website: https://github.com/andre-carbajal/NaviMusic
+# categories: media
+# source: dokploy
+# connect: true
+services:
+  navi-music:
+    image: anvian/navi-music:4.1.0
+    restart: unless-stopped
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        java $$JAVA_OPTS -jar /app/NaviMusic.jar nogui --spring.profiles.active=prod; code=$$?; if [ "$$code" -eq 0 ]; then echo "NaviMusic is idle. Set DISCORD_TOKEN (and optionally Spotify/YouTube credentials) in the Environment tab, then redeploy."; tail -f /dev/null; fi; exit $$code
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:-}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+      YOUTUBE_POTOKEN: ${YOUTUBE_POTOKEN:-}
+      YOUTUBE_VISITOR: ${YOUTUBE_VISITOR:-}
+      YOUTUBE_OAUTH2: ${YOUTUBE_OAUTH2:-}

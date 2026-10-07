@@ -1,0 +1,21 @@
+# name: MediaWiki
+# about: MediaWiki is a collaboration and documentation platform brought to you by a vibrant community.
+# docs: https://www.mediawiki.org
+# categories: cms, docs, productivity
+# source: coolify
+services:
+  mediawiki:
+    image: mediawiki:latest
+    environment:
+      - SERVICE_URL_MEDIAWIKI_80
+    volumes:
+      - mediawiki-images:/var/www/html/images
+      - mediawiki-sqlite:/var/www/html/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 5s
+      timeout: 20s
+      retries: 10
+volumes:
+  mediawiki-images:
+  mediawiki-sqlite:

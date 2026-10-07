@@ -1,0 +1,23 @@
+# name: DokuWiki
+# about: A lightweight and easy-to-use wiki platform for creating and managing documentation and knowledge bases.
+# docs: https://www.dokuwiki.org/
+# categories: cms, docs
+# source: coolify
+services:
+  dokuwiki:
+    image: lscr.io/linuxserver/dokuwiki:latest
+    environment:
+      - SERVICE_URL_DOKUWIKI
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+      - SERVICE_FQDN_DOKUWIKI_80
+    volumes:
+      - dokuwiki-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80"]
+      interval: 2s
+      timeout: 10s
+      retries: 15
+volumes:
+  dokuwiki-config:

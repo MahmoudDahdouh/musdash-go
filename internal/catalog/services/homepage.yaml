@@ -1,0 +1,18 @@
+# name: Homepage
+# about: Homepage is a highly customizable self-hosted application dashboard and startpage with service and widget integrations.
+# docs: https://gethomepage.dev/installation/
+# website: https://gethomepage.dev/
+# categories: home, productivity
+# source: dokploy
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v1.13.1
+    restart: unless-stopped
+    expose:
+      - 3000
+    volumes:
+      - homepage-homepage-config:/app/config
+    environment:
+      - SERVICE_FQDN_HOMEPAGE_3000
+volumes:
+  homepage-homepage-config:

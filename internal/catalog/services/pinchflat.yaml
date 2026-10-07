@@ -1,0 +1,16 @@
+# name: Pinchflat
+# about: Pinchflat is a self-hosted YouTube downloader that allows you to download videos and playlists with a simple web interface.
+# docs: https://github.com/kieraneglin/pinchflat
+# categories: media
+# source: dokploy
+services:
+  pinchflat:
+    image: ghcr.io/kieraneglin/pinchflat:latest
+    volumes:
+      - pinchflat-config:/config
+      - pinchflat-downloads:/downloads
+    environment:
+      - SERVICE_FQDN_PINCHFLAT_8945
+volumes:
+  pinchflat-config:
+  pinchflat-downloads:

@@ -1,0 +1,40 @@
+# name: KitchenOwl
+# about: KitchenOwl is a self-hosted grocery list and recipe manager.
+# docs: https://github.com/TomBursch/kitchenowl/wiki
+# website: https://kitchenowl.org/
+# categories: home
+# source: dokploy
+services:
+  web:
+    image: tombursch/kitchenowl:v0.7.1
+    restart: unless-stopped
+    environment:
+      - JWT_SECRET_KEY=${SERVICE_PASSWORD_APP_PASSWORD}
+      - DB_DRIVER=postgresql
+      - DB_HOST=db
+      - DB_NAME=${DB_NAME:-kitchenowl}
+      - DB_USER=${DB_USER:-kitchenowl}
+      - DB_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - SERVICE_FQDN_WEB_8080
+    volumes:
+      - kitchenowl_files:/data
+    depends_on:
+      - db
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${DB_NAME:-kitchenowl}
+      - POSTGRES_USER=${DB_USER:-kitchenowl}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+    volumes:
+      - kitchenowl_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 60s
+      retries: 5
+      start_period: 80s
+volumes:
+  kitchenowl_files:
+  kitchenowl_db:

@@ -1,0 +1,16 @@
+# name: PocketBase
+# about: Open Source backend for your next SaaS and Mobile app in 1 file.
+# docs: https://pocketbase.io/docs/
+# categories: backend, devtools
+# source: coolify
+services:
+  pocketbase:
+    image: ghcr.io/coollabsio/pocketbase:latest
+    environment:
+      - SERVICE_URL_POCKETBASE_8080
+    volumes:
+      - pocketbase-data:/app/pb_data
+      - pocketbase-hooks:/app/pb_hooks
+volumes:
+  pocketbase-data:
+  pocketbase-hooks:

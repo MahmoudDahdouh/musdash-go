@@ -1,0 +1,52 @@
+# name: Marketing Dashboard
+# about: Self-hosted marketing operations dashboard for product-led growth, checkout analytics, paid media, SEO signals, and Stripe readiness.
+# docs: https://github.com/abel-yelin/marketing-dashboard/blob/main/docs/production-deployment.md
+# website: https://github.com/abel-yelin/marketing-dashboard
+# categories: analytics, business
+# source: dokploy
+services:
+  marketing-dashboard:
+    image: ghcr.io/abel-yelin/marketing-dashboard:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://marketing_dashboard:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/marketing_dashboard?schema=public
+      DIRECT_URL: postgresql://marketing_dashboard:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/marketing_dashboard?schema=public
+      MARKETING_APP_URL: ${SERVICE_URL_MARKETING_DASHBOARD}
+      MARKETING_COLLECTOR_UPSTREAM_URL: ${SERVICE_URL_MARKETING_DASHBOARD}/api/ingest/browser
+      MARKETING_SESSION_TIMEOUT_MINUTES: ${MARKETING_SESSION_TIMEOUT_MINUTES:-30}
+      MARKETING_PROXY_TIMEOUT_MS: ${MARKETING_PROXY_TIMEOUT_MS:-4000}
+      MARKETING_INGEST_MAX_BODY_BYTES: ${MARKETING_INGEST_MAX_BODY_BYTES:-65536}
+      MARKETING_INGEST_IP_RATE_LIMIT: ${MARKETING_INGEST_IP_RATE_LIMIT:-300}
+      MARKETING_INGEST_CLIENT_RATE_LIMIT: ${MARKETING_INGEST_CLIENT_RATE_LIMIT:-1200}
+      MARKETING_INGEST_RATE_LIMIT_WINDOW_MS: ${MARKETING_INGEST_RATE_LIMIT_WINDOW_MS:-60000}
+      MARKETING_ENABLE_PILOT_API: ${MARKETING_ENABLE_PILOT_API:-false}
+      MARKETING_DASHBOARD_ADMIN_USER: ${MARKETING_DASHBOARD_ADMIN_USER:-admin}
+      MARKETING_DASHBOARD_ADMIN_PASSWORD: ${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      SERVICE_FQDN_MARKETING_DASHBOARD_3000:
+    expose:
+      - 3000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/health > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-marketing_dashboard}
+      POSTGRES_USER: ${POSTGRES_USER:-marketing_dashboard}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+    volumes:
+      - marketing-dashboard-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+volumes:
+  marketing-dashboard-postgres:

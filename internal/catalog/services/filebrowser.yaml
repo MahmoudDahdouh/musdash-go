@@ -1,0 +1,28 @@
+# name: File Browser
+# about: FileBrowser is a web-based file manager and file explorer with a user-friendly interface.
+# docs: https://filebrowser.org
+# categories: storage
+# source: coolify
+services:
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    environment:
+      - SERVICE_URL_FILEBROWSER_80
+    volumes:
+      - filebrowser-srv:/srv
+    configs:
+      - source: filebrowser-database-db
+        target: /database.db
+      - source: filebrowser-filebrowser-json
+        target: /.filebrowser.json
+volumes:
+  filebrowser-srv:
+configs:
+  filebrowser-database-db:
+    content: "\n"
+  filebrowser-filebrowser-json:
+    content: |
+      {
+        "address": "0.0.0.0",
+        "port": 80
+      }

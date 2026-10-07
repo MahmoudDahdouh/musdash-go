@@ -1,0 +1,38 @@
+# name: Vikunja
+# about: The open-source, self-hostable to-do app. Organize everything, on all platforms.
+# docs: https://vikunja.io
+# categories: productivity
+# source: coolify
+services:
+  vikunja:
+    image: vikunja/vikunja:latest
+    environment:
+      - SERVICE_URL_VIKUNJA
+      - VIKUNJA_SERVICE_PUBLICURL=$SERVICE_URL_VIKUNJA
+      - VIKUNJA_SERVICE_SECRET=$SERVICE_PASSWORD_JWTSECRET
+      - VIKUNJA_SERVICE_ENABLEREGISTRATION=true
+      - VIKUNJA_DATABASE_PATH=/db/vikunja.db
+      - VIKUNJA_DATABASE_TYPE=sqlite
+      - SERVICE_FQDN_VIKUNJA_3456
+    volumes:
+      - vikunja-data:/app/vikunja/
+      - vikunja-sqlite-data:/db
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/vikunja/vikunja", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+  init:
+    image: busybox:latest
+    restart: no
+    volumes:
+      - vikunja-data:/app/vikunja
+      - vikunja-sqlite-data:/db
+    command: ["sh", "-c", "touch /db/vikunja.db && chown -R 1000 /db && chown -R 1000 /app/vikunja"]
+volumes:
+  vikunja-data:
+  vikunja-sqlite-data:

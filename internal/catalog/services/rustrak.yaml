@@ -1,0 +1,24 @@
+# name: Rustrak
+# about: Self-hosted error tracking compatible with Sentry SDKs.
+# docs: https://rustrak.github.io/rustrak/getting-started/overview
+# website: https://rustrak.github.io/rustrak/
+# categories: monitoring, devtools
+# source: dokploy
+services:
+  rustrak:
+    image: rustrak/rustrak-server:latest
+    restart: unless-stopped
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - RUST_LOG=info
+      - SSL_PROXY=true
+      - SESSION_SECRET_KEY=${SERVICE_PASSWORD_64_SESSION_SECRET_KEY}
+      - CREATE_SUPERUSER=${ADMIN_EMAIL:?Set an email address}:${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - SERVICE_FQDN_RUSTRAK_8080
+    volumes:
+      - rustrak_data:/data
+    expose:
+      - 8080
+volumes:
+  rustrak_data:

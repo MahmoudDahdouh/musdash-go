@@ -1,0 +1,49 @@
+# name: WupNext
+# about: WupNext is a self-hosted to-do and task queue app: groups, subtasks, deadlines, a built-in pomodoro timer, email reminders, and an MCP server so an…
+# website: https://github.com/javierlnmn/wupnext
+# categories: productivity, ai
+# source: dokploy
+services:
+  wupnext:
+    image: docker.io/javierlnmn/wupnext:0.3.0
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SERVICE_PASSWORD_64_SECRET_KEY}
+      DEBUG: "False"
+      ALLOWED_HOSTS: ${SERVICE_FQDN_WUPNEXT}
+      CSRF_TRUSTED_ORIGINS: ${SERVICE_URL_WUPNEXT}
+      SITE_URL: ${SERVICE_URL_WUPNEXT}
+      MCP_BASE_URL: ${SERVICE_URL_WUPNEXT}
+      EMAIL_BACKEND: anymail.backends.resend.EmailBackend
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-wupnext <onboarding@resend.dev>}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
+      DJANGO_SUPERUSER_EMAIL: ${ADMIN_EMAIL:?Set an email address}
+      DJANGO_SUPERUSER_PASSWORD: ${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      SERVICE_FQDN_WUPNEXT_8000:
+    expose:
+      - "8000"
+    volumes:
+      - wupnext-db:/app/db
+  wupnext-worker:
+    image: docker.io/javierlnmn/wupnext:latest
+    restart: unless-stopped
+    command: python manage.py qcluster
+    environment:
+      SECRET_KEY: ${SERVICE_PASSWORD_64_SECRET_KEY}
+      DEBUG: "False"
+      ALLOWED_HOSTS: ${SERVICE_FQDN_WUPNEXT}
+      CSRF_TRUSTED_ORIGINS: ${SERVICE_URL_WUPNEXT}
+      SITE_URL: ${SERVICE_URL_WUPNEXT}
+      EMAIL_BACKEND: anymail.backends.resend.EmailBackend
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-wupnext <onboarding@resend.dev>}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      Q_WORKERS: ${Q_WORKERS:-2}
+      Q_TIMEOUT: ${Q_TIMEOUT:-60}
+      Q_RETRY: ${Q_RETRY:-120}
+    volumes:
+      - wupnext-db:/app/db
+    depends_on:
+      - wupnext
+volumes:
+  wupnext-db:

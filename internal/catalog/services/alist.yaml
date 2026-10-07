@@ -1,0 +1,19 @@
+# name: AList
+# about: ðŸ—‚ï¸A file list/WebDAV program that supports multiple storages, powered by Gin and Solidjs.
+# docs: https://alistgo.com/guide/install/docker.html
+# website: https://alistgo.com/
+# categories: storage
+# source: dokploy
+services:
+  alist:
+    image: xhofe/alist:v3.55.0
+    volumes:
+      - alist-data:/opt/alist/data
+    environment:
+      - PUID=0
+      - PGID=0
+      - UMASK=022
+      - SERVICE_FQDN_ALIST_5244
+    restart: unless-stopped
+volumes:
+  alist-data:

@@ -1,0 +1,22 @@
+# name: Grafana
+# about: Grafana is the open source analytics & monitoring solution for every database.
+# docs: https://grafana.com
+# categories: monitoring, analytics, home
+# source: coolify
+services:
+  grafana:
+    image: grafana/grafana-oss:latest
+    environment:
+      - SERVICE_URL_GRAFANA_3000
+      - GF_SERVER_ROOT_URL=${SERVICE_URL_GRAFANA}
+      - GF_SERVER_DOMAIN=${SERVICE_FQDN_GRAFANA}
+      - GF_SECURITY_ADMIN_PASSWORD=${SERVICE_PASSWORD_GRAFANA}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/api/health"]
+      interval: 5s
+      timeout: 20s
+      retries: 10
+volumes:
+  grafana-data:

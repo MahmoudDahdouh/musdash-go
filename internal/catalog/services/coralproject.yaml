@@ -1,0 +1,35 @@
+# name: Coral
+# about: Coral is a revolutionary commenting platform designed to enhance website interactions.
+# docs: https://docs.coralproject.net/
+# website: https://coralproject.net/
+# categories: communication
+# source: dokploy
+services:
+  coral:
+    image: coralproject/talk:9.7.0
+    expose:
+      - "3000"
+    environment:
+      - MONGODB_URI=mongodb://mongo:${SERVICE_PASSWORD_MONGO_PASSWORD}@mongo:27017
+      - REDIS_URI=redis://default:${SERVICE_PASSWORD_REDIS_PASSWORD}@redis:6379
+      - SIGNING_SECRET=${SERVICE_PASSWORD_64_SIGNING_SECRET}
+      - NODE_ENV=production
+      - SERVICE_FQDN_CORAL_3000
+    depends_on:
+      - mongo
+      - redis
+  mongo:
+    image: mongo:4
+    environment:
+      - MONGO_INITDB_ROOT_PASSWORD=${SERVICE_PASSWORD_MONGO_PASSWORD}
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER:-mongo}
+    volumes:
+      - mongo-data:/data/db
+  redis:
+    image: redis:6
+    command: redis-server --requirepass ${SERVICE_PASSWORD_REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+volumes:
+  mongo-data:
+  redis-data:

@@ -1,0 +1,72 @@
+# name: Valkey
+# about: Valkey is an open-source fork of Redis, backed by AWS and the Linux Foundation.
+# docs: https://github.com/valkey-io/valkey
+# website: https://valkey.io/
+# categories: database
+# source: dokploy
+# connect: true
+services:
+  valkey:
+    image: valkey/valkey:8.1.4
+    restart: unless-stopped
+    volumes:
+      - valkey-data:/data
+    command: valkey-server /etc/valkey/valkey.conf
+    environment:
+      - VALKEY_PASSWORD=${SERVICE_PASSWORD_VALKEY_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$VALKEY_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    configs:
+      - source: valkey-valkey-conf
+        target: /etc/valkey/valkey.conf
+volumes:
+  valkey-data:
+configs:
+  valkey-valkey-conf:
+    content: |
+      # Valkey configuration file
+      # For more information, see: https://github.com/valkey-io/valkey
+
+      # Network
+      bind 0.0.0.0
+      port 6379
+      protected-mode yes
+
+      # General
+      daemonize no
+      supervised no
+      pidfile /data/valkey.pid
+      loglevel notice
+      logfile ""
+
+      # Snapshotting
+      save 900 1
+      save 300 10
+      save 60 10000
+      stop-writes-on-bgsave-error yes
+      rdbcompression yes
+      rdbchecksum yes
+      dbfilename dump.rdb
+      dir /data
+
+      # Replication
+      replica-serve-stale-data yes
+      replica-read-only yes
+
+      # Security
+      requirepass ${SERVICE_PASSWORD_VALKEY_PASSWORD}
+
+      # Memory management
+      maxmemory-policy noeviction
+
+      # Append only file
+      appendonly yes
+      appendfilename "appendonly.aof"
+      appendfsync everysec
+      no-appendfsync-on-rewrite no
+      auto-aof-rewrite-percentage 100
+      auto-aof-rewrite-min-size 64mb

@@ -1,0 +1,40 @@
+# name: Instatic
+# about: Instatic is a self-hosted, open-source visual CMS combining a canvas editor, content engine, and static site publisher, producing clean semantic HTML…
+# docs: https://github.com/corebunch/instatic/tree/main/docs
+# website: https://instatic.com
+# categories: cms
+# source: dokploy
+services:
+  instatic-init:
+    image: ghcr.io/corebunch/instatic:0.0.16
+    user: "0:0"
+    entrypoint: ["chown", "-R", "bun:bun", "/app/storage"]
+    volumes:
+      - instatic-storage:/app/storage
+    restart: "no"
+  instatic:
+    image: ghcr.io/corebunch/instatic:0.0.16
+    restart: unless-stopped
+    depends_on:
+      instatic-init:
+        condition: service_completed_successfully
+    expose:
+      - 3001
+    volumes:
+      - instatic-storage:/app/storage
+    healthcheck:
+      test: ["CMD", "bun", "run", "server/healthcheck.ts"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    environment:
+      - DATABASE_URL=sqlite:/app/storage/data/cms.db
+      - INSTATIC_SECRET_KEY=${SERVICE_BASE64_INSTATIC_SECRET_KEY}
+      - PORT=3001
+      - PUBLIC_ORIGIN=${SERVICE_URL_INSTATIC},${SERVICE_URL_INSTATIC}
+      - STATIC_DIR=/app/dist
+      - UPLOADS_DIR=/app/storage/uploads
+      - SERVICE_FQDN_INSTATIC_3001
+volumes:
+  instatic-storage:

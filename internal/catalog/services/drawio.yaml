@@ -1,0 +1,55 @@
+# name: draw.io
+# about: draw.io is a configurable diagramming/whiteboarding visualization application.
+# docs: https://www.drawio.com/docs/
+# website: https://www.drawio.com/
+# categories: docs, devtools
+# source: dokploy
+services:
+  plantuml-server:
+    image: plantuml/plantuml-server:latest
+    expose:
+      - "8080"
+    volumes:
+      - fonts_volume:/usr/share/fonts/drawio
+  image-export:
+    image: jgraph/export-server:latest
+    expose:
+      - "8000"
+    volumes:
+      - fonts_volume:/usr/share/fonts/drawio
+    environment:
+      - DRAWIO_BASE_URL=${SERVICE_URL_DRAWIO}
+  drawio:
+    image: jgraph/drawio:24.7.17
+    expose:
+      - "8080"
+    depends_on:
+      - plantuml-server
+      - image-export
+    environment:
+      RAWIO_SELF_CONTAINED: 1
+      DRAWIO_USE_HTTP: 1
+      PLANTUML_URL: http://plantuml-server:8080/
+      EXPORT_URL: http://image-export:8000/
+      DRAWIO_BASE_URL: ${SERVICE_URL_DRAWIO}
+      DRAWIO_SERVER_URL: ${SERVICE_URL_DRAWIO}/
+      DRAWIO_CSP_HEADER: ${DRAWIO_CSP_HEADER:-}
+      DRAWIO_VIEWER_URL: ${DRAWIO_VIEWER_URL:-}
+      DRAWIO_LIGHTBOX_URL: ${DRAWIO_LIGHTBOX_URL:-}
+      DRAWIO_CONFIG: ${DRAWIO_CONFIG:-}
+      DRAWIO_GOOGLE_CLIENT_ID: ${DRAWIO_GOOGLE_CLIENT_ID:-}
+      DRAWIO_GOOGLE_APP_ID: ${DRAWIO_GOOGLE_APP_ID:-}
+      DRAWIO_GOOGLE_CLIENT_SECRET: ${DRAWIO_GOOGLE_CLIENT_SECRET:-}
+      DRAWIO_GOOGLE_VIEWER_CLIENT_ID: ${DRAWIO_GOOGLE_VIEWER_CLIENT_ID:-}
+      DRAWIO_GOOGLE_VIEWER_APP_ID: ${DRAWIO_GOOGLE_VIEWER_APP_ID:-}
+      DRAWIO_GOOGLE_VIEWER_CLIENT_SECRET: ${DRAWIO_GOOGLE_VIEWER_CLIENT_SECRET:-}
+      DRAWIO_MSGRAPH_CLIENT_ID: ${DRAWIO_MSGRAPH_CLIENT_ID:-}
+      DRAWIO_MSGRAPH_CLIENT_SECRET: ${DRAWIO_MSGRAPH_CLIENT_SECRET:-}
+      DRAWIO_MSGRAPH_TENANT_ID: ${DRAWIO_MSGRAPH_TENANT_ID:-}
+      DRAWIO_GITLAB_ID: ${DRAWIO_GITLAB_ID:-}
+      DRAWIO_GITLAB_SECRET: ${DRAWIO_GITLAB_SECRET:-}
+      DRAWIO_GITLAB_URL: ${DRAWIO_GITLAB_URL:-}
+      DRAWIO_CLOUD_CONVERT_APIKEY: ${DRAWIO_CLOUD_CONVERT_APIKEY:-}
+      SERVICE_FQDN_DRAWIO_8080:
+volumes:
+  fonts_volume:

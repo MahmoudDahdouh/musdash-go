@@ -1,0 +1,21 @@
+# name: Reef Chain - Keys Generator
+# about: Generates 3 Validators keys for a custom Reef Chain cluster.
+# docs: https://docs.reef.io/
+# website: https://hub.docker.com/repository/docker/anukulpandey/reef-chain-node
+# categories: finance
+# source: dokploy
+services:
+  reef-keygen:
+    image: anukulpandey/reef-chain-node:latest
+    restart: unless-stopped
+    working_dir: /workspace
+    volumes:
+      - reef-keygen-output:/output
+    expose:
+      - "${PORT:-48765}"
+    entrypoint: /bin/sh
+    command: "-c \" set -e &&\necho '\U0001F4E6 Installing python3...' && apt-get update && apt-get install -y python3 &&\nmkdir -p /output && chmod -R 777 /output &&\necho '=====================================' && echo '\U0001F511 Generating Validator Keys' && echo '=====================================' &&\nreef-node key generate --scheme Sr25519 --output-type json > /output/validator1.json && reef-node key generate-node-key --chain local > /output/v1_node_key.txt &&\nreef-node key generate --scheme Sr25519 --output-type json > /output/validator2.json && reef-node key generate-node-key --chain local > /output/v2_node_key.txt &&\nreef-node key generate --scheme Sr25519 --output-type json > /output/validator3.json && reef-node key generate-node-key --chain local > /output/v3_node_key.txt &&\necho '✅ Keys generated:' && ls -lah /output &&\necho '\U0001F310 Starting HTTP server on port ${PORT:-48765}' && cd /output && python3 -m http.server ${PORT:-48765} --bind 0.0.0.0\""
+    environment:
+      - SERVICE_FQDN_REEF_KEYGEN_48765
+volumes:
+  reef-keygen-output:

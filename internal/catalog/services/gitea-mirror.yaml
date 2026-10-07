@@ -1,0 +1,28 @@
+# name: Gitea Mirror
+# about: Gitea Mirror is a modern web app for automatically mirroring repositories from GitHub to your self-hosted Gitea instance.
+# docs: https://github.com/arunavo4/gitea-mirror#readme
+# website: https://github.com/arunavo4/gitea-mirror
+# categories: git, automation
+# source: dokploy
+services:
+  gitea-mirror:
+    image: ghcr.io/raylabshq/gitea-mirror:latest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=3", "--spider", "http://localhost:4321/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    environment:
+      - BETTER_AUTH_SECRET=${SERVICE_BASE64_64_BETTER_AUTH_SECRET}
+      - BETTER_AUTH_URL=${SERVICE_URL_GITEA_MIRROR}
+      - NODE_ENV=production
+      - DATABASE_URL=file:data/gitea-mirror.db
+      - HOST=0.0.0.0
+      - PORT=4321
+      - SERVICE_FQDN_GITEA_MIRROR_4321
+    volumes:
+      - gitea_mirror_data:/app/data
+volumes:
+  gitea_mirror_data:

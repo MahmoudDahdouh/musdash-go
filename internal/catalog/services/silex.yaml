@@ -1,0 +1,26 @@
+# name: Silex
+# about: Silex is a free and open-source website builder for professional designers.
+# docs: https://docs.silex.me
+# website: https://www.silex.me
+# categories: cms, backend
+# source: dokploy
+services:
+  silex:
+    image: silexlabs/silex:3.7.0
+    restart: unless-stopped
+    expose:
+      - 6805
+    environment:
+      - SILEX_URL=${SERVICE_URL_SILEX}
+      - SILEX_SESSION_SECRET=${SERVICE_PASSWORD_SESSION_SECRET}
+      - STORAGE_CONNECTORS=fs
+      - HOSTING_CONNECTORS=fs,download
+      - SILEX_FS_ROOT=/silex/silex/storage
+      - SILEX_FS_HOSTING_ROOT=/silex/silex/hosting
+      - SERVICE_FQDN_SILEX_6805
+    volumes:
+      - silex-storage:/silex/silex/storage
+      - silex-hosting:/silex/silex/hosting
+volumes:
+  silex-storage:
+  silex-hosting:

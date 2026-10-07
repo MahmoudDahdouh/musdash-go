@@ -1,0 +1,35 @@
+# name: Joplin Server
+# about: Joplin Server is the self-hosted sync backend for Joplin notes, notebooks, and attachments.
+# docs: https://github.com/laurent22/joplin/tree/dev/packages/server
+# website: https://joplinapp.org/
+# categories: docs, storage, productivity
+# source: dokploy
+services:
+  joplin-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-joplin}
+      POSTGRES_DB: ${POSTGRES_DATABASE:-joplin}
+    volumes:
+      - joplin_db_data:/var/lib/postgresql/data
+  joplin-server:
+    image: joplin/server:3.7.1
+    restart: unless-stopped
+    depends_on:
+      - joplin-db
+    environment:
+      APP_BASE_URL: ${SERVICE_URL_JOPLIN_SERVER}
+      APP_PORT: ${APP_PORT:-22300}
+      DB_CLIENT: pg
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-joplin}
+      POSTGRES_USER: ${POSTGRES_USER:-joplin}
+      POSTGRES_PORT: 5432
+      POSTGRES_HOST: joplin-db
+      SERVICE_FQDN_JOPLIN_SERVER_22300:
+    expose:
+      - "22300"
+volumes:
+  joplin_db_data:

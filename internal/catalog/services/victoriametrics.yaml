@@ -1,0 +1,22 @@
+# name: VictoriaMetrics
+# about: VictoriaMetrics is a fast, cost-effective, and scalable monitoring solution and time series database. It is a drop-in replacement for Prometheus.
+# docs: https://docs.victoriametrics.com/
+# website: https://victoriametrics.com/
+# categories: monitoring, database
+# source: dokploy
+services:
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.108.1
+    restart: unless-stopped
+    expose:
+      - 8428
+    command:
+      - "--storageDataPath=/storage"
+      - "--retentionPeriod=${RETENTION_PERIOD:-90d}"
+      - "--httpListenAddr=:8428"
+    volumes:
+      - vm-data:/storage
+    environment:
+      - SERVICE_FQDN_VICTORIAMETRICS_8428
+volumes:
+  vm-data:

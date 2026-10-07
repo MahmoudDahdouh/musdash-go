@@ -1,0 +1,65 @@
+# name: Quant-UX
+# about: Quant-UX is an open-source UX design and prototyping tool that allows you to create interactive prototypes, conduct user research, and analyze user…
+# docs: https://www.quant-ux.com/
+# categories: devtools
+# source: dokploy
+services:
+  mongo:
+    restart: always
+    image: mongo:latest
+    volumes:
+      - mongo_data:/data/db
+  qux-fe:
+    restart: always
+    image: klausenschaefersinho/quant-ux:latest
+    environment:
+      - QUX_PROXY_URL=http://quant-ux-backend:8080
+      - QUX_AUTH=${QUX_AUTH:-qux}
+      - QUX_KEYCLOAK_REALM=${QUX_KEYCLOAK_REALM:-}
+      - QUX_KEYCLOAK_CLIENT=${QUX_KEYCLOAK_CLIENT:-}
+      - QUX_KEYCLOAK_URL=${QUX_KEYCLOAK_URL:-}
+      - QUX_WS_URL=wss://${SERVICE_FQDN_QUX_WS}
+      - SERVICE_FQDN_QUX_FE_8082
+    expose:
+      - 8082
+    depends_on:
+      - qux-be
+  qux-be:
+    restart: always
+    image: klausenschaefersinho/quant-ux-backend:latest
+    volumes:
+      - quant_ux_data:/app-data
+    environment:
+      - QUX_HTTP_HOST=${SERVICE_URL_QUX_FE}
+      - QUX_HTTP_PORT=8080
+      - QUX_MONGO_DB_NAME=${QUX_MONGO_DB_NAME:-quantux}
+      - QUX_MONGO_TABLE_PREFIX=${QUX_MONGO_TABLE_PREFIX:-quantux}
+      - QUX_MONGO_CONNECTION_STRING=mongodb://quant-ux-mongo:27017
+      - QUX_MAIL_USER=${QUX_MAIL_USER_EMAIL:?Set an email address}
+      - QUX_MAIL_PASSWORD=${SERVICE_PASSWORD_QUX_MAIL_PASSWORD}
+      - QUX_MAIL_HOST=${QUX_MAIL_HOST:-mail.example.com}
+      - QUX_JWT_PASSWORD=${SERVICE_PASSWORD_64_QUX_JWT_PASSWORD}
+      - QUX_IMAGE_FOLDER_USER=/app-data/qux-images
+      - QUX_IMAGE_FOLDER_APPS=/app-data/qux-image-apps
+      - TZ=${TZ:-America/Chicago}
+      - QUX_AUTH_SERVICE=${QUX_AUTH_SERVICE:-qux}
+      - QUX_KEYCLOAK_SERVER=${QUX_KEYCLOAK_SERVER:-}
+      - QUX_KEYCLOAK_REALM=${QUX_KEYCLOAK_REALM:-}
+      - QUX_USER_ALLOW_SIGNUP=${QUX_USER_ALLOW_SIGNUP:-true}
+      - QUX_USER_ALLOWED_DOMAINS=${QUX_USER_ALLOWED_DOMAINS:-*}
+    depends_on:
+      - mongo
+  qux-ws:
+    restart: always
+    image: klausenschaefersinho/quant-ux-websocket:latest
+    environment:
+      - QUX_SERVER=http://quant-ux-backend:8080/
+      - QUX_SERVER_PORT=8086
+      - SERVICE_FQDN_QUX_WS_8086
+    expose:
+      - 8086
+    depends_on:
+      - qux-be
+volumes:
+  mongo_data:
+  quant_ux_data:

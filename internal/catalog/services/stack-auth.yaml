@@ -1,0 +1,44 @@
+# name: Stack Auth
+# about: Open-source Auth0/Clerk alternative. Stack Auth is a free and open source authentication tool that allows you to authenticate your users.
+# docs: https://docs.stack-auth.com/next/overview
+# website: https://stack-auth.com/
+# categories: auth
+# source: dokploy
+services:
+  stack-auth-db:
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-stackframe}
+    volumes:
+      - stack-auth-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "db_prod"]
+      interval: 10s
+      timeout: 60s
+      retries: 5
+      start_period: 80s
+  stack-auth:
+    image: stackauth/server:latest
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-stackframe}
+      - NEXT_PUBLIC_STACK_API_URL=${SERVICE_URL_STACK_AUTH}
+      - NEXT_PUBLIC_STACK_DASHBOARD_URL=${SERVICE_URL_STACK_AUTH_P8101}
+      - STACK_DATABASE_CONNECTION_STRING=postgres://postgres:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@stack-auth-db/stackframe
+      - STACK_DIRECT_DATABASE_CONNECTION_STRING=postgres://postgres:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@stack-auth-db/stackframe
+      - STACK_SERVER_SECRET=${SERVICE_PASSWORD_64_STACK_SERVER_SECRET}
+      - STACK_SEED_INTERNAL_PROJECT_ALLOW_LOCALHOST=${STACK_SEED_INTERNAL_PROJECT_ALLOW_LOCALHOST:-true}
+      - STACK_SEED_INTERNAL_PROJECT_SIGN_UP_ENABLED=${STACK_SEED_INTERNAL_PROJECT_SIGN_UP_ENABLED:-true}
+      - STACK_RUN_MIGRATIONS=${STACK_RUN_MIGRATIONS:-true}
+      - STACK_RUN_SEED_SCRIPT=${STACK_RUN_SEED_SCRIPT:-true}
+      - STACK_EMAIL_HOST=${STACK_EMAIL_HOST:-}
+      - SERVICE_FQDN_STACK_AUTH_8102
+      - SERVICE_FQDN_STACK_AUTH_P8101_8101
+    depends_on:
+      stack-auth-db:
+        condition: service_healthy
+volumes:
+  stack-auth-db-data:

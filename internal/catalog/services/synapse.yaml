@@ -1,0 +1,126 @@
+# name: Synapse
+# about: Synapse is the reference homeserver implementation for Matrix, an open standard for secure, decentralised, real-time communication.
+# docs: https://element-hq.github.io/synapse/latest/setup/installation.html
+# website: https://element-hq.github.io/synapse/latest/
+# categories: communication
+# source: dokploy
+services:
+  synapse:
+    image: matrixdotorg/synapse:v1.156.0
+    restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        python -m synapse.app.homeserver --config-path /config/homeserver.yaml --keys-directory /data --generate-keys
+        chown -R 991:991 /data
+        exec /start.py
+    environment:
+      SYNAPSE_CONFIG_PATH: /config/homeserver.yaml
+      SERVICE_FQDN_SYNAPSE_8008:
+    volumes:
+      - synapse-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fSs http://localhost:8008/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    configs:
+      - source: synapse-homeserver-yaml
+        target: /config/homeserver.yaml
+      - source: synapse-log-config
+        target: /config/log.config
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_DB: synapse
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse -d synapse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  synapse-data:
+  postgres-data:
+configs:
+  synapse-homeserver-yaml:
+    content: |
+      # Synapse homeserver configuration
+      # https://element-hq.github.io/synapse/latest/usage/configuration/config_documentation.html
+
+      server_name: "${SERVICE_FQDN_SYNAPSE}"
+      public_baseurl: "${SERVICE_URL_SYNAPSE}/"
+      pid_file: /data/homeserver.pid
+      signing_key_path: "/data/signing.key"
+      log_config: "/config/log.config"
+      media_store_path: /data/media_store
+      report_stats: false
+
+      # Serve /.well-known/matrix/server so other homeservers can federate with
+      # this server over port 443 (the dedicated federation port 8448 is not exposed).
+      serve_server_wellknown: true
+
+      listeners:
+        - port: 8008
+          tls: false
+          type: http
+          x_forwarded: true
+          bind_addresses: ['0.0.0.0']
+          resources:
+            - names: [client, federation]
+              compress: false
+
+      database:
+        name: psycopg2
+        args:
+          user: synapse
+          password: "${SERVICE_PASSWORD_POSTGRES_PASSWORD}"
+          database: synapse
+          host: postgres
+          port: 5432
+          cp_min: 5
+          cp_max: 10
+
+      # Public registration is disabled. Create users with the
+      # register_new_matrix_user tool (see the template instructions).
+      enable_registration: false
+      registration_shared_secret: "${SERVICE_PASSWORD_REGISTRATION_SHARED_SECRET}"
+
+      macaroon_secret_key: "${SERVICE_PASSWORD_MACAROON_SECRET_KEY}"
+      form_secret: "${SERVICE_PASSWORD_FORM_SECRET}"
+
+      trusted_key_servers:
+        - server_name: "matrix.org"
+      suppress_key_server_warning: true
+  synapse-log-config:
+    content: |
+      version: 1
+
+      formatters:
+        precise:
+          format: '%(asctime)s - %(name)s - %(lineno)d - %(levelname)s - %(request)s - %(message)s'
+
+      handlers:
+        console:
+          class: logging.StreamHandler
+          formatter: precise
+
+      loggers:
+        synapse.storage.SQL:
+          level: INFO
+
+      root:
+        level: INFO
+        handlers: [console]
+
+      disable_existing_loggers: false

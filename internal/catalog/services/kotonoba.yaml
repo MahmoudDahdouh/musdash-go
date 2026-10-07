@@ -1,0 +1,22 @@
+# name: Kotonoba
+# about: A high-performance, self-hosted, multi-tenant blog CMS built with Next.js 16, SQLite, Tailwind CSS v4, and Docker.
+# docs: https://github.com/TrixtyLab/kotonoba/tree/master/docs
+# website: https://github.com/trixtylab/kotonoba
+# categories: cms, devtools
+# source: dokploy
+services:
+  kotonoba:
+    image: ghcr.io/trixtylab/kotonoba:1.0.19
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DB_PATH: ${DB_PATH:-/app/data/kotonoba.db}
+      UPLOAD_DIR: ${UPLOAD_DIR:-/app/data/uploads}
+      JWT_SECRET: ${SERVICE_PASSWORD_JWT_SECRET}
+      SITE_URL: ${SERVICE_URL_KOTONOBA}
+      ADMIN_DOMAIN: ${SERVICE_FQDN_KOTONOBA}
+      SERVICE_FQDN_KOTONOBA_3000:
+    volumes:
+      - blog_data:/app/data
+volumes:
+  blog_data:

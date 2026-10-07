@@ -1,0 +1,19 @@
+# name: Plark
+# about: Self-hosted Website Builder.
+# docs: https://plark.com/get-started
+# website: https://plark.com
+# categories: cms
+# source: dokploy
+services:
+  plark:
+    image: plarkinc/plark:latest
+    pull_policy: always
+    restart: unless-stopped
+    expose:
+      - "80"
+    volumes:
+      - plark-data:/var/data
+    environment:
+      - SERVICE_FQDN_PLARK_80
+volumes:
+  plark-data:

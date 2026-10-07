@@ -1,0 +1,33 @@
+# name: Hermes
+# about: Hermes is an open agent runtime from Nous Research, exposing an OpenAI-compatible gateway API and a supervised web dashboard for building and running…
+# docs: https://hermes-agent.nousresearch.com/docs/user-guide/docker
+# website: https://hermes-agent.nousresearch.com/
+# categories: ai
+# source: dokploy
+services:
+  hermes:
+    image: nousresearch/hermes-agent:v2026.6.19
+    restart: unless-stopped
+    command: gateway run
+    expose:
+      - 9119
+      - 8642
+    environment:
+      - HERMES_DASHBOARD=${HERMES_DASHBOARD:-1}
+      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:-admin}
+      - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${SERVICE_BASE64_128_DASHBOARD_PASSWORD}
+      - HERMES_DASHBOARD_BASIC_AUTH_SECRET=${SERVICE_BASE64_DASHBOARD_SECRET}
+      - API_SERVER_ENABLED=${API_SERVER_ENABLED:-true}
+      - API_SERVER_HOST=${API_SERVER_HOST:-0.0.0.0}
+      - API_SERVER_KEY=${SERVICE_PASSWORD_API_KEY}
+      - SERVICE_FQDN_HERMES_9119
+      - SERVICE_FQDN_HERMES_P8642_8642
+    volumes:
+      - hermes_data:/opt/data
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+volumes:
+  hermes_data:

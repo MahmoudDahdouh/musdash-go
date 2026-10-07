@@ -1,0 +1,21 @@
+# name: Gotenberg
+# about: Gotenberg is a Docker-powered stateless API for PDF files.
+# docs: https://gotenberg.dev/docs/getting-started/introduction
+# categories: devtools, backend
+# source: coolify
+services:
+  gotenberg:
+    image: gotenberg/gotenberg:latest
+    environment:
+      - SERVICE_URL_GOTENBERG_3000
+      - GOTENBERG_API_BASIC_AUTH_USERNAME=${SERVICE_USER_GOTENBERG}
+      - GOTENBERG_API_BASIC_AUTH_PASSWORD=${SERVICE_PASSWORD_GOTENBERG}
+    command:
+      - gotenberg
+      - --api-enable-basic-auth
+      - --api-disable-health-check-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/health"]
+      interval: 5s
+      timeout: 20s
+      retries: 10

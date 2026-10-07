@@ -1,0 +1,24 @@
+# name: NaviServer
+# about: A lightweight Minecraft server manager with a web interface, CLI, automatic JVM management, monitoring, and support for Vanilla, Paper, Fabric…
+# docs: https://github.com/andre-carbajal/NaviServer/wiki
+# website: https://github.com/andre-carbajal/NaviServer
+# categories: games
+# source: dokploy
+services:
+  naviserver:
+    image: ghcr.io/andre-carbajal/naviserver:2.4.5
+    restart: unless-stopped
+    expose:
+      - "23008"
+    environment:
+      NAVISERVER_HOST: ${NAVISERVER_HOST:-0.0.0.0}
+      NAVISERVER_PORT: ${NAVISERVER_PORT:-23008}
+      NAVISERVER_ALLOWED_ORIGINS: ${NAVISERVER_ALLOWED_ORIGINS:-}
+      NAVISERVER_SECRET_KEY: ${SERVICE_PASSWORD_64_NAVISERVER_SECRET_KEY}
+      NAVISERVER_CLI_TOKEN: ${SERVICE_PASSWORD_64_NAVISERVER_CLI_TOKEN}
+      CURSEFORGE_API_KEY: ${CURSEFORGE_API_KEY:-}
+      SERVICE_FQDN_NAVISERVER_23008:
+    volumes:
+      - naviserver-data:/data
+volumes:
+  naviserver-data:

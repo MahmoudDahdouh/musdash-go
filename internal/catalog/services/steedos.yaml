@@ -1,0 +1,17 @@
+# name: Steedos
+# about: Steedos is an open-source low-code platform and alternative to Salesforce, designed to help you build enterprise applications like CRM with clicks…
+# docs: https://docs.steedos.com/
+# website: https://www.steedos.com/
+# categories: business, backend
+# source: dokploy
+services:
+  steedos:
+    image: steedos/steedos-community:3.0.14
+    restart: always
+    environment:
+      - ROOT_URL=${SERVICE_URL_STEEDOS}
+      - SERVICE_FQDN_STEEDOS_80
+    volumes:
+      - steedos-data:/steedos-storage
+volumes:
+  steedos-data:

@@ -1,0 +1,21 @@
+# name: Seq
+# about: Seq is a self-hosted search, analysis, and alerting server for structured application logs and events.
+# docs: https://datalust.co/docs
+# website: https://datalust.co/seq
+# categories: monitoring
+# source: dokploy
+services:
+  seq:
+    image: datalust/seq:2025.2
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_API_CANONICALURI: ${SERVICE_URL_SEQ}
+      SEQ_FIRSTRUN_ADMINPASSWORD: ${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      SERVICE_FQDN_SEQ_80:
+    expose:
+      - "80"
+    volumes:
+      - seq-data:/data
+volumes:
+  seq-data:

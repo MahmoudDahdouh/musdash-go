@@ -1,0 +1,24 @@
+# name: Elasticsearch
+# about: Elasticsearch is free and Open Source, Distributed, RESTful Search Engine.
+# docs: https://www.elastic.co/products/elasticsearch
+# categories: search
+# source: coolify
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-wolfi:8.19.0
+    environment:
+      - SERVICE_URL_ELASTICSEARCH_9200
+      - ELASTIC_PASSWORD=${SERVICE_PASSWORD_ELASTICSEARCH}
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - xpack.security.http.ssl.enabled=false
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl --user elastic:${SERVICE_PASSWORD_ELASTICSEARCH} --silent --fail http://localhost:9200/_cluster/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 24
+volumes:
+  elasticsearch-data:

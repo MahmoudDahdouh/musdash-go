@@ -1,0 +1,17 @@
+# name: Collabora Office
+# about: Collabora Online is a powerful, flexible, and secure online office suite designed to break free from vendor lock-in and put you in full control of…
+# docs: https://sdk.collaboraonline.com/docs
+# website: https://collaboraonline.com
+# categories: docs, productivity
+# source: dokploy
+services:
+  collabora:
+    image: collabora/code:latest
+    expose:
+      - "9980"
+    environment:
+      - domain=${SERVICE_FQDN_COLLABORA}
+      - username=${USERNAME:-user}
+      - password=${SERVICE_PASSWORD_PASSWORD}
+      - extra_params=--o:ssl.enable=false
+      - SERVICE_FQDN_COLLABORA_9980

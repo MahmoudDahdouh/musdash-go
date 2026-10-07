@@ -1,0 +1,28 @@
+# name: Prometheus
+# about: Prometheus is an open-source monitoring and alerting toolkit designed for reliability and scalability.
+# docs: https://prometheus.io/docs/introduction/overview/
+# website: https://prometheus.io/
+# categories: monitoring
+# source: dokploy
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    volumes:
+      - prometheus-data:/prometheus
+    environment:
+      - SERVICE_FQDN_PROMETHEUS_9090
+    configs:
+      - source: prometheus-prometheus-yml
+        target: /etc/prometheus/prometheus.yml
+volumes:
+  prometheus-data:
+configs:
+  prometheus-prometheus-yml:
+    content: "# Prometheus Configuration\n# https://prometheus.io/docs/prometheus/latest/configuration/configuration/\n\nglobal:\n  scrape_interval: 15s\n  evaluation_interval: 15s\n  external_labels:\n    monitor: 'dokploy-prometheus'\n\n# Alertmanager configuration (optional)\n# alerting:\n#   alertmanagers:\n#     - static_configs:\n#         - targets:\n#           - 'alertmanager:9093'\n\n# Load rules once and periodically evaluate them\n# rule_files:\n#   - \"alerts.yml\"\n\n# Scrape configurations\nscrape_configs:\n  # Prometheus self-monitoring\n  - job_name: 'prometheus'\n    static_configs:\n      - targets: ['localhost:9090']\n\n  # Example: Add your own targets here\n  # - job_name: 'node_exporter'\n  #   static_configs:\n  #     - targets: ['node-exporter:9100']\n  \n  # - job_name: 'docker'\n  #   static_configs:\n  #     - targets: ['docker-host:9323']\n"

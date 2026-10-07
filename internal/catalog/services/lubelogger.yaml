@@ -1,0 +1,24 @@
+# name: LubeLogger
+# about: LubeLogger is a self-hosted vehicle maintenance and fuel mileage tracker for managing service records, reminders, fuel logs, and vehicle expenses.
+# docs: https://docs.lubelogger.com/
+# website: https://lubelogger.com/
+# categories: home, business
+# source: dokploy
+services:
+  lubelogger:
+    image: ghcr.io/hargata/lubelogger:v1.6.5
+    restart: unless-stopped
+    environment:
+      - LC_ALL=${LUBELOGGER_LOCALE:-en_US.UTF-8}
+      - LANG=${LUBELOGGER_LOCALE:-en_US.UTF-8}
+      - LUBELOGGER_DOMAIN=${SERVICE_URL_LUBELOGGER}
+      - EnableAuth=${LUBELOGGER_ENABLE_AUTH:-false}
+      - SERVICE_FQDN_LUBELOGGER_8080
+    volumes:
+      - lubelogger-data:/App/data
+      - lubelogger-keys:/root/.aspnet/DataProtection-Keys
+    expose:
+      - 8080
+volumes:
+  lubelogger-data:
+  lubelogger-keys:

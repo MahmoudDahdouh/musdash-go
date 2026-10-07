@@ -1,0 +1,34 @@
+# name: Matomo
+# about: Leading open-source web analytics platform with global data ownership.
+# docs: https://matomo.org/docs
+# website: https://matomo.org
+# categories: analytics, monitoring
+# source: dokploy
+services:
+  matomo:
+    image: matomo:5.1-apache
+    restart: always
+    environment:
+      - MATOMO_DATABASE_HOST=${MATOMO_DATABASE_HOST:-db}
+      - MATOMO_DATABASE_DB=${MATOMO_DATABASE_DB:-matomo}
+      - MATOMO_DATABASE_USER=${MATOMO_DATABASE_USER:-matomo}
+      - MATOMO_DATABASE_PASSWORD=${SERVICE_PASSWORD_MATOMO_DATABASE_PASSWORD}
+      - SERVICE_FQDN_MATOMO_80
+    volumes:
+      - matomo:/var/www/html
+    depends_on:
+      - db
+  db:
+    image: mariadb:10.11
+    restart: always
+    command: --max-allowed-packet=64MB
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-matomo}
+      - MYSQL_USER=${MYSQL_USER:-matomo}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_MATOMO_DATABASE_PASSWORD}
+    volumes:
+      - db:/var/lib/mysql
+volumes:
+  matomo:
+  db:

@@ -1,0 +1,15 @@
+# name: BentoPDF
+# about: Process PDFs entirely in your browser. No uploads. No servers. Complete privacy.
+# docs: https://bentopdf.com/docs
+# categories: productivity, devtools
+# source: coolify
+services:
+  bento-pdf:
+    image: ghcr.io/alam00000/bentopdf:v1.16.1
+    environment:
+      - SERVICE_URL_BENTOPDF_8080
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080"]
+      interval: 5s
+      timeout: 20s
+      retries: 10

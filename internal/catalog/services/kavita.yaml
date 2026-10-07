@@ -1,0 +1,25 @@
+# name: Kavita
+# about: Kavita is a self-hosted digital library server for reading manga, comics, and ebooks from any device.
+# docs: https://wiki.kavitareader.com/installation/docker/
+# website: https://www.kavitareader.com/
+# categories: media
+# source: dokploy
+services:
+  kavita:
+    image: jvmilazz0/kavita:latest
+    restart: unless-stopped
+    expose:
+      - "5000"
+    environment:
+      - TZ=${TZ:-Etc/UTC}
+      - SERVICE_FQDN_KAVITA_5000
+    volumes:
+      - kavita-config:/kavita/config
+      - kavita-media:/manga
+      - kavita-books:/books
+      - kavita-comics:/comics
+volumes:
+  kavita-config:
+  kavita-media:
+  kavita-books:
+  kavita-comics:

@@ -1,0 +1,25 @@
+# name: Java Runtime (Multi-Version)
+# about: Configurable Java runtime environment supporting versions 8, 11, 16, 17, and 21.
+# docs: https://docs.oracle.com/en/java/
+# website: https://java.com/
+# categories: games
+# source: dokploy
+services:
+  java-app:
+    image: ghcr.io/pterodactyl/yolks:java_${JAVA_VERSION:-21}
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    volumes:
+      - app-data:/home/container
+    working_dir: /home/container
+    environment:
+      - STARTUP=${STARTUP_COMMAND:-java -Xmx1024M -Xms512M -jar server.jar nogui}
+      - SERVER_JARFILE=${SERVER_JARFILE:-server.jar}
+      - JAVA_VERSION=${JAVA_VERSION:-21}
+      - SERVICE_FQDN_JAVA_APP_25565
+    expose:
+      - ${SERVER_PORT:-25565}
+    user: container
+volumes:
+  app-data:

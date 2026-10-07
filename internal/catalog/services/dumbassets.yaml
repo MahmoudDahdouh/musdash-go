@@ -1,0 +1,18 @@
+# name: DumbAssets
+# about: DumbAssets is a simple, self-hosted asset tracking service with no database or authentication required.
+# docs: https://github.com/dumbwareio/dumbassets
+# website: https://dumbware.io/DumbAssets/
+# categories: business
+# source: dokploy
+services:
+  dumbassets:
+    image: dumbwareio/dumbassets:latest
+    restart: unless-stopped
+    expose:
+      - 3000
+    volumes:
+      - dumbassets-data:/app/data
+    environment:
+      - SERVICE_FQDN_DUMBASSETS_3000
+volumes:
+  dumbassets-data:

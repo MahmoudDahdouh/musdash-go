@@ -1,0 +1,24 @@
+# name: Firefox
+# about: Fast, private, and self-hosted secure browser for browsing without limits.
+# docs: https://github.com/jlesage/docker-firefox
+# categories: productivity, devtools
+# source: coolify
+services:
+  firefox:
+    image: jlesage/firefox:latest
+    environment:
+      - SERVICE_URL_FIREFOX_5800
+    volumes:
+      - firefox_config:/config
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - "-q"
+        - "--spider"
+        - "http://127.0.0.1:5800/"
+      interval: 5s
+      timeout: 20s
+      retries: 10
+volumes:
+  firefox_config:

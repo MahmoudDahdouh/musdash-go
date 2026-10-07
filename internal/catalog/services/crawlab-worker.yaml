@@ -1,0 +1,25 @@
+# name: Crawlab (Worker)
+# about: Crawlab worker node for distributed web crawling. Connects to an existing Crawlab master node via gRPC.
+# docs: https://docs.crawlab.cn
+# website: https://crawlab.cn
+# categories: automation
+# source: dokploy
+# connect: true
+services:
+  crawlab-worker:
+    image: crawlabteam/crawlab:latest
+    restart: unless-stopped
+    environment:
+      - CRAWLAB_NODE_MASTER=N
+      - CRAWLAB_GRPC_ADDRESS=${MASTER_GRPC_ADDRESS:-<master_node_ip>:9666}
+      - CRAWLAB_FS_FILER_URL=${MASTER_FILER_URL:-http://<master_node_ip>:8080/api/filer}
+    volumes:
+      - crawlab-worker-data:/root/.crawlab
+      - crawlab-worker-app:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "${CPU_LIMIT:-0.8}"
+volumes:
+  crawlab-worker-data:
+  crawlab-worker-app:

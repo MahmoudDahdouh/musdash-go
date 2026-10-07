@@ -1,0 +1,29 @@
+# name: Focalboard
+# about: Open source project management for technical teams.
+# docs: https://www.focalboard.com/docs/
+# website: https://focalboard.com
+# categories: productivity
+# source: dokploy
+services:
+  focalboard:
+    image: mattermost/focalboard:7.11.4
+    restart: unless-stopped
+    volumes:
+      - focalboardData:/opt/focalboard/data
+    environment:
+      - VIRTUAL_HOST=${SERVICE_FQDN_FOCALBOARD}
+      - 'VIRTUAL_PORT=${VIRTUAL_PORT:-8000 # Do Not Alter}'
+      - DB_TYPE=${DB_TYPE:-postgres}
+      - DB_CONFIG=postgres://${POSTGRES_USER:-focalboard}:${POSTGRES_password:-}@postgres:5432/${postgres_db:-}?sslmode=disable
+      - SERVICE_FQDN_FOCALBOARD_8000
+  postgres:
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-focalboard}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-focalboard}
+    volumes:
+      - postgres-postgres-data:/var/lib/postgresql/data
+volumes:
+  focalboardData:
+  postgres-postgres-data:

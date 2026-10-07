@@ -1,0 +1,31 @@
+# name: Openinary
+# about: Openinary is a self-hosted Cloudinary alternative.
+# docs: https://docs.openinary.dev
+# website: https://openinary.dev
+# categories: media, devtools
+# source: dokploy
+services:
+  openinary:
+    image: openinary/openinary:${IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    expose:
+      - 3000
+    environment:
+      NODE_ENV: production
+      MODE: fullstack
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+      BETTER_AUTH_SECRET: ${SERVICE_PASSWORD_64_BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${SERVICE_URL_OPENINARY}
+      ALLOWED_ORIGIN: ${SERVICE_URL_OPENINARY}
+      DOCKER_CONTAINER: "true"
+      SERVICE_FQDN_OPENINARY_3000:
+    volumes:
+      - cache-data:/app/apps/api/cache
+      - public-files:/app/apps/api/public
+      - db-data:/app/data
+      - db-data:/app/web-standalone/data
+volumes:
+  cache-data:
+  public-files:
+  db-data:

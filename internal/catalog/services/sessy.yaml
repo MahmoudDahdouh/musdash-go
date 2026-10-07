@@ -1,0 +1,22 @@
+# name: Sessy
+# about: Email observability platform for monitoring and analyzing email systems.
+# docs: https://github.com/marckohlbrugge/sessy/blob/main/docs/docker-deployment.md
+# categories: monitoring, email, analytics
+# source: coolify
+services:
+  sessy:
+    image: ghcr.io/marckohlbrugge/sessy:main
+    environment:
+      - SERVICE_URL_SESSY_80
+      - SECRET_KEY_BASE=$SERVICE_HEX_64_SESSYSECRET
+      - HTTP_AUTH_USERNAME=$SERVICE_USER_SESSY
+      - HTTP_AUTH_PASSWORD=$SERVICE_PASSWORD_SESSY
+    volumes:
+      - sessy-data:/rails/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:80 || [ $$? -eq 22 ]"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+volumes:
+  sessy-data:

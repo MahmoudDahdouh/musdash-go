@@ -1,0 +1,30 @@
+# name: ByteStash
+# about: ByteStash is a self-hosted web application designed to store, organise, and manage your code snippets efficiently.
+# docs: https://github.com/jordan-dalby/ByteStash
+# categories: storage
+# source: dokploy
+services:
+  bytestash:
+    image: ghcr.io/jordan-dalby/bytestash:1.5.6
+    restart: unless-stopped
+    expose:
+      - "5000"
+    environment:
+      - BASE_PATH=
+      - JWT_SECRET=${SERVICE_PASSWORD_JWT_SECRET}
+      - TOKEN_EXPIRY=24h
+      - ALLOW_NEW_ACCOUNTS=true
+      - DEBUG=true
+      - DISABLE_ACCOUNTS=false
+      - DISABLE_INTERNAL_ACCOUNTS=false
+      - OIDC_ENABLED=false
+      - OIDC_DISPLAY_NAME=
+      - OIDC_ISSUER_URL=
+      - OIDC_CLIENT_ID=
+      - OIDC_CLIENT_SECRET=
+      - OIDC_SCOPES=
+      - SERVICE_FQDN_BYTESTASH_5000
+    volumes:
+      - snippets:/data/snippets
+volumes:
+  snippets:

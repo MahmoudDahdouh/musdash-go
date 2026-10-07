@@ -1,0 +1,21 @@
+# name: OpenGist
+# about: OpenGist is a self-hosted pastebin alternative.
+# docs: https://github.com/thomiceli/opengist
+# categories: devtools
+# source: dokploy
+services:
+  opengist:
+    image: ghcr.io/thomiceli/opengist:1
+    restart: unless-stopped
+    expose:
+      - 6157
+      - 2222
+    volumes:
+      - opengist-data:/opengist
+    environment:
+      - UID=${UID:-1001}
+      - GID=${GID:-1001}
+      - OG_LOG_LEVEL=${OG_LOG_LEVEL:-info}
+      - SERVICE_FQDN_OPENGIST_6157
+volumes:
+  opengist-data:

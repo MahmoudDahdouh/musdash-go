@@ -1,0 +1,24 @@
+# name: Dagu
+# about: Dagu is a self-contained workflow engine with a Web UI. Schedule and orchestrate jobs as DAGs defined in declarative YAML, with no DBMS required.
+# docs: https://docs.dagu.sh
+# website: https://dagu.sh
+# categories: automation, devtools
+# source: dokploy
+services:
+  dagu:
+    image: ghcr.io/dagucloud/dagu:2.10.7
+    command: dagu start-all
+    restart: unless-stopped
+    expose:
+      - 8080
+    volumes:
+      - dagu-data:/var/lib/dagu
+    environment:
+      - DAGU_HOST=0.0.0.0
+      - DAGU_PORT=8080
+      - DAGU_AUTH_MODE=basic
+      - DAGU_AUTH_BASIC_USERNAME=${ADMIN_USERNAME:-admin}
+      - DAGU_AUTH_BASIC_PASSWORD=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - SERVICE_FQDN_DAGU_8080
+volumes:
+  dagu-data:

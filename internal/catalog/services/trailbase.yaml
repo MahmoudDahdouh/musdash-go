@@ -1,0 +1,14 @@
+# name: TrailBase
+# about: A blazingly fast Rust/SQLite/Wasmtime app server with type-safe APIs.
+# docs: https://trailbase.io/
+# categories: backend, devtools
+# source: coolify
+services:
+  trailbase:
+    image: trailbase/trailbase:0.22.6
+    environment:
+      - SERVICE_URL_TRAILBASE_4000
+    volumes:
+      - trailbase-data:/app/traildepot
+volumes:
+  trailbase-data:

@@ -1,0 +1,12 @@
+# name: Drawnix
+# about: Drawnix is an application for generating and managing visual content, powered by pubuzhixing/drawnix Docker image.
+# docs: https://github.com/plait-board/drawnix/blob/develop/README_en.md#docker
+# website: https://drawnix.com/
+# categories: docs
+# source: dokploy
+services:
+  drawnix:
+    image: pubuzhixing/drawnix:latest
+    restart: unless-stopped
+    environment:
+      - SERVICE_FQDN_DRAWNIX_3000

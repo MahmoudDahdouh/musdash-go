@@ -1,0 +1,26 @@
+# name: Ollama Chat Tone
+# about: Self-contained Ollama chat client with local auth, streaming responses, and per-user conversations.
+# docs: https://hub.docker.com/r/billnice250/chattone
+# categories: ai
+# source: dokploy
+services:
+  ollama-chat-tone:
+    image: billnice250/chattone:latest
+    expose:
+      - 8080
+    environment:
+      APP_NAME: "Ollama Chat Tone"
+      ADDR: ":8080"
+      SESSION_SECRET: "${SESSION_SECRET:-change-me......32charsOrMore}"
+      DB_PATH: "/data/app.db"
+      OLLAMA_URL: "${OLLAMA_URL:-http://your-ollama-host:11434}"
+      OLLAMA_TIMEOUT: "${OLLAMA_TIMEOUT:-5}"
+      DEFAULT_MODEL: "${DEFAULT_MODEL:-llama3.2}"
+      OPEN_BROWSER: "false"
+      BASIC_AUTH_USER: "${BASIC_AUTH_USER:-admin}"
+      BASIC_AUTH_PASSWORD: "${BASIC_AUTH_PASSWORD:?Set a password to sign in with}"
+      SERVICE_FQDN_OLLAMA_CHAT_TONE_8080:
+    volumes:
+      - ollama-chat-tone-data:/data
+volumes:
+  ollama-chat-tone-data:

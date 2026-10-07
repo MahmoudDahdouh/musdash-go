@@ -1,0 +1,26 @@
+# name: MailCatcher NG
+# about: MailCatcher NG runs a super simple SMTP server which catches any message sent to it to display in a web interface.
+# docs: https://spaquet.github.io/docker-alpine-mailcatcher/
+# website: https://spaquet.github.io/mailcatcher/
+# categories: email, devtools
+# source: dokploy
+services:
+  mailcatcher-ng:
+    image: stpaquet/alpinemailcatcher:latest@sha256:499c0eabca5e82b23d030706ba9d5b8b27bba5a5f34a43154ee5e68b07cba52c
+    restart: unless-stopped
+    command: sh -c "mailcatcher --foreground --smtp-port=1025 --http-port=1080 --ip=0.0.0.0 --messages-limit=$$MAIL_LIMIT --persistence --no-quit"
+    environment:
+      - MAIL_LIMIT=${MAIL_LIMIT:-50}
+      - SERVICE_FQDN_MAILCATCHER_NG_1080
+    expose:
+      - 1025
+      - 1080
+    volumes:
+      - mailcatcher-data:/home/mailcatcher/.mailcatcher
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:1080']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+volumes:
+  mailcatcher-data:

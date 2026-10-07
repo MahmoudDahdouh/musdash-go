@@ -1,0 +1,25 @@
+# name: TRMNL LaraPaper
+# about: LaraPaper is a self-hosted application (BYOS) to manage TRMNL e-ink devices.
+# docs: https://github.com/usetrmnl/larapaper/blob/main/README.md
+# website: https://docs.usetrmnl.com/go/diy/byos
+# categories: home
+# source: dokploy
+services:
+  trmnl-larapaper:
+    image: ghcr.io/usetrmnl/larapaper:0.40.0
+    environment:
+      - APP_URL=${SERVICE_FQDN_TRMNL_LARAPAPER}
+      - PHP_OPCACHE_ENABLE=${PHP_OPCACHE_ENABLE:-1}
+      - DEPLOY_VARIANT="dokploy"
+      - DB_DATABASE=database/storage/database.sqlite
+      - APP_TIMEZONE=${APP_TIMEZONE:-UTC}
+      - REGISTRATION_ENABLED=${REGISTRATION_ENABLED:-1}
+      - FORCE_HTTPS=${FORCE_HTTPS:-0}
+      - SERVICE_FQDN_TRMNL_LARAPAPER_8080
+    restart: always
+    volumes:
+      - trmnl-database:/var/www/html/database/storage
+      - trmnl-storage:/var/www/html/storage/app/public/images/generated
+volumes:
+  trmnl-database:
+  trmnl-storage:

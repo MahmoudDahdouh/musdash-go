@@ -1,0 +1,78 @@
+# name: Reef Chain - Dev Cluster
+# about: Self-contained Reef dev cluster with bootnode, validators, spec server, substrate RPC, EVM RPC, and faucet.
+# docs: https://docs.reef.io/
+# website: https://hub.docker.com/repository/docker/anukulpandey/reef-chain-node
+# categories: finance, devtools
+# source: dokploy
+services:
+  reef-dev-cluster:
+    image: anukulpandey/reef-chain-node:latest
+    restart: unless-stopped
+    working_dir: /workspace
+    environment:
+      v1sec: "${v1sec:-}"
+      v2sec: "${v2sec:-}"
+      v3sec: "${v3sec:-}"
+      faucetsec: "${faucetsec:-}"
+      DEFAULT_AMOUNT: "${DEFAULT_AMOUNT:-2000}"
+      MAX_AMOUNT: "${MAX_AMOUNT:-2000}"
+      SERVICE_FQDN_REEF_DEV_CLUSTER_8001:
+      SERVICE_FQDN_REEF_DEV_CLUSTER_P9945_9945:
+      SERVICE_FQDN_REEF_DEV_CLUSTER_P8080_8080:
+    volumes:
+      - reef-dev-cluster-state:/workspace/state
+      - reef-dev-cluster-download:/workspace/download
+    expose:
+      - "30335"
+      - "30333"
+      - "30334"
+      - "30336"
+      - "8001"
+      - "9944"
+      - "9945"
+      - "8080"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - bash -lc 'exec 3<>/dev/tcp/127.0.0.1/9944'
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 300s
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - "set -e\n\nexport DEBIAN_FRONTEND=noninteractive\n\necho '\U0001F4E6 Installing required tools...'\n\napt-get update\n\napt-get install -y \\\n  wget \\\n  curl \\\n  python3 \\\n  ca-certificates \\\n  gnupg \\\n  nginx\n\nmkdir -p \\\n  /etc/apt/keyrings \\\n  /workspace \\\n  /workspace/state \\\n  /workspace/download\n\necho '\U0001F511 Configuring NodeSource repository...'\n\ncurl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \\\n  | gpg --batch --yes --dearmor -o /etc/apt/keyrings/nodesource.gpg\n\necho 'deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main' \\\n  > /etc/apt/sources.list.d/nodesource.list\n\napt-get update\n\napt-get install -y nodejs\n\necho '\U0001F4E5 Downloading cluster bootstrap...'\n\nwget -O /workspace/run-cluster.sh \\\n  https://raw.githubusercontent.com/anukulpandey/dokploy-templates/d8a82420dad013a3eb7e5d8afc0b9f2700a0045a/blueprints/reef-dev-cluster/run-cluster.sh\n\necho '\U0001F527 Making script executable...'\n\nchmod +x /workspace/run-cluster.sh\n\necho '\U0001F680 Starting self-contained network...'\n\nexec env TEMPLATE_ASSET_REF=d8a82420dad013a3eb7e5d8afc0b9f2700a0045a \\\n  /workspace/run-cluster.sh\n"
+  reef-dev-cluster-eth-rpc:
+    image: anukulpandey/reef-chain-eth-rpc:latest
+    restart: unless-stopped
+    working_dir: /workspace
+    depends_on:
+      reef-dev-cluster:
+        condition: service_healthy
+    expose:
+      - "8545"
+    environment:
+      NODE_RPC_URL: ws://reef-dev-cluster:9945
+      PORT: "8545"
+      SERVICE_FQDN_REEF_DEV_CLUSTER_ETH_RPC_8545:
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - bash -lc 'exec 3<>/dev/tcp/127.0.0.1/8545'
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        exec eth-rpc \
+          --node-rpc-url "$$NODE_RPC_URL" \
+          --rpc-port "$$PORT" \
+          --rpc-external \
+          --rpc-cors all
+volumes:
+  reef-dev-cluster-state:
+  reef-dev-cluster-download:

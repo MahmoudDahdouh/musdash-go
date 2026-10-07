@@ -1,0 +1,20 @@
+# name: AdGuard Home
+# about: AdGuard Home is a comprehensive solution designed to enhance your online browsing experience by eliminating all kinds of ads, from annoying banners…
+# docs: https://github.com/AdguardTeam/AdGuardHome/wiki
+# website: https://adguard.com
+# categories: security, networking
+# source: dokploy
+services:
+  adguardhome:
+    image: adguard/adguardhome:latest
+    restart: unless-stopped
+    expose:
+      - 6060
+    volumes:
+      - adguardhome-work:/opt/adguardhome/work
+      - adguardhome-conf:/opt/adguardhome/conf
+    environment:
+      - SERVICE_FQDN_ADGUARDHOME_3000
+volumes:
+  adguardhome-work:
+  adguardhome-conf:

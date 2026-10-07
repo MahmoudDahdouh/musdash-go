@@ -1,0 +1,23 @@
+# name: Grocy
+# about: Grocy is a web-based household management and grocery list application.
+# docs: https://github.com/grocy/grocy
+# categories: productivity, home, ecommerce
+# source: coolify
+services:
+  grocy:
+    image: lscr.io/linuxserver/grocy:4.6.0
+    environment:
+      - SERVICE_URL_GROCY
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+      - SERVICE_FQDN_GROCY_80
+    volumes:
+      - grocy-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80"]
+      interval: 2s
+      timeout: 10s
+      retries: 15
+volumes:
+  grocy-config:

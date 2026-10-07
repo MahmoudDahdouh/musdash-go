@@ -1,0 +1,26 @@
+# name: MuleSoft ESB Runtime Community Edition
+# about: MuleSoft ESB Runtime is a lightweight, Java-based integration platform that allows you to easily integrate applications, data sources, and APIs.
+# docs: https://docs.mulesoft.com/
+# website: https://www.mulesoft.com/
+# categories: automation, devtools
+# source: dokploy
+services:
+  mule:
+    image: yogeshmulecraft/mulece-esb:latest
+    restart: unless-stopped
+    expose:
+      - "8081"
+    environment:
+      - MULE_VERSION=${MULE_VERSION:-4.9.0}
+      - HTTP_PORT=${HTTP_PORT:-8081}
+      - MULE_HOME=/opt/mule-standalone
+      - MULE_BASE=/opt/mule-standalone
+      - TZ=UTC
+      - MULE_VERBOSE_EXCEPTIONS=true
+      - SERVICE_FQDN_MULE_8081
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:${HTTP_PORT:-8081}/ || exit 0"]
+      interval: 60s
+      timeout: 20s
+      retries: 5
+      start_period: 120s

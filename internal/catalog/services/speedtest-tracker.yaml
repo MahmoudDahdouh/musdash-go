@@ -1,0 +1,21 @@
+# name: Speedtest Tracker
+# about: Speedtest Tracker runs scheduled internet speed tests and stores the results in a self-hosted dashboard.
+# docs: https://docs.speedtest-tracker.dev/
+# categories: monitoring, networking
+# source: dokploy
+services:
+  speedtest-tracker:
+    image: lscr.io/linuxserver/speedtest-tracker:latest
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      APP_KEY: base64:${SERVICE_BASE64_APP_KEY}
+      DB_CONNECTION: sqlite
+      SERVICE_FQDN_SPEEDTEST_TRACKER_80:
+    volumes:
+      - speedtest_config:/config
+    expose:
+      - "80"
+volumes:
+  speedtest_config:

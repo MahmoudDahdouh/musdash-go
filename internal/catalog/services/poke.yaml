@@ -1,0 +1,12 @@
+# name: Poke
+# about: Poke is an open-source, self-hosted alternative to YouTube.
+# docs: https://codeberg.org/ashleyirispuppy/poke
+# website: https://poketube.fun/
+# categories: media
+# source: dokploy
+services:
+  poke:
+    image: codeberg.org/poketube/poke:amd64
+    restart: unless-stopped
+    environment:
+      - SERVICE_FQDN_POKE_6003

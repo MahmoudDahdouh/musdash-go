@@ -1,0 +1,22 @@
+# name: Mumble
+# about: Mumble is an open-source, low-latency, high-quality voice chat software primarily intended for use while gaming.
+# docs: https://www.mumble.info/documentation/
+# website: https://www.mumble.info/
+# categories: communication, games
+# source: dokploy
+# connect: true
+services:
+  mumble-server:
+    image: mumblevoip/mumble-server:latest
+    restart: unless-stopped
+    expose:
+      - 64738
+      - 64738/udp
+    volumes:
+      - mumble-data:/data
+    environment:
+      - MUMBLE_SUPERUSER_PASSWORD=${SERVICE_PASSWORD_SUPERUSER_PASSWORD}
+      - MUMBLE_CONFIG_WELCOMETEXT=${WELCOME_TEXT:-Welcome to Mumble Server! Low-latency voice chat.}
+      - MUMBLE_CONFIG_USERS=${MAX_USERS:-50}
+volumes:
+  mumble-data:

@@ -1,0 +1,52 @@
+# name: Typebot
+# about: Typebot is an open-source chatbot builder platform.
+# docs: https://docs.typebot.io/get-started/introduction
+# website: https://typebot.io/
+# categories: ai
+# source: dokploy
+services:
+  typebot-db:
+    image: postgres:14-alpine
+    restart: always
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: typebot
+      POSTGRES_DB: typebot
+      POSTGRES_PASSWORD: typebot
+  typebot-builder:
+    image: baptistearno/typebot-builder:2.27
+    restart: always
+    depends_on:
+      - typebot-db
+    environment:
+      ENCRYPTION_SECRET: '${SERVICE_BASE64_ENCRYPTION_SECRET}'
+      DATABASE_URL: 'postgresql://typebot:typebot@typebot-db:5432/typebot'
+      NEXTAUTH_URL: '${SERVICE_URL_TYPEBOT_BUILDER}'
+      NEXT_PUBLIC_VIEWER_URL: '${SERVICE_URL_TYPEBOT_VIEWER}'
+      ADMIN_EMAIL: '${ADMIN_EMAIL:-typebot@example.com}'
+      SMTP_HOST: '${SMTP_HOST:-Fill}'
+      SMTP_PORT: ${SMTP_PORT:-25}
+      NEXT_PUBLIC_SMTP_FROM: '${NEXT_PUBLIC_SMTP_FROM:-typebot@example.com}'
+      SMTP_USERNAME: '${SMTP_USERNAME:-Fill}'
+      SMTP_PASSWORD: '${SMTP_PASSWORD:-Fill}'
+      DEFAULT_WORKSPACE_PLAN: '${DEFAULT_WORKSPACE_PLAN:-UNLIMITED}'
+      SERVICE_FQDN_TYPEBOT_BUILDER_3000:
+  typebot-viewer:
+    image: baptistearno/typebot-viewer:2.27.0
+    restart: always
+    environment:
+      ENCRYPTION_SECRET: '${SERVICE_BASE64_ENCRYPTION_SECRET}'
+      DATABASE_URL: postgresql://typebot:typebot@typebot-db:5432/typebot
+      NEXTAUTH_URL: '${SERVICE_URL_TYPEBOT_BUILDER}'
+      NEXT_PUBLIC_VIEWER_URL: '${SERVICE_URL_TYPEBOT_VIEWER}'
+      ADMIN_EMAIL: '${ADMIN_EMAIL:-typebot@example.com}'
+      SMTP_HOST: '${SMTP_HOST:-Fill}'
+      SMTP_PORT: ${SMTP_PORT:-25}
+      NEXT_PUBLIC_SMTP_FROM: '${NEXT_PUBLIC_SMTP_FROM:-typebot@example.com}'
+      SMTP_USERNAME: '${SMTP_USERNAME:-Fill}'
+      SMTP_PASSWORD: '${SMTP_PASSWORD:-Fill}'
+      DEFAULT_WORKSPACE_PLAN: '${DEFAULT_WORKSPACE_PLAN:-UNLIMITED}'
+      SERVICE_FQDN_TYPEBOT_VIEWER_3000:
+volumes:
+  db-data:

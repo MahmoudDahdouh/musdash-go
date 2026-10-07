@@ -1,0 +1,26 @@
+# name: OpenSEO
+# about: OpenSEO is an open source, self-hosted alternative to Semrush and Ahrefs for keyword research, rank tracking, backlinks, and site audits.
+# docs: https://openseo.so/docs/self-hosting
+# website: https://openseo.so
+# categories: business, analytics
+# source: dokploy
+services:
+  openseo:
+    image: ghcr.io/every-app/open-seo:v0.1.6
+    restart: unless-stopped
+    environment:
+      - CLOUDFLARE_INCLUDE_PROCESS_ENV=true
+      - PORT=3001
+      - ALLOWED_HOST=${SERVICE_FQDN_OPENSEO}
+      - AUTH_MODE=local_noauth
+      - DATAFORSEO_API_KEY=${DATAFORSEO_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      - OPENSEO_TELEMETRY_DISABLED=${OPENSEO_TELEMETRY_DISABLED:-}
+      - SERVICE_FQDN_OPENSEO_3001
+    expose:
+      - 3001
+    volumes:
+      - openseo-data:/app/.wrangler
+volumes:
+  openseo-data:

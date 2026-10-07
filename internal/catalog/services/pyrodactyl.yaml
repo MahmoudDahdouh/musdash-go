@@ -1,0 +1,48 @@
+# name: Pyrodactyl
+# about: Pyrodactyl is the Pterodactyl-based game server panel that's faster, smaller, safer, and more accessible than Pelican.
+# docs: https://pyrodactyl.dev/docs
+# website: https://pyrodactyl.dev
+# categories: games
+# source: dokploy
+services:
+  database:
+    image: mariadb:11
+    restart: always
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - "pterodb:/var/lib/mysql"
+    environment:
+      MYSQL_DATABASE: "panel"
+      MYSQL_USER: "pterodactyl"
+      MYSQL_PASSWORD: ${SERVICE_PASSWORD_DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${SERVICE_PASSWORD_DB_ROOT_PASSWORD}
+  cache:
+    image: redis:alpine
+    restart: always
+  panel:
+    image: ghcr.io/pyrodactyl-oss/pyrodactyl:latest
+    restart: always
+    volumes:
+      - "pterovar:/app/var/"
+      - "pteronginx:/etc/nginx/http.d/"
+      - "pterocerts:/etc/letsencrypt/"
+      - "pterologs:/app/storage/logs"
+    environment:
+      APP_URL: "${SERVICE_URL_PANEL}"
+      APP_ENV: "production"
+      APP_ENVIRONMENT_ONLY: "false"
+      CACHE_DRIVER: ${CACHE_DRIVER:-redis}
+      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
+      QUEUE_DRIVER: ${QUEUE_DRIVER:-redis}
+      REDIS_HOST: ${REDIS_HOST:-cache}
+      DB_HOST: ${DB_HOST:-database}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_PASSWORD: ${SERVICE_PASSWORD_DB_PASSWORD}
+      DB_CONNECTION: "mariadb"
+      SERVICE_FQDN_PANEL_80:
+volumes:
+  pterodb:
+  pterovar:
+  pteronginx:
+  pterocerts:
+  pterologs:

@@ -1,0 +1,19 @@
+# name: Quire Ink
+# about: A self-hosted blog in one container: a real editor over Markdown with tables, footnotes and mathematics, scheduled publishing, newsletters over your…
+# docs: https://github.com/joiha-steven/quireink/blob/main/docs/self-host-docker.md
+# website: https://quireink.com
+# categories: cms
+# source: dokploy
+services:
+  quireink:
+    image: quireink/quireink:2.2.1
+    restart: unless-stopped
+    environment:
+      SITE_URL: ${SERVICE_URL_QUIREINK}
+      SERVICE_FQDN_QUIREINK_3000:
+    volumes:
+      - quireink-data:/var/lib/quire/data
+      - quireink-uploads:/var/lib/quire/uploads
+volumes:
+  quireink-data:
+  quireink-uploads:

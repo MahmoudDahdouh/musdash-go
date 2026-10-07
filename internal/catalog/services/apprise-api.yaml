@@ -1,0 +1,22 @@
+# name: Apprise API
+# about: Push Notifications API.
+# docs: https://docs.linuxserver.io/images/docker-apprise-api/
+# categories: automation, devtools
+# source: coolify
+services:
+  apprise-api:
+    image: linuxserver/apprise-api:latest
+    environment:
+      - SERVICE_URL_APPRISE_8000
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    volumes:
+      - apprise-api-config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/"]
+      interval: 5s
+      timeout: 20s
+      retries: 10
+volumes:
+  apprise-api-config:

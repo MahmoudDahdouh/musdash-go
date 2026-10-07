@@ -1,0 +1,234 @@
+# name: Taiga
+# about: Taiga is a free and open-source project management platform for agile developers, designers and project managers.
+# docs: https://docs.taiga.io/
+# website: https://taiga.io/
+# categories: productivity
+# source: dokploy
+services:
+  taiga-db:
+    image: postgres:12.3
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: taiga
+      POSTGRES_USER: ${POSTGRES_USER:-taiga}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-taiga}"]
+      interval: 2s
+      timeout: 15s
+      retries: 5
+      start_period: 3s
+    volumes:
+      - taiga-db-data:/var/lib/postgresql/data
+  taiga-back:
+    image: taigaio/taiga-back:latest
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: taiga
+      POSTGRES_USER: ${POSTGRES_USER:-taiga}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_HOST: taiga-db
+      TAIGA_SECRET_KEY: ${SERVICE_PASSWORD_64_SECRET_KEY}
+      TAIGA_SITES_SCHEME: ${TAIGA_SCHEME:-https}
+      TAIGA_SITES_DOMAIN: ${SERVICE_FQDN_TAIGA_GATEWAY}
+      TAIGA_SUBPATH: ${SUBPATH:-}
+      EMAIL_BACKEND: django.core.mail.backends.${EMAIL_BACKEND:-console}.EmailBackend
+      DEFAULT_FROM_EMAIL: ${EMAIL_DEFAULT_FROM:-changeme@example.com}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-False}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-False}
+      EMAIL_HOST: ${EMAIL_HOST:-smtp.example.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-user}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-password}
+      RABBITMQ_USER: ${RABBITMQ_USER:-taiga}
+      RABBITMQ_PASS: ${SERVICE_PASSWORD_RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-taiga}
+      ENABLE_TELEMETRY: ${ENABLE_TELEMETRY:-False}
+      PUBLIC_REGISTER_ENABLED: ${PUBLIC_REGISTER_ENABLED:-False}
+    volumes:
+      - taiga-static-data:/taiga-back/static
+      - taiga-media-data:/taiga-back/media
+    depends_on:
+      taiga-db:
+        condition: service_healthy
+      taiga-events-rabbitmq:
+        condition: service_started
+      taiga-async-rabbitmq:
+        condition: service_started
+  taiga-async:
+    image: taigaio/taiga-back:latest
+    restart: unless-stopped
+    entrypoint: ["/taiga-back/docker/async_entrypoint.sh"]
+    environment:
+      POSTGRES_DB: taiga
+      POSTGRES_USER: ${POSTGRES_USER:-taiga}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      POSTGRES_HOST: taiga-db
+      TAIGA_SECRET_KEY: ${SERVICE_PASSWORD_64_SECRET_KEY}
+      TAIGA_SITES_SCHEME: ${TAIGA_SCHEME:-https}
+      TAIGA_SITES_DOMAIN: ${SERVICE_FQDN_TAIGA_GATEWAY}
+      TAIGA_SUBPATH: ${SUBPATH:-}
+      EMAIL_BACKEND: django.core.mail.backends.${EMAIL_BACKEND:-console}.EmailBackend
+      DEFAULT_FROM_EMAIL: ${EMAIL_DEFAULT_FROM:-changeme@example.com}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-False}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-False}
+      EMAIL_HOST: ${EMAIL_HOST:-smtp.example.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-user}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-password}
+      RABBITMQ_USER: ${RABBITMQ_USER:-taiga}
+      RABBITMQ_PASS: ${SERVICE_PASSWORD_RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-taiga}
+      ENABLE_TELEMETRY: ${ENABLE_TELEMETRY:-False}
+      PUBLIC_REGISTER_ENABLED: ${PUBLIC_REGISTER_ENABLED:-False}
+    volumes:
+      - taiga-static-data:/taiga-back/static
+      - taiga-media-data:/taiga-back/media
+    depends_on:
+      taiga-db:
+        condition: service_healthy
+      taiga-events-rabbitmq:
+        condition: service_started
+      taiga-async-rabbitmq:
+        condition: service_started
+  taiga-async-rabbitmq:
+    image: rabbitmq:3.8-management-alpine
+    restart: unless-stopped
+    hostname: taiga-async-rabbitmq
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${SERVICE_PASSWORD_RABBITMQ_ERLANG_COOKIE}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-taiga}
+      RABBITMQ_DEFAULT_PASS: ${SERVICE_PASSWORD_RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-taiga}
+    volumes:
+      - taiga-async-rabbitmq-data:/var/lib/rabbitmq
+  taiga-front:
+    image: taigaio/taiga-front:latest
+    restart: unless-stopped
+    environment:
+      TAIGA_URL: ${TAIGA_SCHEME:-https}://${SERVICE_FQDN_TAIGA_GATEWAY}
+      TAIGA_WEBSOCKETS_URL: ${WEBSOCKETS_SCHEME:-wss}://${SERVICE_FQDN_TAIGA_GATEWAY}
+      TAIGA_SUBPATH: ${SUBPATH:-}
+      PUBLIC_REGISTER_ENABLED: ${PUBLIC_REGISTER_ENABLED_FRONT:-false}
+  taiga-events:
+    image: taigaio/taiga-events:latest
+    restart: unless-stopped
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER:-taiga}
+      RABBITMQ_PASS: ${SERVICE_PASSWORD_RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-taiga}
+      TAIGA_SECRET_KEY: ${SERVICE_PASSWORD_64_SECRET_KEY}
+    depends_on:
+      taiga-events-rabbitmq:
+        condition: service_started
+  taiga-events-rabbitmq:
+    image: rabbitmq:3.8-management-alpine
+    restart: unless-stopped
+    hostname: taiga-events-rabbitmq
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${SERVICE_PASSWORD_RABBITMQ_ERLANG_COOKIE}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-taiga}
+      RABBITMQ_DEFAULT_PASS: ${SERVICE_PASSWORD_RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-taiga}
+    volumes:
+      - taiga-events-rabbitmq-data:/var/lib/rabbitmq
+  taiga-protected:
+    image: taigaio/taiga-protected:latest
+    restart: unless-stopped
+    environment:
+      MAX_AGE: ${ATTACHMENTS_MAX_AGE:-360}
+      SECRET_KEY: ${SERVICE_PASSWORD_64_SECRET_KEY}
+  taiga-gateway:
+    image: nginx:1.19-alpine
+    restart: unless-stopped
+    expose:
+      - 80
+    volumes:
+      - taiga-static-data:/taiga/static:ro
+      - taiga-media-data:/taiga/media:ro
+    depends_on:
+      - taiga-front
+      - taiga-back
+      - taiga-events
+    environment:
+      - SERVICE_FQDN_TAIGA_GATEWAY_80
+    configs:
+      - source: taiga-gateway-volumes-nginx-taiga-conf
+        target: /etc/nginx/conf.d/default.conf
+volumes:
+  taiga-static-data:
+  taiga-media-data:
+  taiga-db-data:
+  taiga-async-rabbitmq-data:
+  taiga-events-rabbitmq-data:
+configs:
+  taiga-gateway-volumes-nginx-taiga-conf:
+    content: |
+      server {
+          listen 80 default_server;
+
+          client_max_body_size 100M;
+          charset utf-8;
+
+          location / {
+              proxy_pass http://taiga-front/;
+              proxy_pass_header Server;
+              proxy_set_header Host $$http_host;
+              proxy_redirect off;
+              proxy_set_header X-Real-IP $$remote_addr;
+              proxy_set_header X-Scheme $$scheme;
+          }
+
+          location /api/ {
+              proxy_pass http://taiga-back:8000/api/;
+              proxy_pass_header Server;
+              proxy_set_header Host $$http_host;
+              proxy_redirect off;
+              proxy_set_header X-Real-IP $$remote_addr;
+              proxy_set_header X-Scheme $$scheme;
+          }
+
+          location /admin/ {
+              proxy_pass http://taiga-back:8000/admin/;
+              proxy_pass_header Server;
+              proxy_set_header Host $$http_host;
+              proxy_redirect off;
+              proxy_set_header X-Real-IP $$remote_addr;
+              proxy_set_header X-Scheme $$scheme;
+          }
+
+          location /static/ {
+              alias /taiga/static/;
+          }
+
+          location /_protected/ {
+              internal;
+              alias /taiga/media/;
+              add_header Content-disposition "attachment";
+          }
+
+          location /media/exports/ {
+              alias /taiga/media/exports/;
+              add_header Content-disposition "attachment";
+          }
+
+          location /media/ {
+              proxy_set_header Host $$http_host;
+              proxy_set_header X-Real-IP $$remote_addr;
+              proxy_set_header X-Scheme $$scheme;
+              proxy_set_header X-Forwarded-Proto $$scheme;
+              proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+              proxy_pass http://taiga-protected:8003/;
+              proxy_redirect off;
+          }
+
+          location /events {
+              proxy_pass http://taiga-events:8888/events;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $$http_upgrade;
+              proxy_set_header Connection "upgrade";
+              proxy_connect_timeout 7d;
+              proxy_send_timeout 7d;
+              proxy_read_timeout 7d;
+          }
+      }

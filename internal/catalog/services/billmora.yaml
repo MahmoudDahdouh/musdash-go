@@ -1,0 +1,142 @@
+# name: Billmora
+# about: Billmora (Billing Management, Operation, and Recurring Automation) is a free, open-source platform for hosting providers to manage clients…
+# docs: https://billmora.com/docs/introduction
+# website: https://billmora.com
+# categories: finance, automation
+# source: dokploy
+services:
+  billmora-app:
+    image: ghcr.io/billmora/billmora:latest
+    restart: always
+    environment:
+      - APP_NAME=${APP_NAME:-Billmora}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_KEY=base64:${SERVICE_BASE64_APP_KEY}
+      - APP_URL=${SERVICE_URL_BILLMORA_APP}
+      - DB_CONNECTION=${DB_CONNECTION:-mariadb}
+      - DB_HOST=${DB_HOST:-billmora-db}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_DATABASE=${DB_DATABASE:-billmora}
+      - DB_USERNAME=${DB_USERNAME:-billmora}
+      - DB_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-billmora-redis}
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS_PASSWORD}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - SESSION_DRIVER=${SESSION_DRIVER:-redis}
+      - CACHE_STORE=${CACHE_STORE:-redis}
+      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-redis}
+      - AUTORUN_ENABLED=true
+      - AUTORUN_LARAVEL_MIGRATION=true
+      - AUTORUN_LARAVEL_MIGRATION_FORCE=true
+      - AUTORUN_LARAVEL_MIGRATION_SEED=true
+      - AUTORUN_LARAVEL_STORAGE_LINK=true
+      - SERVICE_FQDN_BILLMORA_APP_8080
+    volumes:
+      - billmora-storage:/var/www/html/storage
+      - billmora-plugins:/var/www/html/plugin
+      - billmora-themes-resources:/var/www/html/resources/themes
+      - billmora-themes-public:/var/www/html/public/themes
+    depends_on:
+      billmora-db:
+        condition: service_healthy
+      billmora-redis:
+        condition: service_healthy
+  billmora-worker:
+    image: ghcr.io/billmora/billmora:latest
+    restart: always
+    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--max-time=3600"]
+    environment:
+      - APP_NAME=${APP_NAME:-Billmora}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_KEY=base64:${SERVICE_BASE64_APP_KEY}
+      - APP_URL=${SERVICE_URL_BILLMORA_APP}
+      - DB_CONNECTION=${DB_CONNECTION:-mariadb}
+      - DB_HOST=${DB_HOST:-billmora-db}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_DATABASE=${DB_DATABASE:-billmora}
+      - DB_USERNAME=${DB_USERNAME:-billmora}
+      - DB_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-billmora-redis}
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS_PASSWORD}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - SESSION_DRIVER=${SESSION_DRIVER:-redis}
+      - CACHE_STORE=${CACHE_STORE:-redis}
+      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-redis}
+      - AUTORUN_ENABLED=false
+    volumes:
+      - billmora-storage:/var/www/html/storage
+      - billmora-plugins:/var/www/html/plugin
+      - billmora-themes-resources:/var/www/html/resources/themes
+      - billmora-themes-public:/var/www/html/public/themes
+    depends_on:
+      billmora-db:
+        condition: service_healthy
+      billmora-redis:
+        condition: service_healthy
+  billmora-scheduler:
+    image: ghcr.io/billmora/billmora:latest
+    restart: always
+    command: ["/bin/sh", "-c", "while true; do php artisan schedule:run >> /dev/null 2>&1; sleep 60; done"]
+    environment:
+      - APP_NAME=${APP_NAME:-Billmora}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_KEY=base64:${SERVICE_BASE64_APP_KEY}
+      - APP_URL=${SERVICE_URL_BILLMORA_APP}
+      - DB_CONNECTION=${DB_CONNECTION:-mariadb}
+      - DB_HOST=${DB_HOST:-billmora-db}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_DATABASE=${DB_DATABASE:-billmora}
+      - DB_USERNAME=${DB_USERNAME:-billmora}
+      - DB_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-billmora-redis}
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS_PASSWORD}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - SESSION_DRIVER=${SESSION_DRIVER:-redis}
+      - CACHE_STORE=${CACHE_STORE:-redis}
+      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-redis}
+      - AUTORUN_ENABLED=false
+    volumes:
+      - billmora-storage:/var/www/html/storage
+      - billmora-plugins:/var/www/html/plugin
+      - billmora-themes-resources:/var/www/html/resources/themes
+      - billmora-themes-public:/var/www/html/public/themes
+    depends_on:
+      billmora-db:
+        condition: service_healthy
+      billmora-redis:
+        condition: service_healthy
+  billmora-db:
+    image: mariadb:11
+    restart: always
+    environment:
+      - MARIADB_DATABASE=${DB_DATABASE:-billmora}
+      - MARIADB_USER=${DB_USERNAME:-billmora}
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - MARIADB_ROOT_PASSWORD=${SERVICE_PASSWORD_DB_ROOT_PASSWORD}
+    volumes:
+      - billmora-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+  billmora-redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --requirepass ${SERVICE_PASSWORD_REDIS_PASSWORD}
+    volumes:
+      - billmora-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${SERVICE_PASSWORD_REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+volumes:
+  billmora-storage:
+  billmora-plugins:
+  billmora-themes-resources:
+  billmora-themes-public:
+  billmora-db-data:
+  billmora-redis-data:

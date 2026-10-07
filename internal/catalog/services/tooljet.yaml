@@ -1,0 +1,133 @@
+# name: Tooljet
+# about: Tooljet is an open-source low-code platform that allows you to build internal tools quickly and efficiently.
+# docs: https://docs.tooljet.ai/
+# website: https://tooljet.ai/
+# categories: backend, devtools
+# source: dokploy
+services:
+  tooljet:
+    tty: true
+    stdin_open: true
+    image: tooljet/tooljet:ee-lts-latest
+    restart: always
+    expose:
+      - 80
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+    depends_on:
+      - postgres
+    environment:
+      SERVE_CLIENT: "true"
+      PORT: "80"
+      TOOLJET_HOST: ${SERVICE_URL_TOOLJET}:80
+      TOOLJET_HTTP_PROXY: ${SERVICE_URL_TOOLJET}:80
+      LOCKBOX_MASTER_KEY: ${SERVICE_PASSWORD_LOCKBOX_MASTER_KEY}
+      SECRET_KEY_BASE: ${SERVICE_PASSWORD_64_SECRET_KEY_BASE}
+      ORM_LOGGING: all
+      PG_DB: tooljet_production
+      PG_USER: postgres
+      PG_HOST: postgres
+      PG_PASS: ${SERVICE_PASSWORD_PG_PASS}
+      TOOLJET_DB: tooljet_db
+      TOOLJET_DB_USER: postgres
+      TOOLJET_DB_HOST: postgres
+      TOOLJET_DB_PASS: ${SERVICE_PASSWORD_PG_PASS}
+      PGRST_DB_URI: postgres://postgres:${SERVICE_PASSWORD_PG_PASS}@postgres/tooljet_db
+      PGRST_HOST: localhost:3002
+      PGRST_JWT_SECRET: ${SERVICE_PASSWORD_PGRST_JWT_SECRET}
+      PGRST_SERVER_PORT: "3002"
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      REDIS_USER: default
+      REDIS_PASSWORD:
+      CHECK_FOR_UPDATES: "true"
+      DISABLE_TOOLJET_TELEMETRY: "true"
+      GOOGLE_CLIENT_ID:
+      GOOGLE_CLIENT_SECRET:
+      DEFAULT_FROM_EMAIL: hello@tooljet.io
+      SMTP_USERNAME:
+      SMTP_PASSWORD:
+      SMTP_DOMAIN:
+      SMTP_PORT:
+      DISABLE_SIGNUPS:
+      APM_VENDOR:
+      SENTRY_DNS:
+      SENTRY_DEBUG:
+      COMMENT_FEATURE_ENABLE:
+      ENABLE_MULTIPLAYER_EDITING: "true"
+      ENABLE_MARKETPLACE_FEATURE: "true"
+      SSO_GOOGLE_OAUTH2_CLIENT_ID:
+      SSO_GIT_OAUTH2_CLIENT_ID:
+      SSO_GIT_OAUTH2_CLIENT_SECRET:
+      SSO_GIT_OAUTH2_HOST:
+      SSO_ACCEPTED_DOMAINS:
+      SSO_DISABLE_SIGNUPS:
+      ENABLE_ONBOARDING_QUESTIONS_FOR_ALL_SIGN_UPS:
+      USER_SESSION_EXPIRY: "2880"
+      DEPLOYMENT_PLATFORM: docker
+      SERVICE_FQDN_TOOLJET_80:
+    command: npm run start:prod
+  postgres:
+    image: postgres:13
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 3G
+    volumes:
+      - postgres-postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${PG_USER:-postgres}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_PG_PASS}
+      - TOOLJET_HOST=${SERVICE_URL_TOOLJET}:80
+      - TOOLJET_HTTP_PROXY=${SERVICE_URL_TOOLJET}:80
+      - LOCKBOX_MASTER_KEY=${SERVICE_PASSWORD_LOCKBOX_MASTER_KEY}
+      - SECRET_KEY_BASE=${SERVICE_PASSWORD_64_SECRET_KEY_BASE}
+      - ORM_LOGGING=all
+      - PG_DB=tooljet_production
+      - PG_USER=postgres
+      - PG_HOST=postgres
+      - PG_PASS=${SERVICE_PASSWORD_PG_PASS}
+      - TOOLJET_DB=tooljet_db
+      - TOOLJET_DB_USER=postgres
+      - TOOLJET_DB_HOST=postgres
+      - TOOLJET_DB_PASS=${SERVICE_PASSWORD_PG_PASS}
+      - PGRST_DB_URI=postgres://postgres:${SERVICE_PASSWORD_PG_PASS}@postgres/tooljet_db
+      - PGRST_HOST=localhost:3002
+      - PGRST_JWT_SECRET=${SERVICE_PASSWORD_PGRST_JWT_SECRET}
+      - PGRST_SERVER_PORT=3002
+      - REDIS_HOST=localhost
+      - REDIS_PORT=6379
+      - REDIS_USER=default
+      - REDIS_PASSWORD
+      - CHECK_FOR_UPDATES=true
+      - DISABLE_TOOLJET_TELEMETRY=true
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
+      - DEFAULT_FROM_EMAIL=hello@tooljet.io
+      - SMTP_USERNAME
+      - SMTP_PASSWORD
+      - SMTP_DOMAIN
+      - SMTP_PORT
+      - DISABLE_SIGNUPS
+      - APM_VENDOR
+      - SENTRY_DNS
+      - SENTRY_DEBUG
+      - COMMENT_FEATURE_ENABLE
+      - ENABLE_MULTIPLAYER_EDITING=true
+      - ENABLE_MARKETPLACE_FEATURE=true
+      - SSO_GOOGLE_OAUTH2_CLIENT_ID
+      - SSO_GIT_OAUTH2_CLIENT_ID
+      - SSO_GIT_OAUTH2_CLIENT_SECRET
+      - SSO_GIT_OAUTH2_HOST
+      - SSO_ACCEPTED_DOMAINS
+      - SSO_DISABLE_SIGNUPS
+      - ENABLE_ONBOARDING_QUESTIONS_FOR_ALL_SIGN_UPS
+      - USER_SESSION_EXPIRY=2880
+      - DEPLOYMENT_PLATFORM=docker
+volumes:
+  postgres-postgres:

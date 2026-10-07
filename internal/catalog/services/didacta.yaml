@@ -1,0 +1,97 @@
+# name: Didacta
+# about: Didacta is a fair-code, self-hosted learning platform (LMS) with multi-tenant isolation, a public course catalog, enrollment flows, gamification and…
+# docs: https://docs.didacta.io
+# website: https://didacta.io
+# categories: home
+# source: dokploy
+services:
+  didacta:
+    image: ghcr.io/va360labs/didacta-community:0.0.1-alpha.107
+    restart: unless-stopped
+    expose:
+      - 3000
+    volumes:
+      - didacta-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:4000/healthz']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+    environment:
+      - ADMIN_DATABASE_URL=postgresql://didacta:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/didacta?schema=public
+      - API_PORT=4000
+      - AUTH_SECRET=${SERVICE_PASSWORD_64_AUTH_SECRET}
+      - DIDACTA_CORE_VERSION=0.0.1-alpha.107
+      - DIDACTA_LICENSE_KEY
+      - DIDACTA_SETUP_TOKEN=${SERVICE_PASSWORD_SETUP_TOKEN}
+      - NODE_ENV=production
+      - POSTGRES_DB=didacta
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      - POSTGRES_USER=didacta
+      - REDIS_URL=redis://redis:6379
+      - SMTP_FROM
+      - SMTP_HOST
+      - SMTP_PASS
+      - SMTP_PORT=587
+      - SMTP_SECURE=false
+      - SMTP_USER
+      - STORAGE_DRIVER=local
+      - STORAGE_ROOT=/app/data/storage
+      - WEB_PORT=3000
+      - WEB_PUBLIC_ALLOWED_HOSTS=${SERVICE_FQDN_DIDACTA}
+      - WEB_PUBLIC_URL=${SERVICE_URL_DIDACTA}
+      - SERVICE_FQDN_DIDACTA_3000
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    volumes:
+      - didacta-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    environment:
+      - ADMIN_DATABASE_URL=postgresql://didacta:${SERVICE_PASSWORD_POSTGRES_PASSWORD}@postgres:5432/didacta?schema=public
+      - API_PORT=4000
+      - AUTH_SECRET=${SERVICE_PASSWORD_64_AUTH_SECRET}
+      - DIDACTA_CORE_VERSION=0.0.1-alpha.107
+      - DIDACTA_LICENSE_KEY
+      - DIDACTA_SETUP_TOKEN=${SERVICE_PASSWORD_SETUP_TOKEN}
+      - NODE_ENV=production
+      - POSTGRES_DB=didacta
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES_PASSWORD}
+      - POSTGRES_USER=didacta
+      - REDIS_URL=redis://redis:6379
+      - SMTP_FROM
+      - SMTP_HOST
+      - SMTP_PASS
+      - SMTP_PORT=587
+      - SMTP_SECURE=false
+      - SMTP_USER
+      - STORAGE_DRIVER=local
+      - STORAGE_ROOT=/app/data/storage
+      - WEB_PORT=3000
+      - WEB_PUBLIC_ALLOWED_HOSTS=${SERVICE_FQDN_DIDACTA}
+      - WEB_PUBLIC_URL=${SERVICE_URL_DIDACTA}
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - didacta-redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  didacta-data:
+  didacta-postgres-data:
+  didacta-redis-data:

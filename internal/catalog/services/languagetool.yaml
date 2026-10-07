@@ -1,0 +1,14 @@
+# name: LanguageTool
+# about: LanguageTool is an open-source grammar, style, and spell checker that can run as a self-hosted HTTP service.
+# docs: https://dev.languagetool.org/http-server
+# website: https://languagetool.org/
+# categories: docs, devtools
+# source: dokploy
+services:
+  languagetool:
+    image: collabora/languagetool:6.6
+    restart: unless-stopped
+    expose:
+      - "8010"
+    environment:
+      - SERVICE_FQDN_LANGUAGETOOL_8010

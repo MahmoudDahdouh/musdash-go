@@ -1,0 +1,12 @@
+# name: Neko
+# about: Neko is a self-hosted virtual browser that runs in Docker and allows you to share browser sessions with others.
+# docs: https://github.com/m1k1o/neko
+# categories: devtools
+# source: dokploy
+services:
+  neko:
+    image: "ghcr.io/m1k1o/neko/firefox:latest"
+    restart: "unless-stopped"
+    shm_size: "2gb"
+    environment:
+      - SERVICE_FQDN_NEKO_8080

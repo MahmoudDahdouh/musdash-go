@@ -1,0 +1,51 @@
+# name: Flagsmith
+# about: Flagsmith is an open-source feature flagging and remote config service.
+# docs: https://docs.flagsmith.com/
+# website: https://www.flagsmith.com/
+# categories: devtools
+# source: dokploy
+services:
+  postgres:
+    image: postgres:15.5-alpine
+    environment:
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_DATABASE_PASSWORD}
+      POSTGRES_DB: flagsmith
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d flagsmith -U postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 20s
+  flagsmith:
+    image: docker.flagsmith.com/flagsmith/flagsmith:2.177.1
+    environment:
+      DATABASE_URL: postgresql://postgres:${SERVICE_PASSWORD_DATABASE_PASSWORD}@postgres:5432/flagsmith
+      USE_POSTGRES_FOR_ANALYTICS: "true"
+      ENVIRONMENT: production
+      DJANGO_ALLOWED_HOSTS: "*"
+      FLAGSMITH_DOMAIN: ${SERVICE_FQDN_FLAGSMITH}
+      DJANGO_SECRET_KEY: ${SERVICE_PASSWORD_DJANGO_SECRET_KEY}
+      TASK_RUN_METHOD: TASK_PROCESSOR
+      PROMETHEUS_ENABLED: "true"
+      SERVICE_FQDN_FLAGSMITH_8000:
+    expose:
+      - 8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+  flagsmith-task-processor:
+    image: docker.flagsmith.com/flagsmith/flagsmith:2.177.1
+    environment:
+      DATABASE_URL: postgresql://postgres:${SERVICE_PASSWORD_DATABASE_PASSWORD}@postgres:5432/flagsmith
+      USE_POSTGRES_FOR_ANALYTICS: "true"
+      DJANGO_ALLOWED_HOSTS: "*"
+      PROMETHEUS_ENABLED: "true"
+    expose:
+      - 8000
+    depends_on:
+      - flagsmith
+    command: run-task-processor
+volumes:
+  pgdata:

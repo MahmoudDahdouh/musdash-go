@@ -1,0 +1,36 @@
+# name: Flarum
+# about: Flarum is a delightfully simple, modern forum software. It is fast, free, and easy to use with a clean and extensible architecture.
+# docs: https://docs.flarum.org/
+# website: https://flarum.org/
+# categories: communication
+# source: dokploy
+services:
+  flarum:
+    image: crazymax/flarum:latest
+    restart: unless-stopped
+    expose:
+      - 8000
+    environment:
+      - FLARUM_BASE_URL=${SERVICE_URL_FLARUM}
+      - DB_HOST=db
+      - DB_NAME=${DB_NAME:-flarum}
+      - DB_USER=${DB_USER:-flarum}
+      - DB_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - SERVICE_FQDN_FLARUM_8000
+    volumes:
+      - flarum-data:/data
+    depends_on:
+      - db
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME:-flarum}
+      - MYSQL_USER=${DB_USER:-flarum}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/mysql
+volumes:
+  flarum-data:
+  db-data:

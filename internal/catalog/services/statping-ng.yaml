@@ -1,0 +1,20 @@
+# name: Statping-NG
+# about: Statping-NG is an easy-to-use status page for monitoring websites and applications with beautiful metrics, analytics, and health checks.
+# docs: https://statping-ng.github.io/install.html
+# website: https://statping-ng.github.io/
+# categories: monitoring
+# source: dokploy
+services:
+  statping-ng:
+    image: adamboutcher/statping-ng:latest
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-UTC}
+      - DB_CONN=sqlite
+      - SERVICE_FQDN_STATPING_NG_8080
+    volumes:
+      - statping-ng-statping-ng:/app
+    expose:
+      - 8080
+volumes:
+  statping-ng-statping-ng:

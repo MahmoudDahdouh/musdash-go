@@ -1,0 +1,11 @@
+# name: MAZANOKE
+# about: MAZANOKE is a modern, self-hosted image hosting and sharing platform. Upload, organize, and share your images with a clean and intuitive interface.
+# docs: https://github.com/civilblur/mazanoke
+# categories: media, storage
+# source: dokploy
+services:
+  mazanoke:
+    image: ghcr.io/civilblur/mazanoke:latest
+    restart: unless-stopped
+    environment:
+      - SERVICE_FQDN_MAZANOKE_80

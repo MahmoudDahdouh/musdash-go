@@ -1,0 +1,37 @@
+# name: Open Notebook
+# about: Open Notebook with SurrealDB for data storage and AI-powered features.
+# docs: https://www.open-notebook.ai/get-started.html
+# website: https://www.open-notebook.ai/
+# categories: devtools, ai, database
+# source: dokploy
+services:
+  surrealdb:
+    image: surrealdb/surrealdb:v2
+    expose:
+      - 8000
+    volumes:
+      - surrealdb-surreal-data:/mydata
+    command: start --user root --pass root rocksdb:/mydata/mydatabase.db
+    pull_policy: always
+    user: root
+    environment:
+      - SERVICE_FQDN_SURREALDB_8000
+  open_notebook:
+    image: lfnovo/open_notebook:latest
+    expose:
+      - 8502
+    environment:
+      - SURREAL_URL=ws://surrealdb:8000/rpc
+      - SURREAL_USER=root
+      - SURREAL_PASSWORD=root
+      - SURREAL_NAMESPACE=open_notebook
+      - SURREAL_DATABASE=staging
+      - SERVICE_FQDN_OPEN_NOTEBOOK_8502
+    depends_on:
+      - surrealdb
+    pull_policy: always
+    volumes:
+      - open-notebook-notebook-data:/app/data
+volumes:
+  open-notebook-notebook-data:
+  surrealdb-surreal-data:

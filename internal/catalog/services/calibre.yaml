@@ -1,0 +1,24 @@
+# name: Calibre
+# about: Calibre is a comprehensive e-book management tool designed to organize, convert, and read your e-book collection.
+# docs: https://manual.calibre-ebook.com/
+# website: https://calibre-ebook.com/
+# categories: media
+# source: dokploy
+services:
+  calibre:
+    image: linuxserver/calibre:7.26.0
+    restart: unless-stopped
+    environment:
+      - PASSWORD=${SERVICE_PASSWORD_PASSWORD}
+      - TZ=Etc/UTC
+      - PUID=1000
+      - PGID=1000
+      - SERVICE_FQDN_CALIBRE_8080
+    expose:
+      - 8080
+    volumes:
+      - books:/books
+      - data:/config
+volumes:
+  books:
+  data:

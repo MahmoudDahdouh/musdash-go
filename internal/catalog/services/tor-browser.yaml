@@ -1,0 +1,19 @@
+# name: Tor Browser
+# about: A Dockerized Tor Browser accessible via web VNC (noVNC) and VNC client.
+# docs: https://hub.docker.com/r/domistyle/tor-browser
+# website: https://www.torproject.org/
+# categories: security, devtools, networking
+# source: dokploy
+services:
+  tor:
+    image: domistyle/tor-browser:latest
+    restart: always
+    expose:
+      - 5800
+      - 5900
+    environment:
+      DISPLAY_WIDTH: ${DISPLAY_WIDTH:-1920}
+      DISPLAY_HEIGHT: ${DISPLAY_HEIGHT:-1080}
+      KEEP_APP_RUNNING: ${KEEP_APP_RUNNING:-1}
+      TZ: ${TZ:-Europe/Vienna}
+      SERVICE_FQDN_TOR_5800:

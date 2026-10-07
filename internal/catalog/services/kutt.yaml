@@ -1,0 +1,31 @@
+# name: Kutt
+# about: Kutt is a modern URL shortener with support for custom domains. Create and edit links, view statistics, manage users, and more.
+# docs: https://github.com/thedevs-network/kutt#kuttit
+# website: https://kutt.it
+# categories: business
+# source: dokploy
+services:
+  kutt:
+    image: kutt/kutt:main
+    volumes:
+      - kutt_db_data:/var/lib/kutt
+      - kutt-kutt-custom:/kutt/custom
+    environment:
+      DB_FILENAME: "/var/lib/kutt/data.sqlite"
+      JWT_SECRET: ${SERVICE_PASSWORD_JWT_SECRET}
+      DEFAULT_DOMAIN: ${SERVICE_FQDN_KUTT}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      DISALLOW_ANONYMOUS_LINKS: ${DISALLOW_ANONYMOUS_LINKS:-true}
+      CUSTOM_DOMAIN_USE_HTTPS: ${CUSTOM_DOMAIN_USE_HTTPS:-true}
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-22}
+      MAIL_SECURE: ${MAIL_SECURE:-true}
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+      SERVICE_FQDN_KUTT_3000:
+volumes:
+  kutt_db_data:
+  kutt-kutt-custom:

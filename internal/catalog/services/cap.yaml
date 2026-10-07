@@ -1,0 +1,52 @@
+# name: Cap
+# about: Cap is the open source alternative to Loom. Lightweight, powerful, and cross-platform. Record and share in seconds.
+# docs: https://cap.so
+# categories: media, devtools
+# source: coolify
+services:
+  cap-web:
+    image: 'ghcr.io/capsoftware/cap-web:latest'
+    environment:
+      - SERVICE_URL_CAP_3000
+      - 'DATABASE_URL=mysql://$SERVICE_USER_MYSQL:$SERVICE_PASSWORD_MYSQL@cap-db:3306/${MYSQL_DATABASE:-planetscale}'
+      - 'WEB_URL=${SERVICE_URL_CAP}'
+      - 'NEXTAUTH_URL=${SERVICE_URL_CAP}'
+      - 'DATABASE_ENCRYPTION_KEY=${SERVICE_PASSWORD_64_DATABASEENCRYPTIONKEY}'
+      - 'NEXTAUTH_SECRET=${SERVICE_PASSWORD_64_NEXTAUTHSECRET}'
+      - 'CAP_AWS_ACCESS_KEY=${CAP_AWS_ACCESS_KEY:?}'
+      - 'CAP_AWS_SECRET_KEY=${CAP_AWS_SECRET_KEY:?}'
+      - 'CAP_AWS_BUCKET=${CAP_AWS_BUCKET:?}'
+      - 'CAP_AWS_REGION=${CAP_AWS_REGION:?}'
+      - 'S3_PUBLIC_ENDPOINT=${S3_PUBLIC_ENDPOINT:?}'
+      - 'S3_INTERNAL_ENDPOINT=${S3_INTERNAL_ENDPOINT:?}'
+      - 'NEXT_RUNTIME=nodejs'
+      - 'S3_PATH_STYLE=${S3_PATH_STYLE:-true}'
+      - 'CAP_AWS_ENDPOINT=${CAP_AWS_ENDPOINT:?}'
+    depends_on:
+      cap-db:
+        condition: service_healthy
+  cap-db:
+    image: 'mysql:8.0'
+    environment:
+      - 'MYSQL_USER=${SERVICE_USER_MYSQL}'
+      - 'MYSQL_PASSWORD=${SERVICE_PASSWORD_MYSQL}'
+      - 'MYSQL_DATABASE=${MYSQL_DATABASE:-planetscale}'
+      - 'MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_MYSQLROOT}'
+      - 'MYSQL_ALLOW_EMPTY_PASSWORD=${MYSQL_ALLOW_EMPTY_PASSWORD:-yes}'
+    command:
+      - '--max_connections=1000'
+      - '--default-authentication-plugin=mysql_native_password'
+    healthcheck:
+      test:
+        - CMD
+        - mysqladmin
+        - ping
+        - '-h'
+        - 127.0.0.1
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - 'cap_db:/var/lib/mysql'
+volumes:
+  cap_db:

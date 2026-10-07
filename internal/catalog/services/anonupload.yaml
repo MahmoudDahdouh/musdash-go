@@ -1,0 +1,21 @@
+# name: AnonUpload
+# about: AnonUpload is a secure, anonymous file sharing application that does not require a database.
+# docs: https://github.com/Supernova3339/anonupload/blob/main/env.md
+# website: https://anonupload.com/
+# categories: storage
+# source: dokploy
+services:
+  anonupload:
+    image: ghcr.io/supernova3339/anonfiles:1
+    restart: unless-stopped
+    expose:
+      - 80
+    environment:
+      - ADMIN_EMAIL=${ADMIN_EMAIL:?Set an email address}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - CONTACT_EMAIL=${CONTACT_EMAIL:?Set an email address}
+      - SERVICE_FQDN_ANONUPLOAD_80
+    volumes:
+      - uploads:/var/www/html/uploads
+volumes:
+  uploads:

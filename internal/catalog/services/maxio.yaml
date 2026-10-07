@@ -1,0 +1,20 @@
+# name: MaxIO
+# about: MaxIO is a lightweight, single-binary S3-compatible object storage server written in Rust.
+# docs: https://github.com/coollabsio/maxio/blob/main/README.md
+# website: https://github.com/coollabsio/maxio
+# categories: storage
+# source: dokploy
+services:
+  maxio:
+    image: ghcr.io/coollabsio/maxio:0.2.1
+    expose:
+      - 9000
+    volumes:
+      - maxio-data:/data
+    environment:
+      - MAXIO_ACCESS_KEY=${SERVICE_PASSWORD_MAXIO_ACCESS_KEY}
+      - MAXIO_SECRET_KEY=${SERVICE_PASSWORD_MAXIO_SECRET_KEY}
+      - SERVICE_FQDN_MAXIO_9000
+    restart: unless-stopped
+volumes:
+  maxio-data:

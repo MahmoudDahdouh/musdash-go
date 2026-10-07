@@ -1,0 +1,45 @@
+# name: Spliit
+# about: Spliit is a lightweight, self-hosted alternative to Auth0 and Clerk.
+# docs: https://github.com/spliit-app
+# website: https://spliit.app/
+# categories: finance
+# source: dokploy
+services:
+  spliit:
+    image: ghcr.io/spliit-app/spliit:1.19.0
+    restart: unless-stopped
+    depends_on:
+      spliit-db:
+        condition: service_healthy
+    environment:
+      - DB_DATABASE=spliit
+      - DB_DATA_LOCATION=/data/spliit/database
+      - DB_PASSWORD=${SERVICE_PASSWORD_SECRET_KEY}
+      - DB_USERNAME=spliit-admin
+      - POSTGRES_PRISMA_URL=postgresql://${DB_USERNAME:-spliit-admin}:${DB_PASSWORD:-}@spliit-db:5432/${DB_DATABASE:-spliit}
+      - POSTGRES_URL_NON_POOLING=postgresql://${DB_USERNAME:-spliit-admin}:${DB_PASSWORD:-}@spliit-db:5432/${DB_DATABASE:-spliit}
+      - SERVICE_FQDN_SPLIIT_3000
+  spliit-db:
+    image: pgvector/pgvector:pg16
+    volumes:
+      - spliit-db-var-lib-dbql-data:/var/lib/DBql/data
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-spliit-admin}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_SECRET_KEY}
+      POSTGRES_DB: ${DB_DATABASE:-spliit}
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+      POSTGRES_HOST_AUTH_METHOD: trust
+      DB_DATABASE: spliit
+      DB_DATA_LOCATION: /data/spliit/database
+      DB_PASSWORD: ${SERVICE_PASSWORD_SECRET_KEY}
+      DB_USERNAME: spliit-admin
+      POSTGRES_PRISMA_URL: postgresql://${DB_USERNAME:-spliit-admin}:${DB_PASSWORD:-}@spliit-db:5432/${DB_DATABASE:-spliit}
+      POSTGRES_URL_NON_POOLING: postgresql://${DB_USERNAME:-spliit-admin}:${DB_PASSWORD:-}@spliit-db:5432/${DB_DATABASE:-spliit}
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', "${DB_USERNAME:-spliit-admin}", '-d', "${DB_DATABASE:-spliit}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+volumes:
+  spliit-db-var-lib-dbql-data:

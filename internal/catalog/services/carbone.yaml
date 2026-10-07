@@ -1,0 +1,20 @@
+# name: Carbone
+# about: Carbone is a high-performance, self-hosted document generation engine.
+# docs: https://carbone.io/documentation/design/overview/getting-started.html
+# website: https://carbone.io/
+# categories: automation, analytics, productivity
+# source: dokploy
+services:
+  carbone:
+    image: carbone/carbone-ee:full-4.25.5
+    restart: unless-stopped
+    environment:
+      - CARBONE_EE_LICENSE=${SERVICE_PASSWORD_CARBONE_KEY}
+      - CARBONE_EE_STUDIO=true
+      - SERVICE_FQDN_CARBONE_4000
+    expose:
+      - 4000
+    volumes:
+      - template:/app/template
+volumes:
+  template:

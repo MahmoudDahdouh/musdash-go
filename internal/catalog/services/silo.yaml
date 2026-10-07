@@ -1,0 +1,23 @@
+# name: Silo
+# about: S3-Compatible Object Storage. A MinIO fork maintained by PGSTY.
+# docs: https://silo.pgsty.com/docs/
+# website: https://silo.pgsty.com
+# categories: storage
+# source: dokploy
+services:
+  silo:
+    image: pgsty/silo:RELEASE.2026-08-06T00-00-00Z
+    restart: unless-stopped
+    expose:
+      - 9000
+      - 9001
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-silo_usr}
+      - MINIO_ROOT_PASSWORD=${SERVICE_PASSWORD_PASSWORD}
+      - SERVICE_FQDN_SILO_9000
+      - SERVICE_FQDN_SILO_P9001_9001
+    volumes:
+      - silo:/data
+    command: server /data --console-address ":9001"
+volumes:
+  silo:

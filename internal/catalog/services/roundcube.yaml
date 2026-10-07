@@ -1,0 +1,21 @@
+# name: Roundcube
+# about: Free and open source webmail software for the masses, written in PHP.
+# docs: https://roundcube.net/about/
+# website: https://roundcube.net/
+# categories: email
+# source: dokploy
+services:
+  roundcubemail:
+    image: roundcube/roundcubemail:1.6.9-apache
+    volumes:
+      - roundcubemail-www:/var/www/html
+      - roundcubemail-db-sqlite:/var/roundcube/db
+    environment:
+      - ROUNDCUBEMAIL_DB_TYPE=sqlite
+      - ROUNDCUBEMAIL_SKIN=elastic
+      - ROUNDCUBEMAIL_DEFAULT_HOST=${DEFAULT_HOST:-tls://mail.example.com}
+      - ROUNDCUBEMAIL_SMTP_SERVER=${SMTP_SERVER:-tls://mail.example.com}
+      - SERVICE_FQDN_ROUNDCUBEMAIL_80
+volumes:
+  roundcubemail-db-sqlite:
+  roundcubemail-www:

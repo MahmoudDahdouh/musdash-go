@@ -1,0 +1,18 @@
+# name: Komari Monitor
+# about: A lightweight, self-hosted server monitoring tool for tracking server performance.
+# docs: https://github.com/komari-monitor/komari#readme
+# website: https://github.com/komari-monitor/komari
+# categories: monitoring
+# source: dokploy
+services:
+  komari:
+    image: ghcr.io/komari-monitor/komari:latest
+    restart: unless-stopped
+    volumes:
+      - komari-data:/app/data
+    environment:
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN_PASSWORD}
+      - SERVICE_FQDN_KOMARI_25774
+volumes:
+  komari-data:

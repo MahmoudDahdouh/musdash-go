@@ -1,0 +1,26 @@
+# name: Gitea (SQLite)
+# about: Self-hosted Git service using SQLite for a simple one-container setup.
+# docs: https://docs.gitea.com/
+# website: https://gitea.io/
+# categories: git, devtools
+# source: dokploy
+services:
+  gitea:
+    image: docker.gitea.com/gitea:1.24.4
+    restart: unless-stopped
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - SERVICE_FQDN_GITEA_3000
+    volumes:
+      - gitea-data:/data
+    expose:
+      - "3000"
+      - "22"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+volumes:
+  gitea-data:

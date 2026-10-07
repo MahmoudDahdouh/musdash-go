@@ -1,0 +1,27 @@
+# name: Campfire
+# about: Super simple group chat, without a subscription.
+# docs: https://github.com/basecamp/once-campfire
+# categories: communication
+# source: coolify
+services:
+  campfire:
+    image: ghcr.io/basecamp/once-campfire:${TAG:-main}
+    restart: unless-stopped
+    volumes:
+      - campfire-storage:/rails/storage
+    environment:
+      - SERVICE_URL_CAMPFIRE_80
+      - SECRET_KEY_BASE=${SERVICE_PASSWORD_64_CAMPFIRE}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - DISABLE_SSL=${DISABLE_SSL:-true}
+      - SSL_DOMAIN=${SSL_DOMAIN:-false}
+      - SKIP_TELEMETRY=${SKIP_TELEMETRY:-true}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  campfire-storage:

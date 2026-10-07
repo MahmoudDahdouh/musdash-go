@@ -1,0 +1,29 @@
+# name: Chief-Onboarding
+# about: Chief-Onboarding is a comprehensive, self-hosted onboarding and employee management platform designed for businesses to streamline their onboarding…
+# docs: https://docs.chiefonboarding.com/
+# website: https://chiefonboarding.com/
+# categories: business
+# source: dokploy
+services:
+  chiefonboarding:
+    image: chiefonboarding/chiefonboarding:v2.2.5
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${SERVICE_PASSWORD_SECRET_KEY}
+      - DATABASE_URL=postgres://postgres:${SERVICE_PASSWORD_DB_PASSWORD}@db:5432/chiefonboarding
+      - ALLOWED_HOSTS=${SERVICE_FQDN_CHIEFONBOARDING}
+      - SERVICE_FQDN_CHIEFONBOARDING_8000
+    expose:
+      - 8000
+    depends_on:
+      - db
+  db:
+    image: postgres:13
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB_PASSWORD}
+      - POSTGRES_DB=chiefonboarding
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+volumes:
+  postgres_data:

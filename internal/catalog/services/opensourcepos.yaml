@@ -1,0 +1,48 @@
+# name: OpenSourcePOS
+# about: OpenSourcePOS is a web-based point of sale system for managing sales, inventory, customers, and reports.
+# docs: https://github.com/opensourcepos/opensourcepos/blob/master/README.md
+# website: https://opensourcepos.org/
+# categories: business
+# source: dokploy
+services:
+  opensourcepos:
+    image: jekkos/opensourcepos:master
+    restart: unless-stopped
+    depends_on:
+      opensourcepos-db:
+        condition: service_healthy
+    expose:
+      - "80"
+    environment:
+      CI_ENVIRONMENT: production
+      ALLOWED_HOSTNAMES: ${SERVICE_FQDN_OPENSOURCEPOS}
+      FORCE_HTTPS: ${FORCE_HTTPS:-false}
+      PHP_TIMEZONE: ${PHP_TIMEZONE:-UTC}
+      MYSQL_USERNAME: ${MYSQL_USER:-admin}
+      MYSQL_PASSWORD: ${SERVICE_PASSWORD_MYSQL_PASSWORD}
+      MYSQL_DB_NAME: ${MYSQL_DATABASE:-ospos}
+      MYSQL_HOST_NAME: opensourcepos-db
+      SERVICE_FQDN_OPENSOURCEPOS_80:
+    volumes:
+      - opensourcepos-uploads:/app/public/uploads
+      - opensourcepos-logs:/app/writable/logs
+  opensourcepos-db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${SERVICE_PASSWORD_MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ospos}
+      MYSQL_USER: ${MYSQL_USER:-admin}
+      MYSQL_PASSWORD: ${SERVICE_PASSWORD_MYSQL_PASSWORD}
+    volumes:
+      - opensourcepos-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+volumes:
+  opensourcepos-db:
+  opensourcepos-uploads:
+  opensourcepos-logs:

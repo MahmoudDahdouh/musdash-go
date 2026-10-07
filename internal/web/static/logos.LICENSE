@@ -26,6 +26,23 @@ which draws them in one colour. Changed here: the colours are those of
 each owner's own icon (KeyDB's favicon; the two ends of the gradient in
 Dragonfly's logo), and the editor's metadata is removed.
 
+The logos of the services the catalogue was filled with from Coolify's and
+Dokploy's (the keys listed in ../../catalog/services.SOURCES, each with
+where its logo is from) were put here by tools/catalog:
+
+- "selfhst:<file>" is from the selfh.st icon collection named above
+  (CC BY 4.0).
+- "coolify:<file>" is from Coolify's public/svgs
+  (https://github.com/coollabsio/coolify, Apache License 2.0).
+- "dokploy:<file>" is from the blueprint of that service in Dokploy's
+  templates (https://github.com/Dokploy/templates, MIT License).
+
+Changed here, in each of them: a style attribute and a <style> element of
+classes are written as presentation attributes, as above, and comments,
+titles, descriptions and an editor's own metadata are removed. A logo that
+could not be written this way, or is larger than 6 KB, was not taken: that
+service is shown with an icon.
+
 Each logo is a trademark of its owner and is used only to name that
 owner's service.
 

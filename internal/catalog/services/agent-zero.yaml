@@ -1,0 +1,20 @@
+# name: Agent Zero
+# about: Agent Zero is an open-source autonomous AI agent framework with memory and tool use capabilities.
+# docs: https://www.agent-zero.ai/p/docs/
+# website: https://www.agent-zero.ai
+# categories: ai, automation
+# source: dokploy
+services:
+  agent-zero:
+    image: agent0ai/agent-zero:v1.9
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      - AUTH_LOGIN=${SERVICE_USER_AUTH_LOGIN}
+      - AUTH_PASSWORD=${SERVICE_PASSWORD_AUTH_PASSWORD}
+      - SERVICE_FQDN_AGENT_ZERO_80
+    volumes:
+      - agent-zero-data:/a0/usr
+volumes:
+  agent-zero-data:

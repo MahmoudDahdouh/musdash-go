@@ -1,0 +1,24 @@
+# name: Homebridge
+# about: Bringing HomeKit support where there is none. Homebridge allows you to integrate with smart home devices that do not natively support HomeKit.
+# docs: https://github.com/homebridge/homebridge/wiki
+# website: https://homebridge.io/
+# categories: home
+# source: dokploy
+services:
+  homebridge:
+    image: homebridge/homebridge:latest
+    restart: always
+    expose:
+      - 8581
+    volumes:
+      - homebridge-volumes-homebridge:/homebridge
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://homebridge:8581/"]
+      interval: 60s
+      retries: 5
+      start_period: 300s
+      timeout: 2s
+    environment:
+      - SERVICE_FQDN_HOMEBRIDGE_8581
+volumes:
+  homebridge-volumes-homebridge:
