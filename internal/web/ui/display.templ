@@ -181,6 +181,9 @@ templ Menu(p MenuProps) {
 type MenuItemProps struct {
 	Label string
 	Icon  string
+	// Logo is the name of a Logo to show in place of an Icon: the item is
+	// a product, told by its mark.
+	Logo string
 	// Href makes the item a link. Without one it is a button that sends the
 	// form it is in.
 	Href string
@@ -224,7 +227,9 @@ templ MenuItem(p MenuItemProps) {
 }
 
 templ menuItemBody(p MenuItemProps) {
-	if p.Icon != "" {
+	if p.Logo != "" {
+		@Logo(p.Logo)
+	} else if p.Icon != "" {
 		// A danger item's icon has the item's colour.
 		if p.Danger {
 			@Icon(p.Icon)

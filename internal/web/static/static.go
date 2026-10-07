@@ -17,7 +17,7 @@ import (
 	"sync"
 )
 
-//go:embed app.css app.js htmx.min.js htmx-sse.js favicon.svg terminal.js
+//go:embed app.css app.js htmx.min.js htmx-sse.js favicon.svg terminal.js logo-*.svg
 var files embed.FS
 
 type asset struct {
@@ -70,6 +70,13 @@ func URL(name string) string {
 	}
 	a.read()
 	return "/static/" + name + "?v=" + a.hash
+}
+
+// Has says whether there is an embedded asset of this name, for a name that
+// comes from data: URL panics for one there is not.
+func Has(name string) bool {
+	_, ok := assets()[name]
+	return ok
 }
 
 // Handler serves GET /static/{name}.

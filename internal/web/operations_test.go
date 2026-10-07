@@ -15,6 +15,8 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
 
 // until waits for a condition that a job brings about.
@@ -355,6 +357,13 @@ func TestNotificationsPage(t *testing.T) {
 	if strings.Contains(body, "data-autoopen") {
 		t.Fatal("a dialog is open on a page nobody sent a form from")
 	}
+	// Every kind in the menu is told by its logo.
+	menu := between(t, page, body, `id="new-channel"`, `</button></div>`)
+	for _, k := range notify.Kinds {
+		if !strings.Contains(menu, `<img class="logo" src="/static/logo-`+k.Kind+`.svg?v=`) {
+			t.Errorf("the menu's %s has no logo", k.Label)
+		}
+	}
 	// The page is the sidebar's, not a tab of Settings, whose old address
 	// is gone.
 	if !strings.Contains(body, `href="/notifications" aria-current="page"`) {
@@ -411,7 +420,7 @@ func TestNotificationsPage(t *testing.T) {
 	// told about and its state. The Add channel menu moved to the header,
 	// and the channel has an Edit dialog of its own.
 	row := between(t, page, body, "<tbody", "</tbody>")
-	for _, want := range []string{">Ops<", ">Webhook<", ">Everything<", "On", `data-open="edit-channel-` + ch.ID + `"`, `action="/notifications/` + ch.ID + `/test"`, `action="/notifications/` + ch.ID + `/delete"`} {
+	for _, want := range []string{">Ops<", `src="/static/logo-webhook.svg?v=`, ">Webhook<", ">Everything<", "On", `data-open="edit-channel-` + ch.ID + `"`, `action="/notifications/` + ch.ID + `/test"`, `action="/notifications/` + ch.ID + `/delete"`} {
 		if !strings.Contains(row, want) {
 			t.Errorf("the channel's row is missing %q", want)
 		}
@@ -554,5 +563,41 @@ func TestOtherTeamsOperationsAreNotFound(t *testing.T) {
 	}
 	if n := len(a.fake.Calls()) - before; n != 0 {
 		t.Fatalf("%d commands ran: %v", n, a.fake.Calls()[before:])
+	}
+}
+
+// A channel kind's logo is a file named by the kind, which nothing but this
+// holds a new kind to. The file is drawn with attributes only: the policy
+// that forbids inline style is sent with it, and a logo that reached for
+// another address would tell that address who has the page open.
+func TestEveryChannelKindHasALogo(t *testing.T) {
+	a := newApp(t, false)
+	for _, k := range notify.Kinds {
+		res, body := a.get("/static/logo-" + k.Kind + ".svg")
+		if res.StatusCode != http.StatusOK || res.Header.Get("Content-Type") != "image/svg+xml" {
+			t.Errorf("%s: no logo-%s.svg (%d, %q)", k.Label, k.Kind, res.StatusCode, res.Header.Get("Content-Type"))
+			continue
+		}
+		for _, bad := range []string{"style", "<script", "href", "<image", "<foreignObject"} {
+			if strings.Contains(body, bad) {
+				t.Errorf("logo-%s.svg holds %q", k.Kind, bad)
+			}
+		}
+		if len(body) > 2048 {
+			t.Errorf("logo-%s.svg is %d bytes: a logo of 16 pixels should be far under that", k.Kind, len(body))
+		}
+	}
+}
+
+// A row of a kind this build has no logo for is drawn with the bell, not
+// with a page that fails.
+func TestChannelOfAnUnknownKindIsDrawn(t *testing.T) {
+	var b strings.Builder
+	list := []db.Channel{{ID: "abc", Name: "Old", Kind: "pager", Enabled: true}}
+	if err := pages.Notifications(ui.Shell{}, list, notify.KindInfo{}, ui.Form{}).Render(context.Background(), &b); err != nil {
+		t.Fatal(err)
+	}
+	if row := between(t, "the page", b.String(), "<tbody", "</tbody>"); !strings.Contains(row, ">Old<") || strings.Contains(row, "<img") {
+		t.Fatalf("the row of an unknown kind: %s", row)
 	}
 }

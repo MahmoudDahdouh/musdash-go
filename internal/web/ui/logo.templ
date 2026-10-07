@@ -1,0 +1,19 @@
+package ui
+
+import "github.com/MahmoudDahdouh/musdash-go/internal/web/static"
+
+// LogoFile is the asset that holds the logo of this name.
+func LogoFile(name string) string {
+	return "logo-" + name + ".svg"
+}
+
+// Logo is the mark of a product in its owner's colours, where an Icon is
+// one colour, the text's. It is a file (static/logo-<name>.svg), not part
+// of the page: fetched once and cached for good. The name beside it says
+// what it is, so it has no text of its own.
+//
+// A logo's colours are attributes in its file, never a style: the policy
+// that forbids inline style is sent with the image too.
+templ Logo(name string) {
+	<img class="logo" src={ static.URL(LogoFile(name)) } alt="" width="16" height="16"/>
+}

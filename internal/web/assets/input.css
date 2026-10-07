@@ -434,7 +434,8 @@
     text-align: left;
     cursor: pointer;
   }
-  .menu-item .icon {
+  .menu-item .icon,
+  .menu-item .logo {
     margin-top: 2px;
   }
   /* Every item keeps the room for the tick, so the labels line up. */
@@ -553,7 +554,8 @@
       align-items: center;
       min-height: 2.75rem;
     }
-    .menu-item .icon {
+    .menu-item .icon,
+    .menu-item .logo {
       margin-top: 0;
     }
   }
@@ -1908,6 +1910,13 @@
   .icon-lg {
     width: 20px;
     height: 20px;
+  }
+  /* A product's mark, an image in its own colours (ui.Logo): the size of
+     an icon, so it stands wherever one does. */
+  .logo {
+    flex: none;
+    width: 16px;
+    height: 16px;
   }
 
   /* htmx: shown only while a request is in flight. */

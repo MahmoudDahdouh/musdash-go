@@ -8,6 +8,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
 	"github.com/MahmoudDahdouh/musdash-go/internal/ops"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/static"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
 
@@ -580,6 +581,17 @@ func kindLabel(kind string) string {
 	return kind
 }
 
+// channelLogo is the mark of a channel's kind. Every kind has one, by its
+// name (a test asks); a row of a kind this build does not know gets the
+// bell, since ui.Logo has no file to point at.
+templ channelLogo(kind string) {
+	if static.Has(ui.LogoFile(kind)) {
+		@ui.Logo(kind)
+	} else {
+		@ui.Icon("bell", "text-ink-mute")
+	}
+}
+
 // channelEvents says in a few words what a channel is told about.
 func channelEvents(c db.Channel) string {
 	var out []string
@@ -617,7 +629,7 @@ func fieldLabel(f notify.Field) string {
 templ addChannelMenu(end bool) {
 	@ui.Menu(ui.MenuProps{ID: "new-channel", Label: "Add channel", Class: "btn btn-primary", End: end, Button: addChannelButton()}) {
 		for _, k := range notify.Kinds {
-			@ui.MenuItem(ui.MenuItemProps{Label: k.Label, Opens: "add-channel-" + k.Kind})
+			@ui.MenuItem(ui.MenuItemProps{Label: k.Label, Logo: k.Kind, Opens: "add-channel-" + k.Kind})
 		}
 	}
 }
@@ -646,7 +658,12 @@ templ Notifications(s ui.Shell, list []db.Channel, kind notify.KindInfo, f ui.Fo
 				@ui.Table("Name", "Type", "Tells about", "State", "") {
 					for _, c := range list {
 						<tr>
-							<td class="font-semibold">{ c.Name }</td>
+							<td>
+								<span class="inline-flex items-center gap-2">
+									@channelLogo(c.Kind)
+									<span class="font-semibold">{ c.Name }</span>
+								</span>
+							</td>
 							<td>
 								@ui.Badge(kindLabel(c.Kind), ui.ToneNeutral)
 							</td>

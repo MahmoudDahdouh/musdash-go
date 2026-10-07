@@ -1,6 +1,9 @@
 package pages
 
-import "github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+import (
+	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
 
 var galleryRegions = []ui.Option{
 	{Value: "ams", Label: "Amsterdam"},
@@ -256,6 +259,17 @@ templ Gallery(s ui.Shell) {
 						@ui.MenuItem(ui.MenuItemProps{Href: "#", Icon: "trash", Label: "Delete", Danger: true})
 					}
 					<p class="muted">Things to do and places to go. It opens with nothing marked; an item for what ends or removes something is a danger item.</p>
+				</div>
+			}
+			@gallerySection("Logos") {
+				<div class="card card-body flex flex-wrap items-center gap-x-5 gap-y-3">
+					for _, k := range notify.Kinds {
+						<span class="inline-flex items-center gap-2">
+							@ui.Logo(k.Kind)
+							{ k.Label }
+						</span>
+					}
+					<p class="muted basis-full">A product's mark in its owner's colours, the size of an icon: a file of its own, not part of the page.</p>
 				</div>
 			}
 			@gallerySection("Tabs") {

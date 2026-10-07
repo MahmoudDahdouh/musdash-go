@@ -1,0 +1,16 @@
+logo-discord.svg, logo-slack.svg, logo-mattermost.svg, logo-telegram.svg
+and logo-pushover.svg are from the selfh.st icon collection
+(https://selfh.st/icons, https://github.com/selfhst/icons), which is
+licensed under Creative Commons Attribution 4.0 International
+(https://creativecommons.org/licenses/by/4.0/).
+
+Changed here: each style attribute is written as the presentation
+attributes it stands for (style="fill:#5865f2" is fill="#5865f2"), since
+the dashboard's content security policy drops a style attribute. Nothing
+else of a file is changed.
+
+Each logo is a trademark of its owner and is used only to name that
+owner's service.
+
+logo-email.svg and logo-webhook.svg are musdash's own. The outline of the
+webhook mark is Hugeicons' (MIT licence, ../ui/icons.LICENSE).
