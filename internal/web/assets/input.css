@@ -765,9 +765,13 @@
   }
   .rail[data-state="deploying"]::before,
   .rail[data-state="building"]::before,
-  .rail[data-state="queued"]::before,
   .rail[data-state="starting"]::before {
     background: var(--color-warn-mark);
+    animation: rail-pulse 1.4s ease-in-out infinite;
+  }
+  /* The pill's own blue (.pill-info). */
+  .rail[data-state="queued"]::before {
+    background: var(--color-info);
     animation: rail-pulse 1.4s ease-in-out infinite;
   }
   .rail[data-state="degraded"]::before,
@@ -824,6 +828,13 @@
   .pill-busy .icon,
   .pill-warn .icon {
     color: var(--color-warn-mark);
+  }
+  /* Waiting in the queue is neither under way nor settled: the soft blue of
+     a notice, which is something to know and nothing to do. */
+  .pill-info {
+    background: var(--color-info-soft);
+    border-color: var(--color-info-line);
+    color: var(--color-info);
   }
   .pill-danger {
     background: var(--color-danger-soft);

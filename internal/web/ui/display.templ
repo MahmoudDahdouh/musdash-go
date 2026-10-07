@@ -395,6 +395,10 @@ const (
 // ToneBusy is a pill's alone: something is in progress.
 const ToneBusy = "busy"
 
+// ToneInfo is a pill's too: something to know that is neither good nor bad
+// yet, as waiting in the queue is.
+const ToneInfo = "info"
+
 templ Badge(text, tone string) {
 	<span class={ "badge", templ.KV("badge-"+tone, tone != "") }>{ text }</span>
 }
@@ -405,7 +409,9 @@ func stateTone(state string) string {
 	switch state {
 	case "running", "healthy", "success", "done":
 		return ToneOK
-	case "deploying", "building", "queued", "starting", "restarting":
+	case "queued":
+		return ToneInfo
+	case "deploying", "building", "starting", "restarting":
 		return ToneBusy
 	case "degraded", "unhealthy":
 		return ToneWarn
@@ -423,6 +429,8 @@ func toneIcon(tone string) string {
 		return "check"
 	case ToneBusy:
 		return "loading"
+	case ToneInfo:
+		return "info"
 	case ToneWarn:
 		return "alert"
 	case ToneDanger:
