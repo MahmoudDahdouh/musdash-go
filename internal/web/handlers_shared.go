@@ -61,7 +61,7 @@ func (s *Server) sharedEnvironment(w http.ResponseWriter, r *http.Request) (shar
 	}
 	return sharedTarget{
 		scope: db.ScopeEnvironment, id: env.ID, active: "projects",
-		crumbs: projectCrumbs(p, ui.Crumb{Label: "Settings", Href: "/projects/" + p.ID + "/settings"}, ui.Crumb{Label: env.Name + " variables"}),
+		crumbs: envCrumbs(p, env, ui.Crumb{Label: "Settings", Href: pages.EnvPath(p.ID, env.ID) + "/settings"}, ui.Crumb{Label: "Shared variables"}),
 		view: pages.SharedView{
 			Title: "Variables of " + env.Name, Intro: "Shared by everything in the " + env.Name + " environment of " + p.Name + ".",
 			Scope: db.ScopeEnvironment, Action: pages.EnvPath(p.ID, env.ID) + "/variables", CanEdit: true,

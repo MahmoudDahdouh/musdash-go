@@ -174,6 +174,8 @@ func (s *Server) Handler() http.Handler {
 	handle("GET /projects/{id}/settings", member, s.projectSettings)
 	handle("POST /projects/{id}/delete", member, s.projectDelete)
 	handle("POST /projects/{id}/environments", member, s.environmentCreate)
+	handle("GET "+inEnv+"/settings", member, s.environmentSettings)
+	handle("POST "+inEnv+"/settings", member, s.environmentRename)
 	handle("POST "+inEnv+"/delete", member, s.environmentDelete)
 	handle("GET /projects/{id}/variables", member, s.sharedShow(s.sharedProject))
 	handle("GET /projects/{id}/variables/values", member, s.sharedValues(s.sharedProject))

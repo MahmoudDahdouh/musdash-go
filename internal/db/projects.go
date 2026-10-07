@@ -132,6 +132,14 @@ func (d *DB) CreateEnvironment(ctx context.Context, teamID, projectID, name stri
 	return e, err
 }
 
+// RenameEnvironment gives an environment another name. The name is a
+// label: its network and everything of it on a server are named by its id.
+// A name another environment of the project has is refused by the table.
+func (d *DB) RenameEnvironment(ctx context.Context, teamID, id, name string) error {
+	return affected(d.ExecContext(ctx, `UPDATE environments SET name = ? WHERE id = ?
+		AND project_id IN (SELECT id FROM projects WHERE team_id = ?)`, name, id, teamID))
+}
+
 // DeleteEnvironment removes an environment unless it is the project's last.
 func (d *DB) DeleteEnvironment(ctx context.Context, teamID, id string) error {
 	return d.Tx(ctx, func(tx *sql.Tx) error {

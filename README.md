@@ -291,7 +291,7 @@ A value that several apps need is written once and taken by name. There are four
 |---|---|---|
 | Team, Shared variables | `{{team.NAME}}` | Admins |
 | A project's Settings | `{{project.NAME}}` | everybody |
-| A project's Settings, per environment | `{{environment.NAME}}` | everybody |
+| An environment's Settings | `{{environment.NAME}}` | everybody |
 | Servers, on a server's card | `{{server.NAME}}` | Admins |
 
 An app or a service uses one by naming it in a variable of its own, alone or inside a longer value:
@@ -462,7 +462,7 @@ Pages are rendered on the server with [templ](https://templ.guide) and updated w
 
 How the pages are laid out:
 
-- The bar at the top is where you are: the project, its environment and the resource, each a switcher to the others beside it. The address says the same: `/projects/<project>/env/<environment>` for an environment and `/projects/<project>/env/<environment>/app/<id>` (or `database`, `service`) for what is in it; a project's own address leads to its first environment. The short address of a resource, `/apps/<id>`, still leads to its page: it is what a notification's link holds.
+- The bar at the top is where you are: the project, its environment and the resource, each a switcher to the others beside it. The address says the same: `/projects/<project>/env/<environment>` for an environment and `/projects/<project>/env/<environment>/app/<id>` (or `database`, `service`) for what is in it; a project's own address leads to its first environment. On a project's page, under its tabs, is the environment you are in: a menu to the project's others, **Environment settings** (its name, its shared variables, deleting it) and **Add environment**. The short address of a resource, `/apps/<id>`, still leads to its page: it is what a notification's link holds.
 - Projects, and what is in an environment, are tiles. Apps, databases and services are all resources and are added from one page, **Add resource**.
 - A form of up to five fields is a dialog, opened from a button beside what it changes. Anything that stops, removes or replaces something asks first; deleting a project, an app, a database or a service asks for its name.
 - Keys, tokens and webhook secrets of the whole team are on one page, **Keys & tokens**, in two tabs: **Private Keys** (SSH key pairs) and **API Tokens** (a person's API tokens, deploy tokens and webhook secrets, in one table). No other page holds them or points at them. An app's domains are on its own **Domains** tab.

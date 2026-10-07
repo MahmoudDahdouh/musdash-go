@@ -233,6 +233,12 @@ def _compat(page, action):
         page = action + "/edit"
     if action and re.match(r"^/apps/[a-z2-7]+/domains$", action) and page == action[:-len("domains")] + "settings":
         page = action  # an app's domains moved from its Settings to a tab of their own
+    m = re.match(r"^/projects/([a-z2-7]+)/settings$", page or "")
+    if m and action == f"/projects/{m.group(1)}/environments":
+        page = f"/projects/{m.group(1)}"  # Add environment is on the project's page, beside the choice of environment
+    m = re.match(r"^/environments/([a-z2-7]+)/delete$", action or "")
+    if m and re.match(r"^/projects/[a-z2-7]+/settings$", page or ""):
+        page = f"/environments/{m.group(1)}/settings"  # an environment is deleted from its own Settings
     if action == "/projects" and page == "/projects/new":
         page = "/projects"
     if action == "/account/tokens" and page in ("/account", "/keys"):
