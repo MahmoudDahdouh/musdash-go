@@ -2,6 +2,7 @@
 # about: The publishing platform, with its own MariaDB database.
 # docs: https://wordpress.org/documentation/
 # website: https://wordpress.org/
+# categories: cms
 services:
   wordpress:
     image: wordpress:6-apache

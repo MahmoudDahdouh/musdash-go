@@ -600,8 +600,14 @@ func TestEveryOfferHasALogo(t *testing.T) {
 	for _, e := range catalog.Databases() {
 		names = append(names, e.Engine)
 	}
+	// The templates written for musdash have one each. An imported one has
+	// a logo where its makers' could be drawn for the dashboard, and its
+	// icon where not; the rules below are held for every logo there is by
+	// the static package's own test.
 	for _, s := range catalog.Services() {
-		names = append(names, s.Key)
+		if s.Source == "" {
+			names = append(names, s.Key)
+		}
 	}
 	for _, name := range names {
 		res, body := a.get("/static/logo-" + name + ".svg")

@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"io"
 	"mime"
 	"net/http"
 	"path"
@@ -23,6 +24,11 @@ var files embed.FS
 type asset struct {
 	name string
 	mime string
+	// A logo is one of several hundred, and a page can show them all. Its
+	// body is never kept: it is read once for its hash and let go, and a
+	// request is answered from the embedded file, which is part of the
+	// program and not of the heap.
+	logo bool
 
 	// Read and hashed when first asked for, not when the program starts
 	// and not with the others: reading an embedded file copies it onto the
@@ -44,7 +50,10 @@ func (a *asset) read() {
 			panic(err)
 		}
 		sum := sha256.Sum256(raw)
-		a.raw, a.hash = raw, hex.EncodeToString(sum[:6])
+		a.hash = hex.EncodeToString(sum[:6])
+		if !a.logo {
+			a.raw = raw
+		}
 	})
 }
 
@@ -57,7 +66,7 @@ var assets = sync.OnceValue(func() map[string]*asset {
 	}
 	all := make(map[string]*asset, len(entries))
 	for _, e := range entries {
-		all[e.Name()] = &asset{name: e.Name(), mime: mime.TypeByExtension(path.Ext(e.Name()))}
+		all[e.Name()] = &asset{name: e.Name(), mime: mime.TypeByExtension(path.Ext(e.Name())), logo: strings.HasPrefix(e.Name(), "logo-")}
 	}
 	return all
 })
@@ -90,7 +99,9 @@ func Handler() http.Handler {
 		a.read()
 		h := w.Header()
 		h.Set("Content-Type", a.mime)
-		h.Set("Vary", "Accept-Encoding")
+		if !a.logo {
+			h.Set("Vary", "Accept-Encoding")
+		}
 		if r.URL.Query().Get("v") == a.hash {
 			h.Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
@@ -100,6 +111,22 @@ func Handler() http.Handler {
 		h.Set("ETag", etag)
 		if r.Header.Get("If-None-Match") == etag {
 			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		if a.logo {
+			// Sent as it is: a logo is a few kilobytes, fetched once and
+			// kept by the browser, and a gzip writer for each of a page's
+			// several hundred would cost more memory than it saves bytes.
+			if r.Method == http.MethodHead {
+				return
+			}
+			f, err := files.Open(a.name)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			defer f.Close()
+			io.Copy(w, f)
 			return
 		}
 		body := a.raw

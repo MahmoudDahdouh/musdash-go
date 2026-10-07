@@ -96,21 +96,33 @@
   });
 
   // data-filter="<id>" on a field narrows what is inside that element to the
-  // items whose data-search holds the text. A data-filter-group with nothing
-  // left in it goes too, and data-filter-empty="<id>" shows when nothing is.
-  on("input", "[data-filter]", (el) => {
-    const box = document.getElementById(el.dataset.filter);
+  // items whose data-search holds the text, or whose own text does (what is
+  // inside its data-search-text, where it has one). data-filter-pick="<id>" on a set
+  // of radio buttons narrows the same items to those whose data-tags holds
+  // the chosen value; the two narrow together. A data-filter-group with
+  // nothing left in it goes too, and data-filter-empty="<id>" shows when
+  // nothing is.
+  const filterList = (id) => {
+    const box = document.getElementById(id);
     if (!box) return;
-    const text = el.value.trim().toLowerCase();
+    const text = (document.querySelector('[data-filter="' + id + '"]')?.value || "").trim().toLowerCase();
+    const tag = document.querySelector('[data-filter-pick="' + id + '"] :checked')?.value || "";
     let shown = 0;
     box.querySelectorAll("[data-search]").forEach((item) => {
-      item.hidden = !item.dataset.search.toLowerCase().includes(text);
+      // Read once: the list can be several hundred cards long.
+      item.findBy ??= (item.dataset.search + " " + (item.querySelector("[data-search-text]")?.textContent || "")).toLowerCase();
+      item.hidden = !item.findBy.includes(text) || (tag !== "" && !(item.dataset.tags || "").split(" ").includes(tag));
       if (!item.hidden) shown++;
     });
     box.querySelectorAll("[data-filter-group]").forEach((g) => (g.hidden = !g.querySelector("[data-search]:not([hidden])")));
-    const none = document.querySelector('[data-filter-empty="' + el.dataset.filter + '"]');
+    const none = document.querySelector('[data-filter-empty="' + id + '"]');
     if (none) none.hidden = shown > 0;
-  });
+  };
+  on("input", "[data-filter]", (el) => filterList(el.dataset.filter));
+  on("change", "[data-filter-pick]", (el) => filterList(el.dataset.filterPick));
+  // A page the browser brings back (Back, Refresh) has its fields as they
+  // were left, and a list that shows everything again.
+  window.addEventListener("pageshow", () => document.querySelectorAll("[data-filter-pick]").forEach((el) => filterList(el.dataset.filterPick)));
 
   // Sidebar on small screens: a drawer over the page, which is out of reach
   // behind it as it is behind a dialog. The stylesheet draws the backdrop,

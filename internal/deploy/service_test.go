@@ -28,6 +28,13 @@ import (
 // domain each.
 func (e *env) newService(template, name, composeText string, connect bool) db.Service {
 	e.t.Helper()
+	return e.newServiceWith(template, name, composeText, connect, map[string]string{})
+}
+
+// newServiceWith is newService with the variables a person typed on the
+// form.
+func (e *env) newServiceWith(template, name, composeText string, connect bool, typed map[string]string) db.Service {
+	e.t.Helper()
 	ctx := context.Background()
 	s, err := e.db.CreateService(ctx, e.team, db.Service{
 		EnvironmentID: e.app.EnvironmentID, ServerID: e.server.ID, Name: name, Template: template, Compose: composeText, ConnectEnv: connect,
@@ -38,7 +45,7 @@ func (e *env) newService(template, name, composeText string, connect bool) db.Se
 	host := func(endpoint string) (string, bool) {
 		return strings.ToLower(strings.ReplaceAll(endpoint, "_", "-")) + "." + name + ".example.test", false
 	}
-	if err := e.d.PrepareService(ctx, s, map[string]string{}, host); err != nil {
+	if err := e.d.PrepareService(ctx, s, typed, host); err != nil {
 		e.t.Fatal(err)
 	}
 	s, _ = e.db.ServiceByID(ctx, s.ID)
@@ -876,8 +883,10 @@ func TestPrepareServiceGeneratesOnceAndTracksEndpoints(t *testing.T) {
 // the local Docker daemon: each must come up healthy, answer on the
 // loopback port of its endpoint, keep its data and generated values across
 // a redeploy, and go away with its volumes. It downloads several gigabytes
-// of images, so it has its own switch; MUSDASH_SERVICES="wordpress,minio"
-// runs just those. Images that were not there before are removed again.
+// of images, so it has its own switch. Without more it installs the
+// templates written for musdash; MUSDASH_SERVICES="wordpress,umami" runs
+// just those, which is how one of the several hundred imported templates
+// is tried. Images that were not there before are removed again.
 func TestCatalogueWithDocker(t *testing.T) {
 	if os.Getenv("MUSDASH_DOCKER_TEST_SERVICES") != "1" {
 		t.Skip("set MUSDASH_DOCKER_TEST_SERVICES=1 to install the service catalogue on the local Docker daemon")
@@ -888,23 +897,33 @@ func TestCatalogueWithDocker(t *testing.T) {
 	dk := docker.Client{R: local}
 	e.d.Runners = fixedRunners{local}
 	only := os.Getenv("MUSDASH_SERVICES")
-	imageRE := regexp.MustCompile(`(?m)^\s+image:\s*(\S+)`)
+	imageRE := regexp.MustCompile(`(?m)^\s+image:\s*["']?([^\s"']+)`)
 
 	for _, tpl := range catalog.Services() {
-		if only != "" && !slices.Contains(strings.Split(only, ","), tpl.Key) {
+		if only != "" && !slices.Contains(strings.Split(only, ","), tpl.Key) || only == "" && tpl.Source != "" {
 			continue
 		}
 		if tpl.Key == "cloudflared" {
 			continue // needs a real tunnel token from Cloudflare
 		}
 		t.Run(tpl.Key, func(t *testing.T) {
+			tpl, _ := catalog.Service(tpl.Key)
 			var fresh []string
 			for _, m := range imageRE.FindAllStringSubmatch(tpl.Compose, -1) {
 				if have, _ := dk.HasImage(ctx, m[1]); !have {
 					fresh = append(fresh, m[1])
 				}
 			}
-			s := e.newService(tpl.Key, tpl.Key, tpl.Compose, tpl.ConnectEnv)
+			// What the template's form would have asked for.
+			typed := map[string]string{}
+			for _, v := range catalog.ScanVariables(tpl.Compose) {
+				if v.Required && strings.Contains(v.Name, "EMAIL") {
+					typed[v.Name] = "someone@example.test"
+				} else if v.Required {
+					typed[v.Name] = "entered-by-the-person"
+				}
+			}
+			s := e.newServiceWith(tpl.Key, tpl.Key, tpl.Compose, tpl.ConnectEnv, typed)
 			project := ServiceProject(s.ID)
 			t.Cleanup(func() {
 				local.Run(ctx, runner.Cmd{Name: "docker", Args: []string{"compose", "--project-name", project, "down", "--volumes", "--remove-orphans", "--timeout", "5"}})
@@ -930,6 +949,14 @@ func TestCatalogueWithDocker(t *testing.T) {
 					req.Header.Set("X-Forwarded-Proto", "http")
 					client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 					res, err := client.Do(req)
+					// A template with no health check counts as up the
+					// moment its container runs, which can be before the
+					// program in it listens (one that first migrates its
+					// database, say).
+					for wait := time.Now().Add(2 * time.Minute); err != nil && time.Now().Before(wait); {
+						time.Sleep(3 * time.Second)
+						res, err = client.Do(req)
+					}
 					if err != nil {
 						t.Fatalf("%s (%s:%d) does not answer on 127.0.0.1:%d: %v", ep.Name, ep.ComposeService, ep.Port, ep.HostPort, err)
 					}

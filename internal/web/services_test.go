@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -118,6 +119,54 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 	}
 	if !strings.Contains(page, "template=custom") {
 		t.Error("the catalogue does not offer a person's own Compose file")
+	}
+
+	// The page is narrowed by category: a chip for every category that has
+	// something and for no other, "All" chosen, and on every template's
+	// card the categories its chip looks for.
+	chips := between(t, "the page", page, `<fieldset class="chips" data-filter-pick="kinds">`, "</fieldset>")
+	if !strings.Contains(chips, `type="radio" name="category" value="" checked`) {
+		t.Errorf("no chip for everything, or it is not the chosen one: %s", chips)
+	}
+	inUse, count := catalog.CategoriesInUse()
+	used := map[string]bool{"database": true} // the engines are databases
+	for _, c := range inUse {
+		used[c.Key] = true
+	}
+	for _, c := range catalog.Categories() {
+		if has := strings.Contains(chips, `value="`+c.Key+`"`); has != used[c.Key] {
+			t.Errorf("category %s: chip %v, in use %v", c.Key, has, used[c.Key])
+		}
+	}
+	if n := strings.Count(chips, `type="radio"`); n != len(used)+1 {
+		t.Errorf("%d chips for %d categories", n, len(used))
+	}
+	if want := `<span>CMS</span> <span class="chip-count">` + strconv.Itoa(count["cms"]) + `</span>`; !strings.Contains(chips, want) {
+		t.Errorf("the CMS chip does not say how many: want %s in %s", want, chips)
+	}
+	for _, tpl := range catalog.Services() {
+		at := strings.Index(page, `/service/new?template=`+tpl.Key+`"`)
+		start := strings.LastIndex(page[:at], "<li")
+		head := page[start : start+strings.Index(page[start:], ">")]
+		if want := `data-tags="` + strings.Join(tpl.Categories, " ") + `"`; !strings.Contains(head, want) {
+			t.Errorf("%s: its card has no %s: %s", tpl.Key, want, head)
+		}
+	}
+	// The cards refer to icons the page draws once: every reference has
+	// its drawing, and each drawing is there once.
+	for _, m := range regexp.MustCompile(`<use href="#(icon-[a-z-]+)"`).FindAllStringSubmatch(page, -1) {
+		if strings.Count(page, `<symbol id="`+m[1]+`"`) != 1 {
+			t.Fatalf("the icon %s is referred to and drawn %d times", m[1], strings.Count(page, `<symbol id="`+m[1]+`"`))
+		}
+	}
+	if n := strings.Count(page, `<path d="M18.5 12L4.99997 12"`); n != 1 {
+		t.Errorf("the arrow of Deploy is drawn %d times on a page of %d templates", n, len(catalog.Services()))
+	}
+	if len(page) > 800<<10 {
+		t.Errorf("the page is %d KB: a card's markup has grown", len(page)>>10)
+	}
+	if !strings.Contains(page, `data-tags="database"`) || !strings.Contains(page, `<p class="offer-tags">CMS</p>`) {
+		t.Error("the engines are not found under Databases, or a card does not name its categories")
 	}
 
 	// A template that needs a value from the person asks for it, and one

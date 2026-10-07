@@ -42,6 +42,17 @@ func TestOffer(t *testing.T) {
 		t.Errorf("a card with no links and its own action: %s", bare)
 	}
 
+	// On a page that draws the icons once, a card refers to them.
+	shared := renderOffer(t, OfferProps{Href: "/add", Icon: "layers", Title: "Umami", Docs: "https://docs.example/", Shared: true, Search: "service umami", Tags: []string{"analytics", "security"}, TagText: "Analytics · Security"})
+	for _, want := range []string{`<use href="#icon-layers">`, `<use href="#icon-book">`, `<use href="#icon-arrow-right">`, `data-search="service umami"`, `data-tags="analytics security"`, `<p class="offer-tags">Analytics · Security</p>`, `data-search-text`} {
+		if !strings.Contains(shared, want) {
+			t.Errorf("no %s in %s", want, shared)
+		}
+	}
+	if strings.Contains(shared, "<path") {
+		t.Errorf("a shared card draws an icon itself: %s", shared)
+	}
+
 	// A name this build has no file for is drawn with the icon, not with a
 	// page that fails.
 	for _, logo := range []string{"", "no-such-product"} {

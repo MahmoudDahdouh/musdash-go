@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -152,6 +153,8 @@ func TestSandboxCannotReadTheServer(t *testing.T) {
 	}
 }
 
+var escapedMagic = regexp.MustCompile(`\$\{?SERVICE_(FQDN|URL|HTTPS|USER|PASSWORD|BASE64|HEX)_[A-Z0-9_]+`)
+
 // Every template of the catalogue loads, passes validation and yields the
 // endpoints it is meant to have.
 func TestCatalogueLoadsInTheSandbox(t *testing.T) {
@@ -165,8 +168,11 @@ func TestCatalogueLoadsInTheSandbox(t *testing.T) {
 		"minio":       "CONSOLE=minio:9001 MINIO=minio:9000",
 		"cloudflared": "",
 	}
-	for _, tpl := range catalog.Services() {
-		t.Run(tpl.Key, func(t *testing.T) {
+	for _, listed := range catalog.Services() {
+		t.Run(listed.Key, func(t *testing.T) {
+			// Several hundred templates, two runs of the sandbox each.
+			t.Parallel()
+			tpl, _ := catalog.Service(listed.Key)
 			vars := catalog.ScanMagic(tpl.Compose)
 			var env strings.Builder
 			for _, v := range vars {
@@ -202,8 +208,15 @@ func TestCatalogueLoadsInTheSandbox(t *testing.T) {
 			for _, e := range endpoints {
 				got = append(got, e.Name+"="+e.Service+":"+strconv.Itoa(e.Port))
 			}
-			if strings.Join(got, " ") != wantEndpoints[tpl.Key] {
-				t.Errorf("endpoints %q, want %q", strings.Join(got, " "), wantEndpoints[tpl.Key])
+			// The templates written for musdash are held to the endpoints
+			// they were written to have; an imported one to having worked
+			// out a port for each.
+			if want, ours := wantEndpoints[tpl.Key]; ours && strings.Join(got, " ") != want {
+				t.Errorf("endpoints %q, want %q", strings.Join(got, " "), want)
+			} else if len(endpoints) == 0 && !tpl.ConnectEnv {
+				t.Errorf("no endpoint, and not connected to its environment: nothing can reach it")
+			} else if ours != (tpl.Source == "") {
+				t.Errorf("a template written for musdash that this test does not know, or the other way round (source %q)", tpl.Source)
 			}
 
 			resolved, err := Config(ctx, r, opt)
@@ -216,8 +229,18 @@ func TestCatalogueLoadsInTheSandbox(t *testing.T) {
 			}
 			// No variable is left unfilled, and every service has an image.
 			out, _ := resolved.Marshal()
-			if strings.Contains(string(out), "SERVICE_URL_") && strings.Contains(string(out), "${") {
-				t.Errorf("an unfilled variable:\n%s", out)
+			// What is left with a dollar sign in front of it was escaped
+			// in the file ("$$"), which is right for a container's own
+			// shell and wrong for a variable musdash was meant to fill.
+			if m := escapedMagic.FindString(string(out)); m != "" {
+				t.Errorf("a magic variable is escaped, so it is never filled in: %s", m)
+			}
+			// Compose reads a config with empty content when it loads the
+			// file and refuses it when it starts the stack.
+			for name, c := range asMap(resolved.doc["configs"]) {
+				if cfg := asMap(c); cfg["file"] == nil && cfg["environment"] == nil && cfg["content"] == "" {
+					t.Errorf("the config %s has no content, which Compose refuses when the stack is started", name)
+				}
 			}
 			for _, s := range resolved.Services() {
 				if resolved.Image(s) == "" {

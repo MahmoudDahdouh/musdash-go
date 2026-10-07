@@ -43,8 +43,8 @@ func serviceTabs(v ServiceView) []ui.Tab {
 
 // templateName is what a service was made from, in words.
 func templateName(key string) string {
-	if t, ok := catalog.Service(key); ok {
-		return t.Name
+	if name, ok := catalog.ServiceName(key); ok {
+		return name
 	}
 	return "Your own Compose file"
 }

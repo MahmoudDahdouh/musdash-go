@@ -2,6 +2,7 @@
 # about: Workflow automation with a visual editor.
 # docs: https://docs.n8n.io/hosting/
 # website: https://n8n.io/
+# categories: automation, ai
 services:
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest

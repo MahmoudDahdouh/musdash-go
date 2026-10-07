@@ -153,42 +153,73 @@ services:
 	}
 }
 
+// The templates written for musdash. The rest of the catalogue is made
+// from Coolify's and Dokploy's by tools/catalog and says so in its header.
+var ownTemplates = map[string]bool{"cloudflared": true, "ghost": true, "minio": true, "n8n": true, "uptime-kuma": true, "wordpress": true}
+
 func TestServiceCatalogue(t *testing.T) {
-	want := []string{"cloudflared", "ghost", "minio", "n8n", "uptime-kuma", "wordpress"}
-	got := map[string]ServiceTemplate{}
-	for _, tpl := range Services() {
-		got[tpl.Key] = tpl
+	var (
+		keyRE     = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+		portsRE   = regexp.MustCompile(`(?m)^\s+ports:`)
+		imageRE   = regexp.MustCompile(`(?m)^\s+image:\s*["']?([^\s"']+)`)
+		commentRE = regexp.MustCompile(`(?m)^#`)
+	)
+	address := func(u string) bool {
+		return u == "" || strings.HasPrefix(u, "https://") && !strings.ContainsAny(u, " \"'<>")
 	}
-	if len(got) != len(want) {
-		t.Fatalf("%d templates, want %d", len(got), len(want))
-	}
-	serviceRE := regexp.MustCompile(`(?m)^  ([a-z0-9-]+):\s*$`)
-	for _, key := range want {
+	own, last := 0, ""
+	for _, listed := range Services() {
+		key := listed.Key
 		tpl, ok := Service(key)
-		if !ok || tpl.Name == "" || tpl.About == "" || !strings.HasPrefix(tpl.Docs, "https://") || !strings.HasPrefix(tpl.Website, "https://") {
-			t.Errorf("%s: missing, or its header is incomplete: %+v", key, tpl)
+		if !ok || !keyRE.MatchString(key) {
+			t.Errorf("%s: not found by its key, or the key is not one a URL and a file name can be", key)
 			continue
+		}
+		if name := strings.ToLower(tpl.Name); name < last {
+			t.Errorf("%s: the list is not sorted by name", key)
+		} else {
+			last = name
+		}
+		if tpl.Name == "" || tpl.About == "" || !address(tpl.Docs) || !address(tpl.Website) || tpl.Docs == "" && tpl.Website == "" {
+			t.Errorf("%s: its header is incomplete: %+v", key, listed)
+		}
+		switch {
+		case ownTemplates[key]:
+			own++
+			if tpl.Source != "" || tpl.Docs == "" || tpl.Website == "" {
+				t.Errorf("%s is written for musdash: no source, and both addresses", key)
+			}
+		case tpl.Source != "coolify" && tpl.Source != "dokploy":
+			t.Errorf("%s: source %q. A template is one of ownTemplates or says whose it was made from", key, tpl.Source)
+		}
+		// The header is the comment the file starts with, and its only one
+		// that starts a line: a later "# name:" would be read as nothing,
+		// but would look like one.
+		if n := len(commentRE.FindAllString(tpl.Compose, -1)); n < 4 || n > 7 || !strings.HasPrefix(tpl.Compose, "# name: ") {
+			t.Errorf("%s: %d comment lines at the start of a line; the header is the only comment", key, n)
 		}
 		if !strings.Contains(tpl.Compose, "\nservices:\n") {
 			t.Errorf("%s: no services", key)
 		}
+		// A service's Compose file can be edited and saved again, and
+		// what may be saved is at most this (maxComposeBytes in
+		// internal/web).
+		if len(tpl.Compose) > 128<<10 {
+			t.Errorf("%s: %d KB, more than a Compose file may be", key, len(tpl.Compose)>>10)
+		}
 		// Ports are named by variables, never published by the template:
 		// two copies of one template must not collide on the server.
-		if regexp.MustCompile(`(?m)^\s+ports:`).MatchString(tpl.Compose) {
+		if portsRE.MatchString(tpl.Compose) {
 			t.Errorf("%s: publishes a port itself", key)
 		}
-		// Every image carries a tag.
-		for _, m := range regexp.MustCompile(`(?m)^\s+image:\s*(\S+)`).FindAllStringSubmatch(tpl.Compose, -1) {
-			if !strings.Contains(m[1][strings.LastIndex(m[1], "/")+1:], ":") {
+		// Every image carries a tag. One that is a variable carries what
+		// the variable holds.
+		for _, m := range imageRE.FindAllStringSubmatch(tpl.Compose, -1) {
+			if !strings.Contains(m[1], "$") && !strings.ContainsAny(m[1][strings.LastIndex(m[1], "/")+1:], ":@") {
 				t.Errorf("%s: image %s has no tag", key, m[1])
 			}
 		}
-		// The top-level keys under "services:" are its services; every
-		// service that should get a domain declares a port once.
-		names := map[string]bool{}
-		for _, m := range serviceRE.FindAllStringSubmatch(tpl.Compose, -1) {
-			names[strings.ToUpper(strings.ReplaceAll(m[1], "-", "_"))] = true
-		}
+		// Every address says which port it goes to, once.
 		withPort := map[string]bool{}
 		for _, v := range ScanMagic(tpl.Compose) {
 			if v.Address() && v.Port > 0 {
@@ -200,13 +231,36 @@ func TestServiceCatalogue(t *testing.T) {
 				t.Errorf("%s: %s names an endpoint whose port is declared nowhere", key, v.Name)
 			}
 		}
-		// A password in a template is always a generated one.
-		for _, line := range strings.Split(tpl.Compose, "\n") {
-			if strings.Contains(line, "PASSWORD=") && !strings.Contains(line, "${SERVICE_PASSWORD_") {
-				t.Errorf("%s: a fixed password: %s", key, strings.TrimSpace(line))
+		// A template publishes no port, so there are two ways to reach
+		// what it runs: a web address, or the environment's network. One
+		// with neither would be listed and be of use to nobody (a game
+		// server whose port is closed).
+		if len(withPort) == 0 && !tpl.ConnectEnv {
+			t.Errorf("%s: no address and not connected to its environment: nothing can reach it", key)
+		}
+		// What a person must type before a template can be deployed is
+		// asked for on its form. An imported template asks for nothing
+		// its makers' own platform would not have: there, a variable left
+		// empty is empty.
+		for _, v := range ScanVariables(tpl.Compose) {
+			if v.Required && !ownTemplates[key] && !strings.Contains(tpl.Compose, "${"+v.Name+":?") && !strings.Contains(tpl.Compose, "${"+v.Name+"?") {
+				t.Errorf("%s: %s has no default, so the form would demand it", key, v.Name)
 			}
 		}
-		_ = names
+		// A password in a template written for musdash is always a
+		// generated one. An imported template may keep one its makers
+		// wrote where the file shows only one end of it (tools/catalog's
+		// passwords says why).
+		if ownTemplates[key] {
+			for _, line := range strings.Split(tpl.Compose, "\n") {
+				if strings.Contains(line, "PASSWORD=") && !strings.Contains(line, "${SERVICE_PASSWORD_") {
+					t.Errorf("%s: a fixed password: %s", key, strings.TrimSpace(line))
+				}
+			}
+		}
+	}
+	if own != len(ownTemplates) {
+		t.Errorf("%d of musdash's own %d templates are in the catalogue", own, len(ownTemplates))
 	}
 	if tpl, _ := Service("cloudflared"); !tpl.ConnectEnv {
 		t.Error("cloudflared must join the environment network to reach apps")
@@ -216,5 +270,55 @@ func TestServiceCatalogue(t *testing.T) {
 	}
 	if _, ok := Service("../databases"); ok {
 		t.Error("a path was accepted as a template key")
+	}
+}
+
+// The list is what the page lists, several hundred entries: it holds what
+// the headers say and no Compose text. Every template says what kind of
+// thing it is, in the catalogue's own words.
+func TestServiceCategories(t *testing.T) {
+	known := map[string]bool{}
+	last := ""
+	for _, c := range Categories() {
+		if known[c.Key] || c.Label == "" || CategoryLabel(c.Key) != c.Label {
+			t.Errorf("category %q is there twice, or has no label", c.Key)
+		}
+		if strings.ToLower(c.Label) < last {
+			t.Errorf("%q is out of order: the list is sorted by label", c.Label)
+		}
+		known[c.Key], last = true, strings.ToLower(c.Label)
+	}
+	if CategoryLabel("nothing") != "" {
+		t.Error("a key that is no category has a label")
+	}
+	for _, tpl := range Services() {
+		if tpl.Compose != "" {
+			t.Errorf("%s: the list holds its Compose text", tpl.Key)
+		}
+		if n := len(tpl.Categories); n < 1 || n > 3 {
+			t.Errorf("%s: %d categories, want one to three", tpl.Key, n)
+		}
+		seen := map[string]bool{}
+		for _, c := range tpl.Categories {
+			if !known[c] || seen[c] {
+				t.Errorf("%s: category %q is unknown, or named twice", tpl.Key, c)
+			}
+			seen[c] = true
+		}
+		if name, ok := ServiceName(tpl.Key); !ok || name != tpl.Name {
+			t.Errorf("%s: ServiceName says %q", tpl.Key, name)
+		}
+	}
+	inUse, count := CategoriesInUse()
+	for _, c := range inUse {
+		if count[c.Key] == 0 {
+			t.Errorf("%s is listed as in use by nothing", c.Key)
+		}
+	}
+	if count["cms"] < 2 || count["nothing"] != 0 {
+		t.Errorf("counts: %v", count)
+	}
+	if _, ok := ServiceName("custom"); ok {
+		t.Error("a person's own Compose file has a template's name")
 	}
 }

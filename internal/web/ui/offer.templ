@@ -1,6 +1,10 @@
 package ui
 
-import "github.com/MahmoudDahdouh/musdash-go/internal/web/static"
+import (
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/static"
+	"strconv"
+	"strings"
+)
 
 // OfferProps configures an Offer.
 type OfferProps struct {
@@ -18,8 +22,23 @@ type OfferProps struct {
 	Website string
 	// Action is what the button at the end says. Empty is "Deploy".
 	Action string
-	// Search is the text a filter field looks in.
+	// Search is what a filter field finds the card by besides its title,
+	// its text and its tags, which it reads from the card.
 	Search string
+	// Tags are the keys a row of Chips narrows by, and TagText is how the
+	// card names them.
+	Tags    []string
+	TagText string
+	// Shared is set on a page that lists offers by the hundred and has
+	// drawn their icons once with IconDefs (OfferIcons, and this card's
+	// Icon): the card then refers to them.
+	Shared bool
+}
+
+// OfferIcons are the icons for IconDefs on a page of shared offers: those
+// every card's foot has, and the cards' own.
+func OfferIcons(own ...string) []string {
+	return append([]string{"book", "globe", "arrow-right"}, own...)
 }
 
 func (p OfferProps) action() string {
@@ -33,6 +52,13 @@ func (p OfferProps) action() string {
 // that is missing must cost the mark, not the page.
 func (p OfferProps) hasLogo() bool {
 	return p.Logo != "" && static.Has(LogoFile(p.Logo))
+}
+
+func (p OfferProps) icon(name string) templ.Component {
+	if p.Shared {
+		return IconRef(name)
+	}
+	return Icon(name)
 }
 
 // Offers is the grid of what can be added. label says what they are, for a
@@ -52,40 +78,77 @@ templ Offers(label string) {
 templ Offer(p OfferProps) {
 	<li
 		class="tile offer"
-		if p.Search != "" {
-			data-search={ p.Search }
+		data-search={ p.Search }
+		if len(p.Tags) > 0 {
+			data-tags={ strings.Join(p.Tags, " ") }
 		}
 	>
-		<div class="offer-head">
+		<div class="offer-head" data-search-text>
 			<span class="offer-mark">
 				if p.hasLogo() {
 					<img src={ static.URL(LogoFile(p.Logo)) } alt="" width="48" height="48" loading="lazy" decoding="async"/>
 				} else {
-					@Icon(p.Icon)
+					@p.icon(p.Icon)
 				}
 			</span>
 			<div class="grid min-w-0 gap-1">
 				<h3 class="tile-title">{ p.Title }</h3>
 				<p class="tile-text">{ p.Text }</p>
+				if p.TagText != "" {
+					<p class="offer-tags">{ p.TagText }</p>
+				}
 			</div>
 		</div>
 		<div class="offer-foot">
 			if p.Docs != "" {
 				<a class="btn btn-sm btn-ghost" href={ templ.SafeURL(p.Docs) } target="_blank" rel="noopener" aria-label={ p.Title + ": Docs" }>
-					@Icon("book")
+					@p.icon("book")
 					Docs
 				</a>
 			}
 			if p.Website != "" {
 				<a class="btn btn-sm btn-ghost" href={ templ.SafeURL(p.Website) } target="_blank" rel="noopener" aria-label={ p.Title + ": Website" }>
-					@Icon("globe")
+					@p.icon("globe")
 					Website
 				</a>
 			}
 			<a class="btn btn-sm btn-secondary offer-go" href={ templ.SafeURL(p.Href) } aria-label={ p.action() + ": " + p.Title }>
 				{ p.action() }
-				@Icon("arrow-right")
+				@p.icon("arrow-right")
 			</a>
 		</div>
 	</li>
+}
+
+// ChipProps configures a Chip.
+type ChipProps struct {
+	// Name is shared by the chips of one row, which makes them one choice.
+	Name  string
+	Value string
+	Label string
+	// Count is how many things the chip stands for; 0 shows none.
+	Count   int
+	Checked bool
+}
+
+// Chips is a row of choices that narrow a list: one is chosen at a time.
+// filters is the id of the element whose items it narrows, the one a
+// data-filter field names too. An item is kept when its data-tags holds the
+// chosen chip's value; the chip with no value keeps them all. They are
+// radio buttons, so the browser brings the choice back with the page.
+templ Chips(label, filters string) {
+	<fieldset class="chips" data-filter-pick={ filters }>
+		<legend class="sr-only">{ label }</legend>
+		{ children... }
+	</fieldset>
+}
+
+templ Chip(p ChipProps) {
+	<label class="chip">
+		<input type="radio" name={ p.Name } value={ p.Value } checked?={ p.Checked }/>
+		<span>{ p.Label }</span>
+		if p.Count > 0 {
+			<span class="chip-count">{ strconv.Itoa(p.Count) }</span>
+		}
+	</label>
 }

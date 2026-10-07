@@ -69,7 +69,7 @@ func TestCreateDatabase(t *testing.T) {
 	// Each is a card with its logo, its documentation and website at the
 	// start of the foot and Deploy, the one link to its form, at the end.
 	for _, tpl := range catalog.Databases() {
-		at := strings.Index(engines, `data-search="database `+tpl.Engine+` `)
+		at := strings.Index(engines, `data-search="database `+tpl.Engine+`"`)
 		if at < 0 {
 			t.Errorf("%s: no card", tpl.Label)
 			continue

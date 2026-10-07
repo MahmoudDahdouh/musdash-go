@@ -2,6 +2,7 @@
 # about: Monitors your sites and services and tells you when one is down.
 # docs: https://github.com/louislam/uptime-kuma/wiki
 # website: https://uptime.kuma.pet/
+# categories: monitoring
 services:
   uptime-kuma:
     image: louislam/uptime-kuma:1
