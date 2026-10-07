@@ -311,6 +311,14 @@ MAIL_URL=smtp://{{team.SMTP_HOST}}:587
 
 A tag is a short name such as `nightly` or `frontend`. The Tags page makes, renames and deletes them, and a tag can exist before anything has it; an app's and a service's Settings page chooses among them or adds a new one. A tag's page lists what has it, and its step of the header switches to the team's other tags. Everything that has a tag is deployed with one API call (below); something that already has a deployment waiting is not queued twice.
 
+## Search
+
+The bar at the top of every page has a search before your own menu. Press `/` anywhere outside a field, or Cmd+K (Ctrl+K on Windows and Linux), type, and press Enter to open the first result; the arrow keys choose another.
+
+It finds what the team has, by name and by what you would know it by: projects (and their descriptions), environments, apps (image, repository, branch), databases (engine, image), services (template, repository), domains, servers (host, address), tags, and the dashboard's own pages. Several words narrow it: `shop web` is the app `web` of the project Shop. A name from the server can be pasted whole (a container, network or volume called `musdash-<id>-…` finds what it belongs to). Variables, Compose files, keys and tokens are not searched, so a search never shows what a secret holds.
+
+Nothing is indexed or kept in memory for it: each pause in the typing is one query on the database.
+
 ## The API
 
 For scripts and pipelines. On the Keys & tokens page, under API Tokens, make a token: it asks for your password, is shown once, and is stored as a hash. It can end in 7, 30, 60 or 90 days or a year, or never; it acts as the person who made it, within the permissions it was given, and never does what that person may not. It stops working when they leave the team, change or reset their password, turn on two-step sign-in, or are given a higher role.

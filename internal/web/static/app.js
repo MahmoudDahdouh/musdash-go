@@ -218,7 +218,7 @@
     list.style.left = Math.max(edge, Math.min(left, innerWidth - list.offsetWidth - edge)) + "px";
   };
   const setActive = (list, option, reveal = true) => {
-    const filter = list.querySelector("[data-select-filter]");
+    const filter = list.querySelector("[data-select-filter], [data-search-field]");
     list.querySelectorAll("[data-active]").forEach((o) => delete o.dataset.active);
     if (!option) return filter.removeAttribute("aria-activedescendant");
     option.dataset.active = "1";
@@ -371,6 +371,135 @@
     e.preventDefault();
     if (filtered) setActive(list, next);
     else next.focus();
+  });
+
+  // Search (ui.searchDialog): the one dialog everything the team has is
+  // looked for in. Its button in the bar opens it, and so do "/" outside a
+  // field and Cmd+K (Ctrl+K off a Mac), which also closes it. The field asks
+  // the server as it is typed in (hx-get) and the answer becomes the list.
+  // Focus stays in the field and the arrow keys move the marker, as in a
+  // menu with a filter; Enter opens the marked row, which is a link.
+  const searchBox = () => document.getElementById("search");
+  // shown is the text the list is the answer to, read from each answer's
+  // own request: the next request can leave before an answer has settled.
+  // While the field holds another text, the list is stale: an answer is on
+  // its way. Enter pressed meanwhile is owed to that answer (wanted), or
+  // typing fast and pressing Enter would open a row of the search before.
+  let shown = null;
+  let wanted = false;
+  const stale = (dialog) => dialog.querySelector("[data-search-field]").value !== shown;
+  // The marked row is the listbox's selected one; nothing else here is.
+  const markRow = (dialog, row, reveal) => {
+    optionsOf(dialog).forEach((o) => o.setAttribute("aria-selected", String(o === row)));
+    setActive(dialog, row, reveal);
+  };
+  const askSearch = (dialog) => {
+    wanted = false;
+    dialog.querySelector("[data-search-error]").hidden = true;
+    dialog.querySelector("[data-search-field]").dispatchEvent(new Event("search-load"));
+  };
+  // It opens as new every time: an empty field over the pages a person can
+  // go to. That is how it starts, and how it is left when it closes, so
+  // there is nothing to do unless something was typed, or the list is
+  // empty: the first time, and after a search that got no answer.
+  const freshSearch = (dialog) => {
+    const field = dialog.querySelector("[data-search-field]");
+    if (field.value === "" && shown === "" && dialog.querySelector("[role=option]")) return;
+    field.value = "";
+    askSearch(dialog);
+  };
+  const openSearch = () => {
+    const dialog = searchBox();
+    // Not over another dialog: what that one asks would be left behind it.
+    if (!dialog || document.querySelector("dialog[open]")) return;
+    dialog.showModal();
+    freshSearch(dialog);
+  };
+  on("click", "[data-search-open]", openSearch);
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+  document.addEventListener("keydown", (e) => {
+    // A key another script took is not this one's: the terminal sends
+    // Ctrl+K to the shell. A browser filling in a form sends key events
+    // that name no key.
+    if (e.defaultPrevented || e.altKey || !e.key || !searchBox()) return;
+    // On a Mac Ctrl+K deletes to the end of the line in every text field,
+    // so there it is Cmd+K alone.
+    const chord = e.key.toLowerCase() === "k" && !e.shiftKey && (mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
+    const slash = e.key === "/" && !e.ctrlKey && !e.metaKey && !openList && !e.target.closest?.("input, textarea, select, [contenteditable]");
+    if (!chord && !slash) return;
+    e.preventDefault();
+    if (chord && searchBox().open) searchBox().close();
+    else openSearch();
+  });
+  on("input", "[data-search-field]", (field) => {
+    wanted = false;
+    field.closest("dialog").querySelector("[data-search-error]").hidden = true;
+  });
+  on("keydown", "[data-search-field]", (field, e) => {
+    const dialog = field.closest("dialog");
+    const all = optionsOf(dialog);
+    const i = all.indexOf(dialog.querySelector("[data-active]"));
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!all.length) return;
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      markRow(dialog, all[i < 0 ? (step > 0 ? 0 : all.length - 1) : (i + step + all.length) % all.length]);
+    } else if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
+      // Enter that ends a composed character is not Enter. Safari sends it
+      // after the composition has ended, and only the key's code says so.
+      e.preventDefault();
+      if (stale(dialog)) wanted = true;
+      else all[i]?.click();
+    }
+  });
+  // The pointer marks a row when it moves, not when a new list arrives
+  // under it: that would take the marker from the first row.
+  on("mousemove", "#search [role=option]", (el) => {
+    if (!el.dataset.active) markRow(searchBox(), el, false);
+  });
+  // A row that leads to a place on the page it is opened from (a server, on
+  // the list of servers) loads nothing: the dialog has to go by itself.
+  on("click", "#search [role=option]", () => searchBox().close());
+  // An answer arrived (the count for the status line settles apart, and is
+  // not it). The first row is the best one: it is marked, and opened if
+  // Enter was waiting for it.
+  document.addEventListener("htmx:afterSettle", (e) => {
+    const list = e.target.closest?.("#search-results");
+    if (!list) return;
+    const dialog = searchBox();
+    const first = list.querySelector("[role=option]");
+    shown = new URL(e.detail.pathInfo.finalRequestPath, location.href).searchParams.get("q");
+    list.scrollTop = 0;
+    markRow(dialog, first);
+    if (!wanted || stale(dialog)) return;
+    wanted = false;
+    first?.click();
+  });
+  // No answer came. Rows of the search before, under the new text, would be
+  // a lie: the list is emptied and the dialog says why.
+  const searchFailed = (e) => {
+    const dialog = e.target.closest?.("#search");
+    if (!dialog) return;
+    wanted = false;
+    shown = null;
+    dialog.querySelector("[role=listbox]").replaceChildren();
+    const note = dialog.querySelector("[data-search-error]");
+    note.hidden = false;
+    // Said as well as shown: the status line still held the last count.
+    dialog.querySelector("[role=status]").textContent = note.textContent;
+  };
+  document.addEventListener("htmx:sendError", searchFailed);
+  document.addEventListener("htmx:responseError", searchFailed);
+  // When it closes, the pages are put back behind it, so the next opening
+  // shows them at once. close does not bubble, and the browser sends it with
+  // its next frame, which can be after the dialog was opened again: then
+  // opening has done this already, and the field holds what is being typed.
+  searchBox()?.addEventListener("close", (e) => {
+    if (!e.target.open) freshSearch(e.target);
+  });
+  // A page the browser kept whole and brings back (Back) has it closed.
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) searchBox()?.close();
   });
 
   // Toasts that confirm an action leave on their own; errors stay until closed.

@@ -183,23 +183,21 @@ templ sidebar(s Shell) {
 	</aside>
 }
 
-// userMenu is the end of the bar: who is signed in, and what is theirs
-// rather than the team's. Sign out is a form, so the form is in the menu
+// userMenu is the last thing in the bar, after the search: who is signed
+// in, and what is theirs rather than the team's. Sign out is a form, so the form is in the menu
 // with its button: the question it asks is read from there.
 templ userMenu(s Shell) {
-	<div class="topbar-end">
-		@Menu(MenuProps{ID: "usermenu", Label: "Account: " + orDefault(s.Name, s.Email), Class: "user-button", End: true, Button: userButton(s), Head: userHead(s)}) {
-			@MenuItem(MenuItemProps{Href: "/account", Icon: "user", Label: "Account", Current: s.Active == "account"})
-			if s.Admin {
-				@MenuItem(MenuItemProps{Href: "/settings", Icon: "settings", Label: "Settings", Current: s.Active == "settings"})
-			}
-			@MenuSep()
-			<form method="post" action="/logout">
-				@CSRF(s.CSRF)
-				@MenuItem(MenuItemProps{Icon: "log-out", Label: "Sign out", Danger: true, Attrs: Ask("Sign out of musdash?", "You will need your password to come back in.", "Sign out", true)})
-			</form>
+	@Menu(MenuProps{ID: "usermenu", Label: "Account: " + orDefault(s.Name, s.Email), Class: "user-button", End: true, Button: userButton(s), Head: userHead(s)}) {
+		@MenuItem(MenuItemProps{Href: "/account", Icon: "user", Label: "Account", Current: s.Active == "account"})
+		if s.Admin {
+			@MenuItem(MenuItemProps{Href: "/settings", Icon: "settings", Label: "Settings", Current: s.Active == "settings"})
 		}
-	</div>
+		@MenuSep()
+		<form method="post" action="/logout">
+			@CSRF(s.CSRF)
+			@MenuItem(MenuItemProps{Icon: "log-out", Label: "Sign out", Danger: true, Attrs: Ask("Sign out of musdash?", "You will need your password to come back in.", "Sign out", true)})
+		</form>
+	}
 }
 
 templ userButton(s Shell) {
@@ -235,7 +233,10 @@ templ Layout(s Shell) {
 							@Icon("menu")
 						</button>
 						@Trail(trail(s))
-						@userMenu(s)
+						<div class="topbar-end">
+							@searchButton()
+							@userMenu(s)
+						</div>
 					</div>
 					<main class="page" id="content">
 						{ children... }
@@ -243,6 +244,7 @@ templ Layout(s Shell) {
 				</div>
 			</div>
 			@confirmDialog()
+			@searchDialog()
 			@Toasts(s.Flash)
 		</body>
 	</html>

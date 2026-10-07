@@ -101,7 +101,7 @@ templ Servers(s ui.Shell, list []ServerInfo, keys []db.SSHKey, f ui.Form) {
 }
 
 templ localServerCard(s ui.Shell, info ServerInfo, f ui.Form) {
-	<section class="card">
+	<section class="card" id={ "server-" + info.Server.ID }>
 		<div class="card-head">
 			<div class="flex items-center gap-2.5">
 				@ui.Icon("server", "text-ink-mute")
