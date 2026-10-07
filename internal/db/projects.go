@@ -34,6 +34,11 @@ type Environment struct {
 	ProjectID string
 	Name      string
 	CreatedAt int64
+	// The three counts of what is in the environment (previews left out,
+	// as everywhere they are listed) are filled by ListEnvironments only.
+	Apps      int
+	Databases int
+	Services  int
 }
 
 // DefaultEnvironment is created with every project.
@@ -93,8 +98,15 @@ func (d *DB) DeleteProject(ctx context.Context, teamID, id string) error {
 	return affected(d.ExecContext(ctx, `DELETE FROM projects WHERE id = ? AND team_id = ?`, id, teamID))
 }
 
+// ListEnvironments is a project's environments in the order they were made,
+// each with the counts of what is in it.
 func (d *DB) ListEnvironments(ctx context.Context, projectID string) ([]Environment, error) {
-	rows, err := d.QueryContext(ctx, `SELECT id, project_id, name, created_at FROM environments WHERE project_id = ? ORDER BY created_at, rowid`, projectID)
+	rows, err := d.QueryContext(ctx, `
+		SELECT e.id, e.project_id, e.name, e.created_at,
+		       (SELECT count(*) FROM apps a WHERE a.environment_id = e.id AND a.preview_of = ''),
+		       (SELECT count(*) FROM databases m WHERE m.environment_id = e.id),
+		       (SELECT count(*) FROM services v WHERE v.environment_id = e.id)
+		FROM environments e WHERE e.project_id = ? ORDER BY e.created_at, e.rowid`, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +114,7 @@ func (d *DB) ListEnvironments(ctx context.Context, projectID string) ([]Environm
 	var out []Environment
 	for rows.Next() {
 		var e Environment
-		if err := rows.Scan(&e.ID, &e.ProjectID, &e.Name, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.ProjectID, &e.Name, &e.CreatedAt, &e.Apps, &e.Databases, &e.Services); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

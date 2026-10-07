@@ -62,48 +62,86 @@ templ ProjectList(s ui.Shell, projects []db.Project, f ui.Form) {
 	}
 }
 
-// projectTabs are the sections of a project. envID is the environment the
-// person is in, when the page has one, so Resources leads back to it.
-func projectTabs(p db.Project, envID string) []ui.Tab {
-	resources := "/projects/" + p.ID
-	if envID != "" {
-		resources = EnvPath(p.ID, envID)
-	}
-	return []ui.Tab{
-		{Key: "resources", Label: "Resources", Href: resources, Icon: "dashboard"},
-		{Key: "settings", Label: "Settings", Href: "/projects/" + p.ID + "/settings", Icon: "settings"},
+// ProjectShow is a project's own page: its environments, each a card that
+// leads into it, and what can be done about the project in two dialogs.
+// details is the Settings form and add the Add environment form, each with
+// what was refused when it comes back: two forms, because both have a field
+// called name.
+templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, details, add ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader(p.Name, p.Description) {
+			@ui.Button(ui.ButtonProps{Icon: "settings", Opens: "project-settings"}) {
+				Settings
+			}
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-environment"}) {
+				Add environment
+			}
+		}
+		<h2 class="section-title mb-3">Environments</h2>
+		@ui.Tiles("Environments", false) {
+			for _, e := range envs {
+				@ui.Tile(ui.TileProps{Href: EnvPath(p.ID, e.ID), Icon: "box", Title: e.Name}) {
+					@ui.Meta(KindIcon(db.KindApp), strconv.Itoa(e.Apps), noun(e.Apps, "app", "apps"))
+					@ui.Meta(KindIcon(db.KindDatabase), strconv.Itoa(e.Databases), noun(e.Databases, "database", "databases"))
+					@ui.Meta(KindIcon(db.KindService), strconv.Itoa(e.Services), noun(e.Services, "service", "services"))
+				}
+			}
+		}
+		@ui.FormDialog(ui.DialogProps{ID: "new-environment", Title: "Add environment", Description: "It starts empty, with a network of its own: what runs in it does not see the other environments.", Action: "/projects/" + p.ID + "/environments", CSRF: s.CSRF, Submit: "Add environment", Open: !add.OK()}) {
+			@ui.TextField(add, "Name", "Lowercase letters, numbers and hyphens.", ui.InputProps{ID: "env-name", Name: "name", Placeholder: "staging", Mono: true, Required: true, Attrs: templ.Attributes{"maxlength": "32"}})
+		}
+		@ui.FormDialog(ui.DialogProps{ID: "project-settings", Title: "Project settings", Action: "/projects/" + p.ID, CSRF: s.CSRF, Submit: "Save changes", Open: !details.OK()}) {
+			@ui.TextField(details, "Name", "", ui.InputProps{ID: "project-name", Name: "name", Value: p.Name, Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
+			@ui.TextField(details, "Description", "Optional.", ui.InputProps{ID: "project-description", Name: "description", Value: p.Description, Attrs: templ.Attributes{"maxlength": "200"}})
+			<div class="card rows">
+				<a class="row" href={ templ.SafeURL("/projects/" + p.ID + "/variables") }>
+					<span class="min-w-0 flex-1">
+						Shared variables
+						<span class="muted block text-sm">Values that apps and services take by name, such as <span class="code">{ "{{project.NAME}}" }</span>.</span>
+					</span>
+					@ui.Icon("chevron-right", "text-ink-mute")
+				</a>
+				<div class="row">
+					<span class="min-w-0 flex-1">
+						Delete project
+						<span class="muted block text-sm">Once nothing is deployed in it.</span>
+					</span>
+					// Its dialog is outside this one: a form cannot hold another.
+					@ui.ConfirmTrigger(deleteProject(s, p))
+				</div>
+			</div>
+		}
+		@ui.ConfirmDialog(deleteProject(s, p)) {
+			<p><strong>{ p.Name }</strong> and its environments are removed. This cannot be undone.</p>
+		}
 	}
 }
 
-// ProjectShow is one environment of a project: what runs in it. Under the
-// tabs is where the environment is chosen, with what can be done about
-// environments beside it. envs are the project's, and f the Add
-// environment form when it came back refused.
-templ ProjectShow(s ui.Shell, p db.Project, env db.Environment, envs []db.Environment, res Resources, f ui.Form) {
+func deleteProject(s ui.Shell, p db.Project) ui.ConfirmProps {
+	return ui.ConfirmProps{
+		ID:      "delete-project",
+		Title:   "Delete project",
+		Action:  "/projects/" + p.ID + "/delete",
+		CSRF:    s.CSRF,
+		Match:   p.Name,
+		Submit:  "Delete project",
+		Trigger: "Delete project",
+	}
+}
+
+// EnvironmentShow is one environment of a project: what runs in it.
+templ EnvironmentShow(s ui.Shell, p db.Project, env db.Environment, res Resources) {
 	@ui.Layout(s) {
-		@ui.PageHeader(p.Name, p.Description) {
+		@ui.PageHeader(env.Name, "An environment of "+p.Name+".") {
+			@ui.LinkButton(EnvPath(p.ID, env.ID)+"/settings", ui.ButtonProps{Icon: "settings"}) {
+				Settings
+			}
 			if res.Count() > 0 {
 				@ui.LinkButton(EnvPath(p.ID, env.ID)+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
 					Add resource
 				}
 			}
 		}
-		@ui.Tabs(projectTabs(p, env.ID), "resources")
-		<div class="mb-5 flex flex-wrap items-center gap-2">
-			@ui.Menu(ui.MenuProps{ID: "environment", Label: "Environment: " + env.Name, Class: "btn btn-secondary", Button: environmentButton(env)}) {
-				for _, e := range envs {
-					@ui.MenuItem(ui.MenuItemProps{Href: EnvPath(p.ID, e.ID), Label: e.Name, Current: e.ID == env.ID})
-				}
-			}
-			// "Environment settings", not "Settings": the tab above is the
-			// project's Settings.
-			@ui.LinkButton(EnvPath(p.ID, env.ID)+"/settings", ui.ButtonProps{Icon: "settings"}) {
-				Environment settings
-			}
-			@ui.Button(ui.ButtonProps{Icon: "plus", Opens: "new-environment"}) {
-				Add environment
-			}
-		</div>
 		if res.Count() == 0 {
 			@ui.EmptyState(ui.EmptyProps{Icon: "box", Title: "Nothing is in " + env.Name + " yet", Text: "Add an app from a Git repository or a Docker image, a database, or a ready-made service such as WordPress or n8n."}) {
 				@ui.LinkButton(EnvPath(p.ID, env.ID)+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
@@ -113,18 +151,7 @@ templ ProjectShow(s ui.Shell, p db.Project, env db.Environment, envs []db.Enviro
 		} else {
 			@ResourceTiles(res)
 		}
-		@ui.FormDialog(ui.DialogProps{ID: "new-environment", Title: "Add environment", Description: "It starts empty, with a network of its own: what runs in it does not see the other environments.", Action: "/projects/" + p.ID + "/environments", CSRF: s.CSRF, Submit: "Add environment", Open: !f.OK()}) {
-			// Where the form was sent from, so a refusal comes back here.
-			<input type="hidden" name="at" value={ env.ID }/>
-			@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens.", ui.InputProps{ID: "env-name", Name: "name", Placeholder: "staging", Mono: true, Required: true, Attrs: templ.Attributes{"maxlength": "32"}})
-		}
 	}
-}
-
-templ environmentButton(env db.Environment) {
-	@ui.Icon("box", "text-ink-mute")
-	<span class="fact">{ env.Name }</span>
-	@ui.Icon("chevron-down")
 }
 
 // EnvironmentSettings is what an environment has of its own: its name, its
@@ -188,72 +215,6 @@ templ EnvironmentSettings(s ui.Shell, p db.Project, env db.Environment, only boo
 						}) {
 							<p>The environment <strong>{ env.Name }</strong> is removed. It must be empty: delete what is deployed in it first.</p>
 						}
-					}
-				</div>
-			</section>
-		</div>
-	}
-}
-
-func orNoDescription(text string) string {
-	if text == "" {
-		return "None"
-	}
-	return text
-}
-
-// ProjectSettings is what the project itself has. An environment's name,
-// variables and deletion are on that environment's own Settings.
-templ ProjectSettings(s ui.Shell, p db.Project, details ui.Form) {
-	@ui.Layout(s) {
-		@ui.PageHeader(p.Name, p.Description)
-		@ui.Tabs(projectTabs(p, ""), "settings")
-		<div class="grid max-w-2xl gap-6">
-			<section class="card">
-				<div class="card-head">
-					<h2 class="card-title">Project details</h2>
-					@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-project"}) {
-						Edit
-					}
-				</div>
-				<div class="card-body">
-					@ui.KeyValue([]ui.KVItem{{Key: "Name", Value: p.Name}, {Key: "Description", Value: orNoDescription(p.Description)}})
-				</div>
-			</section>
-			@ui.FormDialog(ui.DialogProps{ID: "edit-project", Title: "Project details", Action: "/projects/" + p.ID, CSRF: s.CSRF, Submit: "Save changes", Open: !details.OK()}) {
-				@ui.TextField(details, "Name", "", ui.InputProps{ID: "name", Value: p.Name, Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
-				@ui.TextField(details, "Description", "Optional.", ui.InputProps{ID: "description", Value: p.Description, Attrs: templ.Attributes{"maxlength": "200"}})
-			}
-			<section class="card" id="variables">
-				<div class="card-head">
-					<div>
-						<h2 class="card-title">Shared variables</h2>
-						<p class="muted text-sm">Values that apps and services take by name, such as <span class="code">{ "{{project.NAME}}" }</span>, so they are written once.</p>
-					</div>
-				</div>
-				<div class="rows">
-					<a class="row" href={ templ.SafeURL("/projects/" + p.ID + "/variables") }>
-						<span class="min-w-0 flex-1">The whole project</span>
-						@ui.Icon("chevron-right", "text-ink-mute")
-					</a>
-				</div>
-			</section>
-			<section class="card card-danger">
-				<div class="card-head">
-					<div>
-						<h2 class="card-title">Delete project</h2>
-						<p class="muted text-sm">A project can be deleted once nothing is deployed in it.</p>
-					</div>
-					@ui.Confirm(ui.ConfirmProps{
-						ID:      "delete-project",
-						Title:   "Delete project",
-						Action:  "/projects/" + p.ID + "/delete",
-						CSRF:    s.CSRF,
-						Match:   p.Name,
-						Submit:  "Delete project",
-						Trigger: "Delete project",
-					}) {
-						<p><strong>{ p.Name }</strong> and its environments are removed. This cannot be undone.</p>
 					}
 				</div>
 			</section>

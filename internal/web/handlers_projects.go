@@ -82,41 +82,29 @@ func (s *Server) projectCreate(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, "/projects/"+p.ID)
 }
 
-// projectShow is a project's first environment, which is production unless
-// that one was deleted: where a link to the project itself leads.
+// renderProject draws a project's page: its environments as cards. details
+// is the Settings form and add the Add environment form, with what was
+// refused when one comes back.
+func (s *Server) renderProject(w http.ResponseWriter, r *http.Request, status int, p db.Project, details, add ui.Form) {
+	envs, err := s.DB.ListEnvironments(r.Context(), p.ID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, status, pages.ProjectShow(s.shell(w, r, p.Name, "projects", projectCrumbs(p)...), p, envs, details, add))
+}
+
 func (s *Server) projectShow(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.loadProject(w, r)
-	if !ok {
-		return
+	if p, ok := s.loadProject(w, r); ok {
+		s.renderProject(w, r, http.StatusOK, p, ui.Form{}, ui.Form{})
 	}
-	envs, err := s.DB.ListEnvironments(r.Context(), p.ID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if len(envs) == 0 {
-		s.fail(w, r, errors.New("project "+p.ID+" has no environment"))
-		return
-	}
-	// The environment is in the address of its page, so the page has one
-	// address: a project opens on its first environment by leading there.
-	redirect(w, r, pages.EnvPath(p.ID, envs[0].ID))
 }
 
-// environmentShow is one environment of a project, named in the path.
+// environmentShow is one environment of a project, named in the path: what
+// runs in it.
 func (s *Server) environmentShow(w http.ResponseWriter, r *http.Request) {
-	if p, env, ok := s.loadProjectEnv(w, r); ok {
-		s.renderEnvironment(w, r, http.StatusOK, p, env, ui.Form{})
-	}
-}
-
-// renderEnvironment draws an environment's page: what is in it, and where
-// the environment is chosen. f is the Add environment form, with what was
-// refused when it comes back.
-func (s *Server) renderEnvironment(w http.ResponseWriter, r *http.Request, status int, p db.Project, env db.Environment, f ui.Form) {
-	envs, err := s.DB.ListEnvironments(r.Context(), p.ID)
-	if err != nil {
-		s.fail(w, r, err)
+	p, env, ok := s.loadProjectEnv(w, r)
+	if !ok {
 		return
 	}
 	res, err := s.envResources(r, env)
@@ -124,17 +112,14 @@ func (s *Server) renderEnvironment(w http.ResponseWriter, r *http.Request, statu
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, status, pages.ProjectShow(s.shell(w, r, p.Name, "projects", envCrumbs(p, env)...), p, env, envs, res, f))
+	s.render(w, r, http.StatusOK, pages.EnvironmentShow(s.shell(w, r, env.Name, "projects", envCrumbs(p, env)...), p, env, res))
 }
 
-// renderSettings draws the project settings page; details is its form.
-func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, status int, p db.Project, details ui.Form) {
-	s.render(w, r, status, pages.ProjectSettings(s.shell(w, r, p.Name, "projects", projectCrumbs(p, ui.Crumb{Label: "Settings"})...), p, details))
-}
-
+// projectSettings is where the project's Settings were a page. They are a
+// dialog of the project's page now, which this address leads to.
 func (s *Server) projectSettings(w http.ResponseWriter, r *http.Request) {
 	if p, ok := s.loadProject(w, r); ok {
-		s.renderSettings(w, r, http.StatusOK, p, ui.Form{})
+		redirect(w, r, "/projects/"+p.ID)
 	}
 }
 
@@ -145,7 +130,7 @@ func (s *Server) projectUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	name, description, f := projectForm(r)
 	if !f.OK() {
-		s.renderSettings(w, r, http.StatusUnprocessableEntity, p, f)
+		s.renderProject(w, r, http.StatusUnprocessableEntity, p, f, ui.Form{})
 		return
 	}
 	if err := s.DB.UpdateProject(r.Context(), p.TeamID, p.ID, name, description); err != nil {
@@ -153,7 +138,7 @@ func (s *Server) projectUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Project saved.")
-	redirect(w, r, "/projects/"+p.ID+"/settings")
+	redirect(w, r, "/projects/"+p.ID)
 }
 
 func (s *Server) projectDelete(w http.ResponseWriter, r *http.Request) {
@@ -165,13 +150,13 @@ func (s *Server) projectDelete(w http.ResponseWriter, r *http.Request) {
 	// stray or scripted POST cannot delete a project.
 	if strings.TrimSpace(r.PostFormValue("confirm")) != p.Name {
 		setFlash(w, r, ui.ToneDanger, "The project was not deleted: the name you typed did not match.")
-		redirect(w, r, "/projects/"+p.ID+"/settings")
+		redirect(w, r, "/projects/"+p.ID)
 		return
 	}
 	err := s.DB.DeleteProject(r.Context(), p.TeamID, p.ID)
 	if db.IsForeignKey(err) {
 		setFlash(w, r, ui.ToneDanger, "The project still has apps, databases or services in it. Delete them first.")
-		redirect(w, r, "/projects/"+p.ID+"/settings")
+		redirect(w, r, "/projects/"+p.ID)
 		return
 	}
 	if err != nil {
@@ -204,21 +189,8 @@ func (s *Server) environmentCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		// Back on the environment's page the form was sent from, with the
-		// dialog open. A page that names none, or one of another project,
-		// gets the project's first.
-		envs, err := s.DB.ListEnvironments(r.Context(), p.ID)
-		if err != nil || len(envs) == 0 {
-			s.fail(w, r, errors.Join(err, errors.New("project "+p.ID+" has no environment")))
-			return
-		}
-		at := envs[0]
-		for _, e := range envs {
-			if e.ID == r.PostFormValue("at") {
-				at = e
-			}
-		}
-		s.renderEnvironment(w, r, http.StatusUnprocessableEntity, p, at, f)
+		// Back on the project's page, where the form is, with it open.
+		s.renderProject(w, r, http.StatusUnprocessableEntity, p, ui.Form{}, f)
 		return
 	}
 	// Into the new environment: adding to it is what comes next.
@@ -232,7 +204,7 @@ func (s *Server) environmentDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Refused, the person is back on the environment's Settings; deleted,
-	// on the project, which leads to an environment that is still there.
+	// on the project, where the environments that are left are listed.
 	back := pages.EnvPath(p.ID, env.ID) + "/settings"
 	if strings.TrimSpace(r.PostFormValue("confirm")) != env.Name {
 		setFlash(w, r, ui.ToneDanger, "The environment was not deleted: the name you typed did not match.")

@@ -381,7 +381,7 @@ func TestStopRedeployAndDeleteApp(t *testing.T) {
 	}
 
 	// A project that still holds an app cannot be deleted.
-	settings := "/projects/" + projectID + "/settings"
+	settings := "/projects/" + projectID // its Settings are a dialog of its page
 	res, _ = a.post(settings, "/projects/"+projectID+"/delete", url.Values{"confirm": {"Shop"}})
 	wantRedirect(t, res, settings)
 	if _, err := a.db.Project(ctx, firstTeam(t, a), projectID); err != nil {

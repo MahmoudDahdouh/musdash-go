@@ -512,51 +512,77 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	wantStatus(t, res, http.StatusSeeOther)
 	path := res.Header.Get("Location")
 
-	// A project opens on its first environment, whose address says so.
-	res, _ = a.get(path)
-	if to := res.Header.Get("Location"); res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(to, path+"/env/") {
-		t.Fatalf("a project's address: %d → %q, want 303 to its first environment", res.StatusCode, to)
-	}
-	production := res.Header.Get("Location")
-	res, body = a.get(production)
+	// A project has a page of its own: its environments as cards, each a
+	// link into it, and the two buttons with their dialogs, both closed.
+	res, body = a.get(path)
 	wantStatus(t, res, http.StatusOK)
 	if !strings.Contains(body, "Shop &lt;script&gt;") || strings.Contains(body, "Shop <script>") {
 		t.Fatal("project name is not escaped")
 	}
-	if !strings.Contains(body, "Nothing is in production yet") || !strings.Contains(body, "Project created.") {
-		t.Fatal("project page is missing the empty state or the confirmation")
+	if !strings.Contains(body, "Project created.") {
+		t.Fatal("the project's page is missing the confirmation")
 	}
-
-	settings := path + "/settings"
-	res, _ = a.post(settings, path, url.Values{"name": {"Shop"}, "description": {""}})
-	wantRedirect(t, res, settings)
-
-	// Environments. Where the environment is chosen, on the project's page,
-	// are its Settings and the way to add another; the project's Settings
-	// has neither any more.
-	for _, want := range []string{`id="environment"`, `href="` + production + `/settings"`, "Environment settings", `data-open="new-environment"`, `id="new-environment"`, `action="` + path + `/environments"`} {
+	card := regexp.MustCompile(`class="tile-link" href="(` + path + `/env/[a-z2-7]+)">production<`).FindStringSubmatch(body)
+	if card == nil {
+		t.Fatalf("the project's page has no card for production:\n%s", body)
+	}
+	production := card[1]
+	for _, want := range []string{`data-open="project-settings"`, `id="project-settings"`, `data-open="new-environment"`, `id="new-environment"`,
+		`action="` + path + `/environments"`, `action="` + path + `"`, `href="` + path + `/variables"`, `data-open="delete-project"`, `action="` + path + `/delete"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the project's page lacks %s", want)
 		}
 	}
 	if strings.Contains(body, "data-autoopen") {
-		t.Error("the Add environment dialog is open on a page nobody sent it from")
+		t.Error("a dialog is open on a page nobody sent a form from")
 	}
-	if _, page := a.get(settings); strings.Contains(page, "new-environment") || strings.Contains(page, "/delete\"") && strings.Contains(page, "/env/") {
-		t.Error("the project's Settings still adds or deletes environments")
+	// Add environment is the one primary button of the header.
+	header := between(t, path, body, `<header class="mb-6`, `</header>`)
+	if !regexp.MustCompile(`btn-primary"[^>]*data-open="new-environment"`).MatchString(header) || regexp.MustCompile(`btn-primary"[^>]*data-open="project-settings"`).MatchString(header) {
+		t.Fatalf("the header's buttons:\n%s", header)
 	}
-	// Refused, the dialog comes back open on the page it was sent from.
-	res, body = a.post(production, path+"/environments", url.Values{"name": {"Not Valid!"}, "at": {strings.TrimPrefix(production, path+"/env/")}})
+	// The environment's page is what runs in it, and holds neither dialog.
+	res, body = a.get(production)
+	wantStatus(t, res, http.StatusOK)
+	if !strings.Contains(body, "Nothing is in production yet") || !strings.Contains(body, `href="`+production+`/settings"`) {
+		t.Fatal("the environment's page is missing the empty state or the way to its Settings")
+	}
+	if strings.Contains(body, "new-environment") || strings.Contains(body, "project-settings") {
+		t.Error("the environment's page still has the project's dialogs")
+	}
+
+	// The project's Settings are the dialog: saved, the person is on the
+	// project's page; refused, there too, with the dialog open and what
+	// was typed in it. The address its page had leads to the project.
+	res, _ = a.get(path + "/settings")
+	wantRedirect(t, res, path)
+	res, body = a.post(path, path, url.Values{"name": {""}, "description": {"Kept"}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
-	if !strings.Contains(body, envNameRule) || !strings.Contains(body, "data-autoopen") || !strings.Contains(body, "Nothing is in production yet") {
-		t.Fatal("a bad environment name: no error, no open dialog, or not the page it was sent from")
+	if !strings.Contains(body, "Enter a name") || strings.Count(body, "data-autoopen") != 1 || !strings.Contains(body, `value="Kept"`) {
+		t.Fatal("a project without a name: no error, not one open dialog, or what was typed is lost")
+	}
+	if !regexp.MustCompile(`id="project-settings"[^>]*data-autoopen`).MatchString(body) {
+		t.Fatal("the dialog that is open is not the project's Settings")
+	}
+	res, _ = a.post(path, path, url.Values{"name": {"Shop"}, "description": {""}})
+	wantRedirect(t, res, path)
+
+	// Refused, Add environment comes back open on the project's page, and
+	// the error is under its own field, not under the project's name.
+	res, body = a.post(path, path+"/environments", url.Values{"name": {"Not Valid!"}})
+	wantStatus(t, res, http.StatusUnprocessableEntity)
+	if strings.Count(body, envNameRule) != 1 || strings.Count(body, "data-autoopen") != 1 || !strings.Contains(body, `value="Shop"`) {
+		t.Fatal("a bad environment name: not one error, not one open dialog, or the project's name was replaced by it")
+	}
+	if !regexp.MustCompile(`id="new-environment"[^>]*data-autoopen`).MatchString(body) {
+		t.Fatal("the dialog that is open is not Add environment")
 	}
 	// A new environment is where the browser goes next.
-	res, _ = a.post(production, path+"/environments", url.Values{"name": {"Staging"}})
+	res, _ = a.post(path, path+"/environments", url.Values{"name": {"Staging"}})
 	if to := res.Header.Get("Location"); res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(to, path+"/env/") || to == production {
 		t.Fatalf("got %d → %q, want 303 into the new environment", res.StatusCode, to)
 	}
-	res, body = a.post(production, path+"/environments", url.Values{"name": {"staging"}})
+	res, body = a.post(path, path+"/environments", url.Values{"name": {"staging"}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
 	if !strings.Contains(body, "already has an environment called staging") {
 		t.Fatal("no error for a duplicate environment")
@@ -574,12 +600,12 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	}
 	staging := path + "/env/" + envs[1].ID
 
-	// The page's menu lists both, and marks the one the person is in.
-	res, body = a.get(staging)
+	// The project's page has a card for each, in the order they were made.
+	res, body = a.get(path)
 	wantStatus(t, res, http.StatusOK)
-	menu := between(t, staging, body, `id="environment-list"`, `</div>`)
-	if !strings.Contains(menu, `href="`+production+`"`) || !regexp.MustCompile(`href="`+staging+`"[^>]*aria-current="page"`).MatchString(menu) {
-		t.Fatalf("the environment menu:\n%s", menu)
+	tiles := between(t, path, body, `aria-label="Environments"`, `</ul>`)
+	if first, second := strings.Index(tiles, `href="`+production+`"`), strings.Index(tiles, `href="`+staging+`"`); first < 0 || second < first {
+		t.Fatalf("the environments' cards:\n%s", tiles)
 	}
 	res, _ = a.get(path + "/env/nope")
 	wantStatus(t, res, http.StatusNotFound)
@@ -633,15 +659,15 @@ func TestProjectsAndEnvironments(t *testing.T) {
 		t.Fatal("the last environment was deleted")
 	}
 
-	res, _ = a.post(settings, path+"/delete", url.Values{"confirm": {"wrong"}})
-	wantRedirect(t, res, settings)
-	res, _ = a.post(settings, path+"/delete", url.Values{"confirm": {"Shop"}})
+	res, _ = a.post(path, path+"/delete", url.Values{"confirm": {"wrong"}})
+	wantRedirect(t, res, path)
+	res, _ = a.post(path, path+"/delete", url.Values{"confirm": {"Shop"}})
 	wantRedirect(t, res, "/projects")
 	res, _ = a.get(path)
 	wantStatus(t, res, http.StatusNotFound)
 }
 
-// A project's page is one environment of it, named in the path; the
+// An environment's page is named in the path under its project; the
 // switchers in the bar list what is beside it, and only that.
 func TestEnvironmentInThePathAndSwitchers(t *testing.T) {
 	a := newApp(t, false)
@@ -656,10 +682,23 @@ func TestEnvironmentInThePathAndSwitchers(t *testing.T) {
 	a.newApp(projectID, staging, "web-next", false, nil)
 	otherID, otherEnv := a.project("Blog")
 
-	// Without an environment in the path it leads to the first one.
-	first, _ := a.get("/projects/" + projectID)
-	wantRedirect(t, first, "/projects/"+projectID+"/env/"+production.ID)
-	_, page := a.get("/projects/" + projectID + "/env/" + production.ID)
+	// Without an environment in the path it is the project's page, which
+	// lists the environments and nothing that is in one.
+	first, page := a.get("/projects/" + projectID)
+	wantStatus(t, first, http.StatusOK)
+	if !strings.Contains(page, "/env/"+production.ID+`"`) || !strings.Contains(page, "/env/"+staging.ID+`"`) || strings.Contains(page, ">web<") {
+		t.Fatal("the project's page does not list its environments, or lists a resource")
+	}
+	// Each card counts what is in its environment: an app in each, and a
+	// database in production only.
+	a.newDatabase(projectID, production, "postgres", "maindb", nil)
+	_, page = a.get("/projects/" + projectID)
+	tiles := strings.SplitN(between(t, "the project's page", page, `aria-label="Environments"`, `</ul>`), "/env/"+staging.ID, 2)
+	if len(tiles) != 2 || strings.Count(tiles[0], `title="app"`) != 1 || strings.Count(tiles[0], `title="database"`) != 1 ||
+		strings.Count(tiles[1], `title="app"`) != 1 || strings.Count(tiles[1], `title="databases"`) != 1 {
+		t.Fatalf("the cards do not count what is in each environment:\n%s", tiles)
+	}
+	_, page = a.get("/projects/" + projectID + "/env/" + production.ID)
 	if !strings.Contains(page, ">web<") || strings.Contains(page, "web-next") {
 		t.Fatal("the page does not show production's resources, or shows another environment's")
 	}
@@ -687,6 +726,10 @@ func TestEnvironmentInThePathAndSwitchers(t *testing.T) {
 	if !regexp.MustCompile(`href="[^"]*/env/` + staging.ID + `"[^>]*aria-selected="true"`).MatchString(menu) {
 		t.Fatal("the switcher does not mark the current environment")
 	}
+	// Under them is the way up, to the project's page.
+	if !strings.Contains(menu, `href="/projects/`+projectID+`"`) || !strings.Contains(menu, "All environments") {
+		t.Fatalf("the environment switcher does not lead to the project's page:\n%s", menu)
+	}
 	// The resource switcher lists what is in the environment.
 	res, menu = a.get("/projects/" + projectID + "/env/" + production.ID + "/switch/resources")
 	wantStatus(t, res, http.StatusOK)
@@ -696,7 +739,7 @@ func TestEnvironmentInThePathAndSwitchers(t *testing.T) {
 
 	// The project step of a trail is a switcher too, on every page under
 	// a project.
-	for _, page := range []string{"/projects/" + projectID + "/env/" + staging.ID, "/projects/" + projectID + "/settings", a.appPath(appID)} {
+	for _, page := range []string{"/projects/" + projectID + "/env/" + staging.ID, "/projects/" + projectID, "/projects/" + projectID + "/variables", a.appPath(appID)} {
 		if _, body := a.get(page); !strings.Contains(body, `hx-get="/switch/projects?at=`+projectID+`"`) {
 			t.Errorf("%s: the project step is not a switcher", page)
 		}
@@ -956,7 +999,7 @@ func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
 		a.databasePath(mdb.ID), a.databasePath(mdb.ID) + "/backups", a.databasePath(mdb.ID) + "/settings",
 		a.appPath(git.ID) + "/settings", a.appPath(git.ID) + "/tasks", a.appPath(git.ID) + "/environment",
 		a.servicePath(svc.ID), a.servicePath(svc.ID) + "/compose", a.servicePath(svc.ID) + "/settings",
-		"/", "/projects", base + "/env/" + env.ID, base + "/env/" + env.ID + "/new", base + "/env/" + env.ID + "/settings", base + "/env/" + env.ID + "/variables", base + "/settings",
+		"/", "/projects", base + "/env/" + env.ID, base + "/env/" + env.ID + "/new", base + "/env/" + env.ID + "/settings", base + "/env/" + env.ID + "/variables", base, base + "/variables",
 		a.appPath(appID), a.appPath(appID) + "/environment", a.appPath(appID) + "/environment/edit", a.appPath(appID) + "/domains", a.appPath(appID) + "/storage", a.appPath(appID) + "/settings",
 		"/tags", "/keys", "/keys/tokens", "/servers", "/sources", "/team", "/team/variables", "/account",
 		"/settings", "/settings/storages", "/notifications", "/_ui",

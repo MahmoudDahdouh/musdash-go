@@ -77,14 +77,16 @@ templ ProjectOptions(projects []db.Project, at string) {
 }
 
 // EnvironmentOptions is what the environment switcher lists, and under
-// them the way to the Settings of the one the person is in.
+// them the way up to the project's page, where they are cards, and to the
+// Settings of the one the person is in.
 templ EnvironmentOptions(p db.Project, envs []db.Environment, at string) {
 	for _, e := range envs {
 		@ui.SwitchOption(EnvPath(p.ID, e.ID), "", e.Name, e.ID == at)
 	}
+	@ui.MenuSep()
+	@ui.MenuAction("/projects/"+p.ID, "dashboard", "All environments")
 	for _, e := range envs {
 		if e.ID == at {
-			@ui.MenuSep()
 			@ui.MenuAction(EnvPath(p.ID, e.ID)+"/settings", "settings", "Environment settings")
 		}
 	}

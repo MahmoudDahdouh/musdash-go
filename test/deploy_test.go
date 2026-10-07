@@ -77,12 +77,14 @@ func TestDeployWithDocker(t *testing.T) {
 
 	post("/setup", "/setup", url.Values{"name": {"E2E"}, "email": {"e2e@example.com"}, "password": {"an end to end test"}})
 	res := post("/projects", "/projects", url.Values{"name": {"E2E"}})
-	// Followed the redirects to the project's first environment.
-	envPath := res.Request.URL.Path
-	envID := regexp.MustCompile(`^/projects/[a-z2-7]+/env/([a-z2-7]+)$`).FindStringSubmatch(envPath)
+	// Followed the redirect to the project's page, where its one
+	// environment is a card.
+	projectPath := res.Request.URL.Path
+	envID := regexp.MustCompile(`href="(/projects/[a-z2-7]+/env/([a-z2-7]+))"`).FindStringSubmatch(fetch(t, ui, base+projectPath))
 	if envID == nil {
-		t.Fatalf("a new project did not lead to its environment: %s", envPath)
+		t.Fatalf("a new project's page has no environment: %s", projectPath)
 	}
+	envPath := envID[1]
 
 	const host = "e2e.127.0.0.1.sslip.io"
 	res = post(envPath+"/app/new", envPath+"/app", url.Values{

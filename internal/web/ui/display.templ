@@ -9,7 +9,10 @@ import (
 // page's actions, shown on the right.
 templ PageHeader(title, description string) {
 	<header class="mb-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-3 sm:flex-nowrap">
-		<div class="min-w-0 flex-1">
+		// The least width is what sends the buttons under the title on a
+		// narrow screen, where two of them would leave it a column of one
+		// word a line.
+		<div class="min-w-40 flex-1">
 			<h1 class="text-xl font-semibold tracking-tight">{ title }</h1>
 			if description != "" {
 				<p class="muted mt-0.5 max-w-2xl">{ description }</p>
@@ -630,9 +633,23 @@ type ConfirmProps struct {
 // submit button stays disabled until Match has been typed. Its children
 // explain what will be lost.
 templ Confirm(p ConfirmProps) {
+	@ConfirmTrigger(p)
+	@ConfirmDialog(p) {
+		{ children... }
+	}
+}
+
+// ConfirmTrigger is the button of a Confirm alone, for one that stands where
+// its dialog cannot: inside another form, which cannot hold the dialog's.
+templ ConfirmTrigger(p ConfirmProps) {
 	@Button(ButtonProps{Variant: DangerQuiet, Icon: "trash", Attrs: templ.Attributes{"data-open": p.ID}}) {
 		{ p.Trigger }
 	}
+}
+
+// ConfirmDialog is the dialog of a Confirm alone, to go with a
+// ConfirmTrigger.
+templ ConfirmDialog(p ConfirmProps) {
 	@Modal(p.ID, p.Title) {
 		<form method="post" action={ templ.SafeURL(p.Action) }>
 			@CSRF(p.CSRF)

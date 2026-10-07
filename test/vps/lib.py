@@ -233,9 +233,6 @@ def _compat(page, action):
         page = action + "/edit"
     if action and re.match(r"^/apps/[a-z2-7]+/domains$", action) and page == action[:-len("domains")] + "settings":
         page = action  # an app's domains moved from its Settings to a tab of their own
-    m = re.match(r"^/projects/([a-z2-7]+)/settings$", page or "")
-    if m and action == f"/projects/{m.group(1)}/environments":
-        page = f"/projects/{m.group(1)}"  # Add environment is on the project's page, beside the choice of environment
     m = re.match(r"^/environments/([a-z2-7]+)/delete$", action or "")
     if m and re.match(r"^/projects/[a-z2-7]+/settings$", page or ""):
         page = f"/environments/{m.group(1)}/settings"  # an environment is deleted from its own Settings
@@ -274,14 +271,21 @@ class Client:
         asked = path
         if translate and not self.token:  # the API names a resource by its id alone
             path = long_path(path, self._ask)
-            m = re.match(r"^/projects/(%s)$" % _ID, path)
-            if method == "GET" and m:
-                # A project's page is its first environment's, which its
-                # own address now only leads to.
+            m = re.match(r"^/projects/(%s)(/settings)?$" % _ID, path)
+            if method == "GET" and m and m.group(2):
+                # A project's Settings are a dialog of its own page, which
+                # holds the forms the Settings page had and lists the
+                # environments.
+                path = "/projects/" + m.group(1)
+            elif method == "GET" and m:
+                # What the scripts call a project's page is its first
+                # environment's: what runs in it. The project's own page
+                # lists the environments in the order they were made.
                 if m.group(1) not in _first:
                     r0 = self.request("GET", path, translate=False)
-                    if r0.status in (302, 303) and "/e/" in r0.location:
-                        _first[m.group(1)] = long_path(r0.location)
+                    e = re.search(r"/projects/%s/e/(%s)" % (m.group(1), _ID), r0.text)
+                    if r0.status == 200 and e:
+                        _first[m.group(1)] = "/projects/%s/env/%s" % (m.group(1), e.group(1))
                 path = _first.get(m.group(1), path)
         h = {"User-Agent": "musdash-vps-test"}
         if self.cookies:
