@@ -2,6 +2,7 @@ package compose
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -156,6 +157,8 @@ func TestValidateRefuses(t *testing.T) {
 		{"labels", `{"Musdash.Resource": "other"}`, `label "Musdash.Resource"`},
 		{"volumes", `[{"type":"bind","source":"/var/run/docker.sock","target":"/var/run/docker.sock","bind":{}}]`, `/var/run/docker.sock cannot be mounted`},
 		{"volumes", `[{"type":"bind","source":"/","target":"/host","bind":{}}]`, `whole filesystem`},
+		{"volumes", `[{"type":"volume","source":"data","target":"/"}]`, `nothing can be mounted at /,`},
+		{"volumes", `[{"type":"tmpfs","target":"/proc/sys"}]`, `nothing can be mounted at /proc/sys`},
 		{"volumes", `[{"type":"bind","source":"/etc","target":"/host-etc","bind":{}}]`, `/etc cannot be mounted`},
 		{"volumes", `[{"type":"bind","source":"/var/lib/musdash/master.key","target":"/k","bind":{}}]`, `/var/lib/musdash`},
 		{"volumes", `[{"type":"bind","source":"/var/lib/musdash/apps/other/env","target":"/k","bind":{}}]`, `/var/lib/musdash`},
@@ -201,6 +204,13 @@ func TestValidateRefuses(t *testing.T) {
 		// Directories whose content the server acts on as root.
 		{"volumes", `[{"type":"bind","source":"/var/spool/cron","target":"/c","bind":{}}]`, `/var/spool`},
 		{"volumes", `[{"type":"bind","source":"/var/lib/cloud","target":"/c","bind":{}}]`, `/var/lib`},
+		// A mount goes to a full path. The first is what Compose makes of
+		// "v:/x" with a volume called v: the name is taken for a drive.
+		{"volumes", `[{"type":"volume","target":"v:/x","volume":{}}]`, `the mount at "v:/x" must be a full path in the container, such as /data. A volume with a one-letter name`},
+		{"volumes", `[{"type":"volume","source":"data","target":"relative/path","volume":{}}]`, `the mount at "relative/path" must be a full path`},
+		{"volumes", `[{"type":"tmpfs","target":"cache"}]`, `the mount at "cache" must be a full path`},
+		{"volumes", `[{"type":"bind","source":"/srv/site/conf","target":"conf","bind":{}}]`, `the mount at "conf" must be a full path`},
+		{"volumes", `[{"type":"volume","source":"data","volume":{}}]`, `the mount at "" must be a full path`},
 		// A subnet of the stack's choosing becomes a route of the server.
 		{"/networks", `{"default":{"name":"musdash-svc1_default","ipam":{"config":[{"subnet":"8.8.8.0/24"}]}}}`, `"ipam" is not allowed`},
 		{"networks", `{"default":{"ipv4_address":"8.8.8.8"}}`, `the option "ipv4_address" is not supported`},
@@ -528,5 +538,28 @@ func TestSandboxImage(t *testing.T) {
 		if got := SandboxImage(version); got != want {
 			t.Errorf("%q: %s, want %s", version, got, want)
 		}
+	}
+}
+
+func TestNestedInCheckout(t *testing.T) {
+	p := parse(t, `{"name":"x","services":{
+		"b":{"volumes":[
+			{"type":"bind","source":"/co/app","target":"/usr/src/app"},
+			{"type":"bind","source":"/co/app/conf","target":"/usr/src/app/conf/"},
+			{"type":"volume","target":"/usr/src/app/node_modules"},
+			{"type":"volume","source":"cache","target":"/usr/src/app/conf/cache"},
+			{"type":"volume","source":"data","target":"/usr/src/application"},
+			{"type":"tmpfs","target":"/tmp"}]},
+		"a":{"volumes":[
+			{"type":"bind","source":"/srv/files","target":"/files"},
+			{"type":"volume","target":"/files/tmp"}]}}}`)
+	got := p.NestedInCheckout("/co")
+	want := []Nested{
+		{"b", "/usr/src/app/conf", "/usr/src/app", "/co/app/conf"},
+		{"b", "/usr/src/app/node_modules", "/usr/src/app", "/co/app/node_modules"},
+		{"b", "/usr/src/app/conf/cache", "/usr/src/app/conf", "/co/app/conf/cache"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
 	}
 }

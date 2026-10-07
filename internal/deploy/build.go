@@ -204,7 +204,7 @@ func (d *Deployer) clone(ctx context.Context, r runner.Runner, access db.App, re
 // build server decides what this app runs, not what anything else does.
 func (d *Deployer) buildFor(ctx context.Context, r runner.Runner, server db.Server, app db.App, dep db.Deployment, log *Log) (image, commit string, err error) {
 	if app.BuildServerID == "" || app.BuildServerID == server.ID {
-		return d.build(ctx, r, app, dep, log)
+		return d.build(ctx, r, server, app, dep, log)
 	}
 	builder, err := d.DB.ServerByID(ctx, app.BuildServerID)
 	if err != nil {
@@ -215,7 +215,7 @@ func (d *Deployer) buildFor(ctx context.Context, r runner.Runner, server db.Serv
 		return "", "", err
 	}
 	log.Step("Building on %s", builder.Name)
-	if image, commit, err = d.build(ctx, br, app, dep, log); err != nil {
+	if image, commit, err = d.build(ctx, br, builder, app, dep, log); err != nil {
 		return "", "", err
 	}
 	// Whatever happens next, the build server does not keep the image:
@@ -283,10 +283,11 @@ func (d *Deployer) buildFor(ctx context.Context, r runner.Runner, server db.Serv
 	return image, commit, nil
 }
 
-// build clones the app's repository on its server and builds an image from
-// it. It returns the image tag and the commit that was built. The checkout
-// is removed afterwards whether the build worked or not.
-func (d *Deployer) build(ctx context.Context, r runner.Runner, app db.App, dep db.Deployment, log *Log) (image, commit string, err error) {
+// build clones the app's repository on the server r reaches, which is on,
+// and builds an image from it. It returns the image tag and the commit that
+// was built. The checkout is removed afterwards whether the build worked
+// or not.
+func (d *Deployer) build(ctx context.Context, r runner.Runner, on db.Server, app db.App, dep db.Deployment, log *Log) (image, commit string, err error) {
 	repo, err := source.ParseRepo(app.RepoURL)
 	if err != nil {
 		return "", "", err
@@ -371,13 +372,18 @@ func (d *Deployer) build(ctx context.Context, r runner.Runner, app db.App, dep d
 	// Bounded for the same reason as the clone: one build that never ends
 	// would keep every other build on the server waiting.
 	buildCtx, cancelBuild := context.WithTimeout(ctx, d.buildTimeout)
-	err = dk.Build(buildCtx, spec, log)
+	// Only the build is watched. The clone's "Could not resolve host" is
+	// about the server's own DNS, where the advice would be wrong.
+	watch := &lookupWatch{w: log}
+	err = dk.Build(buildCtx, spec, watch)
 	cancelBuild()
 	if err != nil {
 		if errors.Is(buildCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-			return "", "", fmt.Errorf("build: stopped after %s without finishing", d.buildTimeout)
+			// A build can also run out of time trying a name again and
+			// again.
+			return "", "", watch.explain("build", fmt.Errorf("stopped after %s without finishing", d.buildTimeout), on.Name)
 		}
-		return "", "", fmt.Errorf("build: %w", err)
+		return "", "", watch.explain("build", err, on.Name)
 	}
 	log.Step("Built %s", image)
 	return image, commit, nil

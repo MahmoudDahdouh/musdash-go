@@ -1016,6 +1016,9 @@ type gitStack struct {
 	checkout  string          // the directory of the latest clone
 	checkouts []string        // every directory cloned into, by name
 	links     map[string]bool // repository paths that are symbolic links
+	envFiles  string          // the service's env_file entries in the raw document, as JSON
+	missing   map[string]bool // paths the repository does not have
+	mounts    string          // further mounts of the service, as JSON, each ending with a comma
 	compose   string
 	failUp    bool
 }
@@ -1028,6 +1031,13 @@ const gitComposeFile = `services:
     volumes:
       - ./conf/site.conf:/etc/site.conf
 `
+
+func (g *gitStack) rawEnvFiles() string {
+	if g.envFiles == "" {
+		return ""
+	}
+	return `,"env_file":` + strings.ReplaceAll(g.envFiles, "CHECKOUT", g.checkout)
+}
 
 func (g *gitStack) handle(e *env) func(line string, c runner.Cmd) (string, error) {
 	return func(line string, c runner.Cmd) (string, error) {
@@ -1050,21 +1060,61 @@ func (g *gitStack) handle(e *env) func(line string, c runner.Cmd) (string, error
 			return "0123456789abcdef0123456789abcdef01234567\n", nil
 		case strings.Contains(line, "ls-tree HEAD -- "):
 			p := line[strings.Index(line, "-- ")+3:]
+			if g.missing[p] {
+				return "", nil
+			}
 			if g.links[p] {
 				return "120000 blob abc\t" + p + "\n", nil
 			}
 			return "100644 blob abc\t" + p + "\n", nil
 		case strings.Contains(line, "config --format json --no-interpolate"):
-			return `{"name":"` + g.project + `","services":{"web":{"build":{"context":"` + g.checkout + `/deploy"},"environment":["SERVICE_FQDN_WEB_8080"]}}}`, nil
+			return `{"name":"` + g.project + `","services":{"web":{"build":{"context":"` + g.checkout + `/deploy"},"environment":["SERVICE_FQDN_WEB_8080"]` + g.rawEnvFiles() + `}}}`, nil
 		case strings.Contains(line, "config --format json"):
 			return `{"name":"` + g.project + `","networks":{"default":{"name":"` + g.project + `_default"}},"services":{"web":{
 				"build":{"context":"` + g.checkout + `/deploy","dockerfile":"Dockerfile"},
 				"environment":{"SERVICE_FQDN_WEB_8080":"x.example.test"},"networks":{"default":null},
-				"volumes":[{"type":"bind","source":"` + g.checkout + `/deploy/conf/site.conf","target":"/etc/site.conf","bind":{"create_host_path":true}}]}}}`, nil
+				"volumes":[` + strings.ReplaceAll(g.mounts, "CHECKOUT", g.checkout) + `{"type":"bind","source":"` + g.checkout + `/deploy/conf/site.conf","target":"/etc/site.conf","bind":{"create_host_path":true}}]}}}`, nil
 		case strings.HasPrefix(line, "docker inspect"):
 			return running, nil
 		}
 		return "", nil
+	}
+}
+
+// A development file mounts the source and puts a volume inside it. The
+// source is mounted read-only here, so the volume needs its directory to
+// be in the repository, and the deployment says so before Docker is asked.
+func TestGitServiceWithAMountInsideTheCheckout(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, err := e.db.CreateService(ctx, e.team, db.Service{
+		EnvironmentID: e.app.EnvironmentID, ServerID: e.server.ID, Name: "stack", Template: db.TemplateGit,
+		RepoURL: "https://github.com/acme/stack", RepoName: "acme/stack", Branch: "main", ComposePath: "deploy/compose.yaml",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &gitStack{project: ServiceProject(s.ID), compose: gitComposeFile, missing: map[string]bool{"deploy/app/node_modules": true},
+		mounts: `{"type":"bind","source":"CHECKOUT/deploy/app","target":"/usr/src/app","bind":{"create_host_path":true}},
+			{"type":"volume","target":"/usr/src/app/node_modules","volume":{}},`}
+	e.fake.Handle = g.handle(e)
+
+	got := e.deployService(s, 10*time.Second)
+	for _, want := range []string{"service web: the mount at /usr/src/app/node_modules lies inside /usr/src/app", "has no deploy/app/node_modules"} {
+		if !strings.Contains(got.LastError, want) {
+			t.Fatalf("want %q in %q", want, got.LastError)
+		}
+	}
+	for _, c := range e.fake.Calls() {
+		if strings.Contains(c, " build") || strings.Contains(c, " up --detach") {
+			t.Fatalf("something ran for a stack that cannot start: %s", c)
+		}
+	}
+
+	// With the directory in the repository there is something to mount on.
+	g.missing = nil
+	if got = e.deployService(got, 10*time.Second); got.Status != db.AppRunning {
+		t.Fatalf("%+v\n%s", got, e.serviceLog(s))
 	}
 }
 
@@ -1375,4 +1425,72 @@ func TestGitServiceWithDocker(t *testing.T) {
 		t.Fatal("the image built for the deleted service is still there")
 	}
 	t.Log("a stack from a repository: built, served, redeployed from a new commit, a linked mount refused, deleted with its image")
+}
+
+// An env_file is read by the sandbox, which sees the repository and
+// nothing else: one that is not a file of the repository is refused before
+// the stack gets whatever the sandbox's image has at that path.
+func TestEnvFilesMustBeTheRepositorysOwn(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, err := e.db.CreateService(ctx, e.team, db.Service{
+		EnvironmentID: e.app.EnvironmentID, ServerID: e.server.ID, Name: "stack", Template: db.TemplateGit,
+		RepoURL: "https://github.com/acme/stack", RepoName: "acme/stack", Branch: "main", ComposePath: "deploy/compose.yaml",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &gitStack{project: ServiceProject(s.ID), compose: gitComposeFile, links: map[string]bool{}}
+	e.fake.Handle = g.handle(e)
+	for files, want := range map[string]string{
+		`[{"path":"/etc/os-release","required":true}]`:       `the env_file "/etc/os-release" is not a file of the repository`,
+		`[{"path":"CHECKOUT/../other/env"}]`:                 `is not a file of the repository`,
+		`["CHECKOUT/deploy/${NAME}.env"]`:                    `uses a variable`,
+		`[{"path":"CHECKOUT/deploy/a b.env"}]`:               `use only letters`,
+		`[{"path":"CHECKOUT/deploy/linked.env"}]`:            `deploy/linked.env is a symbolic link`,
+		`[{"path":"CHECKOUT"}]`:                              `is not a file of the repository`,
+		`[{"path":"CHECKOUT/deploy/app.env"},{"path":"/x"}]`: `the env_file "/x" is not a file`,
+	} {
+		g.envFiles, g.links = files, map[string]bool{"deploy/linked.env": true}
+		before := len(e.fake.Calls())
+		got := e.deployService(s, 10*time.Second)
+		if !strings.Contains(got.LastError, want) {
+			t.Errorf("%s: want %q in %q", files, want, got.LastError)
+		}
+		for _, c := range e.fake.Calls()[before:] {
+			if strings.Contains(c, " up --detach") {
+				t.Errorf("%s: the stack was started", files)
+			}
+		}
+	}
+	// One of the repository's own is what the sandbox reads.
+	g.envFiles = `[{"path":"CHECKOUT/deploy/app.env","required":true}]`
+	if got := e.deployService(s, 10*time.Second); got.Status != db.AppRunning {
+		t.Fatalf("%+v\n%s", got, e.serviceLog(s))
+	}
+	if all := strings.Join(e.fake.Calls(), "\n"); !strings.Contains(all, "ls-tree HEAD -- deploy/app.env") {
+		t.Error("the env_file was not checked for links")
+	}
+}
+
+// A stack that was pasted has no files, so its env_file could only be the
+// sandbox's own file at that path.
+func TestPastedStackWithAnEnvFileIsRefused(t *testing.T) {
+	e := newEnv(t)
+	s, st := e.scriptedService(false)
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		if strings.Contains(line, "config --format json --no-interpolate") {
+			return `{"name":"` + st.project + `","services":{"front":{"image":"nginx:alpine","env_file":[{"path":"/etc/os-release","required":true}]}}}`, nil
+		}
+		return st.handle(line, c)
+	}
+	got := e.deployService(s, 10*time.Second)
+	if got.Status != db.AppFailed || !strings.Contains(got.LastError, "service front: env_file reads variables from a file") {
+		t.Fatalf("%s %q", got.Status, got.LastError)
+	}
+	for _, c := range e.fake.Calls() {
+		if strings.HasPrefix(c, "docker compose") {
+			t.Fatalf("Compose was run on the server for a refused file: %s", c)
+		}
+	}
 }

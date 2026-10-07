@@ -53,7 +53,19 @@ type wsConn struct {
 	// Writes come from more than one goroutine: output, pings, the close.
 	wmu    sync.Mutex
 	closed bool
+
+	// A write to a browser that does not read holds wmu for the whole
+	// write timeout. Whoever closes the connection must not wait behind
+	// it: dmu guards the write deadline, so that closing can end a write
+	// that is under way and bound every later one, the goodbye included.
+	dmu     sync.Mutex
+	closing bool
+	// goodbye is how long the closing frame may take. Zero is wsGoodbye.
+	goodbye time.Duration
 }
+
+// wsGoodbye is how long a browser has to take the closing frame.
+const wsGoodbye = 2 * time.Second
 
 // headerHas reports whether a comma-separated header names a token.
 func headerHas(h http.Header, name, token string) bool {
@@ -219,7 +231,13 @@ func (c *wsConn) frame(kind byte, payload []byte) error {
 		head[1] = 127
 		head = binary.BigEndian.AppendUint64(head, uint64(n))
 	}
-	c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	c.dmu.Lock()
+	limit := writeTimeout
+	if c.closing {
+		limit = c.goodbye
+	}
+	c.conn.SetWriteDeadline(time.Now().Add(limit))
+	c.dmu.Unlock()
 	if _, err := c.conn.Write(head); err != nil {
 		return err
 	}
@@ -231,6 +249,16 @@ func (c *wsConn) frame(kind byte, payload []byte) error {
 // called more than once and from any goroutine; a Read that is waiting
 // returns.
 func (c *wsConn) Close(code uint16, reason string) {
+	// A write that the browser is not taking ends now, and gives up wmu.
+	c.dmu.Lock()
+	if !c.closing {
+		c.closing = true
+		if c.goodbye == 0 {
+			c.goodbye = wsGoodbye
+		}
+		c.conn.SetWriteDeadline(time.Now())
+	}
+	c.dmu.Unlock()
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
 	if c.closed {

@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -106,7 +105,6 @@ func (s *Server) renderServersWith(w http.ResponseWriter, r *http.Request, statu
 var (
 	hostNameRE = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
 	sshUserRE  = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
-	dataDirRE  = regexp.MustCompile(`^/[A-Za-z0-9._/-]{1,200}$`)
 )
 
 // validHost reports whether host is an IP address or a host name.
@@ -131,8 +129,8 @@ func (s *Server) serverCreate(w http.ResponseWriter, r *http.Request) {
 		return v
 	}
 	server := db.Server{TeamID: teamID, Name: form("name"), Host: form("host"), SSHUser: form("ssh_user"), DataDir: form("data_dir")}
-	if server.Name == "" || len(server.Name) > 60 || strings.ContainsAny(server.Name, "\r\n\x00") {
-		f.Fail("name", "Enter a name of up to 60 characters.")
+	if server.Name == "" || len(server.Name) > 60 || !plainText(server.Name) {
+		f.Fail("name", labelProblem(server.Name, "Enter a name of up to 60 characters."))
 	}
 	if !validHost(server.Host) {
 		f.Fail("host", "Enter an IP address or a host name, without a port or a scheme.")
@@ -148,11 +146,15 @@ func (s *Server) serverCreate(w http.ResponseWriter, r *http.Request) {
 	if !sshUserRE.MatchString(server.SSHUser) {
 		f.Fail("ssh_user", "Enter the account's name: lowercase letters, numbers, hyphens and underscores.")
 	}
-	switch {
-	case server.DataDir == "":
+	if server.DataDir == "" {
 		server.DataDir = servers.DefaultDataDir(server.SSHUser)
-	case !dataDirRE.MatchString(server.DataDir) || path.Clean(server.DataDir) != server.DataDir || server.DataDir == "/":
+	}
+	switch servers.DataDirProblem(server.DataDir) {
+	case servers.DataDirShape:
 		f.Fail("data_dir", "Enter a full path such as /srv/musdash, using letters, numbers, dots, hyphens and underscores.")
+	case servers.DataDirShared:
+		// musdash makes its directories there and empties one of them.
+		f.Fail("data_dir", "That directory is the system's, or is shared with other things. Enter one that is only for musdash, such as /srv/musdash.")
 	}
 	if net.ParseIP(server.Host) != nil {
 		server.IP = server.Host

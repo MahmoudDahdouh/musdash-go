@@ -282,8 +282,8 @@ func taskFromForm(r *http.Request, t db.Task) (db.Task, ui.Form) {
 		return val
 	}
 	t.Name, t.Command, t.Schedule, t.Enabled = form("name"), form("command"), form("schedule"), form("enabled") == "1"
-	if t.Name == "" || len(t.Name) > maxLabel || strings.ContainsAny(t.Name, "\r\n\x00") {
-		f.Fail("name", "Enter a name of up to 60 characters.")
+	if t.Name == "" || len(t.Name) > maxLabel || !plainText(t.Name) {
+		f.Fail("name", labelProblem(t.Name, "Enter a name of up to 60 characters."))
 	}
 	if t.Command == "" || len(t.Command) > ops.MaxTaskCommand || strings.ContainsRune(t.Command, 0) {
 		f.Fail("command", "Enter the command to run, up to 2000 characters.")
@@ -489,8 +489,8 @@ func (s *Server) storageCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	m := db.S3Storage{TeamID: sessionFrom(r).TeamID, Name: form("name"), Endpoint: form("endpoint"), Region: form("region"), Bucket: form("bucket"), Prefix: strings.Trim(form("prefix"), "/")}
 	keys := backup.S3{Endpoint: m.Endpoint, Region: m.Region, Bucket: m.Bucket, Prefix: m.Prefix, AccessKey: form("access_key"), SecretKey: strings.TrimSpace(r.PostFormValue("secret_key"))}
-	if m.Name == "" || len(m.Name) > maxLabel || strings.ContainsAny(m.Name, "\r\n\x00") {
-		f.Fail("name", "Enter a name of up to 60 characters.")
+	if m.Name == "" || len(m.Name) > maxLabel || !plainText(m.Name) {
+		f.Fail("name", labelProblem(m.Name, "Enter a name of up to 60 characters."))
 	}
 	if err := keys.Validate(); err != nil {
 		// Validate names the field in its message; put it where it belongs.
@@ -624,8 +624,8 @@ func (s *Server) notificationCreate(w http.ResponseWriter, r *http.Request) {
 	f.Set("_submitted", "1")
 	name := strings.TrimSpace(r.PostFormValue("name"))
 	f.Set("name", name)
-	if name == "" || len(name) > maxLabel || strings.ContainsAny(name, "\r\n\x00") {
-		f.Fail("name", "Enter a name of up to 60 characters.")
+	if name == "" || len(name) > maxLabel || !plainText(name) {
+		f.Fail("name", labelProblem(name, "Enter a name of up to 60 characters."))
 	}
 	cfg := map[string]string{}
 	for _, field := range kind.Fields {

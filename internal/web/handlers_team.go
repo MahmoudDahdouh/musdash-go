@@ -91,8 +91,8 @@ func (s *Server) teamRename(w http.ResponseWriter, r *http.Request) {
 	var f ui.Form
 	name := strings.TrimSpace(r.PostFormValue("name"))
 	f.Set("name", name)
-	if name == "" || len(name) > 60 {
-		f.Fail("name", "Enter a name, up to 60 characters.")
+	if name == "" || len(name) > 60 || !plainText(name) {
+		f.Fail("name", labelProblem(name, "Enter a name, up to 60 characters."))
 		s.renderTeam(w, r, http.StatusUnprocessableEntity, pages.TeamView{}, f)
 		return
 	}
@@ -384,8 +384,8 @@ func (s *Server) inviteSubmit(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.PostFormValue("name"))
 	password := r.PostFormValue("password")
 	f.Set("name", name)
-	if name == "" || len(name) > 80 {
-		f.Fail("name", "Enter your name, up to 80 characters.")
+	if name == "" || len(name) > 80 || !plainText(name) {
+		f.Fail("name", labelProblem(name, "Enter your name, up to 80 characters."))
 	}
 	if err := auth.ValidatePassword(password); err != nil {
 		f.Fail("password", err.Error())

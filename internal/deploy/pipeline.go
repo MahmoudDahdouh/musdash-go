@@ -188,6 +188,29 @@ func ContainerName(appID, deploymentID string) string {
 // NetworkName is the Docker network shared by one environment's resources.
 func NetworkName(environmentID string) string { return "musdash-" + environmentID }
 
+// dropNetwork removes an environment's network from a server once nothing
+// of the environment is left there. It is called when an app, a database
+// or a service has been deleted: a project or an environment can only be
+// deleted empty, and by then nothing says which servers had the network.
+//
+// The records decide. A stopped app is a record, and so is one that is
+// being deployed for the first time: every start makes sure the network is
+// there, but none looks again before it starts its container. Whatever
+// goes wrong here is logged and no more; what was asked for, the delete,
+// has been done.
+func (d *Deployer) dropNetwork(ctx context.Context, r runner.Runner, environmentID, serverID string) {
+	used, err := d.DB.EnvironmentUsesServer(ctx, environmentID, serverID)
+	if err != nil || used {
+		if err != nil {
+			d.Log.Warn("look for what still uses an environment's network", "environment", environmentID, "err", err)
+		}
+		return
+	}
+	if err := (docker.Client{R: r}).RemoveNetwork(ctx, NetworkName(environmentID)); err != nil {
+		d.Log.Warn("remove an environment's network", "network", NetworkName(environmentID), "err", err)
+	}
+}
+
 // VolumeName namespaces a volume to its resource, so two apps that both ask
 // for a volume called "data" do not share one.
 func VolumeName(resourceID, name string) string { return "musdash-" + resourceID + "-" + name }
@@ -844,6 +867,7 @@ func (d *Deployer) destroy(ctx context.Context, appID string) error {
 	if err := d.DB.DeleteApp(ctx, app.ID); err != nil {
 		return err
 	}
+	d.dropNetwork(ctx, r, app.EnvironmentID, app.ServerID)
 	for _, id := range logs {
 		os.Remove(d.Cfg.DeployLogPath(id))
 	}

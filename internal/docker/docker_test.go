@@ -18,11 +18,30 @@ func TestValidImage(t *testing.T) {
 		"nginx", "nginx:1.29-alpine", "library/nginx", "ghcr.io/acme/worker:4f2a91c",
 		"registry.example.com:5000/team/app:v1.2.3", "postgres:17", "localhost:5000/app",
 		"nginx@sha256:" + strings.Repeat("a", 64), "a/b/c/d:tag_1",
+		"nginx:1.29@sha256:" + strings.Repeat("a", 64),
+		// A registry by address, by a bare name with a port, in upper case
+		// (host names are), and localhost.
+		"127.0.0.1:5000/x", "10.0.0.5/x", "registry:5000/x", "Registry.Example.COM/team/app", "Foo/bar", "localhost/x",
+		"host:05000/x",
+		// A tag may be upper-case; a repository's words may be joined by
+		// one or two underscores.
+		"nginx:ALPINE", "my_image:1", "a__b", "a-b--c/d.e",
+		// What musdash names itself.
+		"musdash/abcdefghijkl:d-mnopqrstuvwx", "musdash/abcdefghijkl:4f2a91c0ffee", "musdash/nixpacks:1.41.0",
 	}
 	bad := []string{
 		"", "-nginx", "--privileged", "nginx --privileged", "nginx;rm -rf /", "nginx:", "nginx:-tag",
 		"NGINX/App", "nginx\n", "$(id)", "nginx:tag with space", "a//b", "nginx@sha256:short", "/nginx",
 		strings.Repeat("a", 300),
+		// Docker refuses these at the pull, which is after the deployment
+		// has started: a repository in upper case, with or without a
+		// registry before it, and separators that are none.
+		"NGINX:ALPINE", "NGINX", "foo/Bar", "a___b", "a..b", "a.-b", "a_.b/c", "a-/x", "a/-b", "nginx/",
+		// Not a host, not a port.
+		"host./x", "-host.io/x", ".io/x", "host:0/x", "host:99999/x", "host:/x", "host:5000x/y", "x/y:1:2",
+		// Docker would take these; they are refused as they always were.
+		"[::1]:5000/x", "my_reg.io/x",
+		"nginx@sha256:" + strings.Repeat("A", 64), "nginx@", "@sha256:" + strings.Repeat("a", 64), ":tag",
 	}
 	for _, ref := range good {
 		if !ValidImage(ref) {
@@ -79,6 +98,8 @@ func TestRunArgsRejectInjection(t *testing.T) {
 		"network as flag":        func(s *RunSpec) { s.Network = "--net=host" },
 		"alias with space":       func(s *RunSpec) { s.Network = "n"; s.Alias = "a b" },
 		"mount target adds opt":  func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountVolume, Source: "v", Target: "/data,readonly"}} },
+		"mount at the root":      func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountVolume, Source: "v", Target: "/"}} },
+		"mount in /proc":         func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountVolume, Source: "v", Target: "/proc/1"}} },
 		"bind source adds opt":   func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountBind, Source: "/a,target=/etc", Target: "/x"}} },
 		"relative bind source":   func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountBind, Source: "relative", Target: "/x"}} },
 		"bind source escapes":    func(s *RunSpec) { s.Mounts = []Mount{{Kind: MountBind, Source: "/srv/../etc", Target: "/x"}} },
@@ -254,6 +275,55 @@ func TestEnsureNetwork(t *testing.T) {
 	}
 }
 
+func TestNetworks(t *testing.T) {
+	ctx := context.Background()
+	// A network that is not there is not an error, in Docker's words for
+	// networks, which are not its words for containers.
+	gone := &scripted{answers: map[string]answer{"docker network rm": {code: 1, stderr: "Error response from daemon: network musdash-env1 not found"}}}
+	if err := (Client{R: gone}).RemoveNetwork(ctx, "musdash-env1"); err != nil {
+		t.Fatalf("removing a network that is not there: %v", err)
+	}
+	if want := "docker network rm musdash-env1"; gone.calls[0] != want {
+		t.Fatalf("got %q", gone.calls[0])
+	}
+	// One that something is attached to is.
+	busy := &scripted{answers: map[string]answer{"docker network rm": {code: 1, stderr: `Error response from daemon: error while removing network: network musdash-env1 has active endpoints (name:"web" id:"abc")`}}}
+	if err := (Client{R: busy}).RemoveNetwork(ctx, "musdash-env1"); err == nil {
+		t.Fatal("a network in use was reported as removed")
+	}
+	for _, bad := range []string{"", "--force", "a b", "-x"} {
+		r := &scripted{}
+		if err := (Client{R: r}).RemoveNetwork(ctx, bad); err == nil || len(r.calls) != 0 {
+			t.Errorf("RemoveNetwork(%q): %v, calls %q", bad, err, r.calls)
+		}
+		if _, err := (Client{R: r}).NetworkInUse(ctx, bad); err == nil || len(r.calls) != 0 {
+			t.Errorf("NetworkInUse(%q): %v, calls %q", bad, err, r.calls)
+		}
+	}
+
+	listed := &scripted{answers: map[string]answer{"docker network ls": {out: "musdash-env1\nmusdash-env2\n"}}}
+	names, err := (Client{R: listed}).Networks(ctx)
+	if err != nil || len(names) != 2 || names[1] != "musdash-env2" {
+		t.Fatalf("%v %v", names, err)
+	}
+	if want := "docker network ls --filter label=musdash.managed=true --format {{.Name}}"; listed.calls[0] != want {
+		t.Fatalf("got %q", listed.calls[0])
+	}
+
+	// Attached means any container, also one that is not running: Docker
+	// would remove the network from under it, and it could not start again.
+	attached := &scripted{answers: map[string]answer{"docker ps": {out: "3f2a9c\n"}}}
+	if used, err := (Client{R: attached}).NetworkInUse(ctx, "musdash-env1"); err != nil || !used {
+		t.Fatalf("%v %v", used, err)
+	}
+	if want := "docker ps --all --quiet --filter network=musdash-env1"; attached.calls[0] != want {
+		t.Fatalf("got %q", attached.calls[0])
+	}
+	if used, err := (Client{R: &scripted{}}).NetworkInUse(ctx, "musdash-env1"); err != nil || used {
+		t.Fatalf("%v %v", used, err)
+	}
+}
+
 func TestList(t *testing.T) {
 	r := &scripted{answers: map[string]answer{
 		"docker ps": {out: "musdash-a-1\trunning\tapp\ta\td1\nmusdash-b-2\texited\tapp\tb\td2\n"},
@@ -274,5 +344,18 @@ func TestList(t *testing.T) {
 	empty := &scripted{}
 	if got, err := (Client{R: empty}).List(context.Background()); err != nil || len(got) != 0 {
 		t.Fatalf("empty: %+v %v", got, err)
+	}
+}
+
+func TestCheckMountTarget(t *testing.T) {
+	for _, ok := range []string{"/data", "/procfs", "/dev/shm", "/sys/x", "/var/lib/postgresql/data", "/a/"} {
+		if err := CheckMountTarget(ok); err != nil {
+			t.Errorf("%q refused: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"/", "//", "/.", "/proc", "/proc/", "/proc/sys/net", "/./proc", "data", "", "/a,b"} {
+		if err := CheckMountTarget(bad); err == nil {
+			t.Errorf("%q allowed", bad)
+		}
 	}
 }

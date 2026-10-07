@@ -7,8 +7,11 @@ package sshtest
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -38,6 +41,64 @@ type Server struct {
 	conns    []net.Conn
 	accepted int
 	silent   map[string]bool
+	forward  string
+}
+
+// How a server answers a request to forward a connection, for Forward.
+const (
+	// Refuse is an sshd with AllowTcpForwarding no.
+	Refuse = "refuse"
+	// LikeOldSSHD is an sshd up to 7.4, which forwards, but answers for a
+	// port that nothing listens on as if it were forbidden to.
+	LikeOldSSHD = "old"
+)
+
+// Forward changes how the server answers requests to forward a connection.
+func (s *Server) Forward(how string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.forward = how
+}
+
+// Kinds of host key, for NewHostKey.
+const (
+	ED25519 = "ed25519"
+	ECDSA   = "ecdsa"
+	RSA     = "rsa"
+)
+
+// NewHostKey makes a host key of the given kind.
+func NewHostKey(t testing.TB, kind string) ssh.Signer {
+	t.Helper()
+	var key any
+	var err error
+	switch kind {
+	case ED25519:
+		_, key, err = ed25519.GenerateKey(rand.Reader)
+	case ECDSA:
+		key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	case RSA:
+		key, err = rsa.GenerateKey(rand.Reader, 2048)
+	default:
+		t.Fatalf("no host key of kind %q", kind)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := ssh.NewSignerFromKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kind == RSA {
+		// As a current sshd offers an RSA key: with SHA-2, and not under
+		// the key type's own name, which means SHA-1.
+		modern, err := ssh.NewSignerWithAlgorithms(signer.(ssh.AlgorithmSigner), []string{ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSASHA256})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return modern
+	}
+	return signer
 }
 
 // What a server can be made to stop answering, for Silence.
@@ -97,8 +158,19 @@ func Start(t testing.TB) *Server {
 // StartWithKey is Start for a server that accepts the given key.
 func StartWithKey(t testing.TB, client ssh.Signer) *Server {
 	t.Helper()
-	hostSigner := newSigner(t)
-	s := &Server{Host: "127.0.0.1", Signer: client, HostKey: hostSigner.PublicKey()}
+	return start(t, client, newSigner(t))
+}
+
+// StartWithHostKeys is Start for a server that has the given host keys, as
+// an sshd has one of each kind. HostKey is the first of them.
+func StartWithHostKeys(t testing.TB, hostKeys ...ssh.Signer) *Server {
+	t.Helper()
+	return start(t, newSigner(t), hostKeys...)
+}
+
+func start(t testing.TB, client ssh.Signer, hostKeys ...ssh.Signer) *Server {
+	t.Helper()
+	s := &Server{Host: "127.0.0.1", Signer: client, HostKey: hostKeys[0].PublicKey()}
 	cfg := &ssh.ServerConfig{
 		PublicKeyCallback: func(_ ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			if string(key.Marshal()) == string(s.Signer.PublicKey().Marshal()) {
@@ -107,7 +179,9 @@ func StartWithKey(t testing.TB, client ssh.Signer) *Server {
 			return nil, fmt.Errorf("unknown key")
 		},
 	}
-	cfg.AddHostKey(hostSigner)
+	for _, key := range hostKeys {
+		cfg.AddHostKey(key)
+	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -179,15 +253,22 @@ func (s *Server) serve(conn net.Conn, cfg *ssh.ServerConfig) {
 				go s.session(channel, requests)
 			}
 		case "direct-tcpip":
-			go forward(ch)
+			go s.forwardTo(ch)
 		default:
 			ch.Reject(ssh.UnknownChannelType, "not supported")
 		}
 	}
 }
 
-// forward serves one forwarded connection: what Runner.Dial opens.
-func forward(ch ssh.NewChannel) {
+// forwardTo serves one forwarded connection: what Runner.Dial opens.
+func (s *Server) forwardTo(ch ssh.NewChannel) {
+	s.mu.Lock()
+	how := s.forward
+	s.mu.Unlock()
+	if how == Refuse {
+		ch.Reject(ssh.Prohibited, "open failed")
+		return
+	}
 	var req struct {
 		Host       string
 		Port       uint32
@@ -199,6 +280,10 @@ func forward(ch ssh.NewChannel) {
 		return
 	}
 	target, err := net.Dial("tcp", net.JoinHostPort(req.Host, strconv.Itoa(int(req.Port))))
+	if err != nil && how == LikeOldSSHD {
+		ch.Reject(ssh.Prohibited, "open failed")
+		return
+	}
 	if err != nil {
 		ch.Reject(ssh.ConnectionFailed, err.Error())
 		return

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -563,9 +564,28 @@ func TestRecoverRepairsWhatACrashLeft(t *testing.T) {
 	task, _ := e.db.CreateTask(ctx, db.Task{AppID: e.app.ID, Name: "tidy", Schedule: "@daily", Command: "true", Enabled: true, NextRun: -1})
 	b, _ := e.db.CreateBackup(ctx, e.pg.ID, db.TriggerSchedule)
 	run, _ := e.db.CreateTaskRun(ctx, task.ID, db.TriggerSchedule)
+	// What that backup had written so far: a file without a name yet, which
+	// no page lists and retention does not count. Next to it a finished
+	// dump and the keys of an upload that was cut short.
+	dir := e.o.Cfg.DatabaseBackupDir(e.pg.ID)
+	os.MkdirAll(dir, 0o700)
+	half, keys, finished := filepath.Join(dir, ".musdash-1234567"), filepath.Join(dir, ".rclone-abc.env"), filepath.Join(dir, "pg-20260101-000000-abc.dump.gz")
+	for _, p := range []string{half, keys, finished} {
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	if err := e.o.Recover(ctx); err != nil {
 		t.Fatal(err)
+	}
+	for _, p := range []string{half, keys} {
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("%s was left behind", filepath.Base(p))
+		}
+	}
+	if _, err := os.Stat(finished); err != nil {
+		t.Errorf("a finished backup was removed: %v", err)
 	}
 	cfg, _ := e.db.BackupConfig(ctx, e.pg.ID)
 	task, _ = e.db.TaskByID(ctx, task.ID)
@@ -714,7 +734,7 @@ func TestCleanup(t *testing.T) {
 		switch {
 		case strings.HasPrefix(line, "docker image prune"):
 			return "Deleted Images:\nsha256:abc\n\nTotal reclaimed space: 1.2GB\n", nil
-		case strings.HasPrefix(line, "docker ps"):
+		case strings.HasPrefix(line, "docker ps --all --filter label="):
 			return appContainer + "\trunning\tapp\t" + e.app.ID + "\td1\tUp 2 hours\n" +
 				// Its app exists: kept although stopped.
 				"musdash-old-of-web\texited\tapp\t" + e.app.ID + "\td0\tExited (0) 3 days ago\n" +
@@ -722,6 +742,16 @@ func TestCleanup(t *testing.T) {
 				"musdash-gone-app\texited\tapp\tgoneapp12345\td9\tExited (137) 3 days ago\n" +
 				"musdash-db-gone\tcreated\tdatabase\tgonedb123456\t\tCreated\n" +
 				"musdash-gone-running\trunning\tapp\tgoneapp99999\td9\tUp 3 days\n", nil
+		case strings.HasPrefix(line, "docker network ls"):
+			return "musdash-" + e.app.EnvironmentID + "\n" + // its environment exists
+				"musdash-goneenvaaaaa\n" + // gone, and nothing is attached
+				"musdash-goneenvbbbbb\n" + // gone, but a stopped container of somebody's is attached
+				"musdash-db-abc\nmusdash-GONEENVCCCCC\nmusdash-goneenvaaaaa-extra\nbridge\n", nil // not the name of an environment's network
+		case strings.HasPrefix(line, "docker ps --all --quiet --filter network="):
+			if strings.HasSuffix(line, "=musdash-goneenvbbbbb") {
+				return "3f2a9c1d\n", nil
+			}
+			return "", nil
 		case strings.HasPrefix(line, "docker info"):
 			return "/var/lib/docker\n", nil
 		case strings.HasPrefix(line, "df "):
@@ -736,21 +766,55 @@ func TestCleanup(t *testing.T) {
 	for _, want := range []string{
 		"\ndocker image prune --force\n",
 		"\ndocker builder prune --force --filter until=168h\n",
+		"\ndocker builder prune --force --max-used-space 2GB\n",
+		// The disk is still full after that: the rest of the cache goes.
+		"\ndocker builder prune --force\n",
 		"\ndocker rm --force musdash-gone-app\n",
 		"\ndocker rm --force musdash-db-gone\n",
+		"\ndocker network rm musdash-goneenvaaaaa\n",
 		"\ndf -P -k -- /var/lib/docker\n",
 	} {
 		if !strings.Contains(all, want) {
 			t.Errorf("missing %q in:%s", strings.TrimSpace(want), all)
 		}
 	}
-	for _, never := range []string{"prune --all", "prune -a", "volume prune", "system prune", "rm --force " + appContainer, "rm --force musdash-old-of-web", "rm --force musdash-gone-running"} {
+	for _, never := range []string{"prune --all", "prune -a", "volume prune", "system prune", "rm --force " + appContainer, "rm --force musdash-old-of-web", "rm --force musdash-gone-running",
+		"network rm musdash-" + e.app.EnvironmentID, "network rm musdash-goneenvbbbbb", "network rm musdash-db-abc", "network rm musdash-GONEENVCCCCC", "network rm musdash-goneenvaaaaa-extra", "network rm bridge",
+		"network=musdash-db-abc", "network=bridge", "network=musdash-" + e.app.EnvironmentID} {
 		if strings.Contains(all, never) {
 			t.Errorf("the clean-up ran something with %q:%s", never, all)
 		}
 	}
 	if msg := e.told(1); !strings.Contains(msg, "is 91% full") {
 		t.Fatalf("notification: %s", msg)
+	}
+}
+
+// The build cache is kept to a size. An older Docker knows the flag by
+// another name, and a disk with room keeps what cache is left.
+func TestCleanupTrimsTheBuildCache(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		switch {
+		case strings.Contains(line, "--max-used-space"):
+			return "", runnertest.Exit("docker", 125, "unknown flag: --max-used-space\nSee 'docker builder prune --help'.")
+		case strings.HasPrefix(line, "docker info"):
+			return "/var/lib/docker\n", nil
+		case strings.HasPrefix(line, "df "):
+			return "Filesystem     1024-blocks     Used Available Capacity Mounted on\n/dev/sda1         80000000 40000000  40000000      50% /\n", nil
+		}
+		return "", nil
+	}
+	if err := e.o.runCleanupJob(ctx, []byte(`{"server_id":"`+e.server.ID+`"}`)); err != nil {
+		t.Fatal(err)
+	}
+	all := "\n" + strings.Join(e.fake.Calls(), "\n") + "\n"
+	if !strings.Contains(all, "\ndocker builder prune --force --keep-storage 2GB\n") {
+		t.Errorf("the older flag was not tried:%s", all)
+	}
+	if strings.Contains(all, "\ndocker builder prune --force\n") {
+		t.Errorf("all of the cache was removed from a disk with room:%s", all)
 	}
 }
 

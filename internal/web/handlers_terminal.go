@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
+	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 )
 
@@ -31,6 +33,9 @@ import (
 //     session's form token.
 //   - Only so many are open at once, and one that nothing passes through
 //     for a while is closed.
+//   - When it is over, what it ran is ended by musdash. Docker does not:
+//     hanging up `docker exec` ends the client on the server, and the shell
+//     in the container would stay until the container is replaced.
 
 const (
 	// maxTerminals bounds the terminals open across the dashboard. Each
@@ -45,18 +50,113 @@ const (
 	// stands between the browser and the dashboard, and finds a browser
 	// that went away without saying so.
 	terminalPing = 30 * time.Second
+	// terminalHangUp is how long ending what a terminal ran may take.
+	terminalHangUp = 10 * time.Second
 )
 
 // shellPick starts bash where the image has it and sh otherwise. It is the
 // whole of what a terminal runs.
 const shellPick = `if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi`
 
-// terminalCmd is the command that opens a shell in a container.
-func terminalCmd(container string) (runner.Cmd, error) {
-	if !docker.ValidName(container) {
+// hangUp ends what a terminal ran: it does what the kernel does when a
+// terminal goes away, which Docker keeps from happening by holding the
+// container's side of the terminal open.
+//
+// The shell was started with a mark in its environment, which everything
+// it starts inherits. The mark alone does not find all of it: after `su`
+// the processes belong to somebody else, whose environment even root may
+// not read in a container, and `su` itself does not take the signal. So
+// the mark is used to find the terminal's session, which anybody may read:
+// the session of a process that carries the mark and still has a terminal.
+// Every process of that session is sent SIGHUP.
+//
+// Nothing else of the container is in that session: the shell leads one of
+// its own. What left the terminal is left alone, as it would be anywhere:
+// a program started with setsid, or a job in the background of a shell
+// that was ended with `exit` (the session has no terminal after its leader
+// went). A session of 1 or less, the container's own, is never taken.
+//
+// The command that looks carries the mark under another name, or it would
+// find itself. Without tr or grep nothing can be found, which is said with
+// a status of its own.
+//
+// In /proc/<pid>/stat the fields after the name are: state, parent,
+// process group, session, terminal.
+const hangUp = `command -v tr >/dev/null 2>&1 && command -v grep >/dev/null 2>&1 || exit 97
+{
+sessions=" "
+for d in /proc/[0-9]*; do
+	if tr "\0" "\n" < "$d/environ" | grep -qxF "MUSDASH_TERMINAL=$MUSDASH_HANGUP"; then
+		read -r s < "$d/stat" && s=${s##*) } && set -- $s && [ "$4" -gt 1 ] && [ "$5" -ne 0 ] && sessions="$sessions$4 "
+	fi
+done
+for d in /proc/[0-9]*; do
+	read -r s < "$d/stat" || continue
+	s=${s##*) }
+	set -- $s
+	case "$sessions" in *" $4 "*) kill -HUP "${d#/proc/}" ;; esac
+done
+} 2>/dev/null
+exit 0`
+
+// validMark is the shape of a terminal's mark: an id of ours.
+var validMark = regexp.MustCompile(`^[a-z][a-z2-7]{11}$`)
+
+// terminalCmd is the command that opens a shell in a container. The mark is
+// what the shell is found by when the terminal is over.
+func terminalCmd(container, mark string) (runner.Cmd, error) {
+	if !docker.ValidName(container) || !validMark.MatchString(mark) {
 		return runner.Cmd{}, errors.New("bad container name")
 	}
-	return runner.Cmd{Name: "docker", Args: []string{"exec", "--interactive", "--tty", "--env", "TERM=xterm-256color", container, "sh", "-c", shellPick}}, nil
+	return runner.Cmd{Name: "docker", Args: []string{"exec", "--interactive", "--tty", "--env", "TERM=xterm-256color", "--env", "MUSDASH_TERMINAL=" + mark, container, "sh", "-c", shellPick}}, nil
+}
+
+// hangUpCmd is the command that ends what the terminal with this mark ran
+// in the container.
+func hangUpCmd(container, mark string) (runner.Cmd, error) {
+	if !docker.ValidName(container) || !validMark.MatchString(mark) {
+		return runner.Cmd{}, errors.New("bad container name")
+	}
+	return runner.Cmd{Name: "docker", Args: []string{"exec", "--env", "MUSDASH_HANGUP=" + mark, container, "sh", "-c", hangUp}}, nil
+}
+
+// hangUpTerminal ends what a terminal ran, once the terminal is closed. The
+// request is over by then and the dashboard may be shutting down, so it has
+// a time of its own.
+func (s *Server) hangUpTerminal(run runner.Runner, container, mark, what string) {
+	cmd, err := hangUpCmd(container, mark)
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), terminalHangUp)
+	defer cancel()
+	if err := run.Run(ctx, cmd); err != nil {
+		// Mostly a container that was replaced meanwhile: its shells went
+		// with it.
+		s.Log.Info("a terminal's shell was not hung up", "resource", what, "err", err)
+	}
+}
+
+// WaitTerminals waits until no terminal is open any more, which includes
+// that what each ran was ended. Shutting down calls it: the terminals are
+// closed by Closing, and the process must not go before they are done.
+func (s *Server) WaitTerminals(ctx context.Context) bool {
+	taken := 0
+	// Whoever holds every place knows nobody else holds one.
+	defer func() {
+		for ; taken > 0; taken-- {
+			<-s.terminals
+		}
+	}()
+	for taken < cap(s.terminals) {
+		select {
+		case s.terminals <- struct{}{}:
+			taken++
+		case <-ctx.Done():
+			return false
+		}
+	}
+	return true
 }
 
 // sameOrigin reports whether a request was made by a page of the dashboard
@@ -94,7 +194,8 @@ func (s *Server) serveTerminal(w http.ResponseWriter, r *http.Request, serverID,
 		http.Error(w, "A terminal can only be opened from the dashboard itself.", http.StatusForbidden)
 		return
 	}
-	cmd, err := terminalCmd(container)
+	mark := secret.RandomID()
+	cmd, err := terminalCmd(container, mark)
 	if container == "" || err != nil {
 		http.Error(w, "Nothing is running.", http.StatusConflict)
 		return
@@ -150,6 +251,9 @@ func (s *Server) serveTerminal(w http.ResponseWriter, r *http.Request, serverID,
 	}
 	s.Log.Info("terminal opened", "resource", what, "user", sess.User.Email)
 	defer s.Log.Info("terminal closed", "resource", what, "user", sess.User.Email)
+	// Runs after the terminal is closed (end, below) and before this
+	// terminal's place is given back, which is what WaitTerminals waits for.
+	defer s.hangUpTerminal(run, container, mark, what)
 
 	// Whichever side ends first takes the other with it, from whichever
 	// goroutine notices. Hanging up the shell is also what frees this
@@ -163,6 +267,12 @@ func (s *Server) serveTerminal(w http.ResponseWriter, r *http.Request, serverID,
 		})
 	}
 	defer end()
+	// Shutting down ends the terminal too, not only the connection: a
+	// goroutine stuck typing does not see the connection close.
+	if s.Closing != nil {
+		stop := context.AfterFunc(s.Closing, end)
+		defer stop()
+	}
 
 	// One that carries nothing for a while is closed. Both directions
 	// count: somebody may be watching output without typing.

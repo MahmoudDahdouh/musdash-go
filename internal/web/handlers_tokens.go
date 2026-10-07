@@ -42,8 +42,8 @@ func (s *Server) tokenCreate(w http.ResponseWriter, r *http.Request) {
 			f.Set(p.Field, "1")
 		}
 	}
-	if name == "" || len(name) > 60 {
-		f.Fail("token_name", "Enter a name, up to 60 characters.")
+	if name == "" || len(name) > 60 || !plainText(name) {
+		f.Fail("token_name", labelProblem(name, "Enter a name, up to 60 characters."))
 	}
 	abilities, err := db.NormalAbilities(chosen)
 	if err != nil {

@@ -4,8 +4,11 @@
 #   sudo ./install.sh ./musdash-linux-amd64
 #
 # It creates the musdash user, installs the binary and the two services, and
-# starts them. Run it again with a newer binary to upgrade; the proxy keeps
-# serving while the control plane restarts.
+# starts them. Run it again with a newer binary to upgrade. Both services
+# are restarted, since they are one binary: apps keep serving while the
+# control plane restarts, but the proxy's own restart leaves them
+# unreachable for about a second, and for up to fifteen while it lets a
+# long request that is under way (a download, a log stream) finish.
 set -eu
 
 BIN="${1:-}"
@@ -43,7 +46,9 @@ install -m 0644 "$HERE/musdash-proxy.service" /etc/systemd/system/musdash-proxy.
 systemctl daemon-reload
 systemctl enable musdash-proxy.service musdash-server.service >/dev/null
 # The proxy first: on an upgrade it restarts in about a second, and apps are
-# unreachable only for that moment.
+# unreachable only for that moment. It takes longer, up to the fifteen
+# seconds the proxy gives requests that are under way, when one of them is
+# long; new connections are refused meanwhile.
 systemctl restart musdash-proxy.service
 systemctl restart musdash-server.service
 

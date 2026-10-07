@@ -390,6 +390,9 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 	if err != nil {
 		return err
 	}
+	if err := d.checkEnvFiles(ctx, r, raw.EnvFiles(), checkout); err != nil {
+		return err
+	}
 	resolved, err := compose.Config(ctx, r, opt)
 	if err != nil {
 		return fmt.Errorf("the Compose file could not be read: %w", err)
@@ -407,6 +410,20 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 			}
 			if err := d.refuseSymlinks(ctx, r, checkout, rel); err != nil {
 				return err
+			}
+		}
+		// A mount inside one of the repository's needs its directory to be
+		// in the repository: the files are mounted read-only, so Docker
+		// cannot make it, and says so in words about a file system that
+		// name neither the mount nor the reason.
+		for _, n := range resolved.NestedInCheckout(checkout) {
+			rel := strings.TrimPrefix(strings.TrimPrefix(n.Path, checkout), "/")
+			out, err := r.Output(ctx, runner.Cmd{Name: "git", Args: []string{"-C", checkout, "ls-tree", "HEAD", "--", rel}, Env: gitEnv()})
+			if err != nil {
+				return fmt.Errorf("inspect the repository: %w", err)
+			}
+			if len(out) == 0 {
+				return fmt.Errorf("service %s: the mount at %s lies inside %s, which is mounted from the repository. musdash mounts a repository's files read-only, and the repository has no %s for Docker to mount it on. Add it to the repository (a directory needs a file in it to be kept, such as .gitkeep), or build the files into the image instead of mounting them", n.Service, n.Target, n.Under, rel)
 			}
 		}
 	}
@@ -501,15 +518,16 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 			if doc.Builds() {
 				log.Step("Building images")
 				build := d.composeCmd(r, s.ID, "build")
-				build.Stdout, build.Stderr = log, log
+				watch := &lookupWatch{w: log}
+				build.Stdout, build.Stderr = watch, watch
 				buildCtx, cancel := context.WithTimeout(ctx, d.buildTimeout)
 				err := r.Run(buildCtx, build)
 				cancel()
 				if err != nil {
 					if errors.Is(buildCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-						return fmt.Errorf("build: stopped after %s without finishing", d.buildTimeout)
+						return watch.explain("build", fmt.Errorf("stopped after %s without finishing", d.buildTimeout), server.Name)
 					}
-					return fmt.Errorf("build the images: %w", err)
+					return watch.explain("build the images", err, server.Name)
 				}
 			}
 		}
@@ -769,6 +787,7 @@ func (d *Deployer) DestroyService(ctx context.Context, id string, deleteData boo
 	if err := d.SyncRoutes(ctx, server); err != nil && !errors.Is(err, ErrProxyDown) {
 		d.Log.Warn("withdraw a deleted service's routes", "service", s.ID, "err", err)
 	}
+	d.dropNetwork(ctx, r, s.EnvironmentID, s.ServerID)
 	return nil
 }
 
@@ -814,4 +833,34 @@ func serviceStatus(listed []docker.Listed, id string) string {
 		return db.AppDegraded
 	}
 	return db.AppExited
+}
+
+// checkEnvFiles refuses an env_file that is not a file of the stack's own
+// repository. The sandbox that reads the Compose file sees the checkout and
+// nothing else of the server, so any other path is read from the sandbox's
+// own image, if it happens to be there: nothing of the server's leaks, but
+// the containers get variables nobody wrote. A link in the repository
+// would be followed to the same place.
+func (d *Deployer) checkEnvFiles(ctx context.Context, r runner.Runner, files []compose.EnvFile, checkout string) error {
+	for _, f := range files {
+		if checkout == "" {
+			return fmt.Errorf("service %s: env_file reads variables from a file, and a stack that was pasted has no files. Put them in the stack's Variables instead", f.Service)
+		}
+		// A variable in the path is filled in after this was looked at.
+		if strings.Contains(f.Path, "$") {
+			return fmt.Errorf("service %s: the env_file path %q uses a variable; write the path out", f.Service, path.Base(f.Path))
+		}
+		clean := path.Clean(f.Path)
+		if !path.IsAbs(clean) || !strings.HasPrefix(clean, checkout+"/") {
+			return fmt.Errorf("service %s: the env_file %q is not a file of the repository. Use a path inside the repository, or put the variables in the stack's Variables", f.Service, strings.TrimPrefix(clean, checkout+"/"))
+		}
+		rel := strings.TrimPrefix(clean, checkout+"/")
+		if !source.ValidRelPath(rel) {
+			return fmt.Errorf("the Compose file names the env_file %q in the repository; use only letters, numbers, dots, hyphens, underscores and slashes in its path", rel)
+		}
+		if err := d.refuseSymlinks(ctx, r, checkout, rel); err != nil {
+			return err
+		}
+	}
+	return nil
 }

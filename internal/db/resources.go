@@ -373,10 +373,15 @@ func (d *DB) FailStaleDeployments(ctx context.Context, reason string) error {
 }
 
 // ProtectedDeployments returns the ids of deployments whose containers must
-// not be cleaned up: those queued or running, and those that finished after
-// the given time (their old container may still be draining).
-func (d *DB) ProtectedDeployments(ctx context.Context, finishedAfter int64) (map[string]bool, error) {
-	rows, err := d.QueryContext(ctx, `SELECT id FROM deployments WHERE status IN ('queued', 'running') OR finished_at > ?`, finishedAfter)
+// not be cleaned up: those queued or running, and those that succeeded
+// after the given time (the container one of them made may still be
+// draining after the next has replaced it).
+//
+// A deployment that failed is not among them, however lately. Its container
+// serves nothing, and when the deployment was failed because the process
+// died in the middle of it, nobody else will remove that container.
+func (d *DB) ProtectedDeployments(ctx context.Context, succeededAfter int64) (map[string]bool, error) {
+	rows, err := d.QueryContext(ctx, `SELECT id FROM deployments WHERE status IN ('queued', 'running') OR (status = ? AND finished_at > ?)`, DeploySuccess, succeededAfter)
 	if err != nil {
 		return nil, err
 	}

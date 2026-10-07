@@ -62,7 +62,7 @@ The installer creates a `musdash` user, installs `/usr/local/bin/musdash` and tw
 4. For HTTPS, point a domain's DNS at the server and add it on the app's **Domains** tab. The certificate is issued on the first request.
 5. To put the dashboard itself on a domain with HTTPS, set it under **Settings**.
 
-Ports 80 and 443 must be reachable from the internet for certificates to be issued. Run the installer again with a newer binary to upgrade; apps keep serving while the control plane restarts.
+Ports 80 and 443 must be reachable from the internet for certificates to be issued. Run the installer again with a newer binary to upgrade. Apps keep running, and keep serving while the control plane restarts; but the proxy is the same binary and is restarted too, so new connections to apps are refused for about a second, and for up to fifteen when a long request (a download, a log stream) is under way, which the proxy lets finish first. Upgrade when that is acceptable.
 
 Use `musdash-linux-arm64` on ARM servers.
 
@@ -84,6 +84,7 @@ Open `http://127.0.0.1:8000`. The first visit asks you to create the owner accou
 | `musdash proxy` | Runs the edge proxy |
 | `musdash migrate` | Applies database migrations and exits |
 | `musdash reset-password <email>` | Prints a one-time link to choose a new password |
+| `musdash unlock <email>` | Lets an account that was locked for too many wrong passwords or codes try again at once |
 | `musdash disable-2fa <email>` | Turns off an account's two-step sign-in, for somebody who lost their phone and their recovery codes |
 | `musdash version` | Prints the version |
 
@@ -145,6 +146,8 @@ Four build packs:
 - **Nixpacks** and **Railpack**: for a repository without a Dockerfile. The builder reads the code, works out how to build it, and the app listens on the port you gave it, which it is told as `PORT`. Their own settings go in as build-time variables (`NIXPACKS_START_CMD`, `RAILPACK_BUILD_CMD`, …) or in the repository's `nixpacks.toml` / `railpack.json`.
 
 Variables marked build-time on the Environment tab are passed as build arguments (with Railpack, as build secrets). The tab lists variables by name: their values are sent to the page only when you choose **Show values**, and are changed in the tab's editor. Shared variables and a service's variables are kept the same way.
+
+**Builds cannot reach the network.** If a build fails where it downloads something ("Temporary failure in name resolution", "Could not resolve host", `EAI_AGAIN`) while containers on the same server reach the network, the steps of a build have no DNS on that server: seen with Docker 29 on Ubuntu 24.04. Give Docker's builds a resolver in `/etc/docker/daemon.json`, for example `{"dns": ["1.1.1.1", "8.8.8.8"]}`, and restart Docker. musdash adds this to the error of a build that failed after such a line.
 
 Neither builder is installed on a server. The first build that needs one makes a small image for it (`musdash/nixpacks:<version>`, `musdash/railpack:<version>`) from the project's release file, which Docker fetches from github.com and refuses unless it matches the checksum pinned in musdash. The builder then runs in a container that sees the checkout and nothing else of the server: no Docker socket, no capabilities, and for Nixpacks no network (Railpack asks the network which versions of a language exist). It needs Docker 24 or newer. The first build with either downloads its base images and takes minutes.
 
@@ -234,14 +237,14 @@ A service also takes a Compose file that lives in a repository ("Compose file in
 
 Servers, "Add a server" takes another machine that has Docker and is reached over SSH. Nothing of musdash runs on it except its containers and, if you install it, the proxy that serves their domains.
 
-1. Add the server: its address, SSH port and account, and a key (a new one is made for it unless you pick an existing one). The account must be able to run `docker`: root, or a member of the `docker` group.
+1. Add the server: its address, SSH port and account, and a key (a new one is made for it unless you pick an existing one). The account must be able to run `docker`: root, or a member of the `docker` group. The server's sshd must forward connections for that account (`AllowTcpForwarding yes` or `local`, which is OpenSSH's default but not Alpine's, and not that of every hardening guide): that is how musdash checks that a new container of an app answers on its port.
 2. Put the public key the page shows into that account's `~/.ssh/authorized_keys` on the server.
-3. Choose **Check**. The first check records the server's host key and shows its fingerprint to compare with the server's own (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`). From then on musdash talks only to a machine that presents this key; if the server is reinstalled, "Forget host key" and check again. The check also reports Docker, the Compose plugin, git, memory, and whether the proxy can be installed.
+3. Choose **Check**. The first check records the server's host key and shows its fingerprint with the kind of key it is, to compare with the server's own: for `ED25519 SHA256:…`, what `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` prints there. musdash asks for the Ed25519 key first, then ECDSA, then RSA, as `ssh` does, and the page names the file. From then on musdash talks only to a machine that presents this key; if the server is reinstalled, "Forget host key" and check again. The check also reports Docker, the Compose plugin, git, memory, whether sshd forwards connections, and whether the proxy can be installed.
 4. Choose **Install proxy** to serve domains from that server. It copies the musdash binary into the server's data directory and starts it as the systemd service `musdash-proxy`, which needs root or `sudo` without a password. For a server of another architecture than the dashboard's, put that architecture's binary at `<data>/dist/musdash-linux-<arch>` first (`make build-linux` produces both).
 
 With more than one server, the form a resource is added with asks which one. Point an app's domain at the server it runs on.
 
-- A remote server keeps musdash's files (env files, Compose stacks, backups, routes, certificates) in its own data directory: `/var/lib/musdash` for root, `~/.musdash` otherwise, or what you entered.
+- A remote server keeps musdash's files (env files, Compose stacks, backups, routes, certificates) in its own data directory: `/var/lib/musdash` for root, `~/.musdash` otherwise, or what you entered. It has to be a directory for musdash alone, which makes directories in it and clears out what its own builds left: a system directory or a home directory is refused, and so is a directory that already holds other things when the server is first checked. A check leaves the file `.owned-by-musdash` in it, which is how musdash knows the directory later.
 - A command's secrets never appear in the server's process list: they travel in a private file that the command's shell reads and removes.
 - One SSH connection per server is opened when first needed and closed after five idle minutes. A server with running containers is watched for their state, so its connection stays open.
 - **Build server.** A Git app's Settings can name another server to build on. The image is built there and moved with `docker save` piped into `docker load` on the app's server: no registry is needed. Use it to keep builds off a small server.
@@ -261,7 +264,7 @@ With more than one server, the form a resource is added with asks which one. Poi
 
 **Notifications.** The **Notifications** page adds channels (Discord, Slack, Mattermost, Telegram, Pushover, a generic webhook, or email over SMTP) and chooses which events each one hears: a deployment finished or failed, a backup finished or failed, a scheduled task failed, a container stopped unexpectedly, the disk is nearly full. A container that keeps crashing is reported once every 15 minutes, not on every restart. A channel's address, and a bucket's endpoint, may not lead to the server's own services, to the private addresses of containers on it, or to a cloud metadata service; what such an address answers is never shown. Other machines on a private network are allowed: a self-hosted chat server or object store usually lives on one.
 
-**Clean-up.** Once a day after 03:00 UTC, musdash removes dangling images, build cache older than a week and stopped containers whose app, database or service no longer exists. It never removes volumes, and never images that a stopped app or database still needs.
+**Clean-up.** Once a day after 03:00 UTC, musdash removes dangling images, build cache that is older than a week or beyond 2 GB (all of it when the disk is 85% full or more), and stopped containers whose app, database or service no longer exists. It never removes volumes, and never images that a stopped app or database still needs.
 
 ## People and roles
 

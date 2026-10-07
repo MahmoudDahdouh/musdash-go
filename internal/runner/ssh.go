@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -24,6 +25,14 @@ import (
 // from the one recorded for it. Either the server was reinstalled, or
 // something between musdash and the server is answering in its place.
 var ErrHostKeyChanged = errors.New("the server's host key is not the one recorded for it")
+
+// ErrForwardRefused is returned by Dial when the server's sshd refuses, as
+// a matter of its settings, to open the connection asked for. An sshd up to
+// 7.4 answers the same for a port that nothing listens on.
+var ErrForwardRefused = errors.New("the server's sshd refused to forward a connection")
+
+// ForwardAdvice is what to change on a server whose sshd does not forward.
+const ForwardAdvice = "allow it for this account: AllowTcpForwarding yes (or local) and no DisableForwarding in /etc/ssh/sshd_config, no PermitOpen that leaves out 127.0.0.1, and no restrict or no-port-forwarding before the key in authorized_keys. Then restart sshd."
 
 // SSHConfig says how to reach a server over SSH.
 type SSHConfig struct {
@@ -130,9 +139,10 @@ func dialClient(ctx context.Context, cfg SSHConfig) (*ssh.Client, []byte, error)
 		return nil, nil, errors.New("ssh: no host key is recorded for this server and there is no way to record one")
 	}
 	clientCfg := &ssh.ClientConfig{
-		User:    cfg.User,
-		Auth:    []ssh.AuthMethod{ssh.PublicKeys(cfg.Signer)},
-		Timeout: cfg.Timeout,
+		User:              cfg.User,
+		Auth:              []ssh.AuthMethod{ssh.PublicKeys(cfg.Signer)},
+		Timeout:           cfg.Timeout,
+		HostKeyAlgorithms: hostKeyAlgorithms(cfg.HostKey),
 		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
 			presented = key.Marshal()
 			if len(cfg.HostKey) > 0 {
@@ -159,10 +169,57 @@ func dialClient(ctx context.Context, cfg SSHConfig) (*ssh.Client, []byte, error)
 		if errors.Is(err, ErrHostKeyChanged) {
 			return nil, nil, ErrHostKeyChanged
 		}
+		// Only the recorded key's kind was asked for. A server that has no
+		// key of that kind any more has other keys than the recorded one.
+		var none *ssh.AlgorithmNegotiationError
+		if len(cfg.HostKey) > 0 && errors.As(err, &none) && none.What == "host key" {
+			return nil, nil, ErrHostKeyChanged
+		}
 		return nil, nil, fmt.Errorf("sign in to %s as %s: %w", addr, cfg.User, err)
 	}
 	conn.SetDeadline(time.Time{})
 	return ssh.NewClient(sc, chans, reqs), presented, nil
+}
+
+// firstContactAlgorithms is the order in which a server's host keys are
+// asked for when none is recorded: OpenSSH's own. The library's order has
+// ECDSA first, so a server with the usual three keys would present its
+// ECDSA key, while a person told to compare fingerprints looks at the
+// Ed25519 one. Host certificates are left out: the fingerprint to compare
+// is a key's, and a server that has a certificate has its key as well.
+var firstContactAlgorithms = []string{
+	ssh.KeyAlgoED25519,
+	ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521,
+	ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSASHA256, ssh.KeyAlgoRSA,
+}
+
+// hostKeyAlgorithms is what a connection asks a server to prove itself
+// with: on a first contact the list above, afterwards the recorded key's
+// kind and no other. A server recorded with its ECDSA key must go on
+// presenting that one; asked for anything, it would present its Ed25519
+// key and be refused as changed.
+func hostKeyAlgorithms(recorded []byte) []string {
+	if len(recorded) == 0 {
+		return firstContactAlgorithms
+	}
+	key, err := ssh.ParsePublicKey(recorded)
+	if err != nil {
+		return nil
+	}
+	switch kind := key.Type(); kind {
+	// An RSA key signs with one of three algorithms. Its type's own name
+	// is the one with SHA-1, which a current sshd no longer offers: asking
+	// for that alone would lock out every server recorded with an RSA key.
+	case ssh.KeyAlgoRSA:
+		return []string{ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSASHA256, ssh.KeyAlgoRSA}
+	case ssh.CertAlgoRSAv01:
+		return []string{ssh.CertAlgoRSASHA512v01, ssh.CertAlgoRSASHA256v01, ssh.CertAlgoRSAv01}
+	case ssh.KeyAlgoED25519, ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521,
+		ssh.CertAlgoED25519v01, ssh.CertAlgoECDSA256v01, ssh.CertAlgoECDSA384v01, ssh.CertAlgoECDSA521v01:
+		return []string{kind}
+	}
+	// A kind this code does not know: the library's own list.
+	return nil
 }
 
 // keepalive closes the connections of a server that stopped answering, so
@@ -512,17 +569,56 @@ func checkPath(p string) error {
 	return nil
 }
 
+// readToEnd notes whether a reader was read to its end. The note is read
+// from another goroutine than the one that reads: a server that reports
+// its command as ended before it has taken all its input leaves the copy
+// still running.
+type readToEnd struct {
+	r    io.Reader
+	done atomic.Bool
+}
+
+func (e *readToEnd) Read(p []byte) (int, error) {
+	n, err := e.r.Read(p)
+	if err == io.EOF {
+		e.done.Store(true)
+	}
+	return n, err
+}
+
 // WriteFile writes to a temporary file next to path and renames it over
 // path. The file is private while it is being written and gets its mode
 // before it gets its name.
+//
+// Writing and naming are two commands. The command that writes cannot tell
+// a file that is complete from one that is not: when the connection goes,
+// or the reader on this side fails, its input simply ends, and it ends
+// well. Were it also the one to rename, half a file would be moved into
+// place: a truncated backup under a backup's name, or half a routes file.
+// The name is given only from here, once everything was read and sent.
 func (r *SSHRunner) WriteFile(ctx context.Context, p string, mode fs.FileMode, src io.Reader) error {
 	if err := checkPath(p); err != nil {
 		return err
 	}
-	tmp := path.Join(path.Dir(p), ".musdash-"+randomName())
-	const write = `umask 077; cat > "$1" && chmod "$2" "$1" && mv -f "$1" "$3" || { rm -f "$1"; exit 1; }`
-	_, err := r.Output(ctx, Cmd{Name: "sh", Args: []string{"-c", write, "sh", tmp, fmt.Sprintf("%04o", mode.Perm()), p}, Stdin: src})
+	tmp := path.Join(path.Dir(p), TempPrefix+randomName())
+	in := &readToEnd{r: src}
+	_, err := r.Output(ctx, Cmd{Name: "sh", Args: []string{"-c", `umask 077; cat > "$1"`, "sh", tmp}, Stdin: in})
+	switch {
+	case err != nil:
+		// This includes a reader that failed: its error is the command's.
+	case !in.done.Load():
+		err = errors.New("the command stopped reading before the end")
+	default:
+		_, err = r.Output(ctx, Cmd{Name: "sh", Args: []string{"-c", `chmod "$2" "$1" && mv -f "$1" "$3"`, "sh", tmp, fmt.Sprintf("%04o", mode.Perm()), p}})
+	}
 	if err != nil {
+		// With time of its own: ctx may be what ended the write. When the
+		// connection is gone the file stays, under its temporary name;
+		// where musdash keeps its files it is removed on the first
+		// connection of the next process (servers.sweep).
+		clean, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		r.remove(clean, tmp)
 		return fmt.Errorf("write %s: %w", p, err)
 	}
 	return nil
@@ -601,7 +697,12 @@ func (r *SSHRunner) RemoveAll(ctx context.Context, p string) error {
 // Dial opens a connection from the server's side: to a port on its own
 // loopback interface, for example.
 func (r *SSHRunner) Dial(ctx context.Context, network, address string) (net.Conn, error) {
-	return r.client.DialContext(ctx, network, address)
+	conn, err := r.client.DialContext(ctx, network, address)
+	var refused *ssh.OpenChannelError
+	if errors.As(err, &refused) && refused.Reason == ssh.Prohibited {
+		return nil, fmt.Errorf("%w: %w", ErrForwardRefused, err)
+	}
+	return conn, err
 }
 
 // sshTerminal is a command on a terminal the server made for it.

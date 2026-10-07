@@ -125,6 +125,36 @@ func Fingerprint(line string) string {
 	return ssh.FingerprintSHA256(key)
 }
 
+// HostKeyKind names the kind of a stored host key as `ssh-keygen -l` does
+// (ED25519, ECDSA, RSA), or "" for a kind that has no key file of its own
+// to compare with: a certificate, for one.
+func HostKeyKind(line string) string {
+	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(line))
+	if err != nil {
+		return ""
+	}
+	switch key.Type() {
+	case ssh.KeyAlgoED25519:
+		return "ED25519"
+	case ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521:
+		return "ECDSA"
+	case ssh.KeyAlgoRSA:
+		return "RSA"
+	}
+	return ""
+}
+
+// HostKeyFile is where an sshd usually keeps the public half of a stored
+// host key: the file whose fingerprint is the one to compare. It is "" for
+// a kind HostKeyKind does not name.
+func HostKeyFile(line string) string {
+	kind := HostKeyKind(line)
+	if kind == "" {
+		return ""
+	}
+	return "/etc/ssh/ssh_host_" + strings.ToLower(kind) + "_key.pub"
+}
+
 // config builds the SSH settings for a server from what is stored.
 func (p *Pool) config(ctx context.Context, s db.Server) (runner.SSHConfig, error) {
 	cfg := runner.SSHConfig{Host: s.Host, Port: s.Port, User: s.SSHUser, DataDir: s.DataDir}
@@ -156,7 +186,19 @@ func (p *Pool) config(ctx context.Context, s db.Server) (runner.SSHConfig, error
 // recorded yet it records the one the server presents; when one is, the
 // server must present it. It returns a Runner on that connection, which
 // the caller closes, and the server's key.
+//
+// It looks at nothing on the server before it records the key. Check is
+// what the dashboard calls; this is the same contact for tests that need a
+// server with a recorded key and nothing else.
 func (p *Pool) FirstContact(ctx context.Context, s db.Server) (*runner.SSHRunner, string, error) {
+	return p.firstContact(ctx, s, nil)
+}
+
+// firstContact is FirstContact with a look at the server before its key is
+// recorded. A server whose key is recorded is one that everything else may
+// talk to; when look returns an error it is not recorded, and the server
+// stays one that only a check reaches.
+func (p *Pool) firstContact(ctx context.Context, s db.Server, look func(*runner.SSHRunner) error) (*runner.SSHRunner, string, error) {
 	cfg, err := p.config(ctx, s)
 	if err != nil {
 		return nil, "", err
@@ -175,6 +217,12 @@ func (p *Pool) FirstContact(ctx context.Context, s db.Server) (*runner.SSHRunner
 	r, err := runner.DialSSH(ctx, cfg)
 	if err != nil {
 		return nil, "", err
+	}
+	if look != nil {
+		if err := look(r); err != nil {
+			r.Close()
+			return nil, seen, err
+		}
 	}
 	recorded, err := p.DB.SetServerHostKey(ctx, s.ID, seen)
 	if err == nil && !recorded {
@@ -267,19 +315,31 @@ func (p *Pool) acquire(ctx context.Context, id string) (*conn, *runner.SSHRunner
 
 // sweep removes what a process that died, or a connection that dropped,
 // left on a server: build directories (a checkout may hold a deploy key),
-// files with a command's environment, files with a storage's keys. It runs
-// before this process has put anything there, so everything it finds is
-// left over. Best effort: a server where it fails is no worse off.
+// files with a command's environment, files with a storage's keys, and
+// files that were being written and never got their name: a backup as
+// large as the dump had got, an app's variables, the routes, a copy of the
+// binary. It runs before this process has put anything there, so
+// everything it finds is left over. Best effort: a server where it fails
+// is no worse off.
+//
+// It does nothing in a directory that is not musdash's (oursFunc). A check
+// refuses such a directory, but a check is not the only way here: a row
+// from before there was that look, or a directory replaced since, would
+// have its work directory emptied at the next start of the dashboard.
 func sweep(ctx context.Context, r *runner.SSHRunner, dataDir string) {
 	if dataDir == "" {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	const clear = `if [ -d "$1" ]; then find "$1" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; fi
-if [ -d "$2" ]; then find "$2" -mindepth 2 -maxdepth 2 -type f -name "$3" -exec rm -f -- {} +; fi`
+	const clear = oursFunc + `ours "$8" || exit 0
+if [ -d "$1" ]; then find "$1" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; fi
+if [ -d "$2" ]; then find "$2" -mindepth 2 -maxdepth 2 -type f \( -name "$3" -o -name "$4" \) -exec rm -f -- {} +; fi
+if [ -d "$5" ]; then find "$5" -mindepth 2 -maxdepth 2 -type f -name "$4" -exec rm -f -- {} +; fi
+for d in "$6" "$7"; do if [ -d "$d" ]; then find "$d" -mindepth 1 -maxdepth 1 -type f -name "$4" -exec rm -f -- {} +; fi; done`
 	r.Output(ctx, runner.Cmd{Name: "sh", Args: []string{"-c", clear, "sh",
-		path.Join(dataDir, "work"), path.Join(dataDir, "backups"), backup.EnvFilePrefix + "*"}})
+		path.Join(dataDir, "work"), path.Join(dataDir, "backups"), backup.EnvFilePrefix + "*", runner.TempPrefix + "*",
+		path.Join(dataDir, "apps"), path.Join(dataDir, "proxy"), path.Join(dataDir, "bin"), dataDir}})
 }
 
 // release ends one use. A connection that turned out dead is dropped, so

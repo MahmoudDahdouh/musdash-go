@@ -252,3 +252,16 @@ func (d *DB) TouchAPIToken(ctx context.Context, id string) error {
 	_, err := d.ExecContext(ctx, `UPDATE api_tokens SET last_used_at = ? WHERE id = ?`, now(), id)
 	return err
 }
+
+// AllowUnlock lets the person past a lock-out for too many attempts, once,
+// until the given time. It is what `musdash unlock` writes.
+func (d *DB) AllowUnlock(ctx context.Context, userID string, until int64) error {
+	return affected(d.ExecContext(ctx, `UPDATE users SET unlock_until = ? WHERE id = ?`, until, userID))
+}
+
+// TakeUnlock uses up what AllowUnlock wrote. It returns ErrNotFound when
+// there is nothing to use or its time has passed. One statement, so of two
+// requests one finds it.
+func (d *DB) TakeUnlock(ctx context.Context, userID string, now int64) error {
+	return affected(d.ExecContext(ctx, `UPDATE users SET unlock_until = 0 WHERE id = ? AND unlock_until >= ?`, userID, now))
+}

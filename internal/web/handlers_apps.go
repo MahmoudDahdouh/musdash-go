@@ -794,6 +794,9 @@ func (s *Server) appStorageAdd(w http.ResponseWriter, r *http.Request) {
 
 	if !docker.ValidMountPath(st.Target) {
 		f.Fail("target", "Enter an absolute path inside the container, such as /data, without commas.")
+	} else if err := docker.CheckMountTarget(st.Target); err != nil {
+		// Docker would refuse it, but only at the next deployment.
+		f.Fail("target", sentence(err))
 	}
 	switch st.Kind {
 	case db.StorageVolume:

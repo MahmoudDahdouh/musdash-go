@@ -75,6 +75,35 @@ func TestEveryEngineIsComplete(t *testing.T) {
 	}
 }
 
+// Docker starts the same container again after a crash, a restart of the
+// daemon or a reboot, and what the first start wrote is then still there. A
+// command that writes a file must remove it first: the file belongs to the
+// engine's user by then, and a kernel with fs.protected_regular set refuses
+// root the redirection (Redis and KeyDB could not come back after a reboot).
+func TestCommandsCanRunAgainInTheSameContainer(t *testing.T) {
+	written := regexp.MustCompile(`>\s*(/[^\s;&|]+)`)
+	for _, tpl := range Databases() {
+		for _, arg := range tpl.Command {
+			for _, m := range written.FindAllStringSubmatchIndex(arg, -1) {
+				file := arg[m[2]:m[3]]
+				if file == "/dev/null" {
+					continue
+				}
+				if !strings.Contains(arg[:m[0]], "rm -f "+file+" ") {
+					t.Errorf("%s: the command writes %s without removing it first, so the container cannot be started a second time", tpl.Engine, file)
+				}
+			}
+		}
+	}
+	// The rule must see the file of the two engines known to write one.
+	for _, engine := range []string{"redis", "keydb"} {
+		tpl, _ := Database(engine)
+		if len(tpl.Command) != 3 || !written.MatchString(tpl.Command[2]) {
+			t.Errorf("%s: this test no longer sees the file its command writes", engine)
+		}
+	}
+}
+
 func TestURLEscapesCredentials(t *testing.T) {
 	tpl, _ := Database("postgres")
 	raw := tpl.URL(Creds{User: "user name", Pass: "p@ss/w:rd?# +x", DB: "my db"}, "host", 5432)

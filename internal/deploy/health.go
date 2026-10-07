@@ -196,12 +196,26 @@ func (d *Deployer) waitHealthy(ctx context.Context, dk docker.Client, app db.App
 		case err == nil && st.Status != "created" && (!st.Running || st.Status == "restarting"):
 			return fmt.Errorf("%w with status %d before it became healthy", errExited, st.ExitCode)
 		case err == nil:
-			if last = check(); last == nil {
+			err := check()
+			if err == nil {
 				return nil
+			}
+			// A check that the end of the time cut short says only that
+			// the time ended. What the one before it found is what the
+			// person needs.
+			if ctx.Err() == nil || last == nil {
+				last = err
 			}
 		}
 		select {
 		case <-ctx.Done():
+			// Not failed any sooner for this answer: on a server with an
+			// old sshd it is also what a port that nothing listens on yet
+			// looks like. Once the time is up, the person is told what
+			// the Servers page would tell them.
+			if errors.Is(last, runner.ErrForwardRefused) {
+				return fmt.Errorf("the health check did not pass within %s: %v. The server's sshd may not forward connections, which is how musdash reaches a new container's port; Check on the Servers page tells whether it does. If it does not: %s", timeout, last, runner.ForwardAdvice)
+			}
 			if last != nil {
 				return fmt.Errorf("the health check did not pass within %s: %v", timeout, last)
 			}

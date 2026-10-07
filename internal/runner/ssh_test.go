@@ -495,3 +495,195 @@ func TestSSHMoreCommandsThanOneConnectionCarries(t *testing.T) {
 		t.Fatalf("after the commands ended: %v", err)
 	}
 }
+
+// halfThenWait gives a reader's first part and then waits, as a dump does
+// that is still running.
+type halfThenWait struct {
+	first   io.Reader
+	sent    chan struct{} // closed when the first part has been read
+	release chan struct{} // the reader ends, with err, when this is closed
+	err     error
+	once    sync.Once
+}
+
+func (h *halfThenWait) Read(p []byte) (int, error) {
+	if n, err := h.first.Read(p); n > 0 || err == nil {
+		return n, nil
+	}
+	h.once.Do(func() { close(h.sent) })
+	<-h.release
+	if h.err != nil {
+		return 0, h.err
+	}
+	return 0, io.EOF
+}
+
+// A file appears under its name only when all of it was written. The
+// connection that goes away in the middle is the case that matters: sshd
+// then closes the remote command's input, which to that command is the
+// end of the file, arrived in good order. A backup was left truncated under
+// its name that way, and so could a routes file be.
+func TestSSHWriteFileNeverLeavesHalfAFileUnderItsName(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	settled := func(name string) (dest bool, temps []string) {
+		// The remote command needs a moment to see its input end, and
+		// then, were it the one to rename, to rename. A destination that
+		// appears within this time is the failure; none is the rule.
+		for deadline := time.Now().Add(time.Second); time.Now().Before(deadline) && !dest; time.Sleep(20 * time.Millisecond) {
+			_, err := os.Stat(name)
+			dest = err == nil
+		}
+		temps, _ = filepath.Glob(filepath.Join(filepath.Dir(name), ".musdash-*"))
+		return dest, temps
+	}
+
+	// The connection drops while the file is being written.
+	srv := sshtest.Start(t)
+	r := mustDial(t, srv)
+	dropped := filepath.Join(dir, "dropped.dump.gz")
+	src := &halfThenWait{first: strings.NewReader(strings.Repeat("half of a dump\n", 4096)), sent: make(chan struct{}), release: make(chan struct{})}
+	done := make(chan error, 1)
+	go func() { done <- r.WriteFile(ctx, dropped, 0o600, src) }()
+	<-src.sent
+	time.Sleep(100 * time.Millisecond)
+	srv.DropConnections()
+	close(src.release)
+	if err := <-done; err == nil {
+		t.Fatal("a write whose connection dropped reported success")
+	}
+	if dest, _ := settled(dropped); dest {
+		t.Fatal("half a file was left under the destination's name after the connection dropped")
+	}
+
+	// The reader fails: no destination, and no temporary file either.
+	r = mustDial(t, sshtest.Start(t))
+	failed := filepath.Join(dir, "failed.dump.gz")
+	src = &halfThenWait{first: strings.NewReader("some of it"), sent: make(chan struct{}), release: make(chan struct{}), err: errors.New("the dump failed")}
+	close(src.release)
+	if err := r.WriteFile(ctx, failed, 0o600, src); err == nil || !strings.Contains(err.Error(), "the dump failed") {
+		t.Fatalf("a write whose reader failed: %v", err)
+	}
+	if dest, temps := settled(failed); dest || len(temps) != 1 {
+		// One temporary file is the dropped write's, which nobody could
+		// remove; the failed write's own must be gone.
+		t.Fatalf("after a reader that failed: destination there %v, temporary files %v", dest, temps)
+	}
+
+	// A file that already exists is left as it was by both.
+	kept := filepath.Join(dir, "kept.env")
+	if err := r.WriteFile(ctx, kept, 0o600, strings.NewReader("the old content")); err != nil {
+		t.Fatal(err)
+	}
+	src = &halfThenWait{first: strings.NewReader("new"), sent: make(chan struct{}), release: make(chan struct{}), err: errors.New("stopped")}
+	close(src.release)
+	if err := r.WriteFile(ctx, kept, 0o600, src); err == nil {
+		t.Fatal("a write whose reader failed reported success")
+	}
+	if got, _ := os.ReadFile(kept); string(got) != "the old content" {
+		t.Fatalf("the file that was there is now %q", got)
+	}
+}
+
+// An sshd with AllowTcpForwarding no refuses what a health check of an app
+// needs. Callers must be able to tell that from a port nothing listens on.
+func TestSSHDialSaysWhenTheServerDoesNotForward(t *testing.T) {
+	srv := sshtest.Start(t)
+	r := mustDial(t, srv)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := ln.Addr().String()
+	ln.Close()
+
+	// A closed port on a server that forwards is not a refusal.
+	if _, err := r.Dial(ctx, "tcp", closed); err == nil || errors.Is(err, runner.ErrForwardRefused) {
+		t.Fatalf("a closed port: %v", err)
+	}
+	srv.Forward(sshtest.Refuse)
+	_, err = r.Dial(ctx, "tcp", net.JoinHostPort(srv.Host, strconv.Itoa(srv.Port)))
+	if !errors.Is(err, runner.ErrForwardRefused) {
+		t.Fatalf("a server that does not forward: %v", err)
+	}
+	// What the server said is still in it.
+	if !strings.Contains(err.Error(), "administratively prohibited") {
+		t.Fatalf("%v", err)
+	}
+}
+
+// The library asks for ECDSA host keys first, so a server with the usual
+// three presented its ECDSA key, while the person was told to compare the
+// fingerprint with the Ed25519 key's.
+func TestSSHFirstContactPrefersTheKeyPeopleAreToldToCompare(t *testing.T) {
+	keys := map[string]ssh.Signer{}
+	for _, kind := range []string{sshtest.ED25519, sshtest.ECDSA, sshtest.RSA} {
+		keys[kind] = sshtest.NewHostKey(t, kind)
+	}
+	// The order a server lists its keys in must not decide.
+	srv := sshtest.StartWithHostKeys(t, keys[sshtest.RSA], keys[sshtest.ECDSA], keys[sshtest.ED25519])
+	presented := func(recorded ssh.Signer) (ssh.PublicKey, error) {
+		var seen ssh.PublicKey
+		r, err := dial(t, srv, func(c *runner.SSHConfig) {
+			if recorded != nil {
+				c.HostKey = recorded.PublicKey().Marshal()
+				return
+			}
+			c.HostKey = nil
+			c.Seen = func(k ssh.PublicKey) error { seen = k; return nil }
+		})
+		if err != nil {
+			return nil, err
+		}
+		// Connected is not enough: a command has to run.
+		if out, err := r.Output(context.Background(), runner.Cmd{Name: "echo", Args: []string{"hello"}}); err != nil || string(out) != "hello\n" {
+			t.Fatalf("%q %v", out, err)
+		}
+		return seen, nil
+	}
+	seen, err := presented(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seen.Type() != ssh.KeyAlgoED25519 || !bytes.Equal(seen.Marshal(), keys[sshtest.ED25519].PublicKey().Marshal()) {
+		t.Fatalf("first contact was shown a %s key", seen.Type())
+	}
+	// A server recorded before, with whichever key it presented then,
+	// still connects: it is asked for that key's kind.
+	for kind, key := range keys {
+		if _, err := presented(key); err != nil {
+			t.Errorf("a server recorded with its %s key: %v", kind, err)
+		}
+	}
+
+	// With only two of the kinds, the next best is taken.
+	two := sshtest.StartWithHostKeys(t, keys[sshtest.RSA], keys[sshtest.ECDSA])
+	var got ssh.PublicKey
+	if _, err := dial(t, two, func(c *runner.SSHConfig) {
+		c.HostKey, c.Signer = nil, two.Signer
+		c.Seen = func(k ssh.PublicKey) error { got = k; return nil }
+	}); err != nil || got.Type() != ssh.KeyAlgoECDSA256 {
+		t.Fatalf("a server without an Ed25519 key: %v %v", got, err)
+	}
+	// A server that no longer has a key of the recorded kind has changed
+	// its keys: said as that, not as a failure to agree on an algorithm.
+	_, err = dial(t, two, func(c *runner.SSHConfig) {
+		c.HostKey, c.Signer = keys[sshtest.ED25519].PublicKey().Marshal(), two.Signer
+	})
+	if !errors.Is(err, runner.ErrHostKeyChanged) {
+		t.Fatalf("a server without the recorded kind of key: %v", err)
+	}
+	// And one that has a key of that kind, but another.
+	other := sshtest.StartWithHostKeys(t, sshtest.NewHostKey(t, sshtest.RSA))
+	_, err = dial(t, other, func(c *runner.SSHConfig) {
+		c.HostKey, c.Signer = keys[sshtest.RSA].PublicKey().Marshal(), other.Signer
+	})
+	if !errors.Is(err, runner.ErrHostKeyChanged) {
+		t.Fatalf("another RSA key than the recorded one: %v", err)
+	}
+}

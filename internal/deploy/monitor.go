@@ -210,14 +210,19 @@ func (d *Deployer) Reconcile(ctx context.Context, server db.Server, dk docker.Cl
 	return d.removeOrphans(ctx, dk, listed, current)
 }
 
-// orphanGrace keeps the cleanup away from containers of deployments that
-// only just finished: the previous container may still be draining.
+// orphanGrace keeps the cleanup away from the container of a deployment
+// that only just succeeded. A container carries the id of the deployment
+// that made it, so this is the container a deployment made a moment ago
+// and the next one has already replaced: it may still be draining.
 const orphanGrace = 5 * time.Minute
 
 // removeOrphans deletes app containers that nothing refers to: left by a
 // process that died mid-deploy, or by a stop that could not finish. They
 // would otherwise hold memory and a port for ever. Containers of
-// deployments that are queued, running or just finished are left alone.
+// deployments that are queued, running or just succeeded are left alone;
+// the container of a failed deployment is not, and that is what removes
+// the one a process killed in mid-deployment left waiting for its health
+// check (the deployment is failed at start, before this runs).
 func (d *Deployer) removeOrphans(ctx context.Context, dk docker.Client, listed []docker.Listed, current map[string]bool) error {
 	protected, err := d.DB.ProtectedDeployments(ctx, time.Now().Add(-orphanGrace).Unix())
 	if err != nil {

@@ -105,7 +105,7 @@ func wrapExit(name string, err error, ctx context.Context, stderr string) error 
 // WriteFile writes to a temporary file in the same directory and renames it
 // over path, so a reader never sees a half-written file.
 func (LocalRunner) WriteFile(_ context.Context, path string, mode fs.FileMode, r io.Reader) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".musdash-*")
+	tmp, err := os.CreateTemp(filepath.Dir(path), TempPrefix+"*")
 	if err != nil {
 		return err
 	}
