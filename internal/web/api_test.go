@@ -215,11 +215,11 @@ func TestAPIRefusesWhatIsNotALiveToken(t *testing.T) {
 		t.Fatalf("a session deployed through the API: %d jobs", n)
 	}
 	// And a token is not a session: pages send it to sign in.
-	for _, path := range []string{"/", "/apps/" + id, "/team", "/settings"} {
+	for _, path := range []string{"/", a.appPath(id), "/team", "/settings"} {
 		res, _ = a.call(http.MethodGet, path, good)
 		wantRedirect(t, res, "/login")
 	}
-	req, _ = http.NewRequest(http.MethodPost, a.url+"/apps/"+id+"/deploy", nil)
+	req, _ = http.NewRequest(http.MethodPost, a.url+a.appPath(id)+"/deploy", nil)
 	req.Header.Set("Authorization", "Bearer "+good)
 	if res, _ := a.do(&http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, req); res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/login" {
 		t.Fatalf("a token was accepted by a page: %d", res.StatusCode)
@@ -247,8 +247,8 @@ func TestAPIReadsAndOperates(t *testing.T) {
 	a.waitDatabase(database.ID)
 	a.stackServer("front", "3000", nil)
 	svc := a.newService(projectID, env, "blog", nil)
-	res, _ := a.post("/apps/"+appID+"/settings", "/apps/"+appID+"/tags", url.Values{"tags": {"nightly"}})
-	wantRedirect(t, res, "/apps/"+appID+"/settings#tags")
+	res, _ := a.post(a.appPath(appID)+"/settings", a.appPath(appID)+"/tags", url.Values{"tags": {"nightly"}})
+	wantRedirect(t, res, a.appPath(appID)+"/settings#tags")
 	read, deploy := a.newToken(db.AbilityRead), a.newToken(operator...)
 
 	// Reading.
@@ -478,10 +478,10 @@ func TestAPINeverReturnsSecrets(t *testing.T) {
 	team := firstTeam(t, a)
 	projectID, env := a.project("Shop")
 	gitApp := a.newGitApp(projectID, env, "web", nil)
-	res, _ := a.post("/apps/"+gitApp.ID+"/environment", "/apps/"+gitApp.ID+"/environment", url.Values{"vars": {"SECRET=plain-env-value-1"}, "build_vars": {"BUILD_SECRET=plain-env-value-2"}})
-	wantRedirect(t, res, "/apps/"+gitApp.ID+"/environment")
-	res, _ = a.post("/apps/"+gitApp.ID+"/settings", "/apps/"+gitApp.ID+"/webhook-secret", nil)
-	res, _ = a.post("/apps/"+gitApp.ID+"/settings", "/apps/"+gitApp.ID+"/deploy-token", nil)
+	res, _ := a.post(a.appPath(gitApp.ID)+"/environment", a.appPath(gitApp.ID)+"/environment", url.Values{"vars": {"SECRET=plain-env-value-1"}, "build_vars": {"BUILD_SECRET=plain-env-value-2"}})
+	wantRedirect(t, res, a.appPath(gitApp.ID)+"/environment")
+	res, _ = a.post(a.appPath(gitApp.ID)+"/settings", a.appPath(gitApp.ID)+"/webhook-secret", nil)
+	res, _ = a.post(a.appPath(gitApp.ID)+"/settings", a.appPath(gitApp.ID)+"/deploy-token", nil)
 	database := a.newDatabase(projectID, env, "postgres", "main", nil)
 	a.waitDatabase(database.ID)
 	a.stackServer("front", "3000", nil)
@@ -525,9 +525,9 @@ func TestAPINeverReturnsSecrets(t *testing.T) {
 
 	// A deployment that failed, so its free-text error is read too. It
 	// fails on a shared variable that does not exist, with others set.
-	res, _ = a.post("/apps/"+gitApp.ID+"/environment", "/apps/"+gitApp.ID+"/environment", url.Values{"vars": {"SECRET=plain-env-value-1\nA={{team.T}}\nB={{team.NOPE}}"}, "build_vars": {"BUILD_SECRET=plain-env-value-2"}})
-	wantRedirect(t, res, "/apps/"+gitApp.ID+"/environment")
-	res, _ = a.post("/apps/"+gitApp.ID, "/apps/"+gitApp.ID+"/deploy", nil)
+	res, _ = a.post(a.appPath(gitApp.ID)+"/environment", a.appPath(gitApp.ID)+"/environment", url.Values{"vars": {"SECRET=plain-env-value-1\nA={{team.T}}\nB={{team.NOPE}}"}, "build_vars": {"BUILD_SECRET=plain-env-value-2"}})
+	wantRedirect(t, res, a.appPath(gitApp.ID)+"/environment")
+	res, _ = a.post(a.appPath(gitApp.ID), a.appPath(gitApp.ID)+"/deploy", nil)
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("deploy: %d", res.StatusCode)
 	}

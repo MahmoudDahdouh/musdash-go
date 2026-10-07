@@ -19,7 +19,7 @@ func TestAppDomainsTab(t *testing.T) {
 	projectID, env := a.project("Shop")
 	web := a.newApp(projectID, env, "web", false, url.Values{"domain": {"shop.example.com"}})
 	api := a.newApp(projectID, env, "api", false, url.Values{"domain": {"api.example.com"}})
-	tab := "/apps/" + web + "/domains"
+	tab := a.appPath(web) + "/domains"
 
 	res, page := a.get(tab)
 	wantStatus(t, res, http.StatusOK)
@@ -78,16 +78,16 @@ func TestAppDomainsTab(t *testing.T) {
 
 	// Settings no longer holds the list or the form, and Overview leads
 	// to the tab.
-	if _, page = a.get("/apps/" + web + "/settings"); strings.Contains(page, `id="add-domain"`) || strings.Contains(page, `action="`+tab+`"`) {
+	if _, page = a.get(a.appPath(web) + "/settings"); strings.Contains(page, `id="add-domain"`) || strings.Contains(page, `action="`+tab+`"`) {
 		t.Error("the app's Settings still hold the Add domain form")
 	}
-	if _, page = a.get("/apps/" + web); !strings.Contains(page, `href="`+tab+`"`) || strings.Contains(page, "settings#domains") {
+	if _, page = a.get(a.appPath(web)); !strings.Contains(page, `href="`+tab+`"`) || strings.Contains(page, "settings#domains") {
 		t.Error("the app's Overview does not lead to the Domains tab")
 	}
 
 	// An app with none says so, with the button that adds one.
 	bare := a.newApp(projectID, env, "bare", false, url.Values{"domain": {""}})
-	if _, page = a.get("/apps/" + bare + "/domains"); !strings.Contains(page, "No domain yet") || !strings.Contains(page, `data-open="add-domain"`) {
+	if _, page = a.get(a.appPath(bare) + "/domains"); !strings.Contains(page, "No domain yet") || !strings.Contains(page, `data-open="add-domain"`) {
 		t.Error("an app without a domain: no empty state, or no button in it")
 	}
 
@@ -99,9 +99,9 @@ func TestAppDomainsTab(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, _ = a.get("/apps/" + preview.ID + "/domains")
-	wantRedirect(t, res, "/apps/"+preview.ID)
-	if _, page = a.get("/apps/" + preview.ID); strings.Contains(page, "/apps/"+preview.ID+"/domains") {
+	res, _ = a.get(a.appPath(preview.ID) + "/domains")
+	wantRedirect(t, res, a.appPath(preview.ID))
+	if _, page = a.get(a.appPath(preview.ID)); strings.Contains(page, a.appPath(preview.ID)+"/domains") {
 		t.Error("a preview has a Domains tab")
 	}
 
@@ -114,7 +114,7 @@ func TestAppDomainsTab(t *testing.T) {
 		t.Error("the project still has a Domains tab")
 	}
 	mdb := a.newDatabase(projectID, env, "postgres", "maindb", nil)
-	res, _ = a.get("/databases/" + mdb.ID + "/domains")
+	res, _ = a.get(a.databasePath(mdb.ID) + "/domains")
 	wantStatus(t, res, http.StatusNotFound)
 
 	// Another team's app has no such tab here.

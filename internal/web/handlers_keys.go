@@ -86,12 +86,12 @@ func (s *Server) keyOwners(r *http.Request) ([]pages.KeyOwner, error) {
 	out := make([]pages.KeyOwner, 0, len(apps)+len(services))
 	reporting := s.pushSources(r)
 	for _, a := range apps {
-		out = append(out, appKeyOwner(a, where(a.EnvironmentID), reporting))
+		out = append(out, appKeyOwner(a, places[a.EnvironmentID].ProjectID, where(a.EnvironmentID), reporting))
 	}
 	for _, m := range services {
 		// Only a service from a repository is deployed from outside.
 		if m.FromGit() {
-			out = append(out, serviceKeyOwner(m, where(m.EnvironmentID), reporting))
+			out = append(out, serviceKeyOwner(m, places[m.EnvironmentID].ProjectID, where(m.EnvironmentID), reporting))
 		}
 	}
 	return out, nil
@@ -114,13 +114,15 @@ func (s *Server) pushSources(r *http.Request) map[string]bool {
 	return out
 }
 
-func appKeyOwner(a db.App, where string, reporting map[string]bool) pages.KeyOwner {
-	return pages.KeyOwner{Kind: db.KindApp, ID: a.ID, Name: a.Name, Where: where, HasToken: a.DeployTokenHash != "",
+func appKeyOwner(a db.App, projectID, where string, reporting map[string]bool) pages.KeyOwner {
+	return pages.KeyOwner{Kind: db.KindApp, ID: a.ID, Name: a.Name, Where: where,
+		Path: pages.ResourcePath(projectID, a.EnvironmentID, db.KindApp, a.ID), HasToken: a.DeployTokenHash != "",
 		Git: a.Source == db.SourceGit, ViaApp: reporting[a.GitSourceID], HasSecret: a.WebhookSecret != ""}
 }
 
-func serviceKeyOwner(m db.Service, where string, reporting map[string]bool) pages.KeyOwner {
-	return pages.KeyOwner{Kind: db.KindService, ID: m.ID, Name: m.Name, Where: where, HasToken: m.DeployTokenHash != "",
+func serviceKeyOwner(m db.Service, projectID, where string, reporting map[string]bool) pages.KeyOwner {
+	return pages.KeyOwner{Kind: db.KindService, ID: m.ID, Name: m.Name, Where: where,
+		Path: pages.ResourcePath(projectID, m.EnvironmentID, db.KindService, m.ID), HasToken: m.DeployTokenHash != "",
 		Git: true, ViaApp: reporting[m.GitSourceID], HasSecret: m.WebhookSecret != ""}
 }
 
@@ -273,12 +275,12 @@ func (s *Server) showHookSecret(w http.ResponseWriter, r *http.Request, owner pa
 
 func (s *Server) appWebhookShow(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadApp(w, r); ok {
-		s.showHookSecret(w, r, appKeyOwner(v.App, "", s.pushSources(r)), v.App.WebhookSecret)
+		s.showHookSecret(w, r, appKeyOwner(v.App, v.Project.ID, "", s.pushSources(r)), v.App.WebhookSecret)
 	}
 }
 
 func (s *Server) serviceWebhookShow(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadService(w, r); ok {
-		s.showHookSecret(w, r, serviceKeyOwner(v.Service, "", s.pushSources(r)), v.Service.WebhookSecret)
+		s.showHookSecret(w, r, serviceKeyOwner(v.Service, v.Project.ID, "", s.pushSources(r)), v.Service.WebhookSecret)
 	}
 }

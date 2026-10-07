@@ -37,8 +37,8 @@ func TestTagsOnAppsAndServices(t *testing.T) {
 		t.Fatalf("empty Tags page:\n%s", body)
 	}
 
-	settings := "/apps/" + web + "/settings"
-	res, _ = a.post(settings, "/apps/"+web+"/tags", url.Values{"tags": {"Nightly, frontend nightly"}})
+	settings := a.appPath(web) + "/settings"
+	res, _ = a.post(settings, a.appPath(web)+"/tags", url.Values{"tags": {"Nightly, frontend nightly"}})
 	wantRedirect(t, res, settings+"#tags")
 	if got := tagsOf(db.KindApp, web); !reflect.DeepEqual(got, []string{"frontend", "nightly"}) {
 		t.Fatalf("tags of web: %v", got)
@@ -48,10 +48,10 @@ func TestTagsOnAppsAndServices(t *testing.T) {
 	if !regexp.MustCompile(`name="tag" value="frontend" checked`).MatchString(body) || !strings.Contains(body, `href="/tags/nightly"`) {
 		t.Fatal("the settings page does not show the tags")
 	}
-	res, _ = a.post(settings, "/apps/"+api+"/tags", url.Values{"tags": {"nightly"}})
-	wantRedirect(t, res, "/apps/"+api+"/settings#tags")
-	svcSettings := "/services/" + svc.ID + "/settings"
-	res, _ = a.post(svcSettings, "/services/"+svc.ID+"/tags", url.Values{"tags": {"nightly"}})
+	res, _ = a.post(settings, a.appPath(api)+"/tags", url.Values{"tags": {"nightly"}})
+	wantRedirect(t, res, a.appPath(api)+"/settings#tags")
+	svcSettings := a.servicePath(svc.ID) + "/settings"
+	res, _ = a.post(svcSettings, a.servicePath(svc.ID)+"/tags", url.Values{"tags": {"nightly"}})
 	wantRedirect(t, res, svcSettings+"#tags")
 	if got := tagsOf(db.KindService, svc.ID); !reflect.DeepEqual(got, []string{"nightly"}) {
 		t.Fatalf("tags of the service: %v", got)
@@ -59,7 +59,7 @@ func TestTagsOnAppsAndServices(t *testing.T) {
 
 	// What is not a tag is refused whole, and too many are.
 	for _, bad := range []string{"ok, not/ok", "<script>", "../../x", "a b c d e f g h i j k"} {
-		res, _ = a.post(settings, "/apps/"+web+"/tags", url.Values{"tags": {bad}})
+		res, _ = a.post(settings, a.appPath(web)+"/tags", url.Values{"tags": {bad}})
 		wantRedirect(t, res, settings+"#tags")
 		if got := tagsOf(db.KindApp, web); !reflect.DeepEqual(got, []string{"frontend", "nightly"}) {
 			t.Fatalf("after %q: %v", bad, got)
@@ -77,7 +77,7 @@ func TestTagsOnAppsAndServices(t *testing.T) {
 	}
 	res, body = a.get("/tags/nightly")
 	wantStatus(t, res, http.StatusOK)
-	for _, want := range []string{"/apps/" + web, "/apps/" + api, "/services/" + svc.ID, `hx-get="/switch/tags?at=nightly"`} {
+	for _, want := range []string{a.appPath(web), a.appPath(api), a.servicePath(svc.ID), `hx-get="/switch/tags?at=nightly"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the tag's page lacks %q", want)
 		}
@@ -118,19 +118,19 @@ func TestTagsOnAppsAndServices(t *testing.T) {
 	}
 
 	// Ticked tags and typed ones are saved together.
-	res, _ = a.post(settings, "/apps/"+web+"/tags", url.Values{"tag": {"nightly"}, "tags": {"blue"}})
+	res, _ = a.post(settings, a.appPath(web)+"/tags", url.Values{"tag": {"nightly"}, "tags": {"blue"}})
 	wantRedirect(t, res, settings+"#tags")
 	if got := tagsOf(db.KindApp, web); !reflect.DeepEqual(got, []string{"blue", "nightly"}) {
 		t.Fatalf("ticked and typed tags: %v", got)
 	}
-	res, _ = a.post(settings, "/apps/"+web+"/tags", url.Values{"tag": {"nightly", "not a tag"}})
+	res, _ = a.post(settings, a.appPath(web)+"/tags", url.Values{"tag": {"nightly", "not a tag"}})
 	wantRedirect(t, res, settings+"#tags")
 	if got := tagsOf(db.KindApp, web); !reflect.DeepEqual(got, []string{"blue", "nightly"}) {
 		t.Fatalf("a ticked value that is no tag was not refused: %v", got)
 	}
 
 	// Sending none removes the app's tags; the tags themselves stay.
-	res, _ = a.post(settings, "/apps/"+web+"/tags", url.Values{"tags": {""}})
+	res, _ = a.post(settings, a.appPath(web)+"/tags", url.Values{"tags": {""}})
 	wantRedirect(t, res, settings+"#tags")
 	res, body = a.get("/tags/frontend")
 	wantStatus(t, res, http.StatusOK)
@@ -139,7 +139,7 @@ func TestTagsOnAppsAndServices(t *testing.T) {
 	}
 
 	// Deleting an app takes its tags along.
-	res, _ = a.post(settings, "/apps/"+api+"/delete", url.Values{"confirm": {"api"}})
+	res, _ = a.post(settings, a.appPath(api)+"/delete", url.Values{"confirm": {"api"}})
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("delete app: %d", res.StatusCode)
 	}
@@ -183,11 +183,11 @@ func TestTagsAreMadeRenamedAndDeleted(t *testing.T) {
 		}
 	}
 	// The app's tags dialog offers it, unticked.
-	_, body = a.get("/apps/" + web + "/settings")
+	_, body = a.get(a.appPath(web) + "/settings")
 	if !strings.Contains(body, `name="tag" value="nightly"`) || regexp.MustCompile(`name="tag" value="nightly" checked`).MatchString(body) {
 		t.Fatal("the tags dialog does not offer the team's tag unticked")
 	}
-	a.post("/apps/"+web+"/settings", "/apps/"+web+"/tags", url.Values{"tag": {"nightly"}})
+	a.post(a.appPath(web)+"/settings", a.appPath(web)+"/tags", url.Values{"tag": {"nightly"}})
 
 	// A tag nothing has: its page says so, and the switcher too.
 	a.post("/tags", "/tags", url.Values{"name": {"empty"}})
@@ -269,7 +269,7 @@ func TestAnotherTeamsTagsAreNotShown(t *testing.T) {
 		t.Fatal("another team's tag was renamed or deleted")
 	}
 	// And their app cannot be tagged from here.
-	res, _ = a.post("/tags", "/apps/"+theirs.ID+"/tags", url.Values{"tags": {"mine"}})
+	res, _ = a.post("/tags", a.appPath(theirs.ID)+"/tags", url.Values{"tags": {"mine"}})
 	wantStatus(t, res, http.StatusNotFound)
 	if got, _ := a.db.TagsOf(ctx, "otherteam", db.KindApp, theirs.ID); !reflect.DeepEqual(got, []string{"nightly"}) {
 		t.Fatalf("their tags changed: %v", got)
@@ -291,8 +291,8 @@ func TestAPreviewCannotBeTagged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, _ := a.post("/apps/"+parent.ID+"/settings", "/apps/"+preview.ID+"/tags", url.Values{"tags": {"nightly"}})
-	wantRedirect(t, res, "/apps/"+preview.ID)
+	res, _ := a.post(a.appPath(parent.ID)+"/settings", a.appPath(preview.ID)+"/tags", url.Values{"tags": {"nightly"}})
+	wantRedirect(t, res, a.appPath(preview.ID))
 	if got, _ := a.db.TagsOf(ctx, team, db.KindApp, preview.ID); len(got) != 0 {
 		t.Fatalf("a preview was tagged: %v", got)
 	}

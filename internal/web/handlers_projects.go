@@ -35,7 +35,12 @@ func projectForm(r *http.Request) (name, description string, f ui.Form) {
 // loadProject fetches the project in the path for the signed-in team. It
 // answers 404 itself and returns false when the project is not visible.
 func (s *Server) loadProject(w http.ResponseWriter, r *http.Request) (db.Project, bool) {
-	p, err := s.DB.Project(r.Context(), sessionFrom(r).TeamID, r.PathValue("id"))
+	return s.projectByID(w, r, r.PathValue("id"))
+}
+
+// projectByID is loadProject for a route that names the project otherwise.
+func (s *Server) projectByID(w http.ResponseWriter, r *http.Request, id string) (db.Project, bool) {
+	p, err := s.DB.Project(r.Context(), sessionFrom(r).TeamID, id)
 	if errors.Is(err, db.ErrNotFound) {
 		s.notFound(w, r)
 		return p, false
@@ -93,7 +98,9 @@ func (s *Server) projectShow(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, errors.New("project "+p.ID+" has no environment"))
 		return
 	}
-	s.renderEnvironment(w, r, p, envs[0])
+	// The environment is in the address of its page, so the page has one
+	// address: a project opens on its first environment by leading there.
+	redirect(w, r, pages.EnvPath(p.ID, envs[0].ID))
 }
 
 // environmentShow is one environment of a project, named in the path.
@@ -104,7 +111,7 @@ func (s *Server) environmentShow(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderEnvironment(w http.ResponseWriter, r *http.Request, p db.Project, env db.Environment) {
-	res, err := s.envResources(r, env.ID)
+	res, err := s.envResources(r, env)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -199,27 +206,21 @@ func (s *Server) environmentCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	// Into the new environment: adding to it is what comes next.
 	setFlash(w, r, ui.ToneOK, "Environment created.")
-	redirect(w, r, envPath(p.ID, env.ID))
+	redirect(w, r, pages.EnvPath(p.ID, env.ID))
 }
 
 func (s *Server) environmentDelete(w http.ResponseWriter, r *http.Request) {
-	teamID := sessionFrom(r).TeamID
-	env, err := s.DB.Environment(r.Context(), teamID, r.PathValue("id"))
-	if errors.Is(err, db.ErrNotFound) {
-		s.notFound(w, r)
+	p, env, ok := s.loadProjectEnv(w, r)
+	if !ok {
 		return
 	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	back := "/projects/" + env.ProjectID + "/settings"
+	back := "/projects/" + p.ID + "/settings"
 	if strings.TrimSpace(r.PostFormValue("confirm")) != env.Name {
 		setFlash(w, r, ui.ToneDanger, "The environment was not deleted: the name you typed did not match.")
 		redirect(w, r, back)
 		return
 	}
-	err = s.DB.DeleteEnvironment(r.Context(), teamID, env.ID)
+	err := s.DB.DeleteEnvironment(r.Context(), p.TeamID, env.ID)
 	switch {
 	case errors.Is(err, db.ErrLastEnvironment):
 		setFlash(w, r, ui.ToneDanger, "A project needs at least one environment.")

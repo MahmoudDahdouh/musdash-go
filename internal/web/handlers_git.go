@@ -205,7 +205,7 @@ func (s *Server) appSourceSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Source saved. Redeploy to build from it.")
-	redirect(w, r, "/apps/"+app.ID+"/settings")
+	redirect(w, r, v.Path()+"/settings")
 }
 
 // appWebhookSecret creates or replaces the secret of the app's own push
@@ -215,7 +215,7 @@ func (s *Server) appWebhookSecret(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.newHookSecret(w, r, appKeyOwner(v.App, "", s.pushSources(r)))
+	s.newHookSecret(w, r, appKeyOwner(v.App, v.Project.ID, "", s.pushSources(r)))
 }
 
 // appBuildServer chooses the server a Git app's image is built on.
@@ -239,7 +239,7 @@ func (s *Server) appBuildServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Saved. The next deployment builds there.")
-	redirect(w, r, "/apps/"+v.App.ID+"/settings")
+	redirect(w, r, v.Path()+"/settings")
 }
 
 // appDeployToken creates, replaces or revokes the app's deploy token. A new
@@ -250,11 +250,11 @@ func (s *Server) appDeployToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.PostFormValue("revoke") == "1" {
-		s.revokeDeployToken(w, r, appKeyOwner(v.App, "", s.pushSources(r)))
+		s.revokeDeployToken(w, r, appKeyOwner(v.App, v.Project.ID, "", s.pushSources(r)))
 		return
 	}
 	if s.sentBefore(w, r, pages.TokensPath) {
 		return
 	}
-	s.newDeployToken(w, r, appKeyOwner(v.App, "", s.pushSources(r)))
+	s.newDeployToken(w, r, appKeyOwner(v.App, v.Project.ID, "", s.pushSources(r)))
 }

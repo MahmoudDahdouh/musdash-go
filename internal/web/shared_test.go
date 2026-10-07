@@ -38,10 +38,10 @@ func TestSharedVariablePages(t *testing.T) {
 	server, _ := a.db.EnsureLocalServer(ctx, team, "")
 
 	pages := map[string][2]string{ // page → scope, scope id
-		"/team/variables":                        {db.ScopeTeam, team},
-		"/projects/" + projectID + "/variables":  {db.ScopeProject, projectID},
-		"/environments/" + env.ID + "/variables": {db.ScopeEnvironment, env.ID},
-		"/servers/" + server.ID + "/variables":   {db.ScopeServer, server.ID},
+		"/team/variables":                                          {db.ScopeTeam, team},
+		"/projects/" + projectID + "/variables":                    {db.ScopeProject, projectID},
+		"/projects/" + projectID + "/env/" + env.ID + "/variables": {db.ScopeEnvironment, env.ID},
+		"/servers/" + server.ID + "/variables":                     {db.ScopeServer, server.ID},
 	}
 	for page, where := range pages {
 		res, body := a.get(page)
@@ -92,7 +92,7 @@ func TestSharedVariablePages(t *testing.T) {
 		t.Fatalf("still stored: %+v", list)
 	}
 	// Unknown ids.
-	for _, page := range []string{"/projects/nosuchid/variables", "/environments/nosuchid/variables", "/servers/nosuchid/variables"} {
+	for _, page := range []string{"/projects/nosuchid/variables", "/projects/nosuchid/env/nosuchid/variables", "/servers/nosuchid/variables"} {
 		res, _ := a.get(page)
 		wantStatus(t, res, http.StatusNotFound)
 	}
@@ -161,7 +161,7 @@ func TestSharedVariablesByRole(t *testing.T) {
 	}
 
 	// A project's and an environment's are a Member's to change.
-	for _, page := range []string{"/projects/" + projectID + "/variables", "/environments/" + env.ID + "/variables"} {
+	for _, page := range []string{"/projects/" + projectID + "/variables", "/projects/" + projectID + "/env/" + env.ID + "/variables"} {
 		res, _ := mem.post(page, url.Values{"vars": {"STAGE=member-set"}})
 		wantRedirect(t, res, page)
 	}
@@ -185,7 +185,7 @@ func TestAnotherTeamsScopesHaveNoVariablePages(t *testing.T) {
 		}
 	}
 	token := a.csrf("/team/variables")
-	for _, page := range []string{"/projects/" + p.ID + "/variables", "/environments/" + envs[0].ID + "/variables", "/servers/theirserver/variables"} {
+	for _, page := range []string{"/projects/" + p.ID + "/variables", "/projects/" + p.ID + "/env/" + envs[0].ID + "/variables", "/servers/theirserver/variables"} {
 		res, body := a.get(page)
 		wantStatus(t, res, http.StatusNotFound)
 		if strings.Contains(body, "THEIRS") || strings.Contains(body, "their-secret") {
@@ -211,7 +211,7 @@ func TestSavingAnAppsVariablesWarnsAboutMissingSharedOnes(t *testing.T) {
 	if err := a.db.ReplaceSharedVars(ctx, team, db.ScopeProject, projectID, []db.EnvVar{{Key: "DB_HOST", Value: a.seal("db.internal")}}); err != nil {
 		t.Fatal(err)
 	}
-	page := "/apps/" + id + "/environment"
+	page := a.appPath(id) + "/environment"
 
 	res, _ := a.post(page, page, url.Values{"vars": {"A={{project.DB_HOST}}\nB={{team.NOPE}}\nC={{ .tmpl }}"}})
 	wantRedirect(t, res, page)

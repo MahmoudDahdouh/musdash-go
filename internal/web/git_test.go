@@ -35,12 +35,12 @@ func (a *app) newGitApp(projectID string, env db.Environment, name string, extra
 	for k, v := range extra {
 		form[k] = v
 	}
-	page := "/projects/" + projectID + "/e/" + env.ID + "/apps/new?source=git"
-	res, body := a.post(page, "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
+	page := "/projects/" + projectID + "/env/" + env.ID + "/app/new?source=git"
+	res, body := a.post(page, "/projects/"+projectID+"/env/"+env.ID+"/app", form)
 	if res.StatusCode != http.StatusSeeOther {
 		a.t.Fatalf("create git app: %d\n%s", res.StatusCode, body)
 	}
-	id := strings.Split(strings.TrimPrefix(res.Header.Get("Location"), "/apps/"), "/")[0]
+	id := createdID(res, db.KindApp)
 	got, err := a.db.AppByID(context.Background(), id)
 	if err != nil {
 		a.t.Fatal(err)
@@ -79,7 +79,7 @@ func TestCreateGitApp(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 
-	_, page := a.get("/projects/" + projectID + "/e/" + env.ID + "/apps/new?source=git")
+	_, page := a.get("/projects/" + projectID + "/env/" + env.ID + "/app/new?source=git")
 	for _, want := range []string{"Git repository", `name="repo"`, `name="branch"`, "Nothing: the repository is public"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the Git form is missing %q", want)
@@ -96,7 +96,7 @@ func TestCreateGitApp(t *testing.T) {
 	if static.Port != 80 || !static.SPAFallback || static.PublishDir != "dist" {
 		t.Fatalf("static app: %+v", static)
 	}
-	_, overview := a.get("/apps/" + got.ID)
+	_, overview := a.get(a.appPath(got.ID))
 	if !strings.Contains(overview, "acme/shop @ main") {
 		t.Fatal("the app page does not show the repository and branch")
 	}
@@ -131,13 +131,13 @@ func TestGitFormValidation(t *testing.T) {
 		{url.Values{"dockerfile_path": {"/etc/passwd"}}, "Enter a path inside the repository"},
 		{url.Values{"publish_dir": {"a;b"}}, "Enter a path inside the repository"},
 	}
-	page := "/projects/" + projectID + "/e/" + env.ID + "/apps/new?source=git"
+	page := "/projects/" + projectID + "/env/" + env.ID + "/app/new?source=git"
 	for _, c := range cases {
 		form := gitForm(env, "web")
 		for k, v := range c.field {
 			form[k] = v
 		}
-		res, body := a.post(page, "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
+		res, body := a.post(page, "/projects/"+projectID+"/env/"+env.ID+"/app", form)
 		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(strings.ToLower(body), strings.ToLower(c.want)) {
 			t.Errorf("%v: status %d, want 422 with %q", c.field, res.StatusCode, c.want)
 		}
@@ -158,11 +158,11 @@ func TestAppSourceAndRuntimeSettings(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 	app := a.newGitApp(projectID, env, "web", nil)
-	page := "/apps/" + app.ID + "/settings"
+	page := a.appPath(app.ID) + "/settings"
 
 	// Source card.
 	src := url.Values{"access": {"public"}, "repo": {"https://github.com/acme/other"}, "branch": {"release/2"}, "build_pack": {"static"}, "publish_dir": {"public"}}
-	res, _ := a.post(page, "/apps/"+app.ID+"/source", src)
+	res, _ := a.post(page, a.appPath(app.ID)+"/source", src)
 	wantRedirect(t, res, page)
 	got, _ := a.db.AppByID(context.Background(), app.ID)
 	// Unticked boxes are stored as off.
@@ -174,14 +174,14 @@ func TestAppSourceAndRuntimeSettings(t *testing.T) {
 		t.Fatalf("switching to the static build pack left the port at %d", got.Port)
 	}
 	src.Set("branch", "bad branch")
-	res, body := a.post(page, "/apps/"+app.ID+"/source", src)
+	res, body := a.post(page, a.appPath(app.ID)+"/source", src)
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "Enter a branch name") {
 		t.Fatalf("bad branch accepted: %d", res.StatusCode)
 	}
 
 	// An image app has no source to save.
 	img := a.newApp(projectID, env, "img", false, nil)
-	res, _ = a.post("/apps/"+img+"/settings", "/apps/"+img+"/source", src)
+	res, _ = a.post(a.appPath(img)+"/settings", a.appPath(img)+"/source", src)
 	wantStatus(t, res, http.StatusNotFound)
 
 	// General form: a Git app needs no image; start command and options.
@@ -213,7 +213,7 @@ func TestBuildTimeVariables(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 	app := a.newGitApp(projectID, env, "web", nil)
-	page := "/apps/" + app.ID + "/environment"
+	page := a.appPath(app.ID) + "/environment"
 
 	for names, want := range map[string]string{
 		"DOCKER_HOST=tcp://evil:2375": "DOCKER_HOST cannot be a build-time variable",
@@ -335,7 +335,7 @@ func TestManualWebhookAndDeployToken(t *testing.T) {
 	ctx := context.Background()
 	projectID, env := a.project("Shop")
 	app := a.newGitApp(projectID, env, "web", nil)
-	settings := "/apps/" + app.ID + "/settings"
+	settings := a.appPath(app.ID) + "/settings"
 	hookPath := "/webhooks/git/" + app.ID
 
 	// Before a secret exists, nothing verifies: not even an empty-key MAC.
@@ -362,13 +362,13 @@ func TestManualWebhookAndDeployToken(t *testing.T) {
 	}
 
 	// Deploy token: shown once, stored hashed.
-	res, page := a.post("/keys/tokens", "/apps/"+app.ID+"/deploy-token", nil)
+	res, page := a.post("/keys/tokens", a.appPath(app.ID)+"/deploy-token", nil)
 	wantStatus(t, res, http.StatusOK)
 	tm := regexp.MustCompile(`mdt_[A-Za-z0-9_-]{40,}`).FindString(page)
 	if tm == "" {
 		t.Fatal("the new deploy token is not shown")
 	}
-	if _, page = a.get("/keys/tokens"); strings.Contains(page, tm) || !strings.Contains(page, `action="/apps/`+app.ID+`/deploy-token"`) {
+	if _, page = a.get("/keys/tokens"); strings.Contains(page, tm) || !strings.Contains(page, `action="`+a.appPath(app.ID)+`/deploy-token"`) {
 		t.Fatal("the token is shown again, or the Keys page does not know there is one")
 	}
 	stored, _ := a.db.AppByID(ctx, app.ID)
@@ -411,7 +411,7 @@ func TestManualWebhookAndDeployToken(t *testing.T) {
 		t.Fatalf("deployment: %+v %v", dep, err)
 	}
 
-	res, _ = a.post("/keys/tokens", "/apps/"+app.ID+"/deploy-token", url.Values{"revoke": {"1"}})
+	res, _ = a.post("/keys/tokens", a.appPath(app.ID)+"/deploy-token", url.Values{"revoke": {"1"}})
 	wantRedirect(t, res, "/keys/tokens")
 	if res, _ := api(app.ID, tm); res.StatusCode != http.StatusUnauthorized {
 		t.Fatal("a revoked token still works")
@@ -502,7 +502,7 @@ func TestWebhookHardening(t *testing.T) {
 	// The deploy API hands back the waiting deployment rather than queueing
 	// another behind it.
 	a.db.Exec(`UPDATE deployments SET status = 'failed'`)
-	_, page := a.post("/keys/tokens", "/apps/"+app.ID+"/deploy-token", nil)
+	_, page := a.post("/keys/tokens", a.appPath(app.ID)+"/deploy-token", nil)
 	token := regexp.MustCompile(`mdt_[A-Za-z0-9_-]{40,}`).FindString(page)
 	api := func() map[string]string {
 		req, _ := http.NewRequest(http.MethodPost, a.url+"/api/v1/deploy?uuid="+app.ID, nil)
@@ -728,8 +728,8 @@ func TestOtherTeamsSourcesAreNotReachable(t *testing.T) {
 	// Nor can an app be pointed at them.
 	projectID, env := a.project("Shop")
 	app := a.newGitApp(projectID, env, "web", nil)
-	settings := "/apps/" + app.ID + "/settings"
-	res, _ = a.post(settings, "/apps/"+app.ID+"/source", url.Values{"access": {"source:" + src.ID}, "repo": {"https://github.com/acme/shop"}, "branch": {"main"}, "build_pack": {"dockerfile"}})
+	settings := a.appPath(app.ID) + "/settings"
+	res, _ = a.post(settings, a.appPath(app.ID)+"/source", url.Values{"access": {"source:" + src.ID}, "repo": {"https://github.com/acme/shop"}, "branch": {"main"}, "build_pack": {"dockerfile"}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
 	if got, _ := a.db.AppByID(ctx, app.ID); got.GitSourceID != "" {
 		t.Fatal("an app was connected to another team's GitHub App")
@@ -793,10 +793,10 @@ func TestPullRequestsThroughAGitHubApp(t *testing.T) {
 	quiet := a.newGitApp(projectID, env, "quiet", url.Values{"access": {"source:" + src.ID}})
 	staging := a.newGitApp(projectID, env, "staging", url.Values{"access": {"source:" + src.ID}, "branch": {"develop"}})
 	public := a.newGitApp(projectID, env, "public", nil)
-	settings := "/apps/" + web.ID + "/settings"
+	settings := a.appPath(web.ID) + "/settings"
 	for _, app := range []db.App{web, staging, public} {
-		page := "/apps/" + app.ID + "/settings"
-		res, _ := a.post(page, "/apps/"+app.ID+"/previews", url.Values{"previews": {"1"}})
+		page := a.appPath(app.ID) + "/settings"
+		res, _ := a.post(page, a.appPath(app.ID)+"/previews", url.Values{"previews": {"1"}})
 		wantRedirect(t, res, page+"#previews")
 	}
 	path := "/webhooks/github/" + src.ID
@@ -880,30 +880,30 @@ func TestPullRequestsThroughAGitHubApp(t *testing.T) {
 
 	// On the pages: with its parent, not among the project's apps.
 	_, page := a.get(settings)
-	for _, want := range []string{"Pull request previews", "/apps/" + child.ID, "feature/login", "/previews/12/delete"} {
+	for _, want := range []string{"Pull request previews", a.appPath(child.ID), "feature/login", "/previews/12/delete"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the parent's settings lack %q", want)
 		}
 	}
-	if _, page = a.get("/projects/" + projectID + "/e/" + env.ID); strings.Contains(page, "web-pr-12") {
+	if _, page = a.get("/projects/" + projectID + "/env/" + env.ID); strings.Contains(page, "web-pr-12") {
 		t.Error("the project page lists the preview as an app")
 	}
-	_, page = a.get("/apps/" + child.ID)
-	if !strings.Contains(page, "The preview of pull request #12") || !strings.Contains(page, "/apps/"+web.ID) {
+	_, page = a.get(a.appPath(child.ID))
+	if !strings.Contains(page, "The preview of pull request #12") || !strings.Contains(page, a.appPath(web.ID)) {
 		t.Error("the preview's page does not say what it is")
 	}
-	if strings.Contains(page, "/apps/"+child.ID+"/environment") || strings.Contains(page, "/apps/"+child.ID+"/storage") {
+	if strings.Contains(page, a.appPath(child.ID)+"/environment") || strings.Contains(page, a.appPath(child.ID)+"/storage") {
 		t.Error("the preview's page offers variables or storage of its own")
 	}
 
 	// A preview has no settings of its own to change.
-	token := "/apps/" + child.ID
+	token := a.appPath(child.ID)
 	for _, post := range []string{"/environment", "/settings", "/domains", "/storage", "/source", "/webhook-secret", "/deploy-token", "/tasks", "/build-server"} {
-		res, _ := a.post(token, "/apps/"+child.ID+post, url.Values{"vars": {"X=1"}, "host": {"x.example.com"}, "name": {"renamed"}})
-		wantRedirect(t, res, "/apps/"+child.ID)
+		res, _ := a.post(token, a.appPath(child.ID)+post, url.Values{"vars": {"X=1"}, "host": {"x.example.com"}, "name": {"renamed"}})
+		wantRedirect(t, res, a.appPath(child.ID))
 	}
 	for _, get := range []string{"/environment", "/environment/values", "/environment/edit", "/storage", "/tasks", "/webhook-secret"} {
-		if res, _ := a.get("/apps/" + child.ID + get); res.StatusCode != http.StatusSeeOther {
+		if res, _ := a.get(a.appPath(child.ID) + get); res.StatusCode != http.StatusSeeOther {
 			t.Errorf("GET %s on a preview: %d", get, res.StatusCode)
 		}
 	}
@@ -914,7 +914,7 @@ func TestPullRequestsThroughAGitHubApp(t *testing.T) {
 		t.Fatalf("a preview's settings were changed: %+v, %d variables, %d domains", after, len(vars), len(doms))
 	}
 	// And previews cannot be switched on for a preview.
-	if res, _ := a.post(token, "/apps/"+child.ID+"/previews", url.Values{"previews": {"1"}}); res.StatusCode != http.StatusNotFound {
+	if res, _ := a.post(token, a.appPath(child.ID)+"/previews", url.Values{"previews": {"1"}}); res.StatusCode != http.StatusNotFound {
 		t.Errorf("previews of a preview: %d", res.StatusCode)
 	}
 
@@ -934,18 +934,18 @@ func TestPullRequestsThroughAGitHubApp(t *testing.T) {
 	if len(again) != 1 {
 		t.Fatalf("reopened: %d previews", len(again))
 	}
-	if res, _ := a.post(settings, "/apps/"+web.ID+"/previews/99/delete", nil); res.StatusCode != http.StatusNotFound {
+	if res, _ := a.post(settings, a.appPath(web.ID)+"/previews/99/delete", nil); res.StatusCode != http.StatusNotFound {
 		t.Errorf("removing a preview that does not exist: %d", res.StatusCode)
 	}
-	if res, _ := a.post(settings, "/apps/"+quiet.ID+"/previews/12/delete", nil); res.StatusCode != http.StatusNotFound {
+	if res, _ := a.post(settings, a.appPath(quiet.ID)+"/previews/12/delete", nil); res.StatusCode != http.StatusNotFound {
 		t.Errorf("removing another app's preview through this one: %d", res.StatusCode)
 	}
-	res, _ = a.post(settings, "/apps/"+web.ID+"/previews/12/delete", nil)
+	res, _ = a.post(settings, a.appPath(web.ID)+"/previews/12/delete", nil)
 	wantRedirect(t, res, settings+"#previews")
 	a.waitGone(again[0].ID)
 
 	// Switched off: later pull requests get none.
-	res, _ = a.post(settings, "/apps/"+web.ID+"/previews", url.Values{})
+	res, _ = a.post(settings, a.appPath(web.ID)+"/previews", url.Values{})
 	wantRedirect(t, res, settings+"#previews")
 	if _, answer = a.hook(path, whSecret, "pull_request", "p-5", prBody("opened", "acme/shop", "acme/shop", "another", 13)); !strings.Contains(answer, `"previews":0`) {
 		t.Fatalf("with previews off: %s", answer)
@@ -958,7 +958,7 @@ func TestPreviewSettingsAndManualWebhook(t *testing.T) {
 	ctx := context.Background()
 	projectID, env := a.project("Shop")
 	app := a.newGitApp(projectID, env, "web", nil)
-	settings := "/apps/" + app.ID + "/settings"
+	settings := a.appPath(app.ID) + "/settings"
 
 	// The domain previews are served under.
 	for name, domain := range map[string]string{
@@ -967,7 +967,7 @@ func TestPreviewSettingsAndManualWebhook(t *testing.T) {
 		"generated":      "1.2.3.4.sslip.io",
 		"too long a one": strings.Repeat("a", 60) + "." + strings.Repeat("b", 60) + "." + strings.Repeat("c", 60) + "." + strings.Repeat("d", 50) + ".example",
 	} {
-		res, _ := a.post(settings, "/apps/"+app.ID+"/previews", url.Values{"previews": {"1"}, "preview_domain": {domain}})
+		res, _ := a.post(settings, a.appPath(app.ID)+"/previews", url.Values{"previews": {"1"}, "preview_domain": {domain}})
 		if res.StatusCode != http.StatusUnprocessableEntity {
 			t.Errorf("%s: %d", name, res.StatusCode)
 		}
@@ -976,17 +976,17 @@ func TestPreviewSettingsAndManualWebhook(t *testing.T) {
 		t.Fatalf("a refused form was saved: %+v", got)
 	}
 	// A wildcard as people write it in DNS is taken for its domain.
-	res, _ := a.post(settings, "/apps/"+app.ID+"/previews", url.Values{"previews": {"1"}, "preview_domain": {"*.Preview.Example.com"}})
+	res, _ := a.post(settings, a.appPath(app.ID)+"/previews", url.Values{"previews": {"1"}, "preview_domain": {"*.Preview.Example.com"}})
 	wantRedirect(t, res, settings+"#previews")
 	if got, _ := a.db.AppByID(ctx, app.ID); !got.Previews || got.PreviewDomain != "preview.example.com" {
 		t.Fatalf("saved: previews %v, domain %q", got.Previews, got.PreviewDomain)
 	}
 	// An app deployed from an image has no pull requests.
 	image := a.newApp(projectID, env, "img", false, nil)
-	if res, _ := a.post("/apps/"+image+"/settings", "/apps/"+image+"/previews", url.Values{"previews": {"1"}}); res.StatusCode != http.StatusNotFound {
+	if res, _ := a.post(a.appPath(image)+"/settings", a.appPath(image)+"/previews", url.Values{"previews": {"1"}}); res.StatusCode != http.StatusNotFound {
 		t.Errorf("previews for an image app: %d", res.StatusCode)
 	}
-	if _, page := a.get("/apps/" + image + "/settings"); strings.Contains(page, "Pull request previews") {
+	if _, page := a.get(a.appPath(image) + "/settings"); strings.Contains(page, "Pull request previews") {
 		t.Error("an image app's settings offer previews")
 	}
 
@@ -1052,7 +1052,7 @@ func TestPreviewSettingsAndManualWebhook(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	res, _ = a.post(settings, "/apps/"+app.ID+"/delete", url.Values{"confirm": {"web"}})
+	res, _ = a.post(settings, a.appPath(app.ID)+"/delete", url.Values{"confirm": {"web"}})
 	if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(res.Header.Get("Location"), "/projects/") {
 		t.Fatalf("delete: %d to %q", res.StatusCode, res.Header.Get("Location"))
 	}

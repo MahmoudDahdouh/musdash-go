@@ -12,10 +12,10 @@ import (
 )
 
 // loadProjectEnv fetches the project and the environment in the path
-// (/projects/{id}/e/{env}/…) for the signed-in team. An environment of
-// another project is not found, like one that does not exist.
+// (/projects/{project}/env/{env}/…) for the signed-in team. An environment
+// of another project is not found, like one that does not exist.
 func (s *Server) loadProjectEnv(w http.ResponseWriter, r *http.Request) (db.Project, db.Environment, bool) {
-	p, ok := s.loadProject(w, r)
+	p, ok := s.projectByID(w, r, r.PathValue("project"))
 	if !ok {
 		return p, db.Environment{}, false
 	}
@@ -30,9 +30,6 @@ func (s *Server) loadProjectEnv(w http.ResponseWriter, r *http.Request) (db.Proj
 	}
 	return p, env, true
 }
-
-// envPath is the page of one environment of a project.
-func envPath(projectID, envID string) string { return "/projects/" + projectID + "/e/" + envID }
 
 // projectCrumb is a project's step of the trail: a switcher to the team's
 // other projects.
@@ -61,7 +58,7 @@ func envCrumbs(p db.Project, env db.Environment, here ...ui.Crumb) []ui.Crumb {
 // is in its environment.
 func resourceCrumb(env db.Environment, kind, id, name string) ui.Crumb {
 	return ui.Crumb{Label: name, Icon: pages.KindIcon(kind), Filter: "Find a resource",
-		Menu: "/environments/" + env.ID + "/switch/resources?at=" + kind + ":" + id}
+		Menu: pages.EnvPath(env.ProjectID, env.ID) + "/switch/resources?at=" + kind + ":" + id}
 }
 
 // menuNote answers a switcher that cannot list its options. The answer is
@@ -117,14 +114,14 @@ func (s *Server) switchEnvironments(w http.ResponseWriter, r *http.Request) {
 // environment, each a link to its page.
 func (s *Server) switchResources(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	env, err := s.DB.Environment(ctx, sessionFrom(r).TeamID, r.PathValue("id"))
-	if errors.Is(err, db.ErrNotFound) {
+	env, err := s.DB.Environment(ctx, sessionFrom(r).TeamID, r.PathValue("env"))
+	if errors.Is(err, db.ErrNotFound) || (err == nil && env.ProjectID != r.PathValue("project")) {
 		s.menuNote(w, r, "The environment is gone.")
 		return
 	}
 	var res pages.Resources
 	if err == nil {
-		res, err = s.envResources(r, env.ID)
+		res, err = s.envResources(r, env)
 	}
 	if err != nil {
 		s.Log.Error("switcher", "route", logRoute(r), "err", err)
@@ -136,16 +133,16 @@ func (s *Server) switchResources(w http.ResponseWriter, r *http.Request) {
 
 // envResources is everything in one environment. Call it with an
 // environment a loader returned for the team.
-func (s *Server) envResources(r *http.Request, envID string) (pages.Resources, error) {
-	var res pages.Resources
+func (s *Server) envResources(r *http.Request, env db.Environment) (pages.Resources, error) {
+	res := pages.Resources{Places: map[string]db.Place{env.ID: {ProjectID: env.ProjectID}}}
 	var err error
-	if res.Apps, err = s.DB.ListApps(r.Context(), envID); err != nil {
+	if res.Apps, err = s.DB.ListApps(r.Context(), env.ID); err != nil {
 		return res, err
 	}
-	if res.Databases, err = s.DB.ListDatabases(r.Context(), envID); err != nil {
+	if res.Databases, err = s.DB.ListDatabases(r.Context(), env.ID); err != nil {
 		return res, err
 	}
-	res.Services, err = s.DB.ListServices(r.Context(), envID)
+	res.Services, err = s.DB.ListServices(r.Context(), env.ID)
 	return res, err
 }
 

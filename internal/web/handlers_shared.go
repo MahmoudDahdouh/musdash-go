@@ -55,18 +55,8 @@ func (s *Server) sharedProject(w http.ResponseWriter, r *http.Request) (sharedTa
 }
 
 func (s *Server) sharedEnvironment(w http.ResponseWriter, r *http.Request) (sharedTarget, bool) {
-	teamID := sessionFrom(r).TeamID
-	env, err := s.DB.Environment(r.Context(), teamID, r.PathValue("id"))
-	var p db.Project
-	if err == nil {
-		p, err = s.DB.Project(r.Context(), teamID, env.ProjectID)
-	}
-	if errors.Is(err, db.ErrNotFound) {
-		s.notFound(w, r)
-		return sharedTarget{}, false
-	}
-	if err != nil {
-		s.fail(w, r, err)
+	p, env, ok := s.loadProjectEnv(w, r)
+	if !ok {
 		return sharedTarget{}, false
 	}
 	return sharedTarget{
@@ -74,7 +64,7 @@ func (s *Server) sharedEnvironment(w http.ResponseWriter, r *http.Request) (shar
 		crumbs: projectCrumbs(p, ui.Crumb{Label: "Settings", Href: "/projects/" + p.ID + "/settings"}, ui.Crumb{Label: env.Name + " variables"}),
 		view: pages.SharedView{
 			Title: "Variables of " + env.Name, Intro: "Shared by everything in the " + env.Name + " environment of " + p.Name + ".",
-			Scope: db.ScopeEnvironment, Action: "/environments/" + env.ID + "/variables", CanEdit: true,
+			Scope: db.ScopeEnvironment, Action: pages.EnvPath(p.ID, env.ID) + "/variables", CanEdit: true,
 		},
 	}, true
 }

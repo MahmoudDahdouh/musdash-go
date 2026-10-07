@@ -278,7 +278,7 @@ func ProjectList(s ui.Shell, projects []db.Project, f ui.Form) templ.Component {
 func projectTabs(p db.Project, envID string) []ui.Tab {
 	resources := "/projects/" + p.ID
 	if envID != "" {
-		resources += "/e/" + envID
+		resources = EnvPath(p.ID, envID)
 	}
 	return []ui.Tab{
 		{Key: "resources", Label: "Resources", Href: resources, Icon: "dashboard"},
@@ -351,7 +351,7 @@ func ProjectShow(s ui.Shell, p db.Project, env db.Environment, res Resources) te
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.LinkButton(EnvPath(p.ID, env.ID)+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -397,7 +397,7 @@ func ProjectShow(s ui.Shell, p db.Project, env db.Environment, res Resources) te
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.LinkButton(EnvPath(p.ID, env.ID)+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -571,9 +571,9 @@ func ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, e
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var22 templ.SafeURL
-				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/projects/" + p.ID + "/e/" + e.ID))
+				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(EnvPath(p.ID, e.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/projects.templ`, Line: 141, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/projects.templ`, Line: 141, Col: 88}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 				if templ_7745c5c3_Err != nil {
@@ -586,7 +586,7 @@ func ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, e
 				var templ_7745c5c3_Var23 string
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(e.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/projects.templ`, Line: 141, Col: 114}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/projects.templ`, Line: 141, Col: 99}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 				if templ_7745c5c3_Err != nil {
@@ -631,7 +631,7 @@ func ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, e
 					templ_7745c5c3_Err = ui.Confirm(ui.ConfirmProps{
 						ID:      "delete-env-" + e.ID,
 						Title:   "Delete environment",
-						Action:  "/environments/" + e.ID + "/delete",
+						Action:  EnvPath(p.ID, e.ID) + "/delete",
 						CSRF:    s.CSRF,
 						Match:   e.Name,
 						Submit:  "Delete environment",
@@ -721,9 +721,9 @@ func ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, e
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var29 templ.SafeURL
-				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/environments/" + e.ID + "/variables"))
+				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(EnvPath(p.ID, e.ID) + "/variables"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/projects.templ`, Line: 177, Col: 81}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/projects.templ`, Line: 177, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 				if templ_7745c5c3_Err != nil {

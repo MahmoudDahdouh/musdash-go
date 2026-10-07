@@ -77,29 +77,29 @@ func TestDeployWithDocker(t *testing.T) {
 
 	post("/setup", "/setup", url.Values{"name": {"E2E"}, "email": {"e2e@example.com"}, "password": {"an end to end test"}})
 	res := post("/projects", "/projects", url.Values{"name": {"E2E"}})
-	projectPath := res.Request.URL.Path // followed the redirect to /projects/<id>
-	newAppPage := fetch(t, ui, base+projectPath)
-	envID := regexp.MustCompile(`/e/([a-z2-7]+)/new"`).FindStringSubmatch(newAppPage)
+	// Followed the redirects to the project's first environment.
+	envPath := res.Request.URL.Path
+	envID := regexp.MustCompile(`^/projects/[a-z2-7]+/env/([a-z2-7]+)$`).FindStringSubmatch(envPath)
 	if envID == nil {
-		t.Fatalf("no New app link on %s", projectPath)
+		t.Fatalf("a new project did not lead to its environment: %s", envPath)
 	}
 
 	const host = "e2e.127.0.0.1.sslip.io"
-	res = post(projectPath+"/e/"+envID[1]+"/apps/new", projectPath+"/e/"+envID[1]+"/apps", url.Values{
+	res = post(envPath+"/app/new", envPath+"/app", url.Values{
 		"name": {"web"}, "image": {"nginx:alpine"}, "port": {"80"}, "domain": {host}, "deploy": {"1"},
 	})
-	deployPath := res.Request.URL.Path // /apps/<id>/deployments/<dep>
+	deployPath := res.Request.URL.Path // <environment>/app/<id>/deployments/<dep>
 	appPath := strings.Split(deployPath, "/deployments/")[0]
-	if !strings.HasPrefix(appPath, "/apps/") {
+	if !strings.HasPrefix(appPath, envPath+"/app/") {
 		t.Fatalf("unexpected redirect after creating the app: %s", deployPath)
 	}
 	// Everything below is scoped to this test's own app and environment, so
 	// containers of another musdash on this machine are never touched.
-	mine := "label=musdash.resource=" + strings.TrimPrefix(appPath, "/apps/")
+	mine := "label=musdash.resource=" + strings.TrimPrefix(appPath, envPath+"/app/")
 	t.Cleanup(func() { removeManaged(t, mine, "musdash-"+envID[1]) })
 	// The images kept for rollbacks are names this test's app gave to
 	// nginx:alpine; only those names are removed.
-	repo := "musdash/" + strings.TrimPrefix(appPath, "/apps/")
+	repo := "musdash/" + strings.TrimPrefix(appPath, envPath+"/app/")
 	t.Cleanup(func() {
 		out, _ := exec.Command("docker", "images", "--format", "{{.Repository}}:{{.Tag}}", repo).Output()
 		for _, ref := range strings.Fields(string(out)) {
@@ -153,11 +153,11 @@ func TestDeployWithDocker(t *testing.T) {
 	// An app whose port setting is wrong must fail its deploy. Docker's own
 	// port proxy accepts connections even when nothing listens inside the
 	// container, so a check that only connects would wrongly pass.
-	res = post(projectPath+"/e/"+envID[1]+"/apps/new", projectPath+"/e/"+envID[1]+"/apps", url.Values{
+	res = post(envPath+"/app/new", envPath+"/app", url.Values{
 		"name": {"wrongport"}, "image": {"nginx:alpine"}, "port": {"8080"},
 	})
 	wrongPath := res.Request.URL.Path
-	wrong := "label=musdash.resource=" + strings.TrimPrefix(wrongPath, "/apps/")
+	wrong := "label=musdash.resource=" + strings.TrimPrefix(wrongPath, envPath+"/app/")
 	t.Cleanup(func() { removeManaged(t, wrong, "musdash-"+envID[1]) })
 	post(wrongPath+"/settings", wrongPath+"/settings", url.Values{"name": {"wrongport"}, "image": {"nginx:alpine"}, "port": {"8080"}, "health_timeout": {"5"}})
 	res = post(wrongPath, wrongPath+"/deploy", url.Values{})

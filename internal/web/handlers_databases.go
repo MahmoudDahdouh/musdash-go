@@ -61,7 +61,7 @@ func (s *Server) databaseShell(w http.ResponseWriter, r *http.Request, v pages.D
 // newResourceCrumbs is the trail of a form that adds a resource of one
 // kind: back through the page that offers every kind.
 func newResourceCrumbs(p db.Project, env db.Environment, kind string) []ui.Crumb {
-	return envCrumbs(p, env, ui.Crumb{Label: "Add resource", Href: envPath(p.ID, env.ID) + "/new"}, ui.Crumb{Label: kind})
+	return envCrumbs(p, env, ui.Crumb{Label: "Add resource", Href: pages.EnvPath(p.ID, env.ID) + "/new"}, ui.Crumb{Label: kind})
 }
 
 func (s *Server) databaseNew(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +72,7 @@ func (s *Server) databaseNew(w http.ResponseWriter, r *http.Request) {
 	engine := r.URL.Query().Get("engine")
 	if engine == "" {
 		// The engines are on the page every kind of resource is added from.
-		redirect(w, r, envPath(p.ID, env.ID)+"/new")
+		redirect(w, r, pages.EnvPath(p.ID, env.ID)+"/new")
 		return
 	}
 	shell := s.shell(w, r, "New database", "projects", newResourceCrumbs(p, env, "Database")...)
@@ -154,7 +154,7 @@ func (s *Server) databaseCreate(w http.ResponseWriter, r *http.Request) {
 		// Start again.
 		s.Log.Error("queue database start", "database", m.ID, "err", err)
 	}
-	redirect(w, r, "/databases/"+m.ID)
+	redirect(w, r, pages.ResourcePath(p.ID, env.ID, db.KindDatabase, m.ID))
 }
 
 // publicHost is the address a database's public port is reached at: the
@@ -210,7 +210,7 @@ func (s *Server) databaseStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refreshWhenSettled(w, r, m.Status)
-	s.render(w, r, http.StatusOK, pages.DatabaseHeader(sessionFrom(r).CSRFToken, m))
+	s.render(w, r, http.StatusOK, pages.DatabaseHeader(sessionFrom(r).CSRFToken, placeInPath(r, db.KindDatabase), m))
 }
 
 // databaseStart starts a stopped database, or restarts a running one.
@@ -227,7 +227,7 @@ func (s *Server) databaseStart(w http.ResponseWriter, r *http.Request) {
 		s.Log.Error("queue database start", "database", v.DB.ID, "err", err)
 		setFlash(w, r, ui.ToneDanger, "The start could not be queued. Try again.")
 	}
-	redirect(w, r, "/databases/"+v.DB.ID)
+	redirect(w, r, v.Path())
 }
 
 func (s *Server) databaseStop(w http.ResponseWriter, r *http.Request) {
@@ -245,7 +245,7 @@ func (s *Server) databaseStop(w http.ResponseWriter, r *http.Request) {
 	default:
 		setFlash(w, r, ui.ToneOK, "Database stopped. Its data is kept.")
 	}
-	redirect(w, r, "/databases/"+v.DB.ID)
+	redirect(w, r, v.Path())
 }
 
 func (s *Server) databaseLogs(w http.ResponseWriter, r *http.Request) {
@@ -364,7 +364,7 @@ func (s *Server) databaseSettingsSave(w http.ResponseWriter, r *http.Request) {
 		}
 		setFlash(w, r, ui.ToneOK, "Settings saved. The database is restarting to apply them.")
 	}
-	redirect(w, r, "/databases/"+m.ID+"/settings")
+	redirect(w, r, v.Path()+"/settings")
 }
 
 func (s *Server) databaseDelete(w http.ResponseWriter, r *http.Request) {
@@ -372,7 +372,7 @@ func (s *Server) databaseDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	back := "/databases/" + v.DB.ID + "/settings"
+	back := v.Path() + "/settings"
 	if strings.TrimSpace(r.PostFormValue("confirm")) != v.DB.Name {
 		setFlash(w, r, ui.ToneDanger, "The database was not deleted: the name you typed did not match.")
 		redirect(w, r, back)
@@ -396,5 +396,5 @@ func (s *Server) databaseDelete(w http.ResponseWriter, r *http.Request) {
 	} else {
 		setFlash(w, r, ui.ToneOK, "Database deleted. Its data is still in the volume "+deploy.DatabaseVolume(v.DB.ID)+".")
 	}
-	redirect(w, r, envPath(v.Project.ID, v.Env.ID))
+	redirect(w, r, pages.EnvPath(v.Project.ID, v.Env.ID))
 }

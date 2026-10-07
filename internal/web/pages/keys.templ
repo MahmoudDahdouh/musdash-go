@@ -12,6 +12,8 @@ type KeyOwner struct {
 	ID    string
 	Name  string
 	Where string // "Shop / production"
+	// Path is the resource's own address, where its forms post.
+	Path string
 	// HasToken says a deploy token exists. Git says the resource is
 	// deployed from a repository and so can have a push webhook; ViaApp
 	// that a GitHub App already delivers its pushes; HasSecret that its own
@@ -37,14 +39,6 @@ func (o KeyOwner) what() string {
 		return "service"
 	}
 	return "app"
-}
-
-// base is the resource's own address, where its forms post.
-func (o KeyOwner) base() string {
-	if o.Kind == db.KindService {
-		return "/services/" + o.ID
-	}
-	return "/apps/" + o.ID
 }
 
 // NewDeployToken is a deploy token that was just made: shown in the
@@ -127,7 +121,7 @@ templ keyOwnerCell(o KeyOwner) {
 	<div class="flex min-w-0 items-center gap-2">
 		@ui.Icon(KindIcon(o.Kind), "text-ink-mute")
 		<div class="min-w-0">
-			<a class="block truncate font-semibold text-ink" href={ templ.SafeURL(o.base()) }>{ o.Name }</a>
+			<a class="block truncate font-semibold text-ink" href={ templ.SafeURL(o.Path) }>{ o.Name }</a>
 			<p class="muted truncate text-xs">{ o.Where }</p>
 		</div>
 	</div>
@@ -140,7 +134,7 @@ templ HookSecret(o KeyOwner, secret string) {
 	<span class="inline-flex max-w-full min-w-0 items-center gap-1.5" id={ "hook-" + o.ID }>
 		if secret == "" {
 			<span class="code whitespace-nowrap">{ ui.Masked }</span>
-			<button type="button" class="btn btn-ghost btn-sm" hx-get={ o.base() + "/webhook-secret" } hx-target={ "#hook-" + o.ID } hx-swap="outerHTML">
+			<button type="button" class="btn btn-ghost btn-sm" hx-get={ o.Path + "/webhook-secret" } hx-target={ "#hook-" + o.ID } hx-swap="outerHTML">
 				@ui.Icon("eye")
 				Show
 			</button>
@@ -150,7 +144,7 @@ templ HookSecret(o KeyOwner, secret string) {
 				@ui.Icon("copy")
 				<span data-copy-label>Copy</span>
 			</button>
-			<button type="button" class="btn btn-ghost btn-sm" hx-get={ o.base() + "/webhook-secret?hide=1" } hx-target={ "#hook-" + o.ID } hx-swap="outerHTML">
+			<button type="button" class="btn btn-ghost btn-sm" hx-get={ o.Path + "/webhook-secret?hide=1" } hx-target={ "#hook-" + o.ID } hx-swap="outerHTML">
 				@ui.Icon("eye-off")
 				Hide
 			</button>
@@ -203,7 +197,7 @@ templ tokenRows(s ui.Shell, v KeysView) {
 			<td class="muted whitespace-nowrap">Not recorded</td>
 			<td class="muted">Never</td>
 			<td>
-				<form class="flex min-w-56 flex-wrap items-center justify-end gap-2" method="post" action={ templ.SafeURL(o.base() + "/deploy-token") }>
+				<form class="flex min-w-56 flex-wrap items-center justify-end gap-2" method="post" action={ templ.SafeURL(o.Path + "/deploy-token") }>
 					@ui.CSRF(s.CSRF)
 					@ui.Once()
 					<button type="button" class="btn btn-ghost btn-sm" data-copy={ v.deployURL(o) }>
@@ -242,7 +236,7 @@ templ tokenRows(s ui.Shell, v KeysView) {
 						@ui.Icon("copy")
 						<span data-copy-label>Copy address</span>
 					</button>
-					<form method="post" action={ templ.SafeURL(o.base() + "/webhook-secret") }>
+					<form method="post" action={ templ.SafeURL(o.Path + "/webhook-secret") }>
 						@ui.CSRF(s.CSRF)
 						@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh", Attrs: ui.Ask("Replace the webhook secret of "+o.Name+"?", "Pushes are refused until the repository's webhook is given the new secret.", "Replace secret", false)}) {
 							Replace

@@ -24,10 +24,8 @@ type DatabaseView struct {
 	Engine  catalog.DBTemplate
 }
 
-func (v DatabaseView) base() string { return "/databases/" + v.DB.ID }
-
 func databaseTabs(v DatabaseView) []ui.Tab {
-	b := v.base()
+	b := v.Path()
 	return []ui.Tab{
 		{Key: "overview", Label: "Overview", Href: b, Icon: "dashboard"},
 		{Key: "logs", Label: "Logs", Href: b + "/logs", Icon: "file"},
@@ -68,7 +66,7 @@ func databasePoll(m db.Database) string {
 
 // DatabaseHeader is the database's name, status and actions. Like an app's
 // header it refreshes itself, so the page follows a start without a reload.
-func DatabaseHeader(csrf string, m db.Database) templ.Component {
+func DatabaseHeader(csrf, base string, m db.Database) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -94,9 +92,9 @@ func DatabaseHeader(csrf string, m db.Database) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue("/databases/" + m.ID + "/status?was=" + m.Status)
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(base + "/status?was=" + m.Status)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 67, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 66, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -109,7 +107,7 @@ func DatabaseHeader(csrf string, m db.Database) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(databasePoll(m))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 68, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 67, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
@@ -122,7 +120,7 @@ func DatabaseHeader(csrf string, m db.Database) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(m.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 73, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 72, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
@@ -143,7 +141,7 @@ func DatabaseHeader(csrf string, m db.Database) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(engineLabel(m.Engine))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 76, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 75, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
@@ -156,7 +154,7 @@ func DatabaseHeader(csrf string, m db.Database) templ.Component {
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(m.Image)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 76, Col: 98}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 75, Col: 98}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -177,9 +175,9 @@ func DatabaseHeader(csrf string, m db.Database) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var7 templ.SafeURL
-				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/databases/" + m.ID + "/stop"))
+				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(base + "/stop"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 81, Col: 79}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 80, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
@@ -220,9 +218,9 @@ func DatabaseHeader(csrf string, m db.Database) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var9 templ.SafeURL
-				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/databases/" + m.ID + "/start"))
+				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(base + "/start"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 87, Col: 80}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 86, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -268,9 +266,9 @@ func DatabaseHeader(csrf string, m db.Database) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var11 templ.SafeURL
-				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/databases/" + m.ID + "/start"))
+				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(base + "/start"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 94, Col: 80}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 93, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {
@@ -357,7 +355,7 @@ func databaseFrame(s ui.Shell, v DatabaseView, tab string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = DatabaseHeader(s.CSRF, v.DB).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = DatabaseHeader(s.CSRF, v.Path(), v.DB).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -423,9 +421,9 @@ func DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTempl
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var17 templ.SafeURL
-			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/projects/" + p.ID + "/e/" + env.ID + "/databases"))
+			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(EnvPath(p.ID, env.ID) + "/database"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 120, Col: 111}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 119, Col: 95}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -446,7 +444,7 @@ func DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTempl
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(t.Engine)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 122, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 121, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 			if templ_7745c5c3_Err != nil {
@@ -502,7 +500,7 @@ func DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTempl
 				var templ_7745c5c3_Var20 string
 				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(f.E("public"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 133, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 132, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 				if templ_7745c5c3_Err != nil {
@@ -535,7 +533,7 @@ func DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTempl
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.LinkButton(EnvPath(p.ID, env.ID)+"/new", ui.ButtonProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -674,7 +672,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 					var templ_7745c5c3_Var26 string
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(v.DB.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 188, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 187, Col: 45}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 					if templ_7745c5c3_Err != nil {
@@ -734,7 +732,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(v.Env.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 203, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 202, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 				if templ_7745c5c3_Err != nil {
@@ -755,7 +753,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 				var templ_7745c5c3_Var29 string
 				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(c.Host)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 210, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 209, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 				if templ_7745c5c3_Err != nil {
@@ -768,7 +766,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 				var templ_7745c5c3_Var30 string
 				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(c.Port))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 212, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 211, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 				if templ_7745c5c3_Err != nil {
@@ -781,7 +779,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 				var templ_7745c5c3_Var31 string
 				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(c.User)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 214, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 213, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 				if templ_7745c5c3_Err != nil {
@@ -799,7 +797,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 					var templ_7745c5c3_Var32 string
 					templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(c.DBName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 217, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 216, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 					if templ_7745c5c3_Err != nil {
@@ -840,7 +838,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.LinkButton(v.base()+"/settings", ui.ButtonProps{Variant: ui.Ghost, Small: true}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var33), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.LinkButton(v.Path()+"/settings", ui.ButtonProps{Variant: ui.Ghost, Small: true}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var33), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -865,7 +863,7 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 					var templ_7745c5c3_Var34 string
 					templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(v.DB.PublicPort))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 239, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 238, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 					if templ_7745c5c3_Err != nil {
@@ -965,7 +963,7 @@ func DatabaseLogs(s ui.Shell, v DatabaseView) templ.Component {
 				}
 				templ_7745c5c3_Err = ui.LogView("runtime-log", templ.Attributes{
 					"hx-ext":      "sse",
-					"sse-connect": v.base() + "/logs/stream",
+					"sse-connect": v.Path() + "/logs/stream",
 					"sse-swap":    "line",
 					"sse-close":   "done",
 					"hx-swap":     "beforeend",
@@ -1145,7 +1143,7 @@ func DatabaseSettings(s ui.Shell, v DatabaseView, f ui.Form, volume string) temp
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "edit-database", Title: "Database settings", Description: "Saving a change restarts a running database to apply it: expect a few seconds during which it does not answer.", Action: v.base() + "/settings", CSRF: s.CSRF, Submit: "Save changes", Wide: true, Open: !f.OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var40), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "edit-database", Title: "Database settings", Description: "Saving a change restarts a running database to apply it: expect a few seconds during which it does not answer.", Action: v.Path() + "/settings", CSRF: s.CSRF, Submit: "Save changes", Wide: true, Open: !f.OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var40), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1172,7 +1170,7 @@ func DatabaseSettings(s ui.Shell, v DatabaseView, f ui.Form, volume string) temp
 				var templ_7745c5c3_Var43 string
 				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(v.DB.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 356, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 355, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 				if templ_7745c5c3_Err != nil {
@@ -1185,7 +1183,7 @@ func DatabaseSettings(s ui.Shell, v DatabaseView, f ui.Form, volume string) temp
 				var templ_7745c5c3_Var44 string
 				templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(volume)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 357, Col: 87}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 356, Col: 87}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 				if templ_7745c5c3_Err != nil {
@@ -1226,7 +1224,7 @@ func DatabaseSettings(s ui.Shell, v DatabaseView, f ui.Form, volume string) temp
 			templ_7745c5c3_Err = ui.Confirm(ui.ConfirmProps{
 				ID:      "delete-database",
 				Title:   "Delete database",
-				Action:  v.base() + "/delete",
+				Action:  v.Path() + "/delete",
 				CSRF:    s.CSRF,
 				Match:   v.DB.Name,
 				Submit:  "Delete database",

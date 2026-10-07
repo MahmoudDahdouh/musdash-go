@@ -137,7 +137,7 @@ templ AppEnvironment(s ui.Shell, v AppView, c VarsCard) {
 templ AppEnvironmentEdit(s ui.Shell, v AppView, f ui.Form) {
 	@appFrame(s, v, "environment") {
 		<div class="max-w-3xl">
-			<form class="card" method="post" action={ templ.SafeURL(v.base() + "/environment") }>
+			<form class="card" method="post" action={ templ.SafeURL(v.Path() + "/environment") }>
 				@ui.CSRF(s.CSRF)
 				<div class="card-head">
 					<div>
@@ -157,7 +157,7 @@ templ AppEnvironmentEdit(s ui.Shell, v AppView, f ui.Form) {
 					@sharedHowTo(v.Project.ID)
 				</div>
 				<div class="card-foot">
-					@ui.LinkButton(v.base()+"/environment", ui.ButtonProps{}) {
+					@ui.LinkButton(v.Path()+"/environment", ui.ButtonProps{}) {
 						Cancel
 					}
 					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
@@ -188,7 +188,7 @@ templ ServiceVariablesField(v ServiceView, f ui.Form, variables string, shown bo
 					<p class="field-error" role="alert">{ f.E("variables") }</p>
 				}
 				<div>
-					<button type="button" class="btn btn-secondary btn-sm" hx-get={ v.base() + "/compose/variables" } hx-target="#service-variables" hx-swap="outerHTML">
+					<button type="button" class="btn btn-secondary btn-sm" hx-get={ v.Path() + "/compose/variables" } hx-target="#service-variables" hx-swap="outerHTML">
 						@ui.Icon("eye")
 						Show and edit
 					</button>

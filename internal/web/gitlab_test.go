@@ -150,7 +150,7 @@ func TestGitLabSource(t *testing.T) {
 	// The Git form offers it by its kind, with its picker, and Add
 	// resource has a tile that leads there.
 	projectID, env := a.project("Shop")
-	newApp := "/projects/" + projectID + "/e/" + env.ID + "/apps/new?source=git&access=gitlab"
+	newApp := "/projects/" + projectID + "/env/" + env.ID + "/app/new?source=git&access=gitlab"
 	_, page = a.get(newApp)
 	if !strings.Contains(page, "GitLab: work") || !strings.Contains(page, `hx-get="/sources/gitlab/`+src.ID+`/repos"`) {
 		t.Fatal("the Git form does not offer the GitLab source, or not its picker")
@@ -158,14 +158,14 @@ func TestGitLabSource(t *testing.T) {
 	if !regexp.MustCompile(`<input type="hidden"[^>]*name="access"[^>]*value="source:` + src.ID + `"`).MatchString(page) {
 		t.Fatal("the Git form reached from the GitLab tile does not start at the GitLab source")
 	}
-	if _, page = a.get("/projects/" + projectID + "/e/" + env.ID + "/new"); !strings.Contains(page, `href="/projects/`+projectID+`/e/`+env.ID+`/apps/new?source=git&amp;access=gitlab"`) {
+	if _, page = a.get("/projects/" + projectID + "/env/" + env.ID + "/new"); !strings.Contains(page, `href="/projects/`+projectID+`/env/`+env.ID+`/app/new?source=git&amp;access=gitlab"`) {
 		t.Fatal("Add resource has no tile for a private repository through GitLab")
 	}
 
 	// It reads repositories on its own instance and nowhere else.
 	form := gitForm(env, "shop")
 	form.Set("access", "source:"+src.ID)
-	res, body := a.post(newApp, "/projects/"+projectID+"/e/"+env.ID+"/apps", form) // the form's repository is on github.com
+	res, body := a.post(newApp, "/projects/"+projectID+"/env/"+env.ID+"/app", form) // the form's repository is on github.com
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "GitLab work can only read repositories on "+host) {
 		t.Fatalf("a repository on another host: %d", res.StatusCode)
 	}

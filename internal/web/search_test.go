@@ -50,7 +50,7 @@ func TestSearchIsInTheBar(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
 	projectID, env := a.project("Shop")
-	for _, page := range []string{"/", "/projects", "/projects/" + projectID + "/e/" + env.ID, "/account", "/nosuchpage"} {
+	for _, page := range []string{"/", "/projects", "/projects/" + projectID + "/env/" + env.ID, "/account", "/nosuchpage"} {
 		_, body := a.get(page)
 		bar := between(t, page, body, `<div class="topbar">`, `<main class="page"`)
 		end := between(t, page, bar, `<div class="topbar-end">`, `id="usermenu-list"`)
@@ -116,31 +116,31 @@ func TestSearchFindsWhatTheTeamHas(t *testing.T) {
 
 	// Each kind leads to its page, best match first.
 	body := a.find("web")
-	if got := strings.Join(found(body), " "); !strings.HasPrefix(got, "/apps/"+web+" /apps/"+a.appID(env, "web-admin")) {
+	if got := strings.Join(found(body), " "); !strings.HasPrefix(got, a.appPath(web)+" "+a.appPath(a.appID(env, "web-admin"))) {
 		t.Errorf("web: %s", got)
 	}
 	// A row says what it is, where it is, one fact of it and its state,
 	// and marks what was typed in its name.
-	row := rowTo(t, body, "/apps/"+web)
+	row := rowTo(t, body, a.appPath(web))
 	for _, want := range []string{"<mark>web</mark>", "App", "Shop", env.Name, "nginx:alpine", "Running", `class="icon`, "pill"} {
 		if !strings.Contains(row, want) {
 			t.Errorf("the app's row lacks %q:\n%s", want, row)
 		}
 	}
-	if !regexp.MustCompile(`<mark>web</mark>-admin`).MatchString(rowTo(t, body, "/apps/"+a.appID(env, "web-admin"))) {
+	if !regexp.MustCompile(`<mark>web</mark>-admin`).MatchString(rowTo(t, body, a.appPath(a.appID(env, "web-admin")))) {
 		t.Error("the match is not marked where it is in the name")
 	}
 	for text, href := range map[string]string{
 		"shop":      base,
-		"Shop prod": base + "/e/" + env.ID,
-		"maindb":    "/databases/" + maindb.ID,
-		"postgres":  "/databases/" + maindb.ID,
-		"site":      "/services/" + site.ID,
-		"shop.exam": "/apps/" + web + "/domains",
-		"press.ex":  "/services/" + site.ID,
+		"Shop prod": base + "/env/" + env.ID,
+		"maindb":    a.databasePath(maindb.ID),
+		"postgres":  a.databasePath(maindb.ID),
+		"site":      a.servicePath(site.ID),
+		"shop.exam": a.appPath(web) + "/domains",
+		"press.ex":  a.servicePath(site.ID),
 		"localhost": "/servers#server-" + servers[0].ID,
 		"frontend":  "/tags/frontend",
-		web:         "/apps/" + web,
+		web:         a.appPath(web),
 	} {
 		if got := found(a.find(text)); len(got) == 0 || got[0] != href {
 			t.Errorf("%q leads to %v, want %s first", text, got, href)
@@ -151,10 +151,10 @@ func TestSearchFindsWhatTheTeamHas(t *testing.T) {
 	if _, page := a.get("/servers"); !strings.Contains(page, `id="server-`+servers[0].ID+`"`) {
 		t.Error("the list of servers has no place the server's row leads to")
 	}
-	if row := rowTo(t, a.find("shop.exam"), "/apps/"+web+"/domains"); !strings.Contains(row, "Domain of web") || !strings.Contains(row, "<mark>shop.exam</mark>ple.com") {
+	if row := rowTo(t, a.find("shop.exam"), a.appPath(web)+"/domains"); !strings.Contains(row, "Domain of web") || !strings.Contains(row, "<mark>shop.exam</mark>ple.com") {
 		t.Errorf("a domain's row does not say what it points at:\n%s", row)
 	}
-	if row := rowTo(t, a.find("maindb"), "/databases/"+maindb.ID); !strings.Contains(row, "Database") || !strings.Contains(row, "postgres") {
+	if row := rowTo(t, a.find("maindb"), a.databasePath(maindb.ID)); !strings.Contains(row, "Database") || !strings.Contains(row, "postgres") {
 		t.Errorf("the database's row:\n%s", row)
 	}
 
@@ -168,7 +168,7 @@ func TestSearchFindsWhatTheTeamHas(t *testing.T) {
 	}
 
 	// Stored variables are not searched: not their names, not their values.
-	res, _ := a.post("/apps/"+web+"/environment/edit", "/apps/"+web+"/environment", url.Values{"vars": {"PAYMENT_TOKEN=s3cr3tvalue"}})
+	res, _ := a.post(a.appPath(web)+"/environment/edit", a.appPath(web)+"/environment", url.Values{"vars": {"PAYMENT_TOKEN=s3cr3tvalue"}})
 	wantStatus(t, res, http.StatusSeeOther)
 	for _, text := range []string{"PAYMENT_TOKEN", "s3cr3tvalue", "API_KEY", "k-123"} {
 		if got := found(a.find(text)); len(got) != 0 {

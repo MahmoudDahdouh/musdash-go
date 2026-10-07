@@ -33,6 +33,9 @@ type Resources struct {
 	Apps      []db.App
 	Databases []db.Database
 	Services  []db.Service
+	// Places says where each environment of the list is, by its id: the
+	// address of a resource starts with its project.
+	Places map[string]db.Place
 }
 
 func (r Resources) Count() int { return len(r.Apps) + len(r.Databases) + len(r.Services) }
@@ -98,7 +101,7 @@ func ResourceTiles(res Resources) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: "/apps/" + a.ID, Icon: KindIcon(db.KindApp), Title: a.Name, Text: appSourceLine(a), Mono: true, State: a.Status}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: res.path(a.EnvironmentID, db.KindApp, a.ID), Icon: KindIcon(db.KindApp), Title: a.Name, Text: appSourceLine(a), Mono: true, State: a.Status}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -128,7 +131,7 @@ func ResourceTiles(res Resources) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: "/databases/" + m.ID, Icon: KindIcon(db.KindDatabase), Title: m.Name, Text: m.Image, Mono: true, State: databaseState(m)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: res.path(m.EnvironmentID, db.KindDatabase, m.ID), Icon: KindIcon(db.KindDatabase), Title: m.Name, Text: m.Image, Mono: true, State: databaseState(m)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -152,7 +155,7 @@ func ResourceTiles(res Resources) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: "/services/" + s.ID, Icon: KindIcon(db.KindService), Title: s.Name, Text: templateName(s.Template), State: serviceState(s)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: res.path(s.EnvironmentID, db.KindService, s.ID), Icon: KindIcon(db.KindService), Title: s.Name, Text: templateName(s.Template), State: serviceState(s)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -233,7 +236,7 @@ func EnvironmentOptions(p db.Project, envs []db.Environment, at string) templ.Co
 		}
 		ctx = templ.ClearChildren(ctx)
 		for _, e := range envs {
-			templ_7745c5c3_Err = ui.SwitchOption("/projects/"+p.ID+"/e/"+e.ID, "", e.Name, e.ID == at).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.SwitchOption(EnvPath(p.ID, e.ID), "", e.Name, e.ID == at).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -331,7 +334,7 @@ func ResourceOptions(env db.Environment, res Resources, at string) templ.Compone
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.SwitchOption("/apps/"+a.ID, KindIcon(db.KindApp), a.Name, at == db.KindApp+":"+a.ID).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.SwitchOption(res.path(a.EnvironmentID, db.KindApp, a.ID), KindIcon(db.KindApp), a.Name, at == db.KindApp+":"+a.ID).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -355,7 +358,7 @@ func ResourceOptions(env db.Environment, res Resources, at string) templ.Compone
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.SwitchOption("/databases/"+m.ID, KindIcon(db.KindDatabase), m.Name, at == db.KindDatabase+":"+m.ID).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.SwitchOption(res.path(m.EnvironmentID, db.KindDatabase, m.ID), KindIcon(db.KindDatabase), m.Name, at == db.KindDatabase+":"+m.ID).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -379,7 +382,7 @@ func ResourceOptions(env db.Environment, res Resources, at string) templ.Compone
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.SwitchOption("/services/"+s.ID, KindIcon(db.KindService), s.Name, at == db.KindService+":"+s.ID).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.SwitchOption(res.path(s.EnvironmentID, db.KindService, s.ID), KindIcon(db.KindService), s.Name, at == db.KindService+":"+s.ID).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -390,7 +393,7 @@ func ResourceOptions(env db.Environment, res Resources, at string) templ.Compone
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = ui.MenuAction("/projects/"+env.ProjectID+"/e/"+env.ID+"/new", "plus", "Add resource").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.MenuAction(EnvPath(env.ProjectID, env.ID)+"/new", "plus", "Add resource").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -411,14 +414,14 @@ type NewResource struct {
 	HasKey    bool
 }
 
-func (v NewResource) base() string { return "/projects/" + v.Project.ID + "/e/" + v.Env.ID }
+func (v NewResource) Path() string { return EnvPath(v.Project.ID, v.Env.ID) }
 
 // privateRepo is where a private-repository tile leads: to the Git form
 // with that access chosen or, while the team has none of the kind, to where
 // one is added.
 func (v NewResource) privateRepo(access string, has bool) string {
 	if has {
-		return v.base() + "/apps/new?source=git&access=" + access
+		return v.Path() + "/app/new?source=git&access=" + access
 	}
 	if access == "key" {
 		return KeysPath
@@ -477,7 +480,7 @@ func kindGroup(title, about string) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 171, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 174, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -490,7 +493,7 @@ func kindGroup(title, about string) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(about)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 172, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 175, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -586,7 +589,7 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.base() + "/apps/new?source=git", Icon: "git-branch", Title: "Public repository", Text: "Build from a public Git repository on any host.", Compact: true, Search: "public repository git github gitlab bitbucket gitea dockerfile nixpacks railpack static"}).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.Path() + "/app/new?source=git", Icon: "git-branch", Title: "Public repository", Text: "Build from a public Git repository on any host.", Compact: true, Search: "public repository git github gitlab bitbucket gitea dockerfile nixpacks railpack static"}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -602,7 +605,7 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.base() + "/apps/new", Icon: "box", Title: "Docker image", Text: "Run an image from a registry, such as nginx:alpine or ghcr.io/you/app:1.4.", Compact: true, Search: "docker image registry container"}).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.Path() + "/app/new", Icon: "box", Title: "Docker image", Text: "Run an image from a registry, such as nginx:alpine or ghcr.io/you/app:1.4.", Compact: true, Search: "docker image registry container"}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -643,7 +646,7 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 					}
 					ctx = templ.InitializeContext(ctx)
 					for _, t := range v.Engines {
-						templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.base() + "/databases/new?engine=" + t.Engine, Icon: "database", Title: t.Label, Text: t.About, Compact: true, Search: searchText("database", t.Engine, t.Label, t.About)}).Render(ctx, templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.Path() + "/database/new?engine=" + t.Engine, Icon: "database", Title: t.Label, Text: t.About, Compact: true, Search: searchText("database", t.Engine, t.Label, t.About)}).Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -684,16 +687,16 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.base() + "/services/new?template=" + db.TemplateCustom, Icon: "code", Title: "Your own Compose file", Text: "Paste a docker-compose.yml. Templates written for Coolify work as they are.", Compact: true, Search: "service compose docker-compose yaml custom own coolify"}).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.Path() + "/service/new?template=" + db.TemplateCustom, Icon: "code", Title: "Your own Compose file", Text: "Paste a docker-compose.yml. Templates written for Coolify work as they are.", Compact: true, Search: "service compose docker-compose yaml custom own coolify"}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.base() + "/services/new?template=" + db.TemplateGit, Icon: "git-branch", Title: "Compose file in a Git repository", Text: "Read from the repository at every deployment. It may build the repository's own Dockerfiles.", Compact: true, Search: "service compose git repository"}).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.Path() + "/service/new?template=" + db.TemplateGit, Icon: "git-branch", Title: "Compose file in a Git repository", Text: "Read from the repository at every deployment. It may build the repository's own Dockerfiles.", Compact: true, Search: "service compose git repository"}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					for _, t := range v.Templates {
-						templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.base() + "/services/new?template=" + t.Key, Icon: "layers", Title: t.Name, Text: t.About, Compact: true, Search: searchText("service", t.Key, t.Name, t.About)}).Render(ctx, templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.Tile(ui.TileProps{Href: v.Path() + "/service/new?template=" + t.Key, Icon: "layers", Title: t.Name, Text: t.About, Compact: true, Search: searchText("service", t.Key, t.Name, t.About)}).Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -714,7 +717,7 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "search", Title: "Nothing matches", Text: "A service that is not listed can be run from its own Compose file.", Link: "Use your own Compose file", LinkHref: v.base() + "/services/new?template=" + db.TemplateCustom, Attrs: templ.Attributes{"data-filter-empty": "kinds", "hidden": true}}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "search", Title: "Nothing matches", Text: "A service that is not listed can be run from its own Compose file.", Link: "Use your own Compose file", LinkHref: v.Path() + "/service/new?template=" + db.TemplateCustom, Attrs: templ.Attributes{"data-filter-empty": "kinds", "hidden": true}}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

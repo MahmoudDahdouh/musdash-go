@@ -342,7 +342,7 @@ func DatabaseBackups(s ui.Shell, v DatabaseView, b BackupsView, f ui.Form) templ
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "edit-schedule", Title: "Backup schedule", Action: v.base() + "/backups/schedule", CSRF: s.CSRF, Submit: "Save schedule", Open: !f.OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "edit-schedule", Title: "Backup schedule", Action: v.Path() + "/backups/schedule", CSRF: s.CSRF, Submit: "Save schedule", Open: !f.OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -364,7 +364,7 @@ func DatabaseBackups(s ui.Shell, v DatabaseView, b BackupsView, f ui.Form) templ
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var12 templ.SafeURL
-				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/backups"))
+				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/backups"))
 				if templ_7745c5c3_Err != nil {
 					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/operations.templ`, Line: 156, Col: 72}
 				}
@@ -473,7 +473,7 @@ func BackupList(csrf string, v DatabaseView, b BackupsView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var15 string
-			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.base() + "/backups/list")
+			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Path() + "/backups/list")
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/operations.templ`, Line: 183, Col: 38}
 			}
@@ -659,7 +659,7 @@ func BackupList(csrf string, v DatabaseView, b BackupsView) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = ui.LinkButton(v.base()+"/backups/"+m.ID+"/download", ui.ButtonProps{Variant: ui.Ghost, Small: true}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.LinkButton(v.Path()+"/backups/"+m.ID+"/download", ui.ButtonProps{Variant: ui.Ghost, Small: true}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -692,7 +692,7 @@ func BackupList(csrf string, v DatabaseView, b BackupsView) templ.Component {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var26 templ.SafeURL
-						templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/backups/" + m.ID + "/delete"))
+						templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/backups/" + m.ID + "/delete"))
 						if templ_7745c5c3_Err != nil {
 							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/operations.templ`, Line: 231, Col: 94}
 						}
@@ -740,7 +740,7 @@ func BackupList(csrf string, v DatabaseView, b BackupsView) templ.Component {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var28 templ.SafeURL
-						templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/backups/" + m.ID + "/delete"))
+						templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/backups/" + m.ID + "/delete"))
 						if templ_7745c5c3_Err != nil {
 							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/operations.templ`, Line: 239, Col: 93}
 						}
@@ -814,7 +814,7 @@ func BackupList(csrf string, v DatabaseView, b BackupsView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var31 templ.SafeURL
-					templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/backups/" + m.ID + "/restore"))
+					templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/backups/" + m.ID + "/restore"))
 					if templ_7745c5c3_Err != nil {
 						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/operations.templ`, Line: 254, Col: 91}
 					}
@@ -1081,7 +1081,7 @@ func AppTasks(s ui.Shell, v AppView, rows []TaskRow, f ui.Form) templ.Component 
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var43 templ.SafeURL
-						templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/tasks/" + row.Task.ID))
+						templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/tasks/" + row.Task.ID))
 						if templ_7745c5c3_Err != nil {
 							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/operations.templ`, Line: 312, Col: 95}
 						}
@@ -1178,7 +1178,7 @@ func AppTasks(s ui.Shell, v AppView, rows []TaskRow, f ui.Form) templ.Component 
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var49 templ.SafeURL
-						templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/tasks/" + row.Task.ID + "/run"))
+						templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/tasks/" + row.Task.ID + "/run"))
 						if templ_7745c5c3_Err != nil {
 							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/operations.templ`, Line: 326, Col: 96}
 						}
@@ -1250,7 +1250,7 @@ func AppTasks(s ui.Shell, v AppView, rows []TaskRow, f ui.Form) templ.Component 
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "add-task", Title: "Add a task", Action: v.base() + "/tasks", CSRF: s.CSRF, Submit: "Add task", Open: !f.OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var51), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "add-task", Title: "Add a task", Action: v.Path() + "/tasks", CSRF: s.CSRF, Submit: "Add task", Open: !f.OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var51), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1388,7 +1388,7 @@ func AppTask(s ui.Shell, v AppView, t db.Task, runs []db.TaskRun, shown string, 
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var56 templ.SafeURL
-			templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/tasks"))
+			templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/tasks"))
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/operations.templ`, Line: 381, Col: 61}
 			}
@@ -1427,7 +1427,7 @@ func AppTask(s ui.Shell, v AppView, t db.Task, runs []db.TaskRun, shown string, 
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var59 templ.SafeURL
-			templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/tasks/" + t.ID + "/run"))
+			templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/tasks/" + t.ID + "/run"))
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/operations.templ`, Line: 389, Col: 85}
 			}
@@ -1572,7 +1572,7 @@ func AppTask(s ui.Shell, v AppView, t db.Task, runs []db.TaskRun, shown string, 
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "edit-task", Title: "Task settings", Action: v.base() + "/tasks/" + t.ID, CSRF: s.CSRF, Submit: "Save task", Open: !f.OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var63), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "edit-task", Title: "Task settings", Action: v.Path() + "/tasks/" + t.ID, CSRF: s.CSRF, Submit: "Save task", Open: !f.OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var63), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1581,7 +1581,7 @@ func AppTask(s ui.Shell, v AppView, t db.Task, runs []db.TaskRun, shown string, 
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var64 templ.SafeURL
-			templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/tasks/" + t.ID + "/delete"))
+			templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/tasks/" + t.ID + "/delete"))
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/operations.templ`, Line: 435, Col: 88}
 			}
@@ -1665,7 +1665,7 @@ func TaskRuns(v AppView, t db.Task, runs []db.TaskRun, shown string) templ.Compo
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var67 string
-			templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.base() + "/tasks/" + t.ID + "/runs")
+			templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Path() + "/tasks/" + t.ID + "/runs")
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/operations.templ`, Line: 452, Col: 49}
 			}
@@ -1808,7 +1808,7 @@ func TaskRuns(v AppView, t db.Task, runs []db.TaskRun, shown string) templ.Compo
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = ui.LinkButton(v.base()+"/tasks/"+t.ID+"?run="+r.ID, ui.ButtonProps{Variant: ui.Ghost, Small: true}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var74), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.LinkButton(v.Path()+"/tasks/"+t.ID+"?run="+r.ID, ui.ButtonProps{Variant: ui.Ghost, Small: true}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var74), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}

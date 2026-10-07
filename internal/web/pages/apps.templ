@@ -43,7 +43,6 @@ func buildServerOptions(v AppView) []ui.Option {
 	return opts
 }
 
-func (v AppView) base() string { return "/apps/" + v.App.ID }
 
 // URL is the address a domain is reached at.
 func domainURL(d db.Domain) string {
@@ -54,7 +53,7 @@ func domainURL(d db.Domain) string {
 }
 
 func appTabs(v AppView) []ui.Tab {
-	b := v.base()
+	b := v.Path()
 	tabs := []ui.Tab{
 		{Key: "overview", Label: "Overview", Href: b, Icon: "dashboard"},
 		{Key: "deployments", Label: "Deployments", Href: b + "/deployments", Icon: "rocket"},
@@ -94,11 +93,11 @@ func headerPoll(app db.App) string {
 // AppHeader is the app's name, status and actions. It refreshes itself, so
 // the page follows a deployment (and offers Stop and Redeploy once it is
 // running) without a reload.
-templ AppHeader(csrf string, app db.App) {
+templ AppHeader(csrf, base string, app db.App) {
 	<header
 		id="app-header"
 		class="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3"
-		hx-get={ "/apps/" + app.ID + "/status" }
+		hx-get={ base + "/status" }
 		hx-trigger={ headerPoll(app) }
 		hx-swap="outerHTML"
 	>
@@ -111,14 +110,14 @@ templ AppHeader(csrf string, app db.App) {
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			if app.Container != "" {
-				<form method="post" action={ templ.SafeURL("/apps/" + app.ID + "/stop") }>
+				<form method="post" action={ templ.SafeURL(base + "/stop") }>
 					@ui.CSRF(csrf)
 					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+app.Name+"?", "The app stops answering until it is deployed again. Its settings, variables and storage are kept.", "Stop app", false)}) {
 						Stop
 					}
 				</form>
 			}
-			<form method="post" action={ templ.SafeURL("/apps/" + app.ID + "/deploy") }>
+			<form method="post" action={ templ.SafeURL(base + "/deploy") }>
 				@ui.CSRF(csrf)
 				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy"}) {
 					if app.Container != "" {
@@ -135,11 +134,11 @@ templ AppHeader(csrf string, app db.App) {
 // appFrame is the header and tabs shared by every app page.
 templ appFrame(s ui.Shell, v AppView, tab string) {
 	@ui.Layout(s) {
-		@AppHeader(s.CSRF, v.App)
+		@AppHeader(s.CSRF, v.Path(), v.App)
 		if v.Parent != nil {
 			<p class="muted mb-4 text-sm">
 				The preview of pull request #{ strconv.Itoa(v.App.PRNumber) } of
-				<a class="link" href={ templ.SafeURL("/apps/" + v.Parent.ID) }>{ v.Parent.Name }</a>.
+				<a class="link" href={ templ.SafeURL(v.Beside(v.Parent.ID)) }>{ v.Parent.Name }</a>.
 				It runs with that app's variables and files, and is removed when the pull request is closed.
 			</p>
 		}
@@ -244,7 +243,7 @@ templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedD
 			@ui.PageHeader("New app from a Docker image", "Runs in "+env.Name+".")
 		}
 		<div class="max-w-xl">
-			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/e/" + env.ID + "/apps") }>
+			<form class="card" method="post" action={ templ.SafeURL(EnvPath(p.ID, env.ID) + "/app") }>
 				@ui.CSRF(s.CSRF)
 				<input type="hidden" name="source" value={ source }/>
 				<div class="card-body grid gap-4">
@@ -262,7 +261,7 @@ templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedD
 					}
 				</div>
 				<div class="card-foot">
-					@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{}) {
+					@ui.LinkButton(EnvPath(p.ID, env.ID)+"/new", ui.ButtonProps{}) {
 						Back
 					}
 					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
@@ -308,7 +307,7 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 				<div class="card-head">
 					<h2 class="card-title">Domains</h2>
 					if !v.App.IsPreview() && len(v.Domains) > 0 {
-						@ui.LinkButton(v.base()+"/domains", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+						@ui.LinkButton(v.Path()+"/domains", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
 							Manage
 						}
 					}
@@ -317,7 +316,7 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 					@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No address", Text: "This preview could not be given one: the address it would have may be taken.", Size: ui.EmptySmall})
 				} else if len(v.Domains) == 0 {
 					@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No domain yet", Text: "Add one to reach the app from outside.", Size: ui.EmptySmall}) {
-						@ui.LinkButton(v.base()+"/domains", ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus"}) {
+						@ui.LinkButton(v.Path()+"/domains", ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus"}) {
 							Add domain
 						}
 					}
@@ -359,14 +358,14 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 			<section class="card lg:col-span-2">
 				<div class="card-head">
 					<h2 class="card-title">Latest deployment</h2>
-					@ui.LinkButton(v.base()+"/deployments", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+					@ui.LinkButton(v.Path()+"/deployments", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
 						All deployments
 					}
 				</div>
 				if last == nil {
 					@ui.EmptyState(ui.EmptyProps{Icon: "rocket", Title: "Not deployed yet", Text: "Choose Deploy to start the app.", Size: ui.EmptySmall})
 				} else {
-					<a class="row rail" data-state={ last.Status } href={ templ.SafeURL(v.base() + "/deployments/" + last.ID) }>
+					<a class="row rail" data-state={ last.Status } href={ templ.SafeURL(v.Path() + "/deployments/" + last.ID) }>
 						<div class="min-w-0 flex-1">
 							<p class="fact truncate">{ orDefault(last.Image, "building") }</p>
 							<p class="muted text-sm">{ ui.Ago(last.CreatedAt) }</p>
@@ -405,7 +404,7 @@ templ AppDeployments(s ui.Shell, v AppView, list []db.Deployment) {
 							</td>
 							<td class="fact">{ ui.Took(d.StartedAt, d.FinishedAt) }</td>
 							<td class="text-right">
-								@ui.LinkButton(v.base()+"/deployments/"+d.ID, ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+								@ui.LinkButton(v.Path()+"/deployments/"+d.ID, ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
 									View log
 								}
 							</td>
@@ -435,12 +434,12 @@ func (v AppView) canRollBack(d db.Deployment) bool {
 
 // DeploymentStatus is the status line above a deployment's log. While the
 // deployment runs it refreshes itself; once finished it stops.
-templ DeploymentStatus(appID string, d db.Deployment) {
+templ DeploymentStatus(base string, d db.Deployment) {
 	<div
 		id="deployment-status"
 		class="flex flex-wrap items-center gap-x-3 gap-y-1"
 		if !deploymentDone(d) {
-			hx-get={ "/apps/" + appID + "/deployments/" + d.ID + "/status" }
+			hx-get={ base + "/deployments/" + d.ID + "/status" }
 			hx-trigger="every 2s"
 			hx-swap="outerHTML"
 		}
@@ -457,7 +456,7 @@ templ DeploymentStatus(appID string, d db.Deployment) {
 templ AppDeployment(s ui.Shell, v AppView, d db.Deployment) {
 	@appFrame(s, v, "deployments") {
 		<div class="grid gap-4">
-			@DeploymentStatus(v.App.ID, d)
+			@DeploymentStatus(v.Path(), d)
 			if d.Error != "" {
 				@ui.Notice(ui.ToneDanger) {
 					{ d.Error }
@@ -466,7 +465,7 @@ templ AppDeployment(s ui.Shell, v AppView, d db.Deployment) {
 			if d.RollbackOf != "" {
 				<p class="muted text-sm">
 					A rollback: it runs the image of
-					<a class="link" href={ templ.SafeURL(v.base() + "/deployments/" + d.RollbackOf) }>an earlier deployment</a>
+					<a class="link" href={ templ.SafeURL(v.Path() + "/deployments/" + d.RollbackOf) }>an earlier deployment</a>
 					again.
 				</p>
 			}
@@ -477,7 +476,7 @@ templ AppDeployment(s ui.Shell, v AppView, d db.Deployment) {
 							<h2 class="card-title">Roll back to this deployment</h2>
 							<p class="muted text-sm">Runs this deployment's image again, as it was kept on the server. Nothing is built or pulled. The app's settings and variables stay as they are today; only the image goes back.</p>
 						</div>
-						<form method="post" action={ templ.SafeURL(v.base() + "/deployments/" + d.ID + "/rollback") }>
+						<form method="post" action={ templ.SafeURL(v.Path() + "/deployments/" + d.ID + "/rollback") }>
 							@ui.CSRF(s.CSRF)
 							@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Secondary, Icon: "refresh", Attrs: ui.Ask("Roll back "+v.App.Name+"?", "The image of this deployment runs again in place of the one serving now. Nothing is built or pulled, and settings and variables stay as they are today.", "Roll back", false)}) {
 								Roll back
@@ -488,7 +487,7 @@ templ AppDeployment(s ui.Shell, v AppView, d db.Deployment) {
 			}
 			@ui.LogView("deploy-log", templ.Attributes{
 				"hx-ext":      "sse",
-				"sse-connect": v.base() + "/deployments/" + d.ID + "/stream",
+				"sse-connect": v.Path() + "/deployments/" + d.ID + "/stream",
 				"sse-swap":    "line",
 				"sse-close":   "done",
 				"hx-swap":     "beforeend",
@@ -500,13 +499,13 @@ templ AppDeployment(s ui.Shell, v AppView, d db.Deployment) {
 templ AppLogs(s ui.Shell, v AppView) {
 	@appFrame(s, v, "logs") {
 		if v.App.Container == "" {
-			@ui.EmptyState(ui.EmptyProps{Icon: "file", Title: "Nothing is running", Text: "The app's output appears here once it is deployed.", Link: "See its deployments", LinkHref: v.base() + "/deployments"})
+			@ui.EmptyState(ui.EmptyProps{Icon: "file", Title: "Nothing is running", Text: "The app's output appears here once it is deployed.", Link: "See its deployments", LinkHref: v.Path() + "/deployments"})
 		} else {
 			<div class="grid gap-2">
 				<p class="muted text-sm">The last 200 lines, then new output as it arrives.</p>
 				@ui.LogView("runtime-log", templ.Attributes{
 					"hx-ext":      "sse",
-					"sse-connect": v.base() + "/logs/stream",
+					"sse-connect": v.Path() + "/logs/stream",
 					"sse-swap":    "line",
 					"sse-close":   "done",
 					"hx-swap":     "beforeend",
@@ -566,7 +565,7 @@ templ AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) {
 								<td class="fact">{ storageSource(st) }</td>
 								<td class="fact">{ st.Target }</td>
 								<td class="text-right">
-									<form method="post" action={ templ.SafeURL(v.base() + "/storage/" + st.ID + "/delete") }>
+									<form method="post" action={ templ.SafeURL(v.Path() + "/storage/" + st.ID + "/delete") }>
 										@ui.CSRF(s.CSRF)
 										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove this storage?", st.Target+" is no longer mounted from the next deploy on. A volume and a server folder keep their data; a file's content is deleted.", "Remove storage", true)}) {
 											Remove
@@ -578,7 +577,7 @@ templ AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) {
 					}
 				}
 			</section>
-			@ui.FormDialog(ui.DialogProps{ID: "add-storage", Title: "Add storage", Description: "It is mounted from the next deploy on.", Action: v.base() + "/storage", CSRF: s.CSRF, Submit: "Add storage", Wide: true, Open: !f.OK()}) {
+			@ui.FormDialog(ui.DialogProps{ID: "add-storage", Title: "Add storage", Description: "It is mounted from the next deploy on.", Action: v.Path() + "/storage", CSRF: s.CSRF, Submit: "Add storage", Wide: true, Open: !f.OK()}) {
 				@ui.Field(ui.FieldProps{Label: "Type", For: "kind", Hint: "A volume is managed by Docker. A server folder is a directory you choose on the server. A file is one file whose content you enter here.", Error: f.E("kind")}) {
 					@ui.Select("kind", []ui.Option{{Value: db.StorageVolume, Label: "Volume"}, {Value: db.StorageBind, Label: "Server folder"}, {Value: db.StorageFile, Label: "File"}}, orDefault(f.V("kind"), db.StorageVolume), templ.Attributes{"aria-describedby": "kind-hint"})
 				}
@@ -641,7 +640,7 @@ templ PreviewSettings(s ui.Shell, v AppView) {
 						<p class="muted text-sm">Stops the preview and removes it. A new push to the pull request makes it again.</p>
 					</div>
 				</div>
-				<form class="card-body grid gap-4" method="post" action={ templ.SafeURL(v.base() + "/delete") }>
+				<form class="card-body grid gap-4" method="post" action={ templ.SafeURL(v.Path() + "/delete") }>
 					@ui.CSRF(s.CSRF)
 					<input type="hidden" name="confirm" value={ v.App.Name }/>
 					<div>
@@ -676,7 +675,7 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 					<div class="row">
 						<div class="min-w-0 flex-1">
 							<p class="truncate">
-								<a class="link font-semibold" href={ templ.SafeURL("/apps/" + p.App.ID) }>#{ strconv.Itoa(p.App.PRNumber) }</a>
+								<a class="link font-semibold" href={ templ.SafeURL(v.Beside(p.App.ID)) }>#{ strconv.Itoa(p.App.PRNumber) }</a>
 								<span class="fact ml-2">{ p.App.Branch }</span>
 							</p>
 							if p.URL != "" {
@@ -686,7 +685,7 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 							}
 						</div>
 						@ui.StatusPill(p.App.Status)
-						<form method="post" action={ templ.SafeURL(v.base() + "/previews/" + strconv.Itoa(p.App.PRNumber) + "/delete") }>
+						<form method="post" action={ templ.SafeURL(v.Path() + "/previews/" + strconv.Itoa(p.App.PRNumber) + "/delete") }>
 							@ui.CSRF(csrf)
 							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the preview of #"+strconv.Itoa(p.App.PRNumber)+"?", "The preview is stopped and removed with its address. A new push to the pull request makes it again.", "Remove preview", true)}) {
 								Remove
@@ -699,7 +698,7 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 			@ui.EmptyState(ui.EmptyProps{Icon: "git-branch", Title: "No previews at the moment", Text: "A pull request into " + v.App.Branch + " gets one when it is opened or pushed to.", Size: ui.EmptySmall})
 		}
 	</section>
-	@ui.FormDialog(ui.DialogProps{ID: "edit-previews", Title: "Pull request previews", Description: "A preview runs the pull request's code with this app's variables, so anyone who can push a branch to the repository can read them. Pull requests from forks get no preview. Up to ten previews exist at once. A webhook added by hand must also send pull request events.", Action: v.base() + "/previews", CSRF: csrf, Submit: "Save", Open: !f.OK()}) {
+	@ui.FormDialog(ui.DialogProps{ID: "edit-previews", Title: "Pull request previews", Description: "A preview runs the pull request's code with this app's variables, so anyone who can push a branch to the repository can read them. Pull requests from forks get no preview. Up to ten previews exist at once. A webhook added by hand must also send pull request events.", Action: v.Path() + "/previews", CSRF: csrf, Submit: "Save", Open: !f.OK()}) {
 		@ui.CheckboxNamed("previews-on", "previews", checked(f, "previews", v.App.Previews), nil) {
 			Give every pull request a preview
 		}
@@ -735,7 +734,7 @@ func optionLabel(opts []ui.Option, value string) string {
 templ AppSettings(s ui.Shell, v AppView, general, src, previews ui.Form, choices GitChoices) {
 	@appFrame(s, v, "settings") {
 		<div class="grid max-w-3xl gap-6">
-			@ui.FormCard("General", "Changes apply on the next deploy.", v.base()+"/settings", s.CSRF, "Save changes") {
+			@ui.FormCard("General", "Changes apply on the next deploy.", v.Path()+"/settings", s.CSRF, "Save changes") {
 				@ui.TextField(general, "Name", "", ui.InputProps{ID: "name", Mono: true, Value: v.App.Name, Required: true, Attrs: templ.Attributes{"maxlength": "32"}})
 				if v.App.Source != db.SourceGit {
 					@ui.TextField(general, "Docker image", "", ui.InputProps{ID: "image", Mono: true, Value: v.App.Image, Required: true})
@@ -752,7 +751,7 @@ templ AppSettings(s ui.Shell, v AppView, general, src, previews ui.Form, choices
 				@ui.TextField(general, "Extra Docker options", "Such as --shm-size 256m or --ulimit nofile=65536:65536. Options that reach outside the container, such as --privileged or -v, are refused.", ui.InputProps{ID: "docker_options", Mono: true, Value: v.App.DockerOptions})
 			}
 			if v.App.Source == db.SourceGit {
-				@ui.FormCard("Source", "Where the code comes from and how it is built.", v.base()+"/source", s.CSRF, "Save source") {
+				@ui.FormCard("Source", "Where the code comes from and how it is built.", v.Path()+"/source", s.CSRF, "Save source") {
 					<input type="hidden" name="_submitted" value="1"/>
 					@gitSourceFields(src, choices, v.App)
 				}
@@ -772,7 +771,7 @@ templ AppSettings(s ui.Shell, v AppView, general, src, previews ui.Form, choices
 						@ui.KeyValue([]ui.KVItem{{Key: "Builds on", Value: optionLabel(buildServerOptions(v), v.App.BuildServerID)}})
 					</div>
 				</section>
-				@ui.FormDialog(ui.DialogProps{ID: "edit-build-server", Title: "Build server", Action: v.base() + "/build-server", CSRF: s.CSRF, Submit: "Save"}) {
+				@ui.FormDialog(ui.DialogProps{ID: "edit-build-server", Title: "Build server", Action: v.Path() + "/build-server", CSRF: s.CSRF, Submit: "Save"}) {
 					@ui.Field(ui.FieldProps{Label: "Build on", For: "build_server", Hint: "Applies from the next deployment."}) {
 						@ui.Select("build_server", buildServerOptions(v), v.App.BuildServerID, templ.Attributes{"aria-describedby": "build_server-hint"})
 					}
@@ -781,7 +780,7 @@ templ AppSettings(s ui.Shell, v AppView, general, src, previews ui.Form, choices
 			if v.App.Source == db.SourceGit {
 				@previewsCard(s.CSRF, v, previews)
 			}
-			@tagsCard(s.CSRF, v.base()+"/tags", v.Tags, v.TeamTags)
+			@tagsCard(s.CSRF, v.Path()+"/tags", v.Tags, v.TeamTags)
 			<section class="card card-danger">
 				<div class="card-head">
 					<div>
@@ -791,7 +790,7 @@ templ AppSettings(s ui.Shell, v AppView, general, src, previews ui.Form, choices
 					@ui.Confirm(ui.ConfirmProps{
 						ID:      "delete-app",
 						Title:   "Delete app",
-						Action:  v.base() + "/delete",
+						Action:  v.Path() + "/delete",
 						CSRF:    s.CSRF,
 						Match:   v.App.Name,
 						Submit:  "Delete app",
@@ -859,7 +858,7 @@ templ AppDomains(s ui.Shell, v AppView, f ui.Form) {
 									@domainOptions(d)
 								</td>
 								<td class="text-right">
-									<form method="post" action={ templ.SafeURL(v.base() + "/domains/" + d.ID + "/delete") }>
+									<form method="post" action={ templ.SafeURL(v.Path() + "/domains/" + d.ID + "/delete") }>
 										@ui.CSRF(s.CSRF)
 										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove "+d.Host+d.Path+"?", v.App.Name+" stops answering at this address at once.", "Remove domain", true)}) {
 											Remove
@@ -871,7 +870,7 @@ templ AppDomains(s ui.Shell, v AppView, f ui.Form) {
 					}
 				}
 			</section>
-			@ui.FormDialog(ui.DialogProps{ID: "add-domain", Title: "Add domain", Description: "Point the domain's DNS at the app's server first, so its certificate can be issued.", Action: v.base() + "/domains", CSRF: s.CSRF, Submit: "Add domain", Wide: true, Open: !f.OK()}) {
+			@ui.FormDialog(ui.DialogProps{ID: "add-domain", Title: "Add domain", Description: "Point the domain's DNS at the app's server first, so its certificate can be issued.", Action: v.Path() + "/domains", CSRF: s.CSRF, Submit: "Add domain", Wide: true, Open: !f.OK()}) {
 					<div class="grid gap-4 sm:grid-cols-2">
 						@ui.TextField(f, "Domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com"})
 						@ui.TextField(f, "Only under this path", "Optional. With /api, this app answers app.example.com/api and what is below it; another app can take the rest of the domain.", ui.InputProps{ID: "path", Mono: true, Placeholder: "/api"})

@@ -227,7 +227,7 @@ func (s *Server) appMetrics(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	h, err := s.history(r, v.App.ServerID, v.App.ID, "/apps/"+v.App.ID+"/metrics")
+	h, err := s.history(r, v.App.ServerID, v.App.ID, v.Path()+"/metrics")
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -237,7 +237,7 @@ func (s *Server) appMetrics(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) appMetricsNow(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadApp(w, r); ok {
-		s.usageOf(w, r, v.App.ServerID, "/apps/"+v.App.ID, one(v.App.Container))
+		s.usageOf(w, r, v.App.ServerID, v.Path(), one(v.App.Container))
 	}
 }
 
@@ -246,7 +246,7 @@ func (s *Server) databaseMetrics(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	h, err := s.history(r, v.DB.ServerID, v.DB.ID, "/databases/"+v.DB.ID+"/metrics")
+	h, err := s.history(r, v.DB.ServerID, v.DB.ID, v.Path()+"/metrics")
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -256,7 +256,7 @@ func (s *Server) databaseMetrics(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) databaseMetricsNow(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadDatabase(w, r); ok {
-		s.usageOf(w, r, v.DB.ServerID, "/databases/"+v.DB.ID, one(v.DB.Container))
+		s.usageOf(w, r, v.DB.ServerID, v.Path(), one(v.DB.Container))
 	}
 }
 
@@ -265,7 +265,7 @@ func (s *Server) serviceMetrics(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	h, err := s.history(r, v.Service.ServerID, v.Service.ID, "/services/"+v.Service.ID+"/metrics")
+	h, err := s.history(r, v.Service.ServerID, v.Service.ID, v.Path()+"/metrics")
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -293,7 +293,7 @@ func serviceContainers(serviceID string) func(context.Context, docker.Client) ([
 
 func (s *Server) serviceMetricsNow(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadService(w, r); ok {
-		s.usageOf(w, r, v.Service.ServerID, "/services/"+v.Service.ID, serviceContainers(v.Service.ID))
+		s.usageOf(w, r, v.Service.ServerID, v.Path(), serviceContainers(v.Service.ID))
 	}
 }
 
@@ -436,23 +436,9 @@ func (s *Server) resourcePage(r *http.Request, kind, id string) string {
 	if !resourceIDRE.MatchString(id) {
 		return ""
 	}
-	team := sessionFrom(r).TeamID
-	var err error
-	switch kind {
-	case db.KindApp:
-		_, err = s.DB.App(r.Context(), team, id)
-		kind = "apps"
-	case db.KindDatabase:
-		_, err = s.DB.Database(r.Context(), team, id)
-		kind = "databases"
-	case db.KindService:
-		_, err = s.DB.Service(r.Context(), team, id)
-		kind = "services"
-	default:
-		return ""
-	}
+	projectID, envID, err := s.DB.PlaceOf(r.Context(), sessionFrom(r).TeamID, kind, id)
 	if err != nil {
 		return ""
 	}
-	return "/" + kind + "/" + id + "/metrics"
+	return pages.ResourcePath(projectID, envID, kind, id) + "/metrics"
 }

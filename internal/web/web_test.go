@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -31,6 +33,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner/runnertest"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/migrations"
 )
 
@@ -174,6 +177,33 @@ func (a *app) postRaw(c *http.Client, path string, form url.Values, header http.
 		req.Header[k] = v
 	}
 	return a.do(c, req)
+}
+
+// appPath, databasePath and servicePath are the address of a resource's
+// page, which says where the resource is: read from the database, so a test
+// names a resource by its id as it always did. An id that is nowhere gets
+// an address that is nowhere, which is how a test asks for what is not
+// there.
+func (a *app) appPath(id string) string      { return a.resourcePath(db.KindApp, "apps", id) }
+func (a *app) databasePath(id string) string { return a.resourcePath(db.KindDatabase, "databases", id) }
+func (a *app) servicePath(id string) string  { return a.resourcePath(db.KindService, "services", id) }
+
+func (a *app) resourcePath(kind, table, id string) string {
+	a.t.Helper()
+	project, env := "nowhere", "nowhere"
+	err := a.db.QueryRow(`SELECT e.project_id, e.id FROM `+table+` r JOIN environments e ON e.id = r.environment_id WHERE r.id = ?`, id).Scan(&project, &env)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		a.t.Fatal(err)
+	}
+	return pages.ResourcePath(project, env, kind, id)
+}
+
+// createdID is the id of what a form made, read from where its answer
+// leads: the address of the new resource, and whatever follows it.
+func createdID(res *http.Response, kind string) string {
+	_, after, _ := strings.Cut(res.Header.Get("Location"), "/"+kind+"/")
+	id, _, _ := strings.Cut(after, "/")
+	return id
 }
 
 // setup creates the owner account and leaves the client signed in.
@@ -482,7 +512,12 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	wantStatus(t, res, http.StatusSeeOther)
 	path := res.Header.Get("Location")
 
-	res, body = a.get(path)
+	// A project opens on its first environment, whose address says so.
+	res, _ = a.get(path)
+	if to := res.Header.Get("Location"); res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(to, path+"/env/") {
+		t.Fatalf("a project's address: %d → %q, want 303 to its first environment", res.StatusCode, to)
+	}
+	res, body = a.get(res.Header.Get("Location"))
 	wantStatus(t, res, http.StatusOK)
 	if !strings.Contains(body, "Shop &lt;script&gt;") || strings.Contains(body, "Shop <script>") {
 		t.Fatal("project name is not escaped")
@@ -503,7 +538,7 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	}
 	// A new environment is where the browser goes next.
 	res, _ = a.post(settings, path+"/environments", url.Values{"name": {"Staging"}})
-	if to := res.Header.Get("Location"); res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(to, path+"/e/") {
+	if to := res.Header.Get("Location"); res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(to, path+"/env/") {
 		t.Fatalf("got %d → %q, want 303 into the new environment", res.StatusCode, to)
 	}
 	res, body = a.post(settings, path+"/environments", url.Values{"name": {"staging"}})
@@ -524,24 +559,24 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	}
 	staging := envs[1]
 
-	res, _ = a.get(path + "/e/" + staging.ID)
+	res, _ = a.get(path + "/env/" + staging.ID)
 	wantStatus(t, res, http.StatusOK)
-	res, _ = a.get(path + "/e/nope")
+	res, _ = a.get(path + "/env/nope")
 	wantStatus(t, res, http.StatusNotFound)
 
 	// Deleting needs the typed name.
-	res, _ = a.post(settings, "/environments/"+staging.ID+"/delete", url.Values{"confirm": {"wrong"}})
+	res, _ = a.post(settings, path+"/env/"+staging.ID+"/delete", url.Values{"confirm": {"wrong"}})
 	wantRedirect(t, res, settings)
 	if envs, _ := a.db.ListEnvironments(ctx, projectID); len(envs) != 2 {
 		t.Fatal("environment deleted without confirmation")
 	}
-	res, _ = a.post(settings, "/environments/"+staging.ID+"/delete", url.Values{"confirm": {"staging"}})
+	res, _ = a.post(settings, path+"/env/"+staging.ID+"/delete", url.Values{"confirm": {"staging"}})
 	wantRedirect(t, res, settings)
 	if envs, _ := a.db.ListEnvironments(ctx, projectID); len(envs) != 1 {
 		t.Fatal("environment not deleted")
 	}
 	// The last environment stays.
-	res, _ = a.post(settings, "/environments/"+envs[0].ID+"/delete", url.Values{"confirm": {"production"}})
+	res, _ = a.post(settings, path+"/env/"+envs[0].ID+"/delete", url.Values{"confirm": {"production"}})
 	wantRedirect(t, res, settings)
 	if envs, _ := a.db.ListEnvironments(ctx, projectID); len(envs) != 1 {
 		t.Fatal("the last environment was deleted")
@@ -570,24 +605,23 @@ func TestEnvironmentInThePathAndSwitchers(t *testing.T) {
 	a.newApp(projectID, staging, "web-next", false, nil)
 	otherID, otherEnv := a.project("Blog")
 
-	// Without an environment in the path it is the first one.
-	_, first := a.get("/projects/" + projectID)
-	_, named := a.get("/projects/" + projectID + "/e/" + production.ID)
-	for _, page := range []string{first, named} {
-		if !strings.Contains(page, ">web<") || strings.Contains(page, "web-next") {
-			t.Fatal("the page does not show production's resources, or shows another environment's")
-		}
-		if !strings.Contains(page, "/projects/"+projectID+"/e/"+production.ID+"/new") {
-			t.Fatal("no Add resource link for this environment")
-		}
+	// Without an environment in the path it leads to the first one.
+	first, _ := a.get("/projects/" + projectID)
+	wantRedirect(t, first, "/projects/"+projectID+"/env/"+production.ID)
+	_, page := a.get("/projects/" + projectID + "/env/" + production.ID)
+	if !strings.Contains(page, ">web<") || strings.Contains(page, "web-next") {
+		t.Fatal("the page does not show production's resources, or shows another environment's")
 	}
-	if _, page := a.get("/projects/" + projectID + "/e/" + staging.ID); !strings.Contains(page, "web-next") || strings.Contains(page, ">web<") {
+	if !strings.Contains(page, "/projects/"+projectID+"/env/"+production.ID+"/new") {
+		t.Fatal("no Add resource link for this environment")
+	}
+	if _, page := a.get("/projects/" + projectID + "/env/" + staging.ID); !strings.Contains(page, "web-next") || strings.Contains(page, ">web<") {
 		t.Fatal("staging's page does not show its own resources only")
 	}
 	// An environment is reached through its own project only.
-	res, _ := a.get("/projects/" + otherID + "/e/" + production.ID)
+	res, _ := a.get("/projects/" + otherID + "/env/" + production.ID)
 	wantStatus(t, res, http.StatusNotFound)
-	res, _ = a.get("/projects/" + otherID + "/e/" + production.ID + "/new")
+	res, _ = a.get("/projects/" + otherID + "/env/" + production.ID + "/new")
 	wantStatus(t, res, http.StatusNotFound)
 	// The old address of the New project page is gone: it is a dialog.
 	res, _ = a.get("/projects/new")
@@ -596,22 +630,22 @@ func TestEnvironmentInThePathAndSwitchers(t *testing.T) {
 	// The environment switcher lists this project's environments.
 	res, menu := a.get("/projects/" + projectID + "/switch/environments?at=" + staging.ID)
 	wantStatus(t, res, http.StatusOK)
-	if !strings.Contains(menu, "/e/"+production.ID) || !strings.Contains(menu, "/e/"+staging.ID) || strings.Contains(menu, otherEnv.ID) {
+	if !strings.Contains(menu, "/env/"+production.ID) || !strings.Contains(menu, "/env/"+staging.ID) || strings.Contains(menu, otherEnv.ID) {
 		t.Fatalf("environment switcher:\n%s", menu)
 	}
-	if !regexp.MustCompile(`href="[^"]*/e/` + staging.ID + `"[^>]*aria-selected="true"`).MatchString(menu) {
+	if !regexp.MustCompile(`href="[^"]*/env/` + staging.ID + `"[^>]*aria-selected="true"`).MatchString(menu) {
 		t.Fatal("the switcher does not mark the current environment")
 	}
 	// The resource switcher lists what is in the environment.
-	res, menu = a.get("/environments/" + production.ID + "/switch/resources")
+	res, menu = a.get("/projects/" + projectID + "/env/" + production.ID + "/switch/resources")
 	wantStatus(t, res, http.StatusOK)
-	if !strings.Contains(menu, ">web<") || strings.Contains(menu, "web-next") || !strings.Contains(menu, "/e/"+production.ID+"/new") {
+	if !strings.Contains(menu, ">web<") || strings.Contains(menu, "web-next") || !strings.Contains(menu, "/env/"+production.ID+"/new") {
 		t.Fatalf("resource switcher:\n%s", menu)
 	}
 
 	// The project step of a trail is a switcher too, on every page under
 	// a project.
-	for _, page := range []string{"/projects/" + projectID + "/e/" + staging.ID, "/projects/" + projectID + "/settings", "/apps/" + appID} {
+	for _, page := range []string{"/projects/" + projectID + "/env/" + staging.ID, "/projects/" + projectID + "/settings", a.appPath(appID)} {
 		if _, body := a.get(page); !strings.Contains(body, `hx-get="/switch/projects?at=`+projectID+`"`) {
 			t.Errorf("%s: the project step is not a switcher", page)
 		}
@@ -633,7 +667,7 @@ func TestEnvironmentInThePathAndSwitchers(t *testing.T) {
 		t.Fatal("the switcher does not mark the current project, or marks another")
 	}
 	theirEnvs, _ := a.db.ListEnvironments(ctx, theirs.ID)
-	for _, path := range []string{"/projects/" + theirs.ID + "/switch/environments", "/environments/" + theirEnvs[0].ID + "/switch/resources"} {
+	for _, path := range []string{"/projects/" + theirs.ID + "/switch/environments", "/projects/" + theirs.ID + "/env/" + theirEnvs[0].ID + "/switch/resources"} {
 		res, menu := a.get(path)
 		wantStatus(t, res, http.StatusOK)
 		if strings.Contains(menu, theirEnvs[0].ID) || strings.Contains(menu, "production") || !strings.Contains(menu, "is gone") {
@@ -669,6 +703,90 @@ func TestProjectTilesAndDialog(t *testing.T) {
 	}
 }
 
+// A resource's address says where the resource is, and is its address only
+// when that is where it is: the same app under another environment or
+// another project is not found, a page, a fragment and an action alike.
+func TestResourceAddressSaysWhereItIs(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+	projectID, production := a.project("Shop")
+	staging, err := a.db.CreateEnvironment(ctx, firstTeam(t, a), projectID, "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherID, otherEnv := a.project("Blog")
+	appID := a.newApp(projectID, production, "web", false, nil)
+	m := a.newDatabase(projectID, production, "postgres", "maindb", nil)
+
+	long := "/projects/" + projectID + "/env/" + production.ID + "/app/" + appID
+	if got := a.appPath(appID); got != long {
+		t.Fatalf("the app's address is %s, want %s", got, long)
+	}
+	res, page := a.get(long)
+	wantStatus(t, res, http.StatusOK)
+	for _, want := range []string{`hx-get="` + long + `/status"`, `action="` + long + `/deploy"`, `href="` + long + `/settings"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the app's page lacks %s", want)
+		}
+	}
+	if strings.Contains(page, `"/apps/`) {
+		t.Error("the app's page still holds a short address")
+	}
+	if _, page = a.get("/projects/" + projectID + "/env/" + production.ID); !strings.Contains(page, `href="`+long+`"`) || !strings.Contains(page, `href="`+a.databasePath(m.ID)+`"`) {
+		t.Error("the environment's tiles do not lead to the long addresses")
+	}
+
+	token := a.csrf("/projects")
+	for _, wrong := range []string{
+		"/projects/" + projectID + "/env/" + staging.ID + "/app/" + appID,
+		"/projects/" + otherID + "/env/" + production.ID + "/app/" + appID,
+		"/projects/" + otherID + "/env/" + otherEnv.ID + "/app/" + appID,
+		"/projects/" + projectID + "/env/" + production.ID + "/database/" + appID,
+		"/projects/" + projectID + "/env/" + production.ID + "/app/" + m.ID,
+	} {
+		for _, rest := range []string{"", "/status", "/settings", "/deployments"} {
+			if res, _ := a.get(wrong + rest); res.StatusCode != http.StatusNotFound {
+				t.Errorf("GET %s%s: %d, want 404", wrong, rest, res.StatusCode)
+			}
+		}
+		if res, _ := a.postRaw(a.client, wrong+"/delete", url.Values{"_csrf": {token}, "confirm": {"web"}}, nil); res.StatusCode != http.StatusNotFound {
+			t.Errorf("POST %s/delete: %d, want 404", wrong, res.StatusCode)
+		}
+	}
+	if _, err := a.db.App(ctx, firstTeam(t, a), appID); err != nil {
+		t.Fatalf("the app was deleted through an address that is not its own: %v", err)
+	}
+
+	// The short address leads to the long one, with what follows it. It is
+	// for reading: nothing is posted to it.
+	res, _ = a.get("/apps/" + appID)
+	wantRedirect(t, res, long)
+	res, _ = a.get("/apps/" + appID + "/deployments/abc/status?was=queued")
+	wantRedirect(t, res, long+"/deployments/abc/status?was=queued")
+	res, _ = a.get("/databases/" + m.ID + "/backups")
+	wantRedirect(t, res, a.databasePath(m.ID)+"/backups")
+	for _, gone := range []string{"/apps/nosuchapp", "/databases/" + appID, "/services/" + appID + "/compose"} {
+		if res, _ := a.get(gone); res.StatusCode != http.StatusNotFound {
+			t.Errorf("GET %s: %d, want 404", gone, res.StatusCode)
+		}
+	}
+	if res, _ := a.postRaw(a.client, "/apps/"+appID+"/delete", url.Values{"_csrf": {token}, "confirm": {"web"}}, nil); res.StatusCode != http.StatusNotFound {
+		t.Errorf("POST to the short address: %d, want 404", res.StatusCode)
+	}
+
+	// The addresses an environment had lead to the ones it has.
+	env := "/projects/" + projectID + "/env/" + production.ID
+	for old, to := range map[string]string{
+		"/projects/" + projectID + "/e/" + production.ID:          env,
+		"/projects/" + projectID + "/e/" + production.ID + "/new": env,
+		"/environments/" + production.ID + "/variables":           env + "/variables",
+	} {
+		res, _ := a.get(old)
+		wantRedirect(t, res, to)
+	}
+}
+
 func TestOtherTeamsProjectIsNotFound(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
@@ -691,10 +809,10 @@ func TestOtherTeamsProjectIsNotFound(t *testing.T) {
 		}
 	}
 	for path, form := range map[string]url.Values{
-		"/projects/" + p.ID:                       {"name": {"Hijacked"}},
-		"/projects/" + p.ID + "/delete":           {"confirm": {"Secret project"}},
-		"/projects/" + p.ID + "/environments":     {"name": {"staging"}},
-		"/environments/" + envs[0].ID + "/delete": {"confirm": {"production"}},
+		"/projects/" + p.ID:                                    {"name": {"Hijacked"}},
+		"/projects/" + p.ID + "/delete":                        {"confirm": {"Secret project"}},
+		"/projects/" + p.ID + "/environments":                  {"name": {"staging"}},
+		"/projects/" + p.ID + "/env/" + envs[0].ID + "/delete": {"confirm": {"production"}},
 	} {
 		form.Set("_csrf", token)
 		res, _ := a.postRaw(a.client, path, form, nil)
@@ -784,11 +902,11 @@ func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
 	mdb := a.newDatabase(projectID, env, "postgres", "maindb", nil)
 	base := "/projects/" + projectID
 	for _, page := range []string{
-		"/databases/" + mdb.ID, "/databases/" + mdb.ID + "/backups", "/databases/" + mdb.ID + "/settings",
-		"/apps/" + git.ID + "/settings", "/apps/" + git.ID + "/tasks", "/apps/" + git.ID + "/environment",
-		"/services/" + svc.ID, "/services/" + svc.ID + "/compose", "/services/" + svc.ID + "/settings",
-		"/", "/projects", base, base + "/e/" + env.ID, base + "/e/" + env.ID + "/new", base + "/settings",
-		"/apps/" + appID, "/apps/" + appID + "/environment", "/apps/" + appID + "/environment/edit", "/apps/" + appID + "/domains", "/apps/" + appID + "/storage", "/apps/" + appID + "/settings",
+		a.databasePath(mdb.ID), a.databasePath(mdb.ID) + "/backups", a.databasePath(mdb.ID) + "/settings",
+		a.appPath(git.ID) + "/settings", a.appPath(git.ID) + "/tasks", a.appPath(git.ID) + "/environment",
+		a.servicePath(svc.ID), a.servicePath(svc.ID) + "/compose", a.servicePath(svc.ID) + "/settings",
+		"/", "/projects", base + "/env/" + env.ID, base + "/env/" + env.ID + "/new", base + "/settings",
+		a.appPath(appID), a.appPath(appID) + "/environment", a.appPath(appID) + "/environment/edit", a.appPath(appID) + "/domains", a.appPath(appID) + "/storage", a.appPath(appID) + "/settings",
 		"/tags", "/keys", "/keys/tokens", "/servers", "/sources", "/team", "/team/variables", "/account",
 		"/settings", "/settings/storages", "/notifications", "/_ui",
 	} {
@@ -921,7 +1039,7 @@ func TestHeader(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 	teamStep := regexp.MustCompile(`(?s)<nav class="crumbs"[^>]*>\s*<div class="select" data-select>\s*<button[^>]*id="crumb-0"[^>]*popovertarget="crumb-0-menu".*?Default team.*?hx-get="/switch/teams"`)
-	for _, page := range []string{"/", "/projects", "/projects/" + projectID + "/e/" + env.ID, "/account", "/nosuchpage"} {
+	for _, page := range []string{"/", "/projects", "/projects/" + projectID + "/env/" + env.ID, "/account", "/nosuchpage"} {
 		_, body := a.get(page)
 		if !teamStep.MatchString(body) {
 			t.Errorf("%s: the trail does not start with the team switcher", page)
@@ -940,7 +1058,7 @@ func TestHeader(t *testing.T) {
 		}
 	}
 	// A page that has a trail of its own keeps it, after the team.
-	_, body := a.get("/projects/" + projectID + "/e/" + env.ID)
+	_, body := a.get("/projects/" + projectID + "/env/" + env.ID)
 	if !regexp.MustCompile(`(?s)Default team.*?crumb-sep.*?href="/projects".*?Shop`).MatchString(body) {
 		t.Error("the project's trail does not follow the team")
 	}

@@ -73,7 +73,7 @@ func (s *Server) loadApp(w http.ResponseWriter, r *http.Request) (pages.AppView,
 func appCrumbs(v pages.AppView) []ui.Crumb {
 	if v.Parent != nil {
 		return envCrumbs(v.Project, v.Env,
-			ui.Crumb{Label: v.Parent.Name, Href: "/apps/" + v.Parent.ID, Icon: pages.KindIcon(db.KindApp)},
+			ui.Crumb{Label: v.Parent.Name, Href: v.Beside(v.Parent.ID), Icon: pages.KindIcon(db.KindApp)},
 			ui.Crumb{Label: v.App.Name})
 	}
 	return envCrumbs(v.Project, v.Env, resourceCrumb(v.Env, db.KindApp, v.App.ID, v.App.Name))
@@ -237,7 +237,7 @@ func domainAuth(f *ui.Form, user, password string) (string, string) {
 // newAppShell frames the New app form.
 func (s *Server) newAppShell(w http.ResponseWriter, r *http.Request, p db.Project, env db.Environment) ui.Shell {
 	return s.shell(w, r, "New app", "projects", envCrumbs(p, env,
-		ui.Crumb{Label: "Add resource", Href: envPath(p.ID, env.ID) + "/new"}, ui.Crumb{Label: "App"})...)
+		ui.Crumb{Label: "Add resource", Href: pages.EnvPath(p.ID, env.ID) + "/new"}, ui.Crumb{Label: "App"})...)
 }
 
 func (s *Server) appNew(w http.ResponseWriter, r *http.Request) {
@@ -372,7 +372,7 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		redirect(w, r, "/apps/"+app.ID+"/deployments/"+dep.ID)
+		redirect(w, r, pages.ResourcePath(p.ID, env.ID, db.KindApp, app.ID)+"/deployments/"+dep.ID)
 		return
 	}
 	if domainTaken {
@@ -380,7 +380,7 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 	} else {
 		setFlash(w, r, ui.ToneOK, "App created. Choose Deploy to start it.")
 	}
-	redirect(w, r, "/apps/"+app.ID)
+	redirect(w, r, pages.ResourcePath(p.ID, env.ID, db.KindApp, app.ID))
 }
 
 func (s *Server) appOverview(w http.ResponseWriter, r *http.Request) {
@@ -416,7 +416,7 @@ func (s *Server) appStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.AppHeader(sessionFrom(r).CSRFToken, app))
+	s.render(w, r, http.StatusOK, pages.AppHeader(sessionFrom(r).CSRFToken, placeInPath(r, db.KindApp), app))
 }
 
 func (s *Server) appDeploy(w http.ResponseWriter, r *http.Request) {
@@ -429,7 +429,7 @@ func (s *Server) appDeploy(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	redirect(w, r, "/apps/"+v.App.ID+"/deployments/"+dep.ID)
+	redirect(w, r, v.Path()+"/deployments/"+dep.ID)
 }
 
 func (s *Server) appStop(w http.ResponseWriter, r *http.Request) {
@@ -447,7 +447,7 @@ func (s *Server) appStop(w http.ResponseWriter, r *http.Request) {
 	default:
 		setFlash(w, r, ui.ToneOK, "App stopped.")
 	}
-	redirect(w, r, "/apps/"+v.App.ID)
+	redirect(w, r, v.Path())
 }
 
 func (s *Server) appDeployments(w http.ResponseWriter, r *http.Request) {
@@ -472,14 +472,14 @@ func (s *Server) appRollback(w http.ResponseWriter, r *http.Request) {
 	dep, err := s.Deploy.Rollback(r.Context(), v.App, to)
 	if errors.Is(err, deploy.ErrNoRollback) {
 		setFlash(w, r, ui.ToneWarn, "This deployment cannot be rolled back to: it did not succeed, or its image was not kept.")
-		redirect(w, r, "/apps/"+v.App.ID+"/deployments/"+to.ID)
+		redirect(w, r, v.Path()+"/deployments/"+to.ID)
 		return
 	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	redirect(w, r, "/apps/"+v.App.ID+"/deployments/"+dep.ID)
+	redirect(w, r, v.Path()+"/deployments/"+dep.ID)
 }
 
 // loadDeployment fetches the deployment in the path, which must belong to
@@ -514,7 +514,7 @@ func (s *Server) appDeploymentStatus(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.DeploymentStatus(v.App.ID, dep))
+	s.render(w, r, http.StatusOK, pages.DeploymentStatus(v.Path(), dep))
 }
 
 // streamContext is the context of a live stream: it ends when the browser
@@ -641,7 +641,7 @@ func (s *Server) appVars(r *http.Request, v pages.AppView, shown bool) (runtime,
 func (s *Server) appVarsCard(r *http.Request, v pages.AppView, shown bool) (pages.VarsCard, error) {
 	runtime, build, err := s.appVars(r, v, shown)
 	c := pages.VarsCard{ID: "app-vars", Title: "Environment variables", Shown: shown,
-		Values: "/apps/" + v.App.ID + "/environment/values", Edit: "/apps/" + v.App.ID + "/environment/edit",
+		Values: v.Path() + "/environment/values", Edit: v.Path() + "/environment/edit",
 		Groups: []pages.VarGroup{{Vars: runtime}}}
 	if v.App.Source == db.SourceGit {
 		c.Groups = []pages.VarGroup{{Title: "Given to the running app", Vars: runtime}, {Title: "Given to the build", Vars: build}}
@@ -754,7 +754,7 @@ func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.warnMissingShared(w, r, v.App.EnvironmentID, v.App.ServerID, values, "Variables saved. Redeploy to apply them.")
-	redirect(w, r, "/apps/"+v.App.ID+"/environment")
+	redirect(w, r, v.Path()+"/environment")
 }
 
 func (s *Server) appStorage(w http.ResponseWriter, r *http.Request) {
@@ -831,7 +831,7 @@ func (s *Server) appStorageAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Storage added. Redeploy to mount it.")
-	redirect(w, r, "/apps/"+v.App.ID+"/storage")
+	redirect(w, r, v.Path()+"/storage")
 }
 
 func (s *Server) appStorageDelete(w http.ResponseWriter, r *http.Request) {
@@ -849,7 +849,7 @@ func (s *Server) appStorageDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Storage removed. The data itself is kept on the server. Redeploy to unmount it.")
-	redirect(w, r, "/apps/"+v.App.ID+"/storage")
+	redirect(w, r, v.Path()+"/storage")
 }
 
 func (s *Server) appSettings(w http.ResponseWriter, r *http.Request) {
@@ -921,7 +921,7 @@ func (s *Server) appSettingsSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Settings saved. Redeploy to apply them.")
-	redirect(w, r, "/apps/"+app.ID+"/settings")
+	redirect(w, r, v.Path()+"/settings")
 }
 
 // syncRoutes republishes the routes of an app's server after its domains
@@ -1018,7 +1018,7 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	s.syncRoutes(r, v.App.ServerID)
 	setFlash(w, r, ui.ToneOK, "Domain added.")
-	redirect(w, r, "/apps/"+v.App.ID+"/domains")
+	redirect(w, r, v.Path()+"/domains")
 }
 
 func (s *Server) appDomainDelete(w http.ResponseWriter, r *http.Request) {
@@ -1037,7 +1037,7 @@ func (s *Server) appDomainDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	s.syncRoutes(r, v.App.ServerID)
 	setFlash(w, r, ui.ToneOK, "Domain removed.")
-	redirect(w, r, "/apps/"+v.App.ID+"/domains")
+	redirect(w, r, v.Path()+"/domains")
 }
 
 func (s *Server) appDelete(w http.ResponseWriter, r *http.Request) {
@@ -1045,7 +1045,7 @@ func (s *Server) appDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	back := "/apps/" + v.App.ID + "/settings"
+	back := v.Path() + "/settings"
 	if strings.TrimSpace(r.PostFormValue("confirm")) != v.App.Name {
 		setFlash(w, r, ui.ToneDanger, "The app was not deleted: the name you typed did not match.")
 		redirect(w, r, back)
@@ -1065,9 +1065,9 @@ func (s *Server) appDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if v.App.IsPreview() {
 		setFlash(w, r, ui.ToneOK, "Preview removed.")
-		redirect(w, r, "/apps/"+v.App.PreviewOf+"/settings#previews")
+		redirect(w, r, v.Beside(v.App.PreviewOf)+"/settings#previews")
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "App deleted.")
-	redirect(w, r, envPath(v.Project.ID, v.Env.ID))
+	redirect(w, r, pages.EnvPath(v.Project.ID, v.Env.ID))
 }

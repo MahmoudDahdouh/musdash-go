@@ -104,24 +104,24 @@ func HitRow(h db.Hit) SearchRow {
 		row.Href, row.Icon = "/projects/"+h.ID, "folder"
 		row.Said = said("Project", h.Detail)
 	case db.HitEnvironment:
-		row.Href, row.Icon = "/projects/"+h.ProjectID+"/e/"+h.ID, "box"
+		row.Href, row.Icon = EnvPath(h.ProjectID, h.ID), "box"
 		row.Said = said("Environment", place(h))
 	case db.KindApp:
-		row.Href, row.Icon, row.Fact = "/apps/"+h.ID, KindIcon(db.KindApp), h.Detail
+		row.Href, row.Icon, row.Fact = ResourcePath(h.ProjectID, h.EnvID, db.KindApp, h.ID), KindIcon(db.KindApp), h.Detail
 		row.Said = said("App", place(h))
 		row.Pill = ui.StatusPill(h.Status)
 	case db.KindDatabase:
-		row.Href, row.Icon, row.Fact = "/databases/"+h.ID, KindIcon(db.KindDatabase), h.Detail
+		row.Href, row.Icon, row.Fact = ResourcePath(h.ProjectID, h.EnvID, db.KindDatabase, h.ID), KindIcon(db.KindDatabase), h.Detail
 		row.Said = said("Database", place(h))
 		row.Pill = ui.StatusPill(databaseState(db.Database{Status: h.Status}))
 	case db.KindService:
-		row.Href, row.Icon, row.Fact = "/services/"+h.ID, KindIcon(db.KindService), h.Detail
+		row.Href, row.Icon, row.Fact = ResourcePath(h.ProjectID, h.EnvID, db.KindService, h.ID), KindIcon(db.KindService), h.Detail
 		row.Said = said("Service", place(h))
 		row.Pill = ui.StatusPill(serviceState(db.Service{Status: h.Status}))
 	case db.HitDomain:
-		row.Href, row.Icon = "/services/"+h.OwnerID, "globe"
+		row.Href, row.Icon = ResourcePath(h.ProjectID, h.EnvID, db.KindService, h.OwnerID), "globe"
 		if h.OwnerKind == db.KindApp {
-			row.Href = "/apps/" + h.OwnerID + "/domains"
+			row.Href = ResourcePath(h.ProjectID, h.EnvID, db.KindApp, h.OwnerID) + "/domains"
 		}
 		row.Said = said("Domain of "+h.Owner, place(h))
 	case db.HitServer:

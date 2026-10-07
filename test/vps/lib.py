@@ -64,7 +64,86 @@ def shout(cmd, **kw):
     return sh(cmd, **kw)[1].strip()
 
 
-# ---------- HTTP ----------
+# ---------- addresses ----------
+# Since 2026-10-07 the address of everything in an environment says where it
+# is: /projects/{p}/env/{e}/app/{id}/… where it was /apps/{id}/…, and
+# /projects/{p}/env/{e}/… where it was /projects/{p}/e/{e}/… or
+# /environments/{e}/…. The scripts were written against the short addresses
+# and still name things that way. The client translates in both directions:
+# what a script asks for is sent to the long address, and what comes back
+# (a page, a Location) is given to the script with the short ones, so a
+# script that reads an id out of "/apps/<id>" or follows a form's action
+# works as it did. Every request on the wire is to a long address.
+_ID = r"[a-z2-7]{12}"
+_KINDS = {"app": "apps", "database": "databases", "service": "services"}
+_PLURAL = {v: k for k, v in _KINDS.items()}
+_place = {}     # (kind, id) -> "/projects/p/env/e"
+_env_of = {}    # environment id -> project id
+_first = {}     # project id -> "/projects/p/env/e", its first environment
+
+_LONG_RES = re.compile(r"/projects/(%s)/env/(%s)/(app|database|service)/(%s)(?![a-z2-7])" % (_ID, _ID, _ID))
+_LONG_ENV_OWN = re.compile(r"/projects/(%s)/env/(%s)/(variables|delete|switch/resources)(?![a-z])" % (_ID, _ID))
+_LONG_ENV_KIND = re.compile(r"/projects/(%s)/env/(%s)/(app|database|service)(?![a-z])" % (_ID, _ID))
+_LONG_ENV = re.compile(r"/projects/(%s)/env/(%s)(?![a-z2-7])" % (_ID, _ID))
+
+
+def short_text(s):
+    """A page or a Location as the scripts expect it: with the short addresses."""
+    if "/env/" not in s:
+        return s
+
+    def res(m):
+        p, e, kind, rid = m.groups()
+        _place[(kind, rid)] = f"/projects/{p}/env/{e}"; _env_of[e] = p
+        return f"/{_KINDS[kind]}/{rid}"
+
+    def own(m):
+        p, e, what = m.groups(); _env_of[e] = p
+        return f"/environments/{e}/{what}"
+
+    def kind(m):
+        p, e, k = m.groups(); _env_of[e] = p
+        return f"/projects/{p}/e/{e}/{_KINDS[k]}"
+
+    def env(m):
+        p, e = m.groups(); _env_of[e] = p
+        return f"/projects/{p}/e/{e}"
+
+    s = _LONG_RES.sub(res, s)
+    s = _LONG_ENV_OWN.sub(own, s)
+    s = _LONG_ENV_KIND.sub(kind, s)
+    return _LONG_ENV.sub(env, s)
+
+
+def long_path(path, ask=None):
+    """The long address of a short one. ask(path) is a GET that does not
+    follow, used once for a resource or environment not seen yet: the short
+    address of a resource still answers with where the long one is."""
+    if not path or not path.startswith("/"):
+        return path
+    m = re.match(r"^/(apps|databases|services)/(%s)(?=$|[/?#])" % _ID, path)
+    if m:
+        key = (_PLURAL[m.group(1)], m.group(2))
+        if key not in _place and ask:
+            ask(f"/{m.group(1)}/{m.group(2)}")  # its Location is read by short_text, which remembers the place
+        if key in _place:
+            return _place[key] + "/" + key[0] + "/" + key[1] + path[m.end():]
+        return path
+    m = re.match(r"^/projects/(%s)/e/(%s)(.*)$" % (_ID, _ID), path)
+    if m:
+        p, e, rest = m.groups()
+        rest = re.sub(r"^/(apps|databases|services)(?=$|[/?#])", lambda k: "/" + _PLURAL[k.group(1)], rest)
+        return f"/projects/{p}/env/{e}{rest}"
+    m = re.match(r"^/environments/(%s)/(.*)$" % _ID, path)
+    if m:
+        e, rest = m.groups()
+        if e not in _env_of and ask:
+            ask(f"/environments/{e}/variables")
+        if e in _env_of:
+            return f"/projects/{_env_of[e]}/env/{e}/{rest}"
+    return path
+
+
 class Resp:
     def __init__(self, status, headers, body, url=""):
         self.status, self.headers, self.body, self.url = status, headers, body, url
@@ -182,7 +261,22 @@ class Client:
             return http.client.HTTPSConnection(self.host, self.port, timeout=self.timeout, context=ssl._create_unverified_context())
         return http.client.HTTPConnection(self.host, self.port, timeout=self.timeout)
 
-    def request(self, method, path, data=None, headers=None, follow=False, raw=None, host=None, ctype=None):
+    def _ask(self, path):
+        self.request("GET", path, translate=False)
+
+    def request(self, method, path, data=None, headers=None, follow=False, raw=None, host=None, ctype=None, translate=True):
+        asked = path
+        if translate and not self.token:  # the API names a resource by its id alone
+            path = long_path(path, self._ask)
+            m = re.match(r"^/projects/(%s)$" % _ID, path)
+            if method == "GET" and m:
+                # A project's page is its first environment's, which its
+                # own address now only leads to.
+                if m.group(1) not in _first:
+                    r0 = self.request("GET", path, translate=False)
+                    if r0.status in (302, 303) and "/e/" in r0.location:
+                        _first[m.group(1)] = long_path(r0.location)
+                path = _first.get(m.group(1), path)
         h = {"User-Agent": "musdash-vps-test"}
         if self.cookies:
             h["Cookie"] = "; ".join(f"{k}={v}" for k, v in self.cookies.items())
@@ -212,7 +306,13 @@ class Client:
                     self.cookies.pop(n, None)
                 else:
                     self.cookies[n] = val
-        resp = Resp(r.status, hd, b, path)
+        # The script sees the short addresses, in the page and in where an
+        # answer leads; reading them is also how places are learned.
+        if "location" in hd:
+            hd["location"] = short_text(hd["location"])
+        if hd.get("content-type", "").startswith("text/html"):
+            b = short_text(b.decode("utf-8", "replace")).encode()
+        resp = Resp(r.status, hd, b, asked)
         if follow and r.status in (301, 302, 303, 307, 308) and resp.location:
             loc = resp.location.split("#")[0]
             if loc.startswith("http"):
@@ -419,6 +519,7 @@ class WS:
     """Minimal RFC 6455 client (masked frames out, unmasked in)."""
     def __init__(self, path, cookies, origin=None, host=None, port=8000, ip=None, timeout=15):
         import socket as _s, os as _o, base64 as _b
+        path = long_path(path)  # from what the script's earlier requests have seen
         self.s = _s.create_connection((ip or HOST, port), timeout=timeout)
         key = _b.b64encode(_o.urandom(16)).decode()
         h = host or f"{HOST}:{port}"

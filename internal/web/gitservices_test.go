@@ -26,10 +26,10 @@ func TestServiceFromGitPages(t *testing.T) {
 	a.setup()
 	ctx := context.Background()
 	projectID, env := a.project("Shop")
-	newPage := "/projects/" + projectID + "/e/" + env.ID + "/services/new"
+	newPage := "/projects/" + projectID + "/env/" + env.ID + "/service/new"
 
 	// Offered next to the catalogue, with its own form.
-	if _, body := a.get("/projects/" + projectID + "/e/" + env.ID + "/new"); !strings.Contains(body, "Compose file in a Git repository") || !strings.Contains(body, "template=git") {
+	if _, body := a.get("/projects/" + projectID + "/env/" + env.ID + "/new"); !strings.Contains(body, "Compose file in a Git repository") || !strings.Contains(body, "template=git") {
 		t.Fatal("the catalogue does not offer a stack from a repository")
 	}
 	res, form := a.get(newPage + "?template=git")
@@ -52,27 +52,27 @@ func TestServiceFromGitPages(t *testing.T) {
 	} {
 		bad := gitServiceForm(env, "stack")
 		bad.Set(key, c[0])
-		res, body := a.post(newPage+"?template=git", "/projects/"+projectID+"/e/"+env.ID+"/services", bad)
+		res, body := a.post(newPage+"?template=git", "/projects/"+projectID+"/env/"+env.ID+"/service", bad)
 		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, `id="`+c[1]+`"`) {
 			t.Errorf("%s=%q: %d, error on the field: %v", key, c[0], res.StatusCode, strings.Contains(body, `id="`+c[1]+`"`))
 		}
 	}
 	bad := gitServiceForm(env, "stack")
 	bad.Set("repo", "git@github.com:acme/stack.git")
-	if _, body := a.post(newPage+"?template=git", "/projects/"+projectID+"/e/"+env.ID+"/services", bad); !strings.Contains(body, "An SSH address needs a deploy key") {
+	if _, body := a.post(newPage+"?template=git", "/projects/"+projectID+"/env/"+env.ID+"/service", bad); !strings.Contains(body, "An SSH address needs a deploy key") {
 		t.Error("an SSH address without a key was not explained")
 	}
 
-	res, _ = a.post(newPage+"?template=git", "/projects/"+projectID+"/e/"+env.ID+"/services", gitServiceForm(env, "stack"))
+	res, _ = a.post(newPage+"?template=git", "/projects/"+projectID+"/env/"+env.ID+"/service", gitServiceForm(env, "stack"))
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("create: %d", res.StatusCode)
 	}
-	id := strings.TrimPrefix(res.Header.Get("Location"), "/services/")
+	id := createdID(res, db.KindService)
 	svc, err := a.db.ServiceByID(ctx, id)
 	if err != nil || !svc.FromGit() || svc.RepoName != "acme/stack" || svc.ComposePath != "deploy/compose.yaml" || !svc.AutoDeploy || svc.Compose != "" || svc.Status != db.AppCreated {
 		t.Fatalf("%+v %v", svc, err)
 	}
-	base := "/services/" + id
+	base := a.servicePath(id)
 
 	// The Compose tab: nothing fetched yet, the source, the ways in.
 	res, page := a.get(base + "/compose")
@@ -214,10 +214,10 @@ func TestServiceFromGitPages(t *testing.T) {
 	// A stack that was pasted has no source, secret or token to set.
 	pasted := a.newService(projectID, env, "pasted", url.Values{"template": {db.TemplateCustom}, "compose": {"services:\n  web:\n    image: nginx:alpine\n"}})
 	for _, path := range []string{"/source", "/webhook-secret", "/deploy-token"} {
-		res, _ := a.post("/services/"+pasted.ID+"/compose", "/services/"+pasted.ID+path, src)
+		res, _ := a.post(a.servicePath(pasted.ID)+"/compose", a.servicePath(pasted.ID)+path, src)
 		wantStatus(t, res, http.StatusNotFound)
 	}
-	if _, page = a.get("/services/" + pasted.ID + "/compose"); strings.Contains(page, "Save source") || !strings.Contains(page, `<textarea id="compose"`) {
+	if _, page = a.get(a.servicePath(pasted.ID) + "/compose"); strings.Contains(page, "Save source") || !strings.Contains(page, `<textarea id="compose"`) {
 		t.Fatal("a pasted stack's Compose tab")
 	}
 }

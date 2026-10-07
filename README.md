@@ -462,7 +462,7 @@ Pages are rendered on the server with [templ](https://templ.guide) and updated w
 
 How the pages are laid out:
 
-- The bar at the top is where you are: the project, its environment and the resource, each a switcher to the others beside it. An environment is part of the address (`/projects/<id>/e/<environment>`); a project's own address leads to its first one.
+- The bar at the top is where you are: the project, its environment and the resource, each a switcher to the others beside it. The address says the same: `/projects/<project>/env/<environment>` for an environment and `/projects/<project>/env/<environment>/app/<id>` (or `database`, `service`) for what is in it; a project's own address leads to its first environment. The short address of a resource, `/apps/<id>`, still leads to its page: it is what a notification's link holds.
 - Projects, and what is in an environment, are tiles. Apps, databases and services are all resources and are added from one page, **Add resource**.
 - A form of up to five fields is a dialog, opened from a button beside what it changes. Anything that stops, removes or replaces something asks first; deleting a project, an app, a database or a service asks for its name.
 - Keys, tokens and webhook secrets of the whole team are on one page, **Keys & tokens**, in two tabs: **Private Keys** (SSH key pairs) and **API Tokens** (a person's API tokens, deploy tokens and webhook secrets, in one table). No other page holds them or points at them. An app's domains are on its own **Domains** tab.

@@ -47,7 +47,7 @@ func TestHomeFollowsAnInstall(t *testing.T) {
 	appID := a.newApp(projectID, env, "web", true, nil)
 	dep := a.waitDeployed(appID)
 	_, page = a.get("/")
-	for _, want := range []string{"Succeeded", `href="/apps/` + appID + `/deployments/` + dep.ID + `"`, "1 of 1 running", "All 1 project"} {
+	for _, want := range []string{"Succeeded", `href="` + a.appPath(appID) + `/deployments/` + dep.ID + `"`, "1 of 1 running", "All 1 project"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("Home after the first deployment lacks %q", want)
 		}
@@ -118,11 +118,15 @@ func TestHomeRowsLeadToPages(t *testing.T) {
 		}
 		seen[href] = true
 		res, body := a.get(href)
+		if res.StatusCode == http.StatusSeeOther {
+			// A project's row: its page is its first environment's.
+			res, body = a.get(res.Header.Get("Location"))
+		}
 		if res.StatusCode != http.StatusOK || !strings.Contains(body, "<html") {
 			t.Errorf("the row to %s leads to status %d, a whole page: %v", href, res.StatusCode, strings.Contains(body, "<html"))
 		}
 	}
-	for _, want := range []string{"/apps/" + appID + "/deployments/" + dep.ID, "/databases/" + maindb.ID + "/backups", "/apps/" + appID + "/tasks/" + task.ID, "/projects/" + projectID} {
+	for _, want := range []string{a.appPath(appID) + "/deployments/" + dep.ID, a.databasePath(maindb.ID) + "/backups", a.appPath(appID) + "/tasks/" + task.ID, "/projects/" + projectID} {
 		if !seen[want] {
 			t.Errorf("no row leads to %s: %v", want, seen)
 		}

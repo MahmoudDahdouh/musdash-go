@@ -45,7 +45,7 @@ func TestAppMetrics(t *testing.T) {
 
 	// Nothing runs yet: nothing to ask the server about.
 	idle := a.newApp(projectID, env, "idle", false, nil)
-	if _, page := a.get("/apps/" + idle + "/metrics"); !strings.Contains(page, "Nothing is running") || strings.Contains(page, "/metrics/now") {
+	if _, page := a.get(a.appPath(idle) + "/metrics"); !strings.Contains(page, "Nothing is running") || strings.Contains(page, "/metrics/now") {
 		t.Fatal("the metrics page of an app that is not running asks for a reading")
 	}
 
@@ -53,15 +53,15 @@ func TestAppMetrics(t *testing.T) {
 	app, _ := a.db.AppByID(ctx, appID)
 	a.measured(app.Container+"\t12.50%\t100MiB / 512MiB\t1.2kB / 3MB\t4.1MB / 0B\t7\n", nil)
 
-	_, page := a.get("/apps/" + appID + "/metrics")
-	for _, want := range []string{`hx-get="/apps/` + appID + `/metrics/now"`, "Sampling is switched off", `href="/apps/` + appID + `/metrics"`} {
+	_, page := a.get(a.appPath(appID) + "/metrics")
+	for _, want := range []string{`hx-get="` + a.appPath(appID) + `/metrics/now"`, "Sampling is switched off", `href="` + a.appPath(appID) + `/metrics"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the metrics page lacks %q", want)
 		}
 	}
-	res, now := a.get("/apps/" + appID + "/metrics/now")
+	res, now := a.get(a.appPath(appID) + "/metrics/now")
 	wantStatus(t, res, http.StatusOK)
-	for _, want := range []string{"12.5%", "100 MiB of 512 MiB", "1.2 KiB in", "7 processes", `hx-get="/apps/` + appID + `/metrics/now?n=1"`, `hx-trigger="every 5s"`} {
+	for _, want := range []string{"12.5%", "100 MiB of 512 MiB", "1.2 KiB in", "7 processes", `hx-get="` + a.appPath(appID) + `/metrics/now?n=1"`, `hx-trigger="every 5s"`} {
 		if !strings.Contains(now, want) {
 			t.Errorf("the reading lacks %q:\n%s", want, now)
 		}
@@ -77,21 +77,21 @@ func TestAppMetrics(t *testing.T) {
 		t.Fatalf("asked %q", asked)
 	}
 	// A page that has been open long enough stops asking.
-	if _, last := a.get("/apps/" + appID + "/metrics/now?n=119"); !strings.Contains(last, "n=120") {
+	if _, last := a.get(a.appPath(appID) + "/metrics/now?n=119"); !strings.Contains(last, "n=120") {
 		t.Fatal("the reading before the last does not ask for one more")
 	}
-	if _, paused := a.get("/apps/" + appID + "/metrics/now?n=120"); strings.Contains(paused, "hx-get") || !strings.Contains(paused, "Paused") {
+	if _, paused := a.get(a.appPath(appID) + "/metrics/now?n=120"); strings.Contains(paused, "hx-get") || !strings.Contains(paused, "Paused") {
 		t.Fatalf("a page open for a long time is still asking:\n%s", paused)
 	}
 	for _, n := range []string{"-5", "x", "99999999999999999999"} {
-		if res, _ := a.get("/apps/" + appID + "/metrics/now?n=" + n); res.StatusCode != http.StatusOK {
+		if res, _ := a.get(a.appPath(appID) + "/metrics/now?n=" + n); res.StatusCode != http.StatusOK {
 			t.Errorf("n=%s: %d", n, res.StatusCode)
 		}
 	}
 
 	// A server that answers nonsense gets none of it shown.
 	a.measured("<script>alert(1)</script>\t1%\t1MiB / 1MiB\t0B / 0B\t0B / 0B\t1\n"+app.Container+"\t<b>\t-- / --\t--\t--\t--\n", nil)
-	if _, now := a.get("/apps/" + appID + "/metrics/now"); strings.Contains(now, "script") || strings.Contains(now, "<b>") || !strings.Contains(now, "Nothing of this is running") {
+	if _, now := a.get(a.appPath(appID) + "/metrics/now"); strings.Contains(now, "script") || strings.Contains(now, "<b>") || !strings.Contains(now, "Nothing of this is running") {
 		t.Fatalf("an unreadable answer was shown:\n%s", now)
 	}
 
@@ -103,7 +103,7 @@ func TestAppMetrics(t *testing.T) {
 	for i := int64(0); i < 5; i++ {
 		a.db.AddSamples(ctx, app.ServerID, at-i*60, map[string]db.Sample{appID: {CPU: 1250 + int(i)*100, Mem: 100 << 20, MemTotal: 512 << 20}})
 	}
-	_, page = a.get("/apps/" + appID + "/metrics?range=6h")
+	_, page = a.get(a.appPath(appID) + "/metrics?range=6h")
 	for _, want := range []string{"<svg", "chart-line", "Processor", "limit 512 MiB", `aria-current="true"`, "?range=24h#history", "100 MiB"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the charts lack %q", want)
@@ -113,7 +113,7 @@ func TestAppMetrics(t *testing.T) {
 		t.Error("the charts carry inline styles, which the content policy forbids")
 	}
 	// An unknown stretch of time is the shortest one.
-	if res, _ := a.get("/apps/" + appID + "/metrics?range=10y"); res.StatusCode != http.StatusOK {
+	if res, _ := a.get(a.appPath(appID) + "/metrics?range=10y"); res.StatusCode != http.StatusOK {
 		t.Fatalf("an unknown range: %d", res.StatusCode)
 	}
 }
@@ -154,7 +154,7 @@ func TestServerMetrics(t *testing.T) {
 	wantStatus(t, res, http.StatusOK)
 	// 1827000 of 2030000 kB in use: nine tenths, said in words as well.
 	for _, want := range []string{"60%", "Of 2 cores", "1.7 GiB of 1.9 GiB", "Nearly full", "0.52", "9.5 GiB of 23.8 GiB",
-		app.Container, `href="/apps/` + appID + `/metrics"`, "12.5%", `hx-trigger="every 10s"`} {
+		app.Container, `href="` + a.appPath(appID) + `/metrics"`, "12.5%", `hx-trigger="every 10s"`} {
 		if !strings.Contains(now, want) {
 			t.Errorf("the reading lacks %q:\n%s", want, now)
 		}
@@ -210,15 +210,15 @@ func TestOtherTeamsMetricsAreNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := len(a.fake.Calls())
-	for _, path := range []string{"/apps/" + other.ID + "/metrics", "/apps/" + other.ID + "/metrics/now",
+	for _, path := range []string{a.appPath(other.ID) + "/metrics", a.appPath(other.ID) + "/metrics/now",
 		"/servers/othersrv/metrics", "/servers/othersrv/metrics/now", "/servers/nosuchserver/metrics",
-		"/databases/" + other.ID + "/metrics", "/services/" + other.ID + "/metrics/now"} {
+		a.databasePath(other.ID) + "/metrics", a.servicePath(other.ID) + "/metrics/now"} {
 		if res, _ := a.get(path); res.StatusCode != http.StatusNotFound {
 			t.Errorf("GET %s: %d, want 404", path, res.StatusCode)
 		}
 	}
-	projectID, _ := a.project("Mine")
-	token := a.csrf("/projects/" + projectID)
+	a.project("Mine")
+	token := a.csrf("/projects")
 	if res, _ := a.postRaw(a.client, "/servers/othersrv/metrics", url.Values{"sample": {"1"}, "_csrf": {token}}, nil); res.StatusCode != http.StatusNotFound {
 		t.Errorf("switching another team's sampling on: %d", res.StatusCode)
 	}
@@ -229,7 +229,7 @@ func TestOtherTeamsMetricsAreNotFound(t *testing.T) {
 		t.Fatalf("%d commands ran for another team's resources", n)
 	}
 	// Signed out, every one of them is the sign-in page.
-	if res, _ := a.do(a.newClient(), mustGet(a.url+"/apps/"+other.ID+"/metrics/now")); res.StatusCode != http.StatusSeeOther {
+	if res, _ := a.do(a.newClient(), mustGet(a.url+a.appPath(other.ID)+"/metrics/now")); res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("signed out: %d", res.StatusCode)
 	}
 }

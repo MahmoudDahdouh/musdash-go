@@ -25,6 +25,7 @@ type Event struct {
 	// The app or database it was done to, and where that is.
 	ResourceID, Resource            string
 	ProjectID, Project, Environment string
+	EnvironmentID                   string
 	// Detail is a deployment's commit or a run's task name, and TaskID the
 	// task of a run.
 	Detail, TaskID string
@@ -36,20 +37,20 @@ type Event struct {
 // otherwise be all the list ever holds.
 func (d *DB) RecentEvents(ctx context.Context, teamID string, limit int) ([]Event, error) {
 	rows, err := d.QueryContext(ctx, `
-		SELECT kind, id, status, trigger, at, started, finished, resource_id, resource, project_id, project, environment, detail, task_id FROM (
+		SELECT kind, id, status, trigger, at, started, finished, resource_id, resource, project_id, project, environment_id, environment, detail, task_id FROM (
 			SELECT * FROM (
 				SELECT ?3 AS kind, d.id AS id, d.status AS status, d.trigger AS trigger, d.created_at AS at, d.started_at AS started, d.finished_at AS finished,
-				       a.id AS resource_id, a.name AS resource, p.id AS project_id, p.name AS project, e.name AS environment, d.commit_sha AS detail, '' AS task_id
+				       a.id AS resource_id, a.name AS resource, p.id AS project_id, p.name AS project, e.id AS environment_id, e.name AS environment, d.commit_sha AS detail, '' AS task_id
 				FROM deployments d JOIN apps a ON a.id = d.app_id
 				JOIN environments e ON e.id = a.environment_id JOIN projects p ON p.id = e.project_id
 				WHERE p.team_id = ?1 ORDER BY d.created_at DESC, d.rowid DESC LIMIT ?2)
 			UNION ALL
-			SELECT ?4, b.id, b.status, b.trigger, b.started_at, b.started_at, b.finished_at, m.id, m.name, p.id, p.name, e.name, '', ''
+			SELECT ?4, b.id, b.status, b.trigger, b.started_at, b.started_at, b.finished_at, m.id, m.name, p.id, p.name, e.id, e.name, '', ''
 			FROM databases m JOIN environments e ON e.id = m.environment_id JOIN projects p ON p.id = e.project_id
 			JOIN backups b ON b.id = (SELECT id FROM backups WHERE database_id = m.id ORDER BY started_at DESC, rowid DESC LIMIT 1)
 			WHERE p.team_id = ?1
 			UNION ALL
-			SELECT ?5, r.id, r.status, r.trigger, r.started_at, r.started_at, r.finished_at, a.id, a.name, p.id, p.name, e.name, t.name, t.id
+			SELECT ?5, r.id, r.status, r.trigger, r.started_at, r.started_at, r.finished_at, a.id, a.name, p.id, p.name, e.id, e.name, t.name, t.id
 			FROM scheduled_tasks t JOIN apps a ON a.id = t.app_id
 			JOIN environments e ON e.id = a.environment_id JOIN projects p ON p.id = e.project_id
 			JOIN task_runs r ON r.id = (SELECT id FROM task_runs WHERE task_id = t.id ORDER BY started_at DESC, rowid DESC LIMIT 1)
@@ -63,7 +64,7 @@ func (d *DB) RecentEvents(ctx context.Context, teamID string, limit int) ([]Even
 	for rows.Next() {
 		var e Event
 		if err := rows.Scan(&e.Kind, &e.ID, &e.Status, &e.Trigger, &e.At, &e.Started, &e.Finished,
-			&e.ResourceID, &e.Resource, &e.ProjectID, &e.Project, &e.Environment, &e.Detail, &e.TaskID); err != nil {
+			&e.ResourceID, &e.Resource, &e.ProjectID, &e.Project, &e.EnvironmentID, &e.Environment, &e.Detail, &e.TaskID); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

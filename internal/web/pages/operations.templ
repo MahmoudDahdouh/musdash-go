@@ -137,7 +137,7 @@ templ DatabaseBackups(s ui.Shell, v DatabaseView, b BackupsView, f ui.Form) {
 							}
 						}
 					</section>
-					@ui.FormDialog(ui.DialogProps{ID: "edit-schedule", Title: "Backup schedule", Action: v.base() + "/backups/schedule", CSRF: s.CSRF, Submit: "Save schedule", Open: !f.OK()}) {
+					@ui.FormDialog(ui.DialogProps{ID: "edit-schedule", Title: "Backup schedule", Action: v.Path() + "/backups/schedule", CSRF: s.CSRF, Submit: "Save schedule", Open: !f.OK()}) {
 						@ui.Checkbox("enabled", checked(f, "enabled", !b.HasCfg || b.Config.Enabled), nil) {
 							Back up on a schedule
 						}
@@ -153,7 +153,7 @@ templ DatabaseBackups(s ui.Shell, v DatabaseView, b BackupsView, f ui.Form) {
 								<h2 class="card-title">Back up now</h2>
 								<p class="muted text-sm">Next scheduled backup: <span class="fact">{ backupNext(b) }</span></p>
 							</div>
-							<form method="post" action={ templ.SafeURL(v.base() + "/backups") }>
+							<form method="post" action={ templ.SafeURL(v.Path() + "/backups") }>
 								@ui.CSRF(s.CSRF)
 								@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Disabled: v.DB.Status != db.AppRunning}) {
 									Back up now
@@ -180,7 +180,7 @@ templ BackupList(csrf string, v DatabaseView, b BackupsView) {
 		class="card"
 		id="backup-list"
 		if backupBusy(b.List) {
-			hx-get={ v.base() + "/backups/list" }
+			hx-get={ v.Path() + "/backups/list" }
 			hx-trigger="every 2s"
 			hx-swap="outerHTML"
 		}
@@ -220,7 +220,7 @@ templ BackupList(csrf string, v DatabaseView, b BackupsView) {
 						<td class="text-right">
 							if m.Status == db.RunSuccess && m.RestoreStatus != db.RunRunning {
 								<div class="flex justify-end gap-2">
-									@ui.LinkButton(v.base()+"/backups/"+m.ID+"/download", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+									@ui.LinkButton(v.Path()+"/backups/"+m.ID+"/download", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
 										Download
 									}
 									if v.Engine.RestoreCmd != "" {
@@ -228,7 +228,7 @@ templ BackupList(csrf string, v DatabaseView, b BackupsView) {
 											Restore
 										}
 									}
-									<form method="post" action={ templ.SafeURL(v.base() + "/backups/" + m.ID + "/delete") }>
+									<form method="post" action={ templ.SafeURL(v.Path() + "/backups/" + m.ID + "/delete") }>
 										@ui.CSRF(csrf)
 										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Delete this backup?", "The backup made "+ui.Ago(m.StartedAt)+" is deleted from this server and from the bucket it was uploaded to. This cannot be undone.", "Delete backup", true)}) {
 											Delete
@@ -236,7 +236,7 @@ templ BackupList(csrf string, v DatabaseView, b BackupsView) {
 									</form>
 								</div>
 							} else if m.Status == db.RunFailed {
-								<form method="post" action={ templ.SafeURL(v.base() + "/backups/" + m.ID + "/delete") }>
+								<form method="post" action={ templ.SafeURL(v.Path() + "/backups/" + m.ID + "/delete") }>
 									@ui.CSRF(csrf)
 									@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Type: "submit"}) {
 										Dismiss
@@ -251,7 +251,7 @@ templ BackupList(csrf string, v DatabaseView, b BackupsView) {
 		for _, m := range b.List {
 			if m.Status == db.RunSuccess && v.Engine.RestoreCmd != "" {
 				@ui.Modal("restore-"+m.ID, "Restore this backup") {
-					<form method="post" action={ templ.SafeURL(v.base() + "/backups/" + m.ID + "/restore") }>
+					<form method="post" action={ templ.SafeURL(v.Path() + "/backups/" + m.ID + "/restore") }>
 						@ui.CSRF(csrf)
 						<div class="card-body grid gap-4">
 							<div class="grid gap-3 text-ink-soft">
@@ -309,7 +309,7 @@ templ AppTasks(s ui.Shell, v AppView, rows []TaskRow, f ui.Form) {
 						for _, row := range rows {
 							<tr>
 								<td>
-									<a class="link font-semibold" href={ templ.SafeURL(v.base() + "/tasks/" + row.Task.ID) }>{ row.Task.Name }</a>
+									<a class="link font-semibold" href={ templ.SafeURL(v.Path() + "/tasks/" + row.Task.ID) }>{ row.Task.Name }</a>
 									<p class="fact muted max-w-xs truncate">{ row.Task.Command }</p>
 								</td>
 								<td class="fact whitespace-nowrap">{ row.Task.Schedule }</td>
@@ -323,7 +323,7 @@ templ AppTasks(s ui.Shell, v AppView, rows []TaskRow, f ui.Form) {
 									}
 								</td>
 								<td class="text-right">
-									<form method="post" action={ templ.SafeURL(v.base() + "/tasks/" + row.Task.ID + "/run") }>
+									<form method="post" action={ templ.SafeURL(v.Path() + "/tasks/" + row.Task.ID + "/run") }>
 										@ui.CSRF(s.CSRF)
 										@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Type: "submit"}) {
 											Run now
@@ -335,7 +335,7 @@ templ AppTasks(s ui.Shell, v AppView, rows []TaskRow, f ui.Form) {
 					}
 				}
 			</section>
-			@ui.FormDialog(ui.DialogProps{ID: "add-task", Title: "Add a task", Action: v.base() + "/tasks", CSRF: s.CSRF, Submit: "Add task", Open: !f.OK()}) {
+			@ui.FormDialog(ui.DialogProps{ID: "add-task", Title: "Add a task", Action: v.Path() + "/tasks", CSRF: s.CSRF, Submit: "Add task", Open: !f.OK()}) {
 				@taskFields(f, db.Task{Enabled: true})
 			}
 		</div>
@@ -378,7 +378,7 @@ templ AppTask(s ui.Shell, v AppView, t db.Task, runs []db.TaskRun, shown string,
 	@appFrame(s, v, "tasks") {
 		<div class="grid max-w-4xl gap-6">
 			<p>
-				<a class="link" href={ templ.SafeURL(v.base() + "/tasks") }>← All tasks</a>
+				<a class="link" href={ templ.SafeURL(v.Path() + "/tasks") }>← All tasks</a>
 			</p>
 			<section class="card">
 				<div class="card-head">
@@ -386,7 +386,7 @@ templ AppTask(s ui.Shell, v AppView, t db.Task, runs []db.TaskRun, shown string,
 						<h2 class="card-title">{ t.Name }</h2>
 						<p class="muted text-sm">Next run: <span class="fact">{ nextRun(t.Enabled, t.NextRun) }</span></p>
 					</div>
-					<form method="post" action={ templ.SafeURL(v.base() + "/tasks/" + t.ID + "/run") }>
+					<form method="post" action={ templ.SafeURL(v.Path() + "/tasks/" + t.ID + "/run") }>
 						@ui.CSRF(s.CSRF)
 						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
 							Run now
@@ -423,7 +423,7 @@ templ AppTask(s ui.Shell, v AppView, t db.Task, runs []db.TaskRun, shown string,
 					})
 				</div>
 			</section>
-			@ui.FormDialog(ui.DialogProps{ID: "edit-task", Title: "Task settings", Action: v.base() + "/tasks/" + t.ID, CSRF: s.CSRF, Submit: "Save task", Open: !f.OK()}) {
+			@ui.FormDialog(ui.DialogProps{ID: "edit-task", Title: "Task settings", Action: v.Path() + "/tasks/" + t.ID, CSRF: s.CSRF, Submit: "Save task", Open: !f.OK()}) {
 				@taskFields(f, t)
 			}
 			<section class="card card-danger">
@@ -432,7 +432,7 @@ templ AppTask(s ui.Shell, v AppView, t db.Task, runs []db.TaskRun, shown string,
 						<h2 class="card-title">Delete task</h2>
 						<p class="muted text-sm">Removes the task and the history of its runs.</p>
 					</div>
-					<form method="post" action={ templ.SafeURL(v.base() + "/tasks/" + t.ID + "/delete") }>
+					<form method="post" action={ templ.SafeURL(v.Path() + "/tasks/" + t.ID + "/delete") }>
 						@ui.CSRF(s.CSRF)
 						@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Icon: "trash", Type: "submit", Attrs: ui.Ask("Delete the task "+t.Name+"?", "The task no longer runs, and the history of its runs is deleted. This cannot be undone.", "Delete task", true)}) {
 							Delete task
@@ -449,7 +449,7 @@ templ TaskRuns(v AppView, t db.Task, runs []db.TaskRun, shown string) {
 	<div
 		id="task-runs"
 		if runBusy(runs) {
-			hx-get={ v.base() + "/tasks/" + t.ID + "/runs" }
+			hx-get={ v.Path() + "/tasks/" + t.ID + "/runs" }
 			hx-trigger="every 2s"
 			hx-swap="outerHTML"
 		}
@@ -474,7 +474,7 @@ templ TaskRuns(v AppView, t db.Task, runs []db.TaskRun, shown string) {
 							if r.ID == shown {
 								<span class="muted text-sm">Shown below</span>
 							} else if r.Status != db.RunRunning {
-								@ui.LinkButton(v.base()+"/tasks/"+t.ID+"?run="+r.ID, ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+								@ui.LinkButton(v.Path()+"/tasks/"+t.ID+"?run="+r.ID, ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
 									Output
 								}
 							}

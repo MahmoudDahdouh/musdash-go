@@ -21,10 +21,9 @@ type ServiceView struct {
 	TeamTags []string
 }
 
-func (v ServiceView) base() string { return "/services/" + v.Service.ID }
 
 func serviceTabs(v ServiceView) []ui.Tab {
-	b := v.base()
+	b := v.Path()
 	return []ui.Tab{
 		{Key: "overview", Label: "Overview", Href: b, Icon: "dashboard"},
 		{Key: "logs", Label: "Logs", Href: b + "/logs", Icon: "file"},
@@ -65,11 +64,11 @@ func serviceDeployed(s db.Service) bool {
 
 // ServiceHeader is the service's name, status and actions. It refreshes
 // itself like an app's header.
-templ ServiceHeader(csrf string, s db.Service) {
+templ ServiceHeader(csrf, base string, s db.Service) {
 	<header
 		id="service-header"
 		class="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3"
-		hx-get={ "/services/" + s.ID + "/status?was=" + s.Status }
+		hx-get={ base + "/status?was=" + s.Status }
 		hx-trigger={ servicePoll(s) }
 		hx-swap="outerHTML"
 	>
@@ -83,14 +82,14 @@ templ ServiceHeader(csrf string, s db.Service) {
 		if s.Status != db.AppDeploying {
 			<div class="flex flex-wrap items-center gap-2">
 				if serviceDeployed(s) {
-					<form method="post" action={ templ.SafeURL("/services/" + s.ID + "/stop") }>
+					<form method="post" action={ templ.SafeURL(base + "/stop") }>
 						@ui.CSRF(csrf)
 						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+s.Name+"?", "Every container of the service is stopped and its endpoints stop answering. Its volumes and settings are kept.", "Stop service", false)}) {
 							Stop
 						}
 					</form>
 				}
-				<form method="post" action={ templ.SafeURL("/services/" + s.ID + "/deploy") }>
+				<form method="post" action={ templ.SafeURL(base + "/deploy") }>
 					@ui.CSRF(csrf)
 					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy"}) {
 						if serviceDeployed(s) {
@@ -107,7 +106,7 @@ templ ServiceHeader(csrf string, s db.Service) {
 
 templ serviceFrame(s ui.Shell, v ServiceView, tab string) {
 	@ui.Layout(s) {
-		@ServiceHeader(s.CSRF, v.Service)
+		@ServiceHeader(s.CSRF, v.Path(), v.Service)
 		@ui.Tabs(serviceTabs(v), tab)
 		{ children... }
 	}
@@ -160,7 +159,7 @@ templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, 
 			@ui.PageHeader("New "+t.Name+" service", t.About)
 		}
 		<div class="max-w-2xl">
-			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/e/" + env.ID + "/services") }>
+			<form class="card" method="post" action={ templ.SafeURL(EnvPath(p.ID, env.ID) + "/service") }>
 				@ui.CSRF(s.CSRF)
 				<input type="hidden" name="template" value={ template }/>
 				<div class="card-body grid gap-4">
@@ -202,7 +201,7 @@ templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, 
 					}
 				</div>
 				<div class="card-foot">
-					@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{}) {
+					@ui.LinkButton(EnvPath(p.ID, env.ID)+"/new", ui.ButtonProps{}) {
 						Back
 					}
 					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
@@ -255,7 +254,7 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 			if len(missing) > 0 {
 				<div class="lg:col-span-2">
 					@ui.Notice(ui.ToneWarn) {
-						<p>The Compose file reads { strings.Join(missing, ", ") }, which has no value yet. Enter it under <a class="link" href={ templ.SafeURL(v.base() + "/compose") }>Compose file</a> before deploying.</p>
+						<p>The Compose file reads { strings.Join(missing, ", ") }, which has no value yet. Enter it under <a class="link" href={ templ.SafeURL(v.Path() + "/compose") }>Compose file</a> before deploying.</p>
 					}
 				</div>
 			}
@@ -263,7 +262,7 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 				<div class="card-head">
 					<h2 class="card-title">Addresses</h2>
 					if len(v.Endpoints) > 0 {
-						@ui.LinkButton(v.base()+"/settings", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+						@ui.LinkButton(v.Path()+"/settings", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
 							Change
 						}
 					}
@@ -344,7 +343,7 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 					<div class="card-body">
 						@ui.LogView("deploy-log", templ.Attributes{
 							"hx-ext":      "sse",
-							"sse-connect": v.base() + "/deploy-log/stream",
+							"sse-connect": v.Path() + "/deploy-log/stream",
 							"sse-swap":    "line",
 							"sse-close":   "done",
 							"hx-swap":     "beforeend",
@@ -369,7 +368,7 @@ templ noAddress(v ServiceView) {
 // noAddressOwn is the same for a stack whose Compose file is edited here.
 templ noAddressOwn(v ServiceView) {
 	@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No web address", Text: "To give a service one, add SERVICE_FQDN_NAME_PORT to its environment in the Compose file.", Size: ui.EmptySmall}) {
-		@ui.LinkButton(v.base()+"/compose", ui.ButtonProps{Variant: ui.Primary, Small: true}) {
+		@ui.LinkButton(v.Path()+"/compose", ui.ButtonProps{Variant: ui.Primary, Small: true}) {
 			Open the Compose file
 		}
 	}
@@ -391,7 +390,7 @@ templ ServiceLogs(s ui.Shell, v ServiceView) {
 				<p class="muted text-sm">The last 200 lines of every container, then new output as it arrives.</p>
 				@ui.LogView("runtime-log", templ.Attributes{
 					"hx-ext":      "sse",
-					"sse-connect": v.base() + "/logs/stream",
+					"sse-connect": v.Path() + "/logs/stream",
 					"sse-swap":    "line",
 					"sse-close":   "done",
 					"hx-swap":     "beforeend",
@@ -414,7 +413,7 @@ func shortCommit(c string) string {
 templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables string, showVars bool, varCount int, git *ServiceGit) {
 	@serviceFrame(s, v, "compose") {
 		<div class="grid max-w-3xl gap-6">
-			<form class="card" method="post" action={ templ.SafeURL(v.base() + "/compose") }>
+			<form class="card" method="post" action={ templ.SafeURL(v.Path() + "/compose") }>
 				@ui.CSRF(s.CSRF)
 				<div class="card-head">
 					<div>
@@ -463,7 +462,7 @@ templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variable
 				</div>
 			</form>
 			if git != nil {
-				@ui.FormCard("Source", "The repository the Compose file is read from.", v.base()+"/source", s.CSRF, "Save source") {
+				@ui.FormCard("Source", "The repository the Compose file is read from.", v.Path()+"/source", s.CSRF, "Save source") {
 					@serviceGitFields(git.Source, git.Choices, v.Service, false)
 				}
 			}
@@ -510,7 +509,7 @@ templ ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) {
 				}
 			</section>
 			for _, e := range v.Endpoints {
-				@ui.FormDialog(ui.DialogProps{ID: "endpoint-" + e.ID, Title: "Domain for " + endpointTarget(e), Description: "Point the domain's DNS at this server first. The change takes effect on the next deployment.", Action: v.base() + "/endpoints/" + e.ID, CSRF: s.CSRF, Submit: "Save domain", Open: endpointError(e, failed, f) != ""}) {
+				@ui.FormDialog(ui.DialogProps{ID: "endpoint-" + e.ID, Title: "Domain for " + endpointTarget(e), Description: "Point the domain's DNS at this server first. The change takes effect on the next deployment.", Action: v.Path() + "/endpoints/" + e.ID, CSRF: s.CSRF, Submit: "Save domain", Open: endpointError(e, failed, f) != ""}) {
 					@ui.Field(ui.FieldProps{Label: "Domain", For: endpointFormID(e), Error: endpointError(e, failed, f)}) {
 						@ui.Input(ui.InputProps{ID: endpointFormID(e), Name: "host", Mono: true, Required: true, Value: endpointValue(e, failed, f), Invalid: endpointError(e, failed, f) != "", Placeholder: "app.example.com"})
 					}
@@ -519,7 +518,7 @@ templ ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) {
 					}
 				}
 			}
-			@tagsCard(s.CSRF, v.base()+"/tags", v.Tags, v.TeamTags)
+			@tagsCard(s.CSRF, v.Path()+"/tags", v.Tags, v.TeamTags)
 			<section class="card card-danger">
 				<div class="card-head">
 					<div>
@@ -529,7 +528,7 @@ templ ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) {
 					@ui.Confirm(ui.ConfirmProps{
 						ID:      "delete-service",
 						Title:   "Delete service",
-						Action:  v.base() + "/delete",
+						Action:  v.Path() + "/delete",
 						CSRF:    s.CSRF,
 						Match:   v.Service.Name,
 						Submit:  "Delete service",

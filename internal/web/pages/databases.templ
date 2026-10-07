@@ -16,10 +16,9 @@ type DatabaseView struct {
 	Engine  catalog.DBTemplate
 }
 
-func (v DatabaseView) base() string { return "/databases/" + v.DB.ID }
 
 func databaseTabs(v DatabaseView) []ui.Tab {
-	b := v.base()
+	b := v.Path()
 	return []ui.Tab{
 		{Key: "overview", Label: "Overview", Href: b, Icon: "dashboard"},
 		{Key: "logs", Label: "Logs", Href: b + "/logs", Icon: "file"},
@@ -60,11 +59,11 @@ func databasePoll(m db.Database) string {
 
 // DatabaseHeader is the database's name, status and actions. Like an app's
 // header it refreshes itself, so the page follows a start without a reload.
-templ DatabaseHeader(csrf string, m db.Database) {
+templ DatabaseHeader(csrf, base string, m db.Database) {
 	<header
 		id="database-header"
 		class="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3"
-		hx-get={ "/databases/" + m.ID + "/status?was=" + m.Status }
+		hx-get={ base + "/status?was=" + m.Status }
 		hx-trigger={ databasePoll(m) }
 		hx-swap="outerHTML"
 	>
@@ -78,20 +77,20 @@ templ DatabaseHeader(csrf string, m db.Database) {
 		if m.Status != db.AppDeploying {
 			<div class="flex flex-wrap items-center gap-2">
 				if m.Container != "" {
-					<form method="post" action={ templ.SafeURL("/databases/" + m.ID + "/stop") }>
+					<form method="post" action={ templ.SafeURL(base + "/stop") }>
 						@ui.CSRF(csrf)
 						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+m.Name+"?", "Apps that use the database get errors until it is started again. Its data is kept.", "Stop database", false)}) {
 							Stop
 						}
 					</form>
-					<form method="post" action={ templ.SafeURL("/databases/" + m.ID + "/start") }>
+					<form method="post" action={ templ.SafeURL(base + "/start") }>
 						@ui.CSRF(csrf)
 						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh", Attrs: ui.Ask("Restart "+m.Name+"?", "The database does not answer for a few seconds. Apps that use it may see errors meanwhile.", "Restart database", false)}) {
 							Restart
 						}
 					</form>
 				} else {
-					<form method="post" action={ templ.SafeURL("/databases/" + m.ID + "/start") }>
+					<form method="post" action={ templ.SafeURL(base + "/start") }>
 						@ui.CSRF(csrf)
 						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "play"}) {
 							Start
@@ -105,7 +104,7 @@ templ DatabaseHeader(csrf string, m db.Database) {
 
 templ databaseFrame(s ui.Shell, v DatabaseView, tab string) {
 	@ui.Layout(s) {
-		@DatabaseHeader(s.CSRF, v.DB)
+		@DatabaseHeader(s.CSRF, v.Path(), v.DB)
 		@ui.Tabs(databaseTabs(v), tab)
 		{ children... }
 	}
@@ -117,7 +116,7 @@ templ DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTemp
 	@ui.Layout(s) {
 		@ui.PageHeader("New "+t.Label+" database", "Runs in "+env.Name+".")
 		<div class="max-w-xl">
-			<form class="card" method="post" action={ templ.SafeURL("/projects/" + p.ID + "/e/" + env.ID + "/databases") }>
+			<form class="card" method="post" action={ templ.SafeURL(EnvPath(p.ID, env.ID) + "/database") }>
 				@ui.CSRF(s.CSRF)
 				<input type="hidden" name="engine" value={ t.Engine }/>
 				<div class="card-body grid gap-4">
@@ -135,7 +134,7 @@ templ DatabaseNew(s ui.Shell, p db.Project, env db.Environment, t catalog.DBTemp
 					</div>
 				</div>
 				<div class="card-foot">
-					@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{}) {
+					@ui.LinkButton(EnvPath(p.ID, env.ID)+"/new", ui.ButtonProps{}) {
 						Back
 					}
 					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit"}) {
@@ -226,7 +225,7 @@ templ DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connectio
 				<section class="card">
 					<div class="card-head">
 						<h2 class="card-title">Connect from outside</h2>
-						@ui.LinkButton(v.base()+"/settings", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+						@ui.LinkButton(v.Path()+"/settings", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
 							Change
 						}
 					</div>
@@ -273,7 +272,7 @@ templ DatabaseLogs(s ui.Shell, v DatabaseView) {
 				<p class="muted text-sm">The last 200 lines, then new output as it arrives.</p>
 				@ui.LogView("runtime-log", templ.Attributes{
 					"hx-ext":      "sse",
-					"sse-connect": v.base() + "/logs/stream",
+					"sse-connect": v.Path() + "/logs/stream",
 					"sse-swap":    "line",
 					"sse-close":   "done",
 					"hx-swap":     "beforeend",
@@ -326,7 +325,7 @@ templ DatabaseSettings(s ui.Shell, v DatabaseView, f ui.Form, volume string) {
 					})
 				</div>
 			</section>
-			@ui.FormDialog(ui.DialogProps{ID: "edit-database", Title: "Database settings", Description: "Saving a change restarts a running database to apply it: expect a few seconds during which it does not answer.", Action: v.base() + "/settings", CSRF: s.CSRF, Submit: "Save changes", Wide: true, Open: !f.OK()}) {
+			@ui.FormDialog(ui.DialogProps{ID: "edit-database", Title: "Database settings", Description: "Saving a change restarts a running database to apply it: expect a few seconds during which it does not answer.", Action: v.Path() + "/settings", CSRF: s.CSRF, Submit: "Save changes", Wide: true, Open: !f.OK()}) {
 				@ui.TextField(f, "Docker image", "Change the tag to move to another version of the same major release. An image already on the server is not downloaded again. A new major version usually cannot open the old data: create a new database and move the data instead.", ui.InputProps{ID: "image", Mono: true, Required: true, Value: v.DB.Image})
 				@ui.Checkbox("public", checked(f, "public", v.DB.PublicPort > 0), nil) {
 					Reachable from the internet, on a port of the server
@@ -346,7 +345,7 @@ templ DatabaseSettings(s ui.Shell, v DatabaseView, f ui.Form, volume string) {
 					@ui.Confirm(ui.ConfirmProps{
 						ID:      "delete-database",
 						Title:   "Delete database",
-						Action:  v.base() + "/delete",
+						Action:  v.Path() + "/delete",
 						CSRF:    s.CSRF,
 						Match:   v.DB.Name,
 						Submit:  "Delete database",

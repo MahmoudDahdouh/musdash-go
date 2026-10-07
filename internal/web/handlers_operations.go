@@ -134,7 +134,7 @@ func (s *Server) databaseBackupSchedule(w http.ResponseWriter, r *http.Request) 
 	} else {
 		setFlash(w, r, ui.ToneOK, "Saved. Scheduled backups are switched off.")
 	}
-	redirect(w, r, "/databases/"+v.DB.ID+"/backups")
+	redirect(w, r, v.Path()+"/backups")
 }
 
 func (s *Server) databaseBackupNow(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +142,7 @@ func (s *Server) databaseBackupNow(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	back := "/databases/" + v.DB.ID + "/backups"
+	back := v.Path() + "/backups"
 	switch {
 	case v.Engine.DumpCmd == "":
 		setFlash(w, r, ui.ToneDanger, "musdash cannot back up "+v.Engine.Label+" databases yet.")
@@ -178,7 +178,7 @@ func (s *Server) loadBackup(w http.ResponseWriter, r *http.Request) (pages.Datab
 }
 
 func (s *Server) databaseBackupDownload(w http.ResponseWriter, r *http.Request) {
-	_, b, ok := s.loadBackup(w, r)
+	v, b, ok := s.loadBackup(w, r)
 	if !ok {
 		return
 	}
@@ -194,7 +194,7 @@ func (s *Server) databaseBackupDownload(w http.ResponseWriter, r *http.Request) 
 	src, err := rn.ReadFile(r.Context(), file)
 	if err != nil {
 		setFlash(w, r, ui.ToneDanger, "The backup's file is no longer on the server.")
-		redirect(w, r, "/databases/"+b.DatabaseID+"/backups")
+		redirect(w, r, v.Path()+"/backups")
 		return
 	}
 	defer src.Close()
@@ -210,7 +210,7 @@ func (s *Server) databaseBackupRestore(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	back := "/databases/" + v.DB.ID + "/backups"
+	back := v.Path() + "/backups"
 	switch {
 	case strings.TrimSpace(r.PostFormValue("confirm")) != v.DB.Name:
 		setFlash(w, r, ui.ToneDanger, "Nothing was restored: the name you typed did not match.")
@@ -238,7 +238,7 @@ func (s *Server) databaseBackupDelete(w http.ResponseWriter, r *http.Request) {
 	} else if b.Status == db.RunSuccess {
 		setFlash(w, r, ui.ToneOK, "Backup deleted.")
 	}
-	redirect(w, r, "/databases/"+v.DB.ID+"/backups")
+	redirect(w, r, v.Path()+"/backups")
 }
 
 // ---- Scheduled tasks ----
@@ -308,7 +308,7 @@ func (s *Server) appTaskCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Task added.")
-	redirect(w, r, "/apps/"+v.App.ID+"/tasks")
+	redirect(w, r, v.Path()+"/tasks")
 }
 
 // loadTask fetches the task in the path, of the app in the path.
@@ -414,7 +414,7 @@ func (s *Server) appTaskSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Task saved.")
-	redirect(w, r, "/apps/"+v.App.ID+"/tasks/"+t.ID)
+	redirect(w, r, v.Path()+"/tasks/"+t.ID)
 }
 
 func (s *Server) appTaskRun(w http.ResponseWriter, r *http.Request) {
@@ -422,7 +422,7 @@ func (s *Server) appTaskRun(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	back := "/apps/" + v.App.ID + "/tasks/" + t.ID
+	back := v.Path() + "/tasks/" + t.ID
 	busy, err := s.DB.TaskRunning(r.Context(), t.ID)
 	switch {
 	case err != nil:
@@ -461,7 +461,7 @@ func (s *Server) appTaskDelete(w http.ResponseWriter, r *http.Request) {
 		os.Remove(s.Cfg.TaskLogPath(run.ID))
 	}
 	setFlash(w, r, ui.ToneOK, "Task deleted.")
-	redirect(w, r, "/apps/"+v.App.ID+"/tasks")
+	redirect(w, r, v.Path()+"/tasks")
 }
 
 // ---- Backup storage ----

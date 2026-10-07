@@ -35,11 +35,11 @@ templ terminalPanel(ws, csrf string) {
 templ AppTerminal(s ui.Shell, v AppView) {
 	@appFrame(s, v, "terminal") {
 		if v.App.Container == "" {
-			@ui.EmptyState(ui.EmptyProps{Icon: "terminal", Title: "Nothing is running", Text: "A terminal opens in the app's running container. Deploy the app first.", Link: "See its deployments", LinkHref: v.base() + "/deployments"})
+			@ui.EmptyState(ui.EmptyProps{Icon: "terminal", Title: "Nothing is running", Text: "A terminal opens in the app's running container. Deploy the app first.", Link: "See its deployments", LinkHref: v.Path() + "/deployments"})
 		} else {
 			<div class="grid max-w-5xl gap-3">
 				<p class="muted text-sm">A shell in the app's running container, as the user its image runs as. It ends when you leave this page; what it changed in the container is gone with the next deployment.</p>
-				@terminalPanel(v.base()+"/terminal/ws", s.CSRF)
+				@terminalPanel(v.Path()+"/terminal/ws", s.CSRF)
 			</div>
 		}
 	}
@@ -52,7 +52,7 @@ templ DatabaseTerminal(s ui.Shell, v DatabaseView) {
 		} else {
 			<div class="grid max-w-5xl gap-3">
 				<p class="muted text-sm">A shell in the database's container, where its own command line is: <span class="code">psql</span>, <span class="code">mysql</span>, <span class="code">redis-cli</span>, <span class="code">mongosh</span>. It ends when you leave this page.</p>
-				@terminalPanel(v.base()+"/terminal/ws", s.CSRF)
+				@terminalPanel(v.Path()+"/terminal/ws", s.CSRF)
 			</div>
 		}
 	}
@@ -71,7 +71,7 @@ templ ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen str
 						for _, name := range containers {
 							<a
 								class={ "btn btn-sm", templ.KV("btn-secondary", name == chosen), templ.KV("btn-ghost", name != chosen) }
-								href={ templ.SafeURL(v.base() + "/terminal?container=" + name) }
+								href={ templ.SafeURL(v.Path() + "/terminal?container=" + name) }
 								if name == chosen {
 									aria-current="true"
 								}
@@ -79,7 +79,7 @@ templ ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen str
 						}
 					</nav>
 				}
-				@terminalPanel(v.base()+"/terminal/ws?container="+chosen, s.CSRF)
+				@terminalPanel(v.Path()+"/terminal/ws?container="+chosen, s.CSRF)
 			</div>
 		}
 	}

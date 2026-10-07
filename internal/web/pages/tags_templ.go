@@ -613,7 +613,7 @@ func tagSummary(n int) string {
 
 // Tag is one tag: what has it, and what can be done with the tag itself.
 // f is the rename form.
-func Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, f ui.Form) templ.Component {
+func Tag(s ui.Shell, tag string, res Resources, f ui.Form) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -729,7 +729,7 @@ func Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, f ui.Form
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.PageHeader(tag, tagSummary(len(apps)+len(services))).Render(templ.WithChildren(ctx, templ_7745c5c3_Var28), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.PageHeader(tag, tagSummary(res.Count())).Render(templ.WithChildren(ctx, templ_7745c5c3_Var28), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -737,13 +737,13 @@ func Tag(s ui.Shell, tag string, apps []db.App, services []db.Service, f ui.Form
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if len(apps)+len(services) == 0 {
+			if res.Count() == 0 {
 				templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "tag", Title: "Nothing has this tag yet", Text: "Give it to an app or a service: open its Settings and edit its tags.", Link: "Go to Projects", LinkHref: "/projects"}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = ResourceTiles(Resources{Apps: apps, Services: services}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ResourceTiles(res).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

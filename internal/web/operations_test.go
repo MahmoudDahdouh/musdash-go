@@ -38,7 +38,7 @@ func TestDatabaseBackupsPage(t *testing.T) {
 	ctx := context.Background()
 	projectID, env := a.project("Shop")
 	m := a.newDatabase(projectID, env, "postgres", "maindb", nil)
-	base := "/databases/" + m.ID + "/backups"
+	base := a.databasePath(m.ID) + "/backups"
 	inner := a.fake.Handle
 	var restored string
 	a.fake.Handle = func(line string, c runner.Cmd) (string, error) {
@@ -134,7 +134,7 @@ func TestDatabaseBackupsPage(t *testing.T) {
 	}
 
 	// A stopped database cannot be backed up or restored.
-	a.post("/databases/"+m.ID, "/databases/"+m.ID+"/stop", url.Values{})
+	a.post(a.databasePath(m.ID), a.databasePath(m.ID)+"/stop", url.Values{})
 	res, _ = a.post(base, base, url.Values{})
 	wantRedirect(t, res, base)
 	if list, _ := a.db.ListBackups(ctx, m.ID, 5); len(list) != 1 {
@@ -152,10 +152,10 @@ func TestDatabaseBackupsPage(t *testing.T) {
 
 	// An engine musdash cannot dump says so instead of offering a button.
 	k := a.newDatabase(projectID, env, "keydb", "cache", nil)
-	if _, page = a.get("/databases/" + k.ID + "/backups"); !strings.Contains(page, "cannot back up KeyDB yet") || strings.Contains(page, "Back up now") {
+	if _, page = a.get(a.databasePath(k.ID) + "/backups"); !strings.Contains(page, "cannot back up KeyDB yet") || strings.Contains(page, "Back up now") {
 		t.Fatal("the page of an engine without backups")
 	}
-	res, _ = a.post("/databases/"+k.ID+"/backups", "/databases/"+k.ID+"/backups/schedule", url.Values{"enabled": {"1"}, "schedule": {"@daily"}, "keep": {"3"}})
+	res, _ = a.post(a.databasePath(k.ID)+"/backups", a.databasePath(k.ID)+"/backups/schedule", url.Values{"enabled": {"1"}, "schedule": {"@daily"}, "keep": {"3"}})
 	wantStatus(t, res, http.StatusNotFound)
 }
 
@@ -165,7 +165,7 @@ func TestAppTasksPages(t *testing.T) {
 	ctx := context.Background()
 	projectID, env := a.project("Shop")
 	appID := a.newApp(projectID, env, "web", true, nil)
-	base := "/apps/" + appID + "/tasks"
+	base := a.appPath(appID) + "/tasks"
 	inner := a.fake.Handle
 	a.fake.Handle = func(line string, c runner.Cmd) (string, error) {
 		if strings.Contains(line, " sh -c echo tidy") {
@@ -219,7 +219,7 @@ func TestAppTasksPages(t *testing.T) {
 	}
 
 	// Without a running container, Run now explains instead of queueing.
-	a.post("/apps/"+appID, "/apps/"+appID+"/stop", url.Values{})
+	a.post(a.appPath(appID), a.appPath(appID)+"/stop", url.Values{})
 	res, _ = a.post(one, one+"/run", url.Values{})
 	wantRedirect(t, res, one)
 	if runs, _ := a.db.ListTaskRuns(ctx, task.ID, 5); len(runs) != 1 {
@@ -318,7 +318,7 @@ func TestStoragesPage(t *testing.T) {
 	// In use by a schedule: not removable until the schedule lets go.
 	projectID, env := a.project("Shop")
 	m := a.newDatabase(projectID, env, "postgres", "maindb", nil)
-	base := "/databases/" + m.ID + "/backups"
+	base := a.databasePath(m.ID) + "/backups"
 	res, _ = a.post(base, base+"/schedule", url.Values{"enabled": {"1"}, "schedule": {"@daily"}, "keep": {"3"}, "storage_id": {st.ID}})
 	wantRedirect(t, res, base)
 	res, _ = a.post(page, page+"/"+st.ID+"/delete", url.Values{})
@@ -498,15 +498,15 @@ func TestOtherTeamsOperationsAreNotFound(t *testing.T) {
 	before := len(a.fake.Calls())
 
 	for _, path := range []string{
-		"/databases/" + theirDB.ID + "/backups",
-		"/databases/" + theirDB.ID + "/backups/list",
-		"/databases/" + theirDB.ID + "/backups/" + theirBackup.ID + "/download",
+		a.databasePath(theirDB.ID) + "/backups",
+		a.databasePath(theirDB.ID) + "/backups/list",
+		a.databasePath(theirDB.ID) + "/backups/" + theirBackup.ID + "/download",
 		// Their backup under our database.
-		"/databases/" + mine.ID + "/backups/" + theirBackup.ID + "/download",
-		"/apps/" + theirApp.ID + "/tasks",
-		"/apps/" + theirApp.ID + "/tasks/" + theirTask.ID,
-		"/apps/" + myApp + "/tasks/" + theirTask.ID,
-		"/apps/" + myApp + "/tasks/" + theirTask.ID + "/runs",
+		a.databasePath(mine.ID) + "/backups/" + theirBackup.ID + "/download",
+		a.appPath(theirApp.ID) + "/tasks",
+		a.appPath(theirApp.ID) + "/tasks/" + theirTask.ID,
+		a.appPath(myApp) + "/tasks/" + theirTask.ID,
+		a.appPath(myApp) + "/tasks/" + theirTask.ID + "/runs",
 	} {
 		res, body := a.get(path)
 		if res.StatusCode != http.StatusNotFound || strings.Contains(body, "secret-") {
@@ -520,15 +520,15 @@ func TestOtherTeamsOperationsAreNotFound(t *testing.T) {
 	}
 	token := a.csrf("/projects")
 	for _, path := range []string{
-		"/databases/" + theirDB.ID + "/backups",
-		"/databases/" + theirDB.ID + "/backups/schedule",
-		"/databases/" + theirDB.ID + "/backups/" + theirBackup.ID + "/restore",
-		"/databases/" + mine.ID + "/backups/" + theirBackup.ID + "/restore",
-		"/databases/" + mine.ID + "/backups/" + theirBackup.ID + "/delete",
-		"/apps/" + theirApp.ID + "/tasks",
-		"/apps/" + myApp + "/tasks/" + theirTask.ID,
-		"/apps/" + myApp + "/tasks/" + theirTask.ID + "/run",
-		"/apps/" + myApp + "/tasks/" + theirTask.ID + "/delete",
+		a.databasePath(theirDB.ID) + "/backups",
+		a.databasePath(theirDB.ID) + "/backups/schedule",
+		a.databasePath(theirDB.ID) + "/backups/" + theirBackup.ID + "/restore",
+		a.databasePath(mine.ID) + "/backups/" + theirBackup.ID + "/restore",
+		a.databasePath(mine.ID) + "/backups/" + theirBackup.ID + "/delete",
+		a.appPath(theirApp.ID) + "/tasks",
+		a.appPath(myApp) + "/tasks/" + theirTask.ID,
+		a.appPath(myApp) + "/tasks/" + theirTask.ID + "/run",
+		a.appPath(myApp) + "/tasks/" + theirTask.ID + "/delete",
 		"/settings/storages/" + theirStorage.ID + "/test",
 		"/settings/storages/" + theirStorage.ID + "/delete",
 		"/notifications/" + theirChannel.ID,
@@ -541,7 +541,7 @@ func TestOtherTeamsOperationsAreNotFound(t *testing.T) {
 		}
 	}
 	// Our schedule cannot copy to their bucket.
-	base := "/databases/" + mine.ID + "/backups"
+	base := a.databasePath(mine.ID) + "/backups"
 	res, _ := a.post(base, base+"/schedule", url.Values{"enabled": {"1"}, "schedule": {"@daily"}, "keep": {"3"}, "storage_id": {theirStorage.ID}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
 

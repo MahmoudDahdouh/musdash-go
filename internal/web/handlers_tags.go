@@ -64,13 +64,13 @@ func (s *Server) tagChoices(r *http.Request, kind, id string) (has, all []string
 
 func (s *Server) appTagsSave(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadApp(w, r); ok {
-		s.saveTags(w, r, db.KindApp, v.App.ID, "/apps/"+v.App.ID+"/settings")
+		s.saveTags(w, r, db.KindApp, v.App.ID, v.Path()+"/settings")
 	}
 }
 
 func (s *Server) serviceTagsSave(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadService(w, r); ok {
-		s.saveTags(w, r, db.KindService, v.Service.ID, "/services/"+v.Service.ID+"/settings")
+		s.saveTags(w, r, db.KindService, v.Service.ID, v.Path()+"/settings")
 	}
 }
 
@@ -154,7 +154,14 @@ func (s *Server) renderTag(w http.ResponseWriter, r *http.Request, status int, t
 	// escaped form.
 	shell := s.shell(w, r, tag, "tags", ui.Crumb{Label: "Tags", Href: "/tags"},
 		ui.Crumb{Label: tag, Icon: "tag", Filter: "Find a tag", Menu: "/switch/tags?at=" + tag})
-	s.render(w, r, status, pages.Tag(shell, tag, apps, services, f))
+	// What has the tag can be in any project: each tile leads to where
+	// its resource is.
+	places, err := s.DB.Places(r.Context(), sessionFrom(r).TeamID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, status, pages.Tag(shell, tag, pages.Resources{Apps: apps, Services: services, Places: places}, f))
 }
 
 func (s *Server) tagShow(w http.ResponseWriter, r *http.Request) {

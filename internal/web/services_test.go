@@ -74,12 +74,12 @@ func (a *app) newService(projectID string, env db.Environment, name string, form
 	for k, v := range form {
 		full[k] = v
 	}
-	page := "/projects/" + projectID + "/e/" + env.ID + "/services/new?template=" + full.Get("template")
-	res, body := a.post(page, "/projects/"+projectID+"/e/"+env.ID+"/services", full)
+	page := "/projects/" + projectID + "/env/" + env.ID + "/service/new?template=" + full.Get("template")
+	res, body := a.post(page, "/projects/"+projectID+"/env/"+env.ID+"/service", full)
 	if res.StatusCode != http.StatusSeeOther {
 		a.t.Fatalf("create service: %d\n%s", res.StatusCode, body)
 	}
-	return a.waitService(strings.TrimPrefix(res.Header.Get("Location"), "/services/"))
+	return a.waitService(createdID(res, db.KindService))
 }
 
 func (a *app) waitService(id string) db.Service {
@@ -103,13 +103,13 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
 	projectID, env := a.project("Shop")
-	base := "/projects/" + projectID + "/e/" + env.ID + "/services/new"
+	base := "/projects/" + projectID + "/env/" + env.ID + "/service/new"
 
 	// The Add resource page is the catalogue; the address without a
 	// template leads to it.
 	res, _ := a.get(base)
-	wantRedirect(t, res, "/projects/"+projectID+"/e/"+env.ID+"/new")
-	res, page := a.get("/projects/" + projectID + "/e/" + env.ID + "/new")
+	wantRedirect(t, res, "/projects/"+projectID+"/env/"+env.ID+"/new")
+	res, page := a.get("/projects/" + projectID + "/env/" + env.ID + "/new")
 	wantStatus(t, res, http.StatusOK)
 	for _, tpl := range catalog.Services() {
 		if !strings.Contains(page, "template="+tpl.Key) || !strings.Contains(html.UnescapeString(page), tpl.Name) {
@@ -138,7 +138,7 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 	wantStatus(t, res, http.StatusNotFound)
 
 	// The token is required.
-	res, body := a.post(base+"?template=cloudflared", "/projects/"+projectID+"/e/"+env.ID+"/services",
+	res, body := a.post(base+"?template=cloudflared", "/projects/"+projectID+"/env/"+env.ID+"/service",
 		url.Values{"template": {"cloudflared"}, "name": {"tunnel"}, "connect_env": {"1"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "Enter a value on one line") {
 		t.Fatalf("cloudflared without its token: %d", res.StatusCode)
@@ -152,13 +152,13 @@ func TestCreateServiceFromTheCatalogue(t *testing.T) {
 	projectID, env := a.project("Shop")
 	a.stackServer("wordpress", "80", nil)
 
-	page := "/projects/" + projectID + "/e/" + env.ID + "/services/new?template=wordpress"
-	res, body := a.post(page, "/projects/"+projectID+"/e/"+env.ID+"/services",
+	page := "/projects/" + projectID + "/env/" + env.ID + "/service/new?template=wordpress"
+	res, body := a.post(page, "/projects/"+projectID+"/env/"+env.ID+"/service",
 		url.Values{"template": {"wordpress"}, "name": {"blog"}, "deploy": {"1"}})
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("create: %d\n%s", res.StatusCode, body)
 	}
-	s := a.waitService(strings.TrimPrefix(res.Header.Get("Location"), "/services/"))
+	s := a.waitService(createdID(res, db.KindService))
 	if s.Status != db.AppRunning || s.Template != "wordpress" || s.ConnectEnv || s.Members != "db,wordpress" {
 		t.Fatalf("after create: %+v", s)
 	}
@@ -199,11 +199,11 @@ func TestCreateServiceFromTheCatalogue(t *testing.T) {
 	}
 
 	// The overview: address, containers, generated values behind bullets.
-	res, overview := a.get("/services/" + s.ID)
+	res, overview := a.get(a.servicePath(s.ID))
 	wantStatus(t, res, http.StatusOK)
 	overview = html.UnescapeString(overview)
 	for _, want := range []string{"Running", "WordPress", endpoints[0].Host, "to wordpress:80", "db, wordpress", "Redeploy", "Stop",
-		`data-copy="` + vars["SERVICE_PASSWORD_ROOT"] + `"`, "SERVICE_USER_WORDPRESS", "/services/" + s.ID + "/deploy-log/stream"} {
+		`data-copy="` + vars["SERVICE_PASSWORD_ROOT"] + `"`, "SERVICE_USER_WORDPRESS", a.servicePath(s.ID) + "/deploy-log/stream"} {
 		if !strings.Contains(overview, want) {
 			t.Errorf("the overview is missing %q", want)
 		}
@@ -215,7 +215,7 @@ func TestCreateServiceFromTheCatalogue(t *testing.T) {
 		t.Fatal("a page holding passwords may be cached")
 	}
 	// Nowhere else.
-	for _, path := range []string{"/projects/" + projectID + "/e/" + env.ID, "/services/" + s.ID + "/settings", "/services/" + s.ID + "/logs", "/services/" + s.ID + "/compose", "/services/" + s.ID + "/status"} {
+	for _, path := range []string{"/projects/" + projectID + "/env/" + env.ID, a.servicePath(s.ID) + "/settings", a.servicePath(s.ID) + "/logs", a.servicePath(s.ID) + "/compose", a.servicePath(s.ID) + "/status"} {
 		res, body := a.get(path)
 		wantStatus(t, res, http.StatusOK)
 		for name, value := range vars {
@@ -224,13 +224,13 @@ func TestCreateServiceFromTheCatalogue(t *testing.T) {
 			}
 		}
 	}
-	_, list := a.get("/projects/" + projectID + "/e/" + env.ID)
-	if !strings.Contains(list, "/services/"+s.ID) || !strings.Contains(list, "blog") {
+	_, list := a.get("/projects/" + projectID + "/env/" + env.ID)
+	if !strings.Contains(list, a.servicePath(s.ID)) || !strings.Contains(list, "blog") {
 		t.Fatal("the project page does not list the service")
 	}
 
 	// The deployment's output, and the containers' own.
-	res, stream := a.get("/services/" + s.ID + "/deploy-log/stream")
+	res, stream := a.get(a.servicePath(s.ID) + "/deploy-log/stream")
 	wantStatus(t, res, http.StatusOK)
 	if !strings.Contains(stream, "Reading the Compose file") || !strings.Contains(stream, "Deployed.") || !strings.Contains(stream, "event: done") {
 		t.Fatalf("deploy log stream:\n%s", stream)
@@ -241,7 +241,7 @@ func TestCreateServiceFromTheCatalogue(t *testing.T) {
 		}
 		return "", nil, false
 	})
-	res, stream = a.get("/services/" + s.ID + "/logs/stream")
+	res, stream = a.get(a.servicePath(s.ID) + "/logs/stream")
 	wantStatus(t, res, http.StatusOK)
 	if !strings.Contains(stream, "wordpress-1  | &lt;b&gt;ready&lt;/b&gt;") || strings.Contains(stream, "<b>") {
 		t.Fatalf("container log stream:\n%s", stream)
@@ -254,8 +254,8 @@ func TestServiceFormValidation(t *testing.T) {
 	projectID, env := a.project("Shop")
 	a.newApp(projectID, env, "web", false, nil)
 	_, otherEnv := a.project("Other")
-	page := "/projects/" + projectID + "/e/" + env.ID + "/services/new?template=custom"
-	create := "/projects/" + projectID + "/e/" + env.ID + "/services"
+	page := "/projects/" + projectID + "/env/" + env.ID + "/service/new?template=custom"
+	create := "/projects/" + projectID + "/env/" + env.ID + "/service"
 	valid := url.Values{"template": {db.TemplateCustom}, "name": {"site"}, "compose": {ownCompose}}
 
 	for _, c := range []struct {
@@ -291,7 +291,7 @@ func TestServiceFormValidation(t *testing.T) {
 		t.Errorf("unknown template: %d, want 404", res.StatusCode)
 	}
 	// An environment is only reached through its own project.
-	if res, _ := a.post(page, "/projects/"+projectID+"/e/"+otherEnv.ID+"/services", valid); res.StatusCode != http.StatusNotFound {
+	if res, _ := a.post(page, "/projects/"+projectID+"/env/"+otherEnv.ID+"/service", valid); res.StatusCode != http.StatusNotFound {
 		t.Errorf("environment of another project: %d, want 404", res.StatusCode)
 	}
 	var n int
@@ -305,12 +305,12 @@ func TestServiceFormValidation(t *testing.T) {
 	if s.Status != db.AppCreated {
 		t.Fatalf("%+v", s)
 	}
-	_, overview := a.get("/services/" + s.ID)
+	_, overview := a.get(a.servicePath(s.ID))
 	if !strings.Contains(overview, "The Compose file reads API_KEY, which has no value yet") || strings.Contains(overview, "REGION,") {
 		t.Fatal("the overview does not name the variable that still needs a value")
 	}
 	// And an app cannot take its name.
-	res, body := a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+env.ID+"/apps",
+	res, body := a.post("/projects/"+projectID+"/env/"+env.ID+"/app/new", "/projects/"+projectID+"/env/"+env.ID+"/app",
 		url.Values{"name": {"site"}, "image": {"nginx"}, "port": {"80"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "already has an app, database or service called site") {
 		t.Fatalf("an app took a service's name: %d", res.StatusCode)
@@ -328,7 +328,7 @@ func TestEditServiceComposeAndVariables(t *testing.T) {
 		t.Fatalf("%+v", s)
 	}
 	before, _ := a.server.Deploy.ServiceVariables(s)
-	composePage := "/services/" + s.ID + "/compose"
+	composePage := a.servicePath(s.ID) + "/compose"
 
 	// The page shows the file. The person's own variables are sent when
 	// asked for, and the generated ones not at all.
@@ -380,7 +380,7 @@ func TestEditServiceComposeAndVariables(t *testing.T) {
 	// Save and deploy.
 	ups := countCalls(a.fake.Calls(), " up --detach")
 	res, _ = a.post(composePage, composePage, url.Values{"compose": {changed}, "variables": {"API_KEY=k-789"}, "deploy": {"1"}})
-	wantRedirect(t, res, "/services/"+s.ID)
+	wantRedirect(t, res, a.servicePath(s.ID))
 	if got = a.waitService(s.ID); got.Status != db.AppRunning || countCalls(a.fake.Calls(), " up --detach") != ups+1 {
 		t.Fatalf("after save and deploy: %+v", got)
 	}
@@ -414,14 +414,14 @@ func TestServiceEndpointDomain(t *testing.T) {
 	_ = appID
 	endpoints, _ := a.db.ListEndpoints(ctx, s.ID)
 	otherEndpoints, _ := a.db.ListEndpoints(ctx, other.ID)
-	settings := "/services/" + s.ID + "/settings"
+	settings := a.servicePath(s.ID) + "/settings"
 	// The form sends what the handler reads: the HTTPS box is "tls", and
 	// the box's own id is not a second name for it.
 	if _, page := a.get(settings); !strings.Contains(page, `id="tls-`+endpoints[0].ID+`" name="tls"`) || strings.Contains(page, `name="tls-`) {
 		t.Fatal("the HTTPS box of an endpoint is not sent as tls")
 	}
 	save := func(endpointID string, form url.Values) (*http.Response, string) {
-		res, body := a.post(settings, "/services/"+s.ID+"/endpoints/"+endpointID, form)
+		res, body := a.post(settings, a.servicePath(s.ID)+"/endpoints/"+endpointID, form)
 		return res, html.UnescapeString(body)
 	}
 
@@ -447,7 +447,7 @@ func TestServiceEndpointDomain(t *testing.T) {
 		t.Fatalf("the endpoint has %d domains, want exactly 1", domains)
 	}
 	// The next deployment tells the service its new address.
-	a.post(settings, "/services/"+s.ID+"/deploy", nil)
+	a.post(settings, a.servicePath(s.ID)+"/deploy", nil)
 	a.waitService(s.ID)
 	envFile, _, _ := a.fake.File(a.cfg.AppDir(s.ID) + "/sandbox.env")
 	if !strings.Contains(envFile, "SERVICE_FQDN_FRONT_3000=shop.example.com\n") {
@@ -501,7 +501,7 @@ func TestServiceFailureStopAndDelete(t *testing.T) {
 	if s.Status != db.AppFailed {
 		t.Fatalf("%+v", s)
 	}
-	_, overview := a.get("/services/" + s.ID)
+	_, overview := a.get(a.servicePath(s.ID))
 	plain := html.UnescapeString(overview)
 	if !strings.Contains(plain, "The last deployment failed") || !strings.Contains(plain, `service front: "privileged" is not allowed`) || !strings.Contains(plain, `service db: "pid" is not allowed`) {
 		t.Fatal("the overview does not explain the refusal")
@@ -517,34 +517,34 @@ func TestServiceFailureStopAndDelete(t *testing.T) {
 		}
 		return "", nil, false
 	})
-	a.post("/services/"+s.ID, "/services/"+s.ID+"/deploy", nil)
+	a.post(a.servicePath(s.ID), a.servicePath(s.ID)+"/deploy", nil)
 	s = a.waitService(s.ID)
-	_, overview = a.get("/services/" + s.ID)
+	_, overview = a.get(a.servicePath(s.ID))
 	if !strings.Contains(html.UnescapeString(overview), "Additional property imagee is not allowed") || strings.Contains(overview, "<script>") {
 		t.Fatal("Compose's message is not shown, or is shown unescaped")
 	}
 
 	// Then a good deployment, stop, and delete.
 	a.stackServer("front", "3000", nil)
-	a.post("/services/"+s.ID, "/services/"+s.ID+"/deploy", nil)
+	a.post(a.servicePath(s.ID), a.servicePath(s.ID)+"/deploy", nil)
 	if s = a.waitService(s.ID); s.Status != db.AppRunning {
 		t.Fatalf("%+v", s)
 	}
 	endpoints, _ := a.db.ListEndpoints(ctx, s.ID)
 
-	res, _ := a.post("/services/"+s.ID, "/services/"+s.ID+"/stop", nil)
-	wantRedirect(t, res, "/services/"+s.ID)
+	res, _ := a.post(a.servicePath(s.ID), a.servicePath(s.ID)+"/stop", nil)
+	wantRedirect(t, res, a.servicePath(s.ID))
 	if got, _ := a.db.ServiceByID(ctx, s.ID); got.Status != db.AppStopped {
 		t.Fatalf("after stop: %+v", got)
 	}
 	if strings.Contains(a.routesFile(), endpoints[0].Host) {
 		t.Fatal("a stopped service is still routed")
 	}
-	_, page := a.get("/services/" + s.ID)
+	_, page := a.get(a.servicePath(s.ID))
 	if !strings.Contains(page, "Stopped") || strings.Contains(page, "Redeploy") {
 		t.Fatal("a stopped service does not offer Deploy")
 	}
-	res, _ = a.get("/services/" + s.ID + "/logs/stream")
+	res, _ = a.get(a.servicePath(s.ID) + "/logs/stream")
 	wantStatus(t, res, http.StatusConflict)
 
 	// The project cannot go while it holds a service.
@@ -552,19 +552,19 @@ func TestServiceFailureStopAndDelete(t *testing.T) {
 	res, _ = a.post(projectSettings, "/projects/"+projectID+"/delete", url.Values{"confirm": {"Shop"}})
 	wantRedirect(t, res, projectSettings)
 
-	settings := "/services/" + s.ID + "/settings"
-	res, _ = a.post(settings, "/services/"+s.ID+"/delete", url.Values{"confirm": {"wrong"}, "delete_data": {"1"}})
+	settings := a.servicePath(s.ID) + "/settings"
+	res, _ = a.post(settings, a.servicePath(s.ID)+"/delete", url.Values{"confirm": {"wrong"}, "delete_data": {"1"}})
 	wantRedirect(t, res, settings)
 	if _, err := a.db.ServiceByID(ctx, s.ID); err != nil {
 		t.Fatal("deleted without the name being typed")
 	}
-	res, _ = a.post(settings, "/services/"+s.ID+"/delete", url.Values{"confirm": {"site"}, "delete_data": {"1"}})
-	wantRedirect(t, res, "/projects/"+projectID+"/e/"+env.ID)
+	res, _ = a.post(settings, a.servicePath(s.ID)+"/delete", url.Values{"confirm": {"site"}, "delete_data": {"1"}})
+	wantRedirect(t, res, "/projects/"+projectID+"/env/"+env.ID)
 	down := a.fake.Calls()[lastIndexOfCall(a.fake.Calls(), " down ")]
 	if !strings.Contains(down, "--project-name "+deploy.ServiceProject(s.ID)) || !strings.HasSuffix(down, "--volumes") {
 		t.Fatalf("down: %s", down)
 	}
-	res, _ = a.get("/services/" + s.ID)
+	res, _ = a.get(a.servicePath(s.ID))
 	wantStatus(t, res, http.StatusNotFound)
 
 	res, _ = a.post(projectSettings, "/projects/"+projectID+"/delete", url.Values{"confirm": {"Shop"}})
@@ -590,7 +590,7 @@ func TestOtherTeamsServiceIsNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	theirs, _ := a.db.ListEndpoints(ctx, other.ID)
-	base := "/services/" + other.ID
+	base := a.servicePath(other.ID)
 
 	for _, path := range []string{"", "/status", "/deploy-log/stream", "/logs", "/logs/stream", "/compose", "/settings"} {
 		res, body := a.get(base + path)
@@ -614,10 +614,10 @@ func TestOtherTeamsServiceIsNotFound(t *testing.T) {
 	// Their endpoint cannot be reached through a service of ours either.
 	projectID, env := a.project("Mine")
 	mine := a.newService(projectID, env, "site", url.Values{})
-	res, _ := a.post("/services/"+mine.ID+"/settings", "/services/"+mine.ID+"/endpoints/"+theirs[0].ID, url.Values{"host": {"mine.example.com"}})
+	res, _ := a.post(a.servicePath(mine.ID)+"/settings", a.servicePath(mine.ID)+"/endpoints/"+theirs[0].ID, url.Values{"host": {"mine.example.com"}})
 	wantStatus(t, res, http.StatusNotFound)
 	// Nor can a service be created in their environment.
-	res, _ = a.post("/projects/"+projectID+"/e/"+env.ID+"/services/new?template=custom", "/projects/"+projectID+"/e/"+envs[0].ID+"/services",
+	res, _ = a.post("/projects/"+projectID+"/env/"+env.ID+"/service/new?template=custom", "/projects/"+projectID+"/env/"+envs[0].ID+"/service",
 		url.Values{"template": {db.TemplateCustom}, "name": {"x"}, "compose": {ownCompose}})
 	wantStatus(t, res, http.StatusNotFound)
 

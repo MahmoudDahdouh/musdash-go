@@ -111,8 +111,8 @@ func TestKeysPage(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<td class="whitespace-nowrap">API token</td>`, `<span class="badge">Read</span>`, `<span class="badge">Deploy</span>`,
-		`<td class="whitespace-nowrap">Deploy token</td>`, `action="/apps/` + image + `/deploy-token"`, "/api/v1/deploy?uuid=" + image,
-		`<td class="whitespace-nowrap">Webhook secret</td>`, `action="/apps/` + git.ID + `/webhook-secret"`, "/webhooks/git/" + git.ID, `hx-get="/apps/` + git.ID + `/webhook-secret"`,
+		`<td class="whitespace-nowrap">Deploy token</td>`, `action="` + a.appPath(image) + `/deploy-token"`, "/api/v1/deploy?uuid=" + image,
+		`<td class="whitespace-nowrap">Webhook secret</td>`, `action="` + a.appPath(git.ID) + `/webhook-secret"`, "/webhooks/git/" + git.ID, `hx-get="` + a.appPath(git.ID) + `/webhook-secret"`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the table of tokens is missing %q", want)
@@ -132,7 +132,7 @@ func TestKeysPage(t *testing.T) {
 
 	// No other page talks about tokens: not Account, not an app's
 	// Settings, not Sources.
-	for _, path := range []string{"/account", "/apps/" + git.ID + "/settings", "/apps/" + image + "/settings", "/sources"} {
+	for _, path := range []string{"/account", a.appPath(git.ID) + "/settings", a.appPath(image) + "/settings", "/sources"} {
 		_, body := a.get(path)
 		// The sidebar's link is the one way to the Keys page.
 		if n := strings.Count(body, `href="/keys`); n != 1 {
@@ -146,7 +146,7 @@ func TestKeysPage(t *testing.T) {
 	}
 
 	// An app without a secret has none to show.
-	res, _ = a.get("/apps/" + image + "/webhook-secret")
+	res, _ = a.get(a.appPath(image) + "/webhook-secret")
 	wantStatus(t, res, http.StatusNotFound)
 
 	// A token that is refused comes back in the open dialog, as it was
@@ -182,7 +182,7 @@ func TestKeysPage(t *testing.T) {
 	if _, page = a.get("/keys/tokens"); strings.Contains(page, "secret-app") || strings.Contains(page, theirs.ID) {
 		t.Fatal("another team's app is listed on the Keys page")
 	}
-	res, body := a.get("/apps/" + theirs.ID + "/webhook-secret")
+	res, body := a.get(a.appPath(theirs.ID) + "/webhook-secret")
 	if res.StatusCode != http.StatusNotFound || strings.Contains(body, "their-webhook-secret") {
 		t.Fatalf("another team's webhook secret: %d", res.StatusCode)
 	}
@@ -374,20 +374,20 @@ func TestFormsThatShowASecretActOnce(t *testing.T) {
 		t.Fatal("the dialog's form sent twice replaced the token")
 	}
 	// Replace, from the row the token now has, and that form again.
-	replace := url.Values{"_once": {a.onceOf("/keys/tokens", "/apps/"+app+"/deploy-token")}}
-	res, page = a.post("/keys/tokens", "/apps/"+app+"/deploy-token", replace)
+	replace := url.Values{"_once": {a.onceOf("/keys/tokens", a.appPath(app)+"/deploy-token")}}
+	res, page = a.post("/keys/tokens", a.appPath(app)+"/deploy-token", replace)
 	wantStatus(t, res, http.StatusOK)
 	replaced := deployTokenRE.FindString(page)
 	if replaced == "" || replaced == token {
 		t.Fatal("Replace did not show a new token")
 	}
-	again("/apps/"+app+"/deploy-token", replace, "/keys/tokens")
+	again(a.appPath(app)+"/deploy-token", replace, "/keys/tokens")
 	if stored, _ := a.db.AppByID(ctx, app); stored.DeployTokenHash != secret.HashToken(replaced) {
 		t.Fatal("the form sent twice replaced the token that had just been shown")
 	}
 	// Revoke is not such a form: it shows nothing, and answers with a redirect.
 	replace.Set("revoke", "1")
-	res, _ = a.post("/keys/tokens", "/apps/"+app+"/deploy-token", replace)
+	res, _ = a.post("/keys/tokens", a.appPath(app)+"/deploy-token", replace)
 	wantRedirect(t, res, "/keys/tokens")
 	if stored, _ := a.db.AppByID(ctx, app); stored.DeployTokenHash != "" {
 		t.Fatal("the token was not revoked")

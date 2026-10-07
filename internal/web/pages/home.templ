@@ -34,11 +34,11 @@ type HomeServer struct {
 func eventHref(e db.Event) string {
 	switch e.Kind {
 	case db.EventBackup:
-		return "/databases/" + e.ResourceID + "/backups"
+		return ResourcePath(e.ProjectID, e.EnvironmentID, db.KindDatabase, e.ResourceID) + "/backups"
 	case db.EventTask:
-		return "/apps/" + e.ResourceID + "/tasks/" + e.TaskID
+		return ResourcePath(e.ProjectID, e.EnvironmentID, db.KindApp, e.ResourceID) + "/tasks/" + e.TaskID
 	}
-	return "/apps/" + e.ResourceID + "/deployments/" + e.ID
+	return ResourcePath(e.ProjectID, e.EnvironmentID, db.KindApp, e.ResourceID) + "/deployments/" + e.ID
 }
 
 func eventIcon(kind string) string {

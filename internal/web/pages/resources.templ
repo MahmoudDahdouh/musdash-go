@@ -25,6 +25,9 @@ type Resources struct {
 	Apps      []db.App
 	Databases []db.Database
 	Services  []db.Service
+	// Places says where each environment of the list is, by its id: the
+	// address of a resource starts with its project.
+	Places map[string]db.Place
 }
 
 func (r Resources) Count() int { return len(r.Apps) + len(r.Databases) + len(r.Services) }
@@ -41,12 +44,12 @@ func appSourceKind(a db.App) string {
 templ ResourceTiles(res Resources) {
 	@ui.Tiles("Resources", false) {
 		for _, a := range res.Apps {
-			@ui.Tile(ui.TileProps{Href: "/apps/" + a.ID, Icon: KindIcon(db.KindApp), Title: a.Name, Text: appSourceLine(a), Mono: true, State: a.Status}) {
+			@ui.Tile(ui.TileProps{Href: res.path(a.EnvironmentID, db.KindApp, a.ID), Icon: KindIcon(db.KindApp), Title: a.Name, Text: appSourceLine(a), Mono: true, State: a.Status}) {
 				@ui.Meta("", appSourceKind(a), "")
 			}
 		}
 		for _, m := range res.Databases {
-			@ui.Tile(ui.TileProps{Href: "/databases/" + m.ID, Icon: KindIcon(db.KindDatabase), Title: m.Name, Text: m.Image, Mono: true, State: databaseState(m)}) {
+			@ui.Tile(ui.TileProps{Href: res.path(m.EnvironmentID, db.KindDatabase, m.ID), Icon: KindIcon(db.KindDatabase), Title: m.Name, Text: m.Image, Mono: true, State: databaseState(m)}) {
 				@ui.Meta("", engineLabel(m.Engine)+" database", "")
 				if m.PublicPort > 0 {
 					@ui.Badge("Public", ui.ToneWarn)
@@ -54,7 +57,7 @@ templ ResourceTiles(res Resources) {
 			}
 		}
 		for _, s := range res.Services {
-			@ui.Tile(ui.TileProps{Href: "/services/" + s.ID, Icon: KindIcon(db.KindService), Title: s.Name, Text: templateName(s.Template), State: serviceState(s)}) {
+			@ui.Tile(ui.TileProps{Href: res.path(s.EnvironmentID, db.KindService, s.ID), Icon: KindIcon(db.KindService), Title: s.Name, Text: templateName(s.Template), State: serviceState(s)}) {
 				@ui.Meta("", "Service", "")
 			}
 		}
@@ -76,7 +79,7 @@ templ ProjectOptions(projects []db.Project, at string) {
 // EnvironmentOptions is what the environment switcher lists.
 templ EnvironmentOptions(p db.Project, envs []db.Environment, at string) {
 	for _, e := range envs {
-		@ui.SwitchOption("/projects/"+p.ID+"/e/"+e.ID, "", e.Name, e.ID == at)
+		@ui.SwitchOption(EnvPath(p.ID, e.ID), "", e.Name, e.ID == at)
 	}
 	@ui.MenuSep()
 	@ui.MenuAction("/projects/"+p.ID+"/settings#environments", "settings", "Manage environments")
@@ -94,24 +97,24 @@ templ TeamOptions(team string) {
 // one, as "kind:id".
 templ ResourceOptions(env db.Environment, res Resources, at string) {
 	for _, a := range res.Apps {
-		@ui.SwitchOption("/apps/"+a.ID, KindIcon(db.KindApp), a.Name, at == db.KindApp+":"+a.ID) {
+		@ui.SwitchOption(res.path(a.EnvironmentID, db.KindApp, a.ID), KindIcon(db.KindApp), a.Name, at == db.KindApp+":"+a.ID) {
 			@ui.StatusPill(a.Status)
 		}
 	}
 	for _, m := range res.Databases {
-		@ui.SwitchOption("/databases/"+m.ID, KindIcon(db.KindDatabase), m.Name, at == db.KindDatabase+":"+m.ID) {
+		@ui.SwitchOption(res.path(m.EnvironmentID, db.KindDatabase, m.ID), KindIcon(db.KindDatabase), m.Name, at == db.KindDatabase+":"+m.ID) {
 			@ui.StatusPill(databaseState(m))
 		}
 	}
 	for _, s := range res.Services {
-		@ui.SwitchOption("/services/"+s.ID, KindIcon(db.KindService), s.Name, at == db.KindService+":"+s.ID) {
+		@ui.SwitchOption(res.path(s.EnvironmentID, db.KindService, s.ID), KindIcon(db.KindService), s.Name, at == db.KindService+":"+s.ID) {
 			@ui.StatusPill(serviceState(s))
 		}
 	}
 	if res.Count() > 0 {
 		@ui.MenuSep()
 	}
-	@ui.MenuAction("/projects/"+env.ProjectID+"/e/"+env.ID+"/new", "plus", "Add resource")
+	@ui.MenuAction(EnvPath(env.ProjectID, env.ID)+"/new", "plus", "Add resource")
 }
 
 // NewResource is what the Add resource page offers.
@@ -127,14 +130,14 @@ type NewResource struct {
 	HasKey    bool
 }
 
-func (v NewResource) base() string { return "/projects/" + v.Project.ID + "/e/" + v.Env.ID }
+func (v NewResource) Path() string { return EnvPath(v.Project.ID, v.Env.ID) }
 
 // privateRepo is where a private-repository tile leads: to the Git form
 // with that access chosen or, while the team has none of the kind, to where
 // one is added.
 func (v NewResource) privateRepo(access string, has bool) string {
 	if has {
-		return v.base() + "/apps/new?source=git&access=" + access
+		return v.Path() + "/app/new?source=git&access=" + access
 	}
 	if access == "key" {
 		return KeysPath
@@ -187,31 +190,31 @@ templ ResourceNew(s ui.Shell, v NewResource) {
 			<div class="grid gap-8" id="kinds">
 				@kindGroup("Apps", "Your own code or image. musdash builds it, runs it and gives it a domain.") {
 					@ui.Tiles("Kinds of app", true) {
-						@ui.Tile(ui.TileProps{Href: v.base() + "/apps/new?source=git", Icon: "git-branch", Title: "Public repository", Text: "Build from a public Git repository on any host.", Compact: true, Search: "public repository git github gitlab bitbucket gitea dockerfile nixpacks railpack static"})
+						@ui.Tile(ui.TileProps{Href: v.Path() + "/app/new?source=git", Icon: "git-branch", Title: "Public repository", Text: "Build from a public Git repository on any host.", Compact: true, Search: "public repository git github gitlab bitbucket gitea dockerfile nixpacks railpack static"})
 						@ui.Tile(ui.TileProps{Href: v.privateRepo("app", v.HasApp), Icon: "github", Title: "Private repository, with a GitHub App", Text: gitHubAppText(v.HasApp), Compact: true, Search: "private repository github app git"})
 						@ui.Tile(ui.TileProps{Href: v.privateRepo("gitlab", v.HasGitLab), Icon: "gitlab", Title: "Private repository, with GitLab", Text: gitLabText(v.HasGitLab), Compact: true, Search: "private repository gitlab token git"})
 						@ui.Tile(ui.TileProps{Href: v.privateRepo("key", v.HasKey), Icon: "key", Title: "Private repository, with a deploy key", Text: deployKeyText(v.HasKey), Compact: true, Search: "private repository deploy key ssh git gitlab bitbucket gitea"})
-						@ui.Tile(ui.TileProps{Href: v.base() + "/apps/new", Icon: "box", Title: "Docker image", Text: "Run an image from a registry, such as nginx:alpine or ghcr.io/you/app:1.4.", Compact: true, Search: "docker image registry container"})
+						@ui.Tile(ui.TileProps{Href: v.Path() + "/app/new", Icon: "box", Title: "Docker image", Text: "Run an image from a registry, such as nginx:alpine or ghcr.io/you/app:1.4.", Compact: true, Search: "docker image registry container"})
 					}
 				}
 				@kindGroup("Databases", "One container with a volume, a user and a generated password. Backups can be scheduled.") {
 					@ui.Tiles("Database engines", true) {
 						for _, t := range v.Engines {
-							@ui.Tile(ui.TileProps{Href: v.base() + "/databases/new?engine=" + t.Engine, Icon: "database", Title: t.Label, Text: t.About, Compact: true, Search: searchText("database", t.Engine, t.Label, t.About)})
+							@ui.Tile(ui.TileProps{Href: v.Path() + "/database/new?engine=" + t.Engine, Icon: "database", Title: t.Label, Text: t.About, Compact: true, Search: searchText("database", t.Engine, t.Label, t.About)})
 						}
 					}
 				}
 				@kindGroup("Services", "One or more containers described by a Docker Compose file: your own, or a ready-made one.") {
 					@ui.Tiles("Kinds of service", true) {
-						@ui.Tile(ui.TileProps{Href: v.base() + "/services/new?template=" + db.TemplateCustom, Icon: "code", Title: "Your own Compose file", Text: "Paste a docker-compose.yml. Templates written for Coolify work as they are.", Compact: true, Search: "service compose docker-compose yaml custom own coolify"})
-						@ui.Tile(ui.TileProps{Href: v.base() + "/services/new?template=" + db.TemplateGit, Icon: "git-branch", Title: "Compose file in a Git repository", Text: "Read from the repository at every deployment. It may build the repository's own Dockerfiles.", Compact: true, Search: "service compose git repository"})
+						@ui.Tile(ui.TileProps{Href: v.Path() + "/service/new?template=" + db.TemplateCustom, Icon: "code", Title: "Your own Compose file", Text: "Paste a docker-compose.yml. Templates written for Coolify work as they are.", Compact: true, Search: "service compose docker-compose yaml custom own coolify"})
+						@ui.Tile(ui.TileProps{Href: v.Path() + "/service/new?template=" + db.TemplateGit, Icon: "git-branch", Title: "Compose file in a Git repository", Text: "Read from the repository at every deployment. It may build the repository's own Dockerfiles.", Compact: true, Search: "service compose git repository"})
 						for _, t := range v.Templates {
-							@ui.Tile(ui.TileProps{Href: v.base() + "/services/new?template=" + t.Key, Icon: "layers", Title: t.Name, Text: t.About, Compact: true, Search: searchText("service", t.Key, t.Name, t.About)})
+							@ui.Tile(ui.TileProps{Href: v.Path() + "/service/new?template=" + t.Key, Icon: "layers", Title: t.Name, Text: t.About, Compact: true, Search: searchText("service", t.Key, t.Name, t.About)})
 						}
 					}
 				}
 			</div>
-			@ui.EmptyState(ui.EmptyProps{Icon: "search", Title: "Nothing matches", Text: "A service that is not listed can be run from its own Compose file.", Link: "Use your own Compose file", LinkHref: v.base() + "/services/new?template=" + db.TemplateCustom, Attrs: templ.Attributes{"data-filter-empty": "kinds", "hidden": true}})
+			@ui.EmptyState(ui.EmptyProps{Icon: "search", Title: "Nothing matches", Text: "A service that is not listed can be run from its own Compose file.", Link: "Use your own Compose file", LinkHref: v.Path() + "/service/new?template=" + db.TemplateCustom, Attrs: templ.Attributes{"data-filter-empty": "kinds", "hidden": true}})
 		</div>
 	}
 }

@@ -46,21 +46,21 @@ func bitbucketPRBody(state, source, commit string, number string) string {
 // would: the Keys page lists it hidden, and Show asks for it.
 func (a *app) webhookSecret(appID string) string {
 	a.t.Helper()
-	res, _ := a.post("/keys/tokens", "/apps/"+appID+"/webhook-secret", nil)
+	res, _ := a.post("/keys/tokens", a.appPath(appID)+"/webhook-secret", nil)
 	wantRedirect(a.t, res, "/keys/tokens")
 	_, page := a.get("/keys/tokens")
-	if !strings.Contains(page, "/webhooks/git/"+appID) || !strings.Contains(page, `hx-get="/apps/`+appID+`/webhook-secret"`) {
+	if !strings.Contains(page, "/webhooks/git/"+appID) || !strings.Contains(page, `hx-get="`+a.appPath(appID)+`/webhook-secret"`) {
 		a.t.Fatal("the Keys page does not list the webhook address with a way to show its secret")
 	}
 	if regexp.MustCompile(`[0-9a-f]{48}`).MatchString(page) {
 		a.t.Fatal("the Keys page holds a webhook secret that was not asked for")
 	}
-	_, cell := a.get("/apps/" + appID + "/webhook-secret")
+	_, cell := a.get(a.appPath(appID) + "/webhook-secret")
 	m := regexp.MustCompile(`data-copy="([0-9a-f]{48})"`).FindStringSubmatch(cell)
 	if m == nil {
 		a.t.Fatal("Show does not answer with the webhook secret")
 	}
-	if _, hidden := a.get("/apps/" + appID + "/webhook-secret?hide=1"); strings.Contains(hidden, m[1]) {
+	if _, hidden := a.get(a.appPath(appID) + "/webhook-secret?hide=1"); strings.Contains(hidden, m[1]) {
 		a.t.Fatal("Hide answers with the secret")
 	}
 	return m[1]
@@ -149,8 +149,8 @@ func TestPreviewsFromGitLabAndBitbucket(t *testing.T) {
 	ctx := context.Background()
 	projectID, env := a.project("Shop")
 	app := a.newGitApp(projectID, env, "web", nil)
-	settings, hookPath := "/apps/"+app.ID+"/settings", "/webhooks/git/"+app.ID
-	res, _ := a.post(settings, "/apps/"+app.ID+"/previews", url.Values{"previews": {"1"}, "preview_domain": {"preview.example.com"}})
+	settings, hookPath := a.appPath(app.ID)+"/settings", "/webhooks/git/"+app.ID
+	res, _ := a.post(settings, a.appPath(app.ID)+"/previews", url.Values{"previews": {"1"}, "preview_domain": {"preview.example.com"}})
 	wantRedirect(t, res, settings+"#previews")
 	secret := a.webhookSecret(app.ID)
 	gitlab := map[string]string{"X-Gitlab-Token": secret}

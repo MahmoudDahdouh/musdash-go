@@ -67,7 +67,7 @@ templ ProjectList(s ui.Shell, projects []db.Project, f ui.Form) {
 func projectTabs(p db.Project, envID string) []ui.Tab {
 	resources := "/projects/" + p.ID
 	if envID != "" {
-		resources += "/e/" + envID
+		resources = EnvPath(p.ID, envID)
 	}
 	return []ui.Tab{
 		{Key: "resources", Label: "Resources", Href: resources, Icon: "dashboard"},
@@ -80,7 +80,7 @@ templ ProjectShow(s ui.Shell, p db.Project, env db.Environment, res Resources) {
 	@ui.Layout(s) {
 		@ui.PageHeader(p.Name, p.Description) {
 			if res.Count() > 0 {
-				@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				@ui.LinkButton(EnvPath(p.ID, env.ID)+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
 					Add resource
 				}
 			}
@@ -88,7 +88,7 @@ templ ProjectShow(s ui.Shell, p db.Project, env db.Environment, res Resources) {
 		@ui.Tabs(projectTabs(p, env.ID), "resources")
 		if res.Count() == 0 {
 			@ui.EmptyState(ui.EmptyProps{Icon: "box", Title: "Nothing is in " + env.Name + " yet", Text: "Add an app from a Git repository or a Docker image, a database, or a ready-made service such as WordPress or n8n."}) {
-				@ui.LinkButton("/projects/"+p.ID+"/e/"+env.ID+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
+				@ui.LinkButton(EnvPath(p.ID, env.ID)+"/new", ui.ButtonProps{Variant: ui.Primary, Icon: "plus"}) {
 					Add resource
 				}
 			}
@@ -138,12 +138,12 @@ templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, 
 				<div class="rows">
 					for _, e := range envs {
 						<div class="row">
-							<a class="fact min-w-0 flex-1 truncate" href={ templ.SafeURL("/projects/" + p.ID + "/e/" + e.ID) }>{ e.Name }</a>
+							<a class="fact min-w-0 flex-1 truncate" href={ templ.SafeURL(EnvPath(p.ID, e.ID)) }>{ e.Name }</a>
 							if len(envs) > 1 {
 								@ui.Confirm(ui.ConfirmProps{
 									ID:      "delete-env-" + e.ID,
 									Title:   "Delete environment",
-									Action:  "/environments/" + e.ID + "/delete",
+									Action:  EnvPath(p.ID, e.ID) + "/delete",
 									CSRF:    s.CSRF,
 									Match:   e.Name,
 									Submit:  "Delete environment",
@@ -174,7 +174,7 @@ templ ProjectSettings(s ui.Shell, p db.Project, envs []db.Environment, details, 
 						@ui.Icon("chevron-right", "text-ink-mute")
 					</a>
 					for _, e := range envs {
-						<a class="row" href={ templ.SafeURL("/environments/" + e.ID + "/variables") }>
+						<a class="row" href={ templ.SafeURL(EnvPath(p.ID, e.ID) + "/variables") }>
 							<span class="min-w-0 flex-1">Only <span class="fact">{ e.Name }</span></span>
 							@ui.Icon("chevron-right", "text-ink-mute")
 						</a>

@@ -42,11 +42,11 @@ func (a *app) newApp(projectID string, env db.Environment, name string, deploy b
 	for k, v := range extra {
 		form[k] = v
 	}
-	res, body := a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
+	res, body := a.post("/projects/"+projectID+"/env/"+env.ID+"/app/new", "/projects/"+projectID+"/env/"+env.ID+"/app", form)
 	if res.StatusCode != http.StatusSeeOther {
 		a.t.Fatalf("create app: %d\n%s", res.StatusCode, body)
 	}
-	id := strings.Split(strings.TrimPrefix(res.Header.Get("Location"), "/apps/"), "/")[0]
+	id := createdID(res, db.KindApp)
 	if deploy {
 		a.waitDeployed(id)
 	}
@@ -79,7 +79,7 @@ func TestCreateAndDeployApp(t *testing.T) {
 	projectID, env := a.project("Shop")
 
 	// The form suggests a generated address that needs no DNS.
-	_, form := a.get("/projects/" + projectID + "/e/" + env.ID + "/apps/new")
+	_, form := a.get("/projects/" + projectID + "/env/" + env.ID + "/app/new")
 	m := regexp.MustCompile(`name="domain"[^>]*value="([a-z2-7]{8}\.127\.0\.0\.1\.sslip\.io)"`).FindStringSubmatch(form)
 	if m == nil {
 		t.Fatal("no generated domain in the form")
@@ -91,7 +91,7 @@ func TestCreateAndDeployApp(t *testing.T) {
 		t.Fatalf("deployment: %s %s", dep.Status, dep.Error)
 	}
 
-	res, body := a.get("/apps/" + appID)
+	res, body := a.get(a.appPath(appID))
 	wantStatus(t, res, http.StatusOK)
 	for _, want := range []string{"Running", "nginx:alpine", m[1], "web:80", "Redeploy"} {
 		if !strings.Contains(body, want) {
@@ -103,18 +103,18 @@ func TestCreateAndDeployApp(t *testing.T) {
 		t.Fatalf("routes: %s", a.routesFile())
 	}
 
-	_, list := a.get("/projects/" + projectID + "/e/" + env.ID)
+	_, list := a.get("/projects/" + projectID + "/env/" + env.ID)
 	if !strings.Contains(list, `data-state="running"`) {
 		t.Fatal("the project page does not show the app as running")
 	}
 
 	// The deployment page and its live log.
-	res, page := a.get("/apps/" + appID + "/deployments/" + dep.ID)
+	res, page := a.get(a.appPath(appID) + "/deployments/" + dep.ID)
 	wantStatus(t, res, http.StatusOK)
 	if !strings.Contains(page, "sse-connect") || !strings.Contains(page, "Succeeded") {
 		t.Fatal("deployment page is missing the log stream or status")
 	}
-	res, stream := a.get("/apps/" + appID + "/deployments/" + dep.ID + "/stream")
+	res, stream := a.get(a.appPath(appID) + "/deployments/" + dep.ID + "/stream")
 	if ct := res.Header.Get("Content-Type"); ct != "text/event-stream" {
 		t.Fatalf("stream content type %q", ct)
 	}
@@ -122,7 +122,7 @@ func TestCreateAndDeployApp(t *testing.T) {
 		t.Fatalf("stream:\n%s", stream)
 	}
 	// A finished deployment's status fragment no longer polls.
-	_, frag := a.get("/apps/" + appID + "/deployments/" + dep.ID + "/status")
+	_, frag := a.get(a.appPath(appID) + "/deployments/" + dep.ID + "/status")
 	if strings.Contains(frag, "hx-trigger") {
 		t.Fatal("a finished deployment still polls for status")
 	}
@@ -153,7 +153,7 @@ func TestAppFormValidation(t *testing.T) {
 		for k, v := range c.field {
 			form[k] = v
 		}
-		res, body := a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
+		res, body := a.post("/projects/"+projectID+"/env/"+env.ID+"/app/new", "/projects/"+projectID+"/env/"+env.ID+"/app", form)
 		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, c.want) {
 			t.Errorf("%v: status %d, want 422 with %q", c.field, res.StatusCode, c.want)
 		}
@@ -169,7 +169,7 @@ func TestAppSettings(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 	appID := a.newApp(projectID, env, "web", false, nil)
-	page := "/apps/" + appID + "/settings"
+	page := a.appPath(appID) + "/settings"
 	valid := func() url.Values {
 		return url.Values{"name": {"web"}, "image": {"nginx:alpine"}, "port": {"80"}, "health_timeout": {"60"}}
 	}
@@ -214,7 +214,7 @@ func TestAppEnvironmentIsSealed(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 	appID := a.newApp(projectID, env, "web", false, nil)
-	page := "/apps/" + appID + "/environment"
+	page := a.appPath(appID) + "/environment"
 
 	res, body := a.post(page, page, url.Values{"vars": {"GOOD=1\nnot a variable\n"}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
@@ -257,7 +257,7 @@ func TestAppStorage(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 	appID := a.newApp(projectID, env, "web", false, nil)
-	page := "/apps/" + appID + "/storage"
+	page := a.appPath(appID) + "/storage"
 
 	bad := []struct {
 		form url.Values
@@ -315,12 +315,12 @@ func TestAppDomains(t *testing.T) {
 	a.fake.PutFile(a.cfg.ProxyPIDPath(), "4242\n")
 	projectID, env := a.project("Shop")
 	appID := a.newApp(projectID, env, "web", true, nil)
-	page := "/apps/" + appID + "/domains"
+	page := a.appPath(appID) + "/domains"
 
-	res, _ := a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {"Shop.Example.com"}, "tls": {"1"}, "redirect_www": {"1"}})
+	res, _ := a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"Shop.Example.com"}, "tls": {"1"}, "redirect_www": {"1"}})
 	wantRedirect(t, res, page)
 	// A generated name never gets HTTPS, whatever the box says.
-	res, _ = a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {"abc.203.0.113.7.sslip.io"}, "tls": {"1"}})
+	res, _ = a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"abc.203.0.113.7.sslip.io"}, "tls": {"1"}})
 	wantRedirect(t, res, page)
 
 	doms, _ := a.db.ListDomains(context.Background(), db.KindApp, appID)
@@ -343,12 +343,12 @@ func TestAppDomains(t *testing.T) {
 		t.Fatalf("the proxy was reloaded %d times", reloads)
 	}
 
-	res, body := a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {"shop.example.com"}})
+	res, body := a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"shop.example.com"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "already routed") {
 		t.Error("a duplicate domain was accepted")
 	}
 
-	res, _ = a.post(page, "/apps/"+appID+"/domains/"+doms[0].ID+"/delete", nil)
+	res, _ = a.post(page, a.appPath(appID)+"/domains/"+doms[0].ID+"/delete", nil)
 	wantRedirect(t, res, page)
 	if strings.Contains(a.routesFile(), "shop.example.com") {
 		t.Fatal("a removed domain is still routed")
@@ -362,8 +362,8 @@ func TestStopRedeployAndDeleteApp(t *testing.T) {
 	appID := a.newApp(projectID, env, "web", true, url.Values{"domain": {"shop.example.com"}})
 	ctx := context.Background()
 
-	res, _ := a.post("/apps/"+appID, "/apps/"+appID+"/stop", nil)
-	wantRedirect(t, res, "/apps/"+appID)
+	res, _ := a.post(a.appPath(appID), a.appPath(appID)+"/stop", nil)
+	wantRedirect(t, res, a.appPath(appID))
 	if got, _ := a.db.AppByID(ctx, appID); got.Status != db.AppStopped || got.Container != "" {
 		t.Fatalf("after stop: %+v", got)
 	}
@@ -371,7 +371,7 @@ func TestStopRedeployAndDeleteApp(t *testing.T) {
 		t.Fatal("a stopped app is still routed")
 	}
 
-	res, _ = a.post("/apps/"+appID, "/apps/"+appID+"/deploy", nil)
+	res, _ = a.post(a.appPath(appID), a.appPath(appID)+"/deploy", nil)
 	wantStatus(t, res, http.StatusSeeOther)
 	a.waitDeployed(appID)
 	var jobs int
@@ -388,12 +388,12 @@ func TestStopRedeployAndDeleteApp(t *testing.T) {
 		t.Fatal("a project with an app in it was deleted")
 	}
 
-	appSettings := "/apps/" + appID + "/settings"
-	res, _ = a.post(appSettings, "/apps/"+appID+"/delete", url.Values{"confirm": {"wrong"}})
+	appSettings := a.appPath(appID) + "/settings"
+	res, _ = a.post(appSettings, a.appPath(appID)+"/delete", url.Values{"confirm": {"wrong"}})
 	wantRedirect(t, res, appSettings)
-	res, _ = a.post(appSettings, "/apps/"+appID+"/delete", url.Values{"confirm": {"web"}})
-	wantRedirect(t, res, "/projects/"+projectID+"/e/"+env.ID)
-	res, _ = a.get("/apps/" + appID)
+	res, _ = a.post(appSettings, a.appPath(appID)+"/delete", url.Values{"confirm": {"web"}})
+	wantRedirect(t, res, "/projects/"+projectID+"/env/"+env.ID)
+	res, _ = a.get(a.appPath(appID))
 	wantStatus(t, res, http.StatusNotFound)
 
 	res, _ = a.post(settings, "/projects/"+projectID+"/delete", url.Values{"confirm": {"Shop"}})
@@ -406,15 +406,15 @@ func TestRuntimeLogStreamEscapesOutput(t *testing.T) {
 	projectID, env := a.project("Shop")
 
 	idle := a.newApp(projectID, env, "idle", false, nil)
-	res, _ := a.get("/apps/" + idle + "/logs/stream")
+	res, _ := a.get(a.appPath(idle) + "/logs/stream")
 	wantStatus(t, res, http.StatusConflict)
-	_, page := a.get("/apps/" + idle + "/logs")
+	_, page := a.get(a.appPath(idle) + "/logs")
 	if !strings.Contains(page, "Nothing is running") {
 		t.Fatal("no empty state for an app that is not running")
 	}
 
 	appID := a.newApp(projectID, env, "web", true, nil)
-	res, stream := a.get("/apps/" + appID + "/logs/stream")
+	res, stream := a.get(a.appPath(appID) + "/logs/stream")
 	wantStatus(t, res, http.StatusOK)
 	if !strings.Contains(stream, "data: listening on :80") {
 		t.Fatalf("stream:\n%s", stream)
@@ -439,7 +439,11 @@ func TestOtherTeamsAppIsNotFound(t *testing.T) {
 	}
 	dep, _ := a.db.CreateDeployment(ctx, db.Deployment{AppID: other.ID, Image: "nginx"})
 	dom, _ := a.db.AddDomain(ctx, "otherteam", "othersrv", db.Domain{ResourceKind: db.KindApp, ResourceID: other.ID, Host: "secret.example.com", TLS: true})
-	base := "/apps/" + other.ID
+	base := a.appPath(other.ID)
+	// The short address would say where another team's app is.
+	if res, _ := a.get("/apps/" + other.ID); res.StatusCode != http.StatusNotFound {
+		t.Errorf("the short address of another team's app: %d", res.StatusCode)
+	}
 
 	for _, path := range []string{"", "/status", "/deployments", "/deployments/" + dep.ID, "/deployments/" + dep.ID + "/status",
 		"/deployments/" + dep.ID + "/stream", "/logs", "/logs/stream", "/environment", "/storage", "/settings"} {
@@ -468,10 +472,10 @@ func TestOtherTeamsAppIsNotFound(t *testing.T) {
 	// A deployment id from another app does not open under our own app.
 	projectID, env := a.project("Mine")
 	mine := a.newApp(projectID, env, "web", false, nil)
-	res, _ := a.get("/apps/" + mine + "/deployments/" + dep.ID)
+	res, _ := a.get(a.appPath(mine) + "/deployments/" + dep.ID)
 	wantStatus(t, res, http.StatusNotFound)
 	// Nor can an app be created in another team's environment.
-	res, _ = a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+envs[0].ID+"/apps",
+	res, _ = a.post("/projects/"+projectID+"/env/"+env.ID+"/app/new", "/projects/"+projectID+"/env/"+envs[0].ID+"/app",
 		url.Values{"name": {"x"}, "image": {"nginx"}, "port": {"80"}})
 	wantStatus(t, res, http.StatusNotFound)
 
@@ -508,7 +512,7 @@ func TestServersAndInstanceSettings(t *testing.T) {
 
 	// New apps are now offered an address on the server's public IP.
 	projectID, env := a.project("Shop")
-	_, form := a.get("/projects/" + projectID + "/e/" + env.ID + "/apps/new")
+	_, form := a.get("/projects/" + projectID + "/env/" + env.ID + "/app/new")
 	if !strings.Contains(form, ".203.0.113.7.sslip.io") {
 		t.Fatal("the generated domain does not use the server's address")
 	}
@@ -528,8 +532,8 @@ func TestServersAndInstanceSettings(t *testing.T) {
 	}
 	// The dashboard's own domain cannot also be given to an app.
 	appID := a.newApp(projectID, env, "web", false, nil)
-	page := "/apps/" + appID + "/settings"
-	res, body = a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {"dash.example.com"}})
+	page := a.appPath(appID) + "/settings"
+	res, body = a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"dash.example.com"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "dashboard&#39;s own address") {
 		t.Errorf("the dashboard domain was given to an app: %d", res.StatusCode)
 	}
@@ -570,22 +574,22 @@ func TestDomainLimits(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 	appID := a.newApp(projectID, env, "web", false, nil)
-	page := "/apps/" + appID + "/domains"
+	page := a.appPath(appID) + "/domains"
 
 	// Valid on its own, but too long once "www." goes in front.
 	long := strings.Repeat("a", 60) + "." + strings.Repeat("b", 60) + "." + strings.Repeat("c", 60) + "." + strings.Repeat("d", 60) + ".example"
-	res, body := a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {long}, "redirect_www": {"1"}})
+	res, body := a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {long}, "redirect_www": {"1"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "too long to also carry a www form") {
 		t.Fatalf("a name too long for its www form was accepted: %d", res.StatusCode)
 	}
-	res, _ = a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {long}})
+	res, _ = a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {long}})
 	wantRedirect(t, res, page)
 
 	for i := 1; i < maxDomains; i++ {
-		res, _ := a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {"d" + strconv.Itoa(i) + ".example.com"}})
+		res, _ := a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"d" + strconv.Itoa(i) + ".example.com"}})
 		wantRedirect(t, res, page)
 	}
-	res, body = a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {"one-too-many.example.com"}})
+	res, body = a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"one-too-many.example.com"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "up to 20 domains") {
 		t.Fatalf("the domain limit was not enforced: %d", res.StatusCode)
 	}
@@ -596,7 +600,7 @@ func TestCPULimitRejectsNaN(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 	appID := a.newApp(projectID, env, "web", false, nil)
-	page := "/apps/" + appID + "/settings"
+	page := a.appPath(appID) + "/settings"
 	for _, v := range []string{"NaN", "Inf", "-Inf", "1e400"} {
 		res, _ := a.post(page, page, url.Values{"name": {"web"}, "image": {"nginx"}, "port": {"80"}, "health_timeout": {"60"}, "cpus": {v}})
 		if res.StatusCode != http.StatusUnprocessableEntity {
@@ -630,13 +634,13 @@ func TestAppDomainPathsAndPasswords(t *testing.T) {
 	projectID, env := a.project("Shop")
 	web := a.newApp(projectID, env, "web", true, nil)
 	api := a.newApp(projectID, env, "api", true, nil)
-	webPage, apiPage := "/apps/"+web+"/domains", "/apps/"+api+"/domains"
+	webPage, apiPage := a.appPath(web)+"/domains", a.appPath(api)+"/domains"
 	const password = "correct horse battery"
 
-	res, _ := a.post(webPage, "/apps/"+web+"/domains", url.Values{"host": {"shop.example.com"}, "tls": {"1"}})
+	res, _ := a.post(webPage, a.appPath(web)+"/domains", url.Values{"host": {"shop.example.com"}, "tls": {"1"}})
 	wantRedirect(t, res, webPage)
 	// Typed loosely: no leading slash, one at the end.
-	res, body := a.post(apiPage, "/apps/"+api+"/domains", url.Values{"host": {"shop.example.com"}, "path": {"api/"}, "strip_prefix": {"1"}, "tls": {"1"},
+	res, body := a.post(apiPage, a.appPath(api)+"/domains", url.Values{"host": {"shop.example.com"}, "path": {"api/"}, "strip_prefix": {"1"}, "tls": {"1"},
 		"auth_user": {"ada"}, "auth_password": {password}})
 	wantRedirect(t, res, apiPage)
 
@@ -670,7 +674,7 @@ func TestAppDomainPathsAndPasswords(t *testing.T) {
 	}
 
 	// The pages show that a password is asked for, never the hash.
-	for _, page := range []string{apiPage, "/apps/" + api} {
+	for _, page := range []string{apiPage, a.appPath(api)} {
 		_, body = a.get(page)
 		if !strings.Contains(body, "shop.example.com/api") || !strings.Contains(body, "Password") {
 			t.Errorf("%s does not show the path and the password", page)
@@ -694,7 +698,7 @@ func TestAppDomainPathsAndPasswords(t *testing.T) {
 		"a user with a line feed": {"host": {"x.example.com"}, "auth_user": {"a\nb"}, "auth_password": {password}},
 	}
 	for name, form := range bad {
-		res, body := a.post(webPage, "/apps/"+web+"/domains", form)
+		res, body := a.post(webPage, a.appPath(web)+"/domains", form)
 		if res.StatusCode != http.StatusUnprocessableEntity {
 			t.Errorf("%s: %d", name, res.StatusCode)
 		}
@@ -710,7 +714,7 @@ func TestAppDomainPathsAndPasswords(t *testing.T) {
 	// and the dashboard's own address has no paths to give away.
 	res, _ = a.post("/settings", "/settings", url.Values{"instance_domain": {"dash.example.com"}, "acme_email": {"ops@example.com"}})
 	wantRedirect(t, res, "/settings")
-	res, body = a.post(webPage, "/apps/"+web+"/domains", url.Values{"host": {"dash.example.com"}, "path": {"/app"}})
+	res, body = a.post(webPage, a.appPath(web)+"/domains", url.Values{"host": {"dash.example.com"}, "path": {"/app"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "dashboard&#39;s own address") {
 		t.Errorf("a path of the dashboard's domain was given to an app: %d", res.StatusCode)
 	}
@@ -736,7 +740,7 @@ func TestRollBackFromTheDeploymentPage(t *testing.T) {
 		return db.Deployment{}
 	}
 	first := wait()
-	res, _ := a.post("/apps/"+appID, "/apps/"+appID+"/deploy", nil)
+	res, _ := a.post(a.appPath(appID), a.appPath(appID)+"/deploy", nil)
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("deploy: %d", res.StatusCode)
 	}
@@ -746,29 +750,29 @@ func TestRollBackFromTheDeploymentPage(t *testing.T) {
 	}
 
 	// Offered on an earlier deployment, not on the one that is serving.
-	_, body := a.get("/apps/" + appID + "/deployments/" + first.ID)
+	_, body := a.get(a.appPath(appID) + "/deployments/" + first.ID)
 	if !strings.Contains(body, "/deployments/"+first.ID+"/rollback") {
 		t.Fatal("an earlier deployment does not offer a rollback")
 	}
-	_, body = a.get("/apps/" + appID + "/deployments/" + second.ID)
+	_, body = a.get(a.appPath(appID) + "/deployments/" + second.ID)
 	if strings.Contains(body, "/rollback") {
 		t.Fatal("the serving deployment offers a rollback to itself")
 	}
-	_, body = a.get("/apps/" + appID + "/deployments")
+	_, body = a.get(a.appPath(appID) + "/deployments")
 	if strings.Count(body, "Serving") != 1 {
 		t.Fatalf("the list marks %d deployments as serving", strings.Count(body, "Serving"))
 	}
 
-	page := "/apps/" + appID + "/deployments/" + first.ID
+	page := a.appPath(appID) + "/deployments/" + first.ID
 	res, _ = a.post(page, page+"/rollback", nil)
-	if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(res.Header.Get("Location"), "/apps/"+appID+"/deployments/") {
+	if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(res.Header.Get("Location"), a.appPath(appID)+"/deployments/") {
 		t.Fatalf("rollback: %d to %q", res.StatusCode, res.Header.Get("Location"))
 	}
 	back := wait()
 	if back.Status != db.DeploySuccess || back.RollbackOf != first.ID || back.KeptImage != first.KeptImage {
 		t.Fatalf("the rollback: %+v", back)
 	}
-	_, body = a.get("/apps/" + appID + "/deployments/" + back.ID)
+	_, body = a.get(a.appPath(appID) + "/deployments/" + back.ID)
 	if !strings.Contains(body, "A rollback") || !strings.Contains(body, "/deployments/"+first.ID) {
 		t.Error("the rollback's page does not say what it went back to")
 	}
@@ -780,7 +784,7 @@ func TestRollBackFromTheDeploymentPage(t *testing.T) {
 
 	// A deployment that failed has nothing to go back to.
 	a.db.Exec(`UPDATE deployments SET status = 'failed' WHERE id = ?`, second.ID)
-	failed := "/apps/" + appID + "/deployments/" + second.ID
+	failed := a.appPath(appID) + "/deployments/" + second.ID
 	res, _ = a.post(failed, failed+"/rollback", nil)
 	wantRedirect(t, res, failed)
 	if list, _ := a.db.ListDeployments(ctx, appID, 10); len(list) != 3 {
@@ -798,7 +802,7 @@ func TestRollBackFromTheDeploymentPage(t *testing.T) {
 	}
 	theirs, _ := a.db.CreateDeployment(ctx, db.Deployment{AppID: other.ID, Image: "nginx"})
 	a.db.Exec(`UPDATE deployments SET status = 'success', kept_image = ? WHERE id = ?`, "musdash/"+other.ID+":d-"+theirs.ID, theirs.ID)
-	for _, path := range []string{"/apps/" + other.ID + "/deployments/" + theirs.ID + "/rollback", "/apps/" + appID + "/deployments/" + theirs.ID + "/rollback"} {
+	for _, path := range []string{a.appPath(other.ID) + "/deployments/" + theirs.ID + "/rollback", a.appPath(appID) + "/deployments/" + theirs.ID + "/rollback"} {
 		if res, _ := a.post(page, path, nil); res.StatusCode != http.StatusNotFound {
 			t.Errorf("%s: %d, want 404", path, res.StatusCode)
 		}

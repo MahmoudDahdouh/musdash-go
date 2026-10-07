@@ -150,10 +150,10 @@ templ historyCard(h History) {
 templ AppMetrics(s ui.Shell, v AppView, h History) {
 	@appFrame(s, v, "metrics") {
 		if v.App.Container == "" {
-			@ui.EmptyState(ui.EmptyProps{Icon: "chart", Title: "Nothing is running", Text: "What the app uses appears here once it is deployed.", Link: "See its deployments", LinkHref: v.base() + "/deployments"})
+			@ui.EmptyState(ui.EmptyProps{Icon: "chart", Title: "Nothing is running", Text: "What the app uses appears here once it is deployed.", Link: "See its deployments", LinkHref: v.Path() + "/deployments"})
 		} else {
 			<div class="grid max-w-5xl gap-6">
-				@UsagePending(v.base() + "/metrics/now")
+				@UsagePending(v.Path() + "/metrics/now")
 				@historyCard(h)
 			</div>
 		}
@@ -166,7 +166,7 @@ templ DatabaseMetrics(s ui.Shell, v DatabaseView, h History) {
 			@ui.EmptyState(ui.EmptyProps{Icon: "chart", Title: "Nothing is running", Text: "What the database uses appears here once it is started."})
 		} else {
 			<div class="grid max-w-5xl gap-6">
-				@UsagePending(v.base() + "/metrics/now")
+				@UsagePending(v.Path() + "/metrics/now")
 				@historyCard(h)
 			</div>
 		}
@@ -179,7 +179,7 @@ templ ServiceMetrics(s ui.Shell, v ServiceView, h History) {
 			@ui.EmptyState(ui.EmptyProps{Icon: "chart", Title: "Nothing is running", Text: "What the service uses appears here once it is deployed."})
 		} else {
 			<div class="grid max-w-5xl gap-6">
-				@UsagePending(v.base() + "/metrics/now")
+				@UsagePending(v.Path() + "/metrics/now")
 				@historyCard(h)
 			</div>
 		}

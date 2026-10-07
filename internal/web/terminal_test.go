@@ -289,9 +289,9 @@ func terminalApp(t *testing.T) (a *app, appID, csrf string, st *started) {
 		st.lines = append(st.lines, line)
 		return term, nil
 	}
-	_, page := a.get("/apps/" + appID + "/terminal")
+	_, page := a.get(a.appPath(appID) + "/terminal")
 	m := regexp.MustCompile(`data-csrf="([^"]+)"`).FindStringSubmatch(page)
-	if m == nil || !strings.Contains(page, `data-terminal="/apps/`+appID+`/terminal/ws"`) || !strings.Contains(page, "/static/terminal.js?v=") {
+	if m == nil || !strings.Contains(page, `data-terminal="`+a.appPath(appID)+`/terminal/ws"`) || !strings.Contains(page, "/static/terminal.js?v=") {
 		t.Fatalf("the terminal page:\n%s", page)
 	}
 	return a, appID, m[1], st
@@ -305,7 +305,7 @@ func hi(csrf string) string {
 func TestTerminal(t *testing.T) {
 	a, appID, csrf, st := terminalApp(t)
 	app, _ := a.db.AppByID(context.Background(), appID)
-	path := "/apps/" + appID + "/terminal/ws"
+	path := a.appPath(appID) + "/terminal/ws"
 
 	res, ws := a.dialWS(path, nil)
 	if ws == nil {
@@ -380,7 +380,7 @@ func TestTerminal(t *testing.T) {
 
 func TestTerminalIsRefused(t *testing.T) {
 	a, appID, csrf, st := terminalApp(t)
-	path := "/apps/" + appID + "/terminal/ws"
+	path := a.appPath(appID) + "/terminal/ws"
 	started := st.count
 
 	// Before the connection is taken over.
@@ -461,7 +461,7 @@ func TestTerminalIsRefused(t *testing.T) {
 func TestTerminalLimitsAndOtherResources(t *testing.T) {
 	a, appID, csrf, st := terminalApp(t)
 	ctx := context.Background()
-	path := "/apps/" + appID + "/terminal/ws"
+	path := a.appPath(appID) + "/terminal/ws"
 
 	// Only so many at once.
 	var open []*wsClient
@@ -488,10 +488,10 @@ func TestTerminalLimitsAndOtherResources(t *testing.T) {
 	// Nothing is running: nothing to open a terminal in.
 	projectID, env := a.project("Other")
 	idle := a.newApp(projectID, env, "idle", false, nil)
-	if _, page := a.get("/apps/" + idle + "/terminal"); !strings.Contains(page, "Nothing is running") || strings.Contains(page, "data-terminal") {
+	if _, page := a.get(a.appPath(idle) + "/terminal"); !strings.Contains(page, "Nothing is running") || strings.Contains(page, "data-terminal") {
 		t.Fatal("an app that is not running offers a terminal")
 	}
-	if res, ws := a.dialWS("/apps/"+idle+"/terminal/ws", nil); ws != nil || res.StatusCode != http.StatusConflict {
+	if res, ws := a.dialWS(a.appPath(idle)+"/terminal/ws", nil); ws != nil || res.StatusCode != http.StatusConflict {
 		t.Fatalf("a terminal in nothing: %d", res.StatusCode)
 	}
 
@@ -502,7 +502,7 @@ func TestTerminalLimitsAndOtherResources(t *testing.T) {
 	envs, _ := a.db.ListEnvironments(ctx, p.ID)
 	other, _ := a.db.CreateApp(ctx, "otherteam", db.App{EnvironmentID: envs[0].ID, ServerID: "othersrv", Name: "secret-app", Image: "nginx", Port: 80})
 	a.db.SetAppRuntime(ctx, other.ID, db.AppRunning, "musdash-secret", 20009, "nginx")
-	for _, path := range []string{"/apps/" + other.ID + "/terminal", "/databases/" + other.ID + "/terminal", "/services/" + other.ID + "/terminal"} {
+	for _, path := range []string{a.appPath(other.ID) + "/terminal", a.databasePath(other.ID) + "/terminal", a.servicePath(other.ID) + "/terminal"} {
 		if res, _ := a.get(path); res.StatusCode != http.StatusNotFound {
 			t.Errorf("GET %s: %d, want 404", path, res.StatusCode)
 		}
@@ -517,7 +517,7 @@ func TestTerminalThatCannotBeOpened(t *testing.T) {
 	a.fake.Term = func(string, runner.Cmd, int, int) (runner.Terminal, error) {
 		return nil, errors.New("docker: permission denied while trying to connect to /var/run/docker.sock")
 	}
-	_, ws := a.dialWS("/apps/"+appID+"/terminal/ws", nil)
+	_, ws := a.dialWS(a.appPath(appID)+"/terminal/ws", nil)
 	ws.text(hi(csrf))
 	note := string(ws.until(wsText))
 	// The page is told that it failed, not what the server said.
@@ -560,7 +560,7 @@ func TestServiceTerminalIsOnlyInItsOwnContainers(t *testing.T) {
 		started = append(started, line)
 		return newFakeTerminal(), nil
 	}
-	base := "/services/" + svc.ID + "/terminal"
+	base := a.servicePath(svc.ID) + "/terminal"
 	_, page := a.get(base + "?container=stack-db-1")
 	m := regexp.MustCompile(`data-csrf="([^"]+)"`).FindStringSubmatch(page)
 	if m == nil || !strings.Contains(page, `data-terminal="`+base+`/ws?container=stack-db-1"`) || !strings.Contains(page, "stack-web-1") {
@@ -604,7 +604,7 @@ func TestTerminalStuckTypingIsStillClosed(t *testing.T) {
 		term.deaf = true
 		return term
 	}
-	_, ws := a.dialWS("/apps/"+appID+"/terminal/ws", nil)
+	_, ws := a.dialWS(a.appPath(appID)+"/terminal/ws", nil)
 	ws.text(hi(csrf))
 	waitFor(t, "a terminal", func() bool { return st.count() == 1 })
 	ws.binary("typed into a program that does not read")

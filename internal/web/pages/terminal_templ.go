@@ -126,7 +126,7 @@ func AppTerminal(s ui.Shell, v AppView) templ.Component {
 			}
 			ctx = templ.InitializeContext(ctx)
 			if v.App.Container == "" {
-				templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "terminal", Title: "Nothing is running", Text: "A terminal opens in the app's running container. Deploy the app first.", Link: "See its deployments", LinkHref: v.base() + "/deployments"}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "terminal", Title: "Nothing is running", Text: "A terminal opens in the app's running container. Deploy the app first.", Link: "See its deployments", LinkHref: v.Path() + "/deployments"}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -135,7 +135,7 @@ func AppTerminal(s ui.Shell, v AppView) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = terminalPanel(v.base()+"/terminal/ws", s.CSRF).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = terminalPanel(v.Path()+"/terminal/ws", s.CSRF).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -197,7 +197,7 @@ func DatabaseTerminal(s ui.Shell, v DatabaseView) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = terminalPanel(v.base()+"/terminal/ws", s.CSRF).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = terminalPanel(v.Path()+"/terminal/ws", s.CSRF).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -289,7 +289,7 @@ func ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen stri
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var13 templ.SafeURL
-						templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/terminal?container=" + name))
+						templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/terminal?container=" + name))
 						if templ_7745c5c3_Err != nil {
 							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/terminal.templ`, Line: 74, Col: 70}
 						}
@@ -330,7 +330,7 @@ func ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen stri
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = terminalPanel(v.base()+"/terminal/ws?container="+chosen, s.CSRF).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = terminalPanel(v.Path()+"/terminal/ws?container="+chosen, s.CSRF).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

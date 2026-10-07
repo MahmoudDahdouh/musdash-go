@@ -108,7 +108,7 @@ func TestServersPage(t *testing.T) {
 	// Nothing is deployed to a server that was never checked.
 	projectID, env := a.project("Shop")
 	form := url.Values{"name": {"api"}, "image": {"nginx:alpine"}, "port": {"80"}, "server": {server.ID}}
-	res, body := a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
+	res, body := a.post("/projects/"+projectID+"/env/"+env.ID+"/app/new", "/projects/"+projectID+"/env/"+env.ID+"/app", form)
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "has not been checked yet") {
 		t.Fatalf("an app on an unchecked server: %d", res.StatusCode)
 	}
@@ -129,7 +129,7 @@ func TestServersPage(t *testing.T) {
 	// With two servers the forms ask which one, and an app goes where it
 	// was sent, with an address built from that server's.
 	a.db.Exec(`UPDATE servers SET ip = '198.51.100.20' WHERE id = ?`, server.ID)
-	_, newForm := a.get("/projects/" + projectID + "/e/" + env.ID + "/apps/new")
+	_, newForm := a.get("/projects/" + projectID + "/env/" + env.ID + "/app/new")
 	if !strings.Contains(newForm, `name="server"`) || !strings.Contains(newForm, "Frankfurt") || !strings.Contains(newForm, "(this machine)") {
 		t.Fatal("the New app form does not ask which server")
 	}
@@ -138,17 +138,17 @@ func TestServersPage(t *testing.T) {
 		t.Fatal("the form suggests no generated address")
 	}
 	form.Set("domain", suggested)
-	res, body = a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+env.ID+"/apps", form)
+	res, body = a.post("/projects/"+projectID+"/env/"+env.ID+"/app/new", "/projects/"+projectID+"/env/"+env.ID+"/app", form)
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("an app on the remote server: %d\n%s", res.StatusCode, body)
 	}
-	appID := strings.Split(strings.TrimPrefix(res.Header.Get("Location"), "/apps/"), "/")[0]
+	appID := createdID(res, db.KindApp)
 	created, _ := a.db.AppByID(ctx, appID)
 	domains, _ := a.db.ListDomains(ctx, db.KindApp, appID)
 	if created.ServerID != server.ID || len(domains) != 1 || !strings.HasSuffix(domains[0].Host, ".198.51.100.20.sslip.io") {
 		t.Fatalf("server %s (want %s), domains %+v", created.ServerID, server.ID, domains)
 	}
-	for _, path := range []string{"/projects/" + projectID + "/e/" + env.ID + "/databases/new?engine=postgres", "/projects/" + projectID + "/e/" + env.ID + "/services/new?template=custom"} {
+	for _, path := range []string{"/projects/" + projectID + "/env/" + env.ID + "/database/new?engine=postgres", "/projects/" + projectID + "/env/" + env.ID + "/service/new?template=custom"} {
 		if _, f := a.get(path); !strings.Contains(f, `name="server"`) {
 			t.Errorf("%s does not ask which server", path)
 		}
@@ -219,7 +219,7 @@ func TestOtherTeamsServerIsNotReachable(t *testing.T) {
 	res, _ := a.post("/servers", "/servers", url.Values{"name": {"x"}, "host": {"203.0.113.20"}, "port": {"22"}, "ssh_user": {"root"}, "key": {theirKey.ID}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
 	projectID, env := a.project("Shop")
-	res, body := a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+env.ID+"/apps",
+	res, body := a.post("/projects/"+projectID+"/env/"+env.ID+"/app/new", "/projects/"+projectID+"/env/"+env.ID+"/app",
 		url.Values{"name": {"api"}, "image": {"nginx:alpine"}, "port": {"80"}, "server": {theirs.ID}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "Choose one of the servers listed") {
 		t.Fatalf("an app on another team's server: %d", res.StatusCode)
@@ -238,7 +238,7 @@ func TestAppBuildServerSetting(t *testing.T) {
 	ctx := context.Background()
 	projectID, env := a.project("Shop")
 	app := a.newGitApp(projectID, env, "web", nil)
-	settings := "/apps/" + app.ID + "/settings"
+	settings := a.appPath(app.ID) + "/settings"
 
 	// With one server there is nothing to choose.
 	if _, page := a.get(settings); strings.Contains(page, "Build server") {
@@ -249,7 +249,7 @@ func TestAppBuildServerSetting(t *testing.T) {
 	if !strings.Contains(page, "Build server") || !strings.Contains(page, "Builder") || !strings.Contains(page, "The server the app runs on") {
 		t.Fatal("the build server choice is missing")
 	}
-	res, _ := a.post(settings, "/apps/"+app.ID+"/build-server", url.Values{"build_server": {server.ID}})
+	res, _ := a.post(settings, a.appPath(app.ID)+"/build-server", url.Values{"build_server": {server.ID}})
 	wantRedirect(t, res, settings)
 	if got, _ := a.db.AppByID(ctx, app.ID); got.BuildServerID != server.ID {
 		t.Fatalf("build server %q", got.BuildServerID)
@@ -261,7 +261,7 @@ func TestAppBuildServerSetting(t *testing.T) {
 		t.Fatal("a server an app is built on was removed")
 	}
 	// Back to its own server.
-	res, _ = a.post(settings, "/apps/"+app.ID+"/build-server", url.Values{"build_server": {""}})
+	res, _ = a.post(settings, a.appPath(app.ID)+"/build-server", url.Values{"build_server": {""}})
 	wantRedirect(t, res, settings)
 	if got, _ := a.db.AppByID(ctx, app.ID); got.BuildServerID != "" {
 		t.Fatalf("build server %q", got.BuildServerID)
@@ -270,9 +270,9 @@ func TestAppBuildServerSetting(t *testing.T) {
 	// Not another team's server, and not for an app that is not built.
 	a.db.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('otherteam', 'Other', 1)`)
 	a.db.Exec(`INSERT INTO servers (id, team_id, name, kind, created_at) VALUES ('theirs', 'otherteam', 'theirs', 'ssh', 1)`)
-	res, _ = a.post(settings, "/apps/"+app.ID+"/build-server", url.Values{"build_server": {"theirs"}})
+	res, _ = a.post(settings, a.appPath(app.ID)+"/build-server", url.Values{"build_server": {"theirs"}})
 	wantStatus(t, res, http.StatusNotFound)
 	imageApp := a.newApp(projectID, env, "img", false, nil)
-	res, _ = a.post("/apps/"+imageApp+"/settings", "/apps/"+imageApp+"/build-server", url.Values{"build_server": {server.ID}})
+	res, _ = a.post(a.appPath(imageApp)+"/settings", a.appPath(imageApp)+"/build-server", url.Values{"build_server": {server.ID}})
 	wantStatus(t, res, http.StatusNotFound)
 }

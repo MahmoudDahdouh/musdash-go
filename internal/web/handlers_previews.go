@@ -22,7 +22,7 @@ func (s *Server) ownSettings(next http.HandlerFunc) http.HandlerFunc {
 		app, err := s.DB.App(r.Context(), sessionFrom(r).TeamID, r.PathValue("id"))
 		if err == nil && app.IsPreview() {
 			setFlash(w, r, ui.ToneWarn, "A preview takes its settings, variables and files from the app it previews. Change them there.")
-			redirect(w, r, "/apps/"+app.ID)
+			redirect(w, r, placeInPath(r, db.KindApp))
 			return
 		}
 		// Anything else, a missing app included, is the handler's to answer.
@@ -105,7 +105,7 @@ func (s *Server) appPreviewsSave(w http.ResponseWriter, r *http.Request) {
 	} else {
 		setFlash(w, r, ui.ToneOK, "Previews are off. The ones that exist stay until their pull requests are closed or you remove them.")
 	}
-	redirect(w, r, "/apps/"+v.App.ID+"/settings#previews")
+	redirect(w, r, v.Path()+"/settings#previews")
 }
 
 // appPreviewDelete removes one preview of an app by hand.
@@ -132,5 +132,5 @@ func (s *Server) appPreviewDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "The preview of pull request #"+strconv.Itoa(number)+" is being removed.")
-	redirect(w, r, "/apps/"+v.App.ID+"/settings#previews")
+	redirect(w, r, v.Path()+"/settings#previews")
 }

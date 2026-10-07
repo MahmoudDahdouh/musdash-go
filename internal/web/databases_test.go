@@ -25,12 +25,12 @@ func (a *app) newDatabase(projectID string, env db.Environment, engine, name str
 	for k, v := range extra {
 		form[k] = v
 	}
-	page := "/projects/" + projectID + "/e/" + env.ID + "/databases/new?engine=" + engine
-	res, body := a.post(page, "/projects/"+projectID+"/e/"+env.ID+"/databases", form)
+	page := "/projects/" + projectID + "/env/" + env.ID + "/database/new?engine=" + engine
+	res, body := a.post(page, "/projects/"+projectID+"/env/"+env.ID+"/database", form)
 	if res.StatusCode != http.StatusSeeOther {
 		a.t.Fatalf("create database: %d\n%s", res.StatusCode, body)
 	}
-	return a.waitDatabase(strings.TrimPrefix(res.Header.Get("Location"), "/databases/"))
+	return a.waitDatabase(createdID(res, db.KindDatabase))
 }
 
 // waitDatabase waits until a database is no longer starting.
@@ -57,20 +57,20 @@ func TestCreateDatabase(t *testing.T) {
 	projectID, env := a.project("Shop")
 
 	// The Add resource page offers every engine; each leads to its form.
-	res, _ := a.get("/projects/" + projectID + "/e/" + env.ID + "/databases/new")
-	wantRedirect(t, res, "/projects/"+projectID+"/e/"+env.ID+"/new")
-	res, engines := a.get("/projects/" + projectID + "/e/" + env.ID + "/new")
+	res, _ := a.get("/projects/" + projectID + "/env/" + env.ID + "/database/new")
+	wantRedirect(t, res, "/projects/"+projectID+"/env/"+env.ID+"/new")
+	res, engines := a.get("/projects/" + projectID + "/env/" + env.ID + "/new")
 	wantStatus(t, res, http.StatusOK)
 	for _, tpl := range catalog.Databases() {
 		if !strings.Contains(engines, "engine="+tpl.Engine) || !strings.Contains(engines, tpl.Label) {
 			t.Errorf("the engine list is missing %s", tpl.Label)
 		}
 	}
-	_, form := a.get("/projects/" + projectID + "/e/" + env.ID + "/databases/new?engine=postgres")
+	_, form := a.get("/projects/" + projectID + "/env/" + env.ID + "/database/new?engine=postgres")
 	if !strings.Contains(form, `value="postgres:17-alpine"`) {
 		t.Fatal("the form does not offer the default image")
 	}
-	res, _ = a.get("/projects/" + projectID + "/e/" + env.ID + "/databases/new?engine=oracle")
+	res, _ = a.get("/projects/" + projectID + "/env/" + env.ID + "/database/new?engine=oracle")
 	wantStatus(t, res, http.StatusNotFound)
 
 	m := a.newDatabase(projectID, env, "postgres", "maindb", nil)
@@ -95,7 +95,7 @@ func TestCreateDatabase(t *testing.T) {
 
 	// The overview hands out the connection string without drawing the
 	// password on the screen.
-	res, page := a.get("/databases/" + m.ID)
+	res, page := a.get(a.databasePath(m.ID))
 	wantStatus(t, res, http.StatusOK)
 	page = html.UnescapeString(page)
 	wantURL := "postgres://postgres:" + pass + "@maindb:5432/postgres"
@@ -117,11 +117,11 @@ func TestCreateDatabase(t *testing.T) {
 
 	// It is listed with the project, and nothing but its own page holds the
 	// password.
-	_, list := a.get("/projects/" + projectID + "/e/" + env.ID)
-	if !strings.Contains(list, "maindb") || !strings.Contains(list, "PostgreSQL") || !strings.Contains(list, "/databases/"+m.ID) {
+	_, list := a.get("/projects/" + projectID + "/env/" + env.ID)
+	if !strings.Contains(list, "maindb") || !strings.Contains(list, "PostgreSQL") || !strings.Contains(list, a.databasePath(m.ID)) {
 		t.Fatal("the project page does not list the database")
 	}
-	for _, path := range []string{"/projects/" + projectID + "/e/" + env.ID, "/databases/" + m.ID + "/settings", "/databases/" + m.ID + "/logs", "/databases/" + m.ID + "/status"} {
+	for _, path := range []string{"/projects/" + projectID + "/env/" + env.ID, a.databasePath(m.ID) + "/settings", a.databasePath(m.ID) + "/logs", a.databasePath(m.ID) + "/status"} {
 		if _, body := a.get(path); strings.Contains(body, pass) {
 			t.Errorf("%s contains the password", path)
 		}
@@ -134,8 +134,8 @@ func TestDatabaseFormValidation(t *testing.T) {
 	projectID, env := a.project("Shop")
 	a.newApp(projectID, env, "web", false, nil)
 	otherProject, otherEnv := a.project("Other")
-	page := "/projects/" + projectID + "/e/" + env.ID + "/databases/new?engine=redis"
-	create := "/projects/" + projectID + "/e/" + env.ID + "/databases"
+	page := "/projects/" + projectID + "/env/" + env.ID + "/database/new?engine=redis"
+	create := "/projects/" + projectID + "/env/" + env.ID + "/database"
 
 	for _, c := range []struct {
 		form url.Values
@@ -167,7 +167,7 @@ func TestDatabaseFormValidation(t *testing.T) {
 		t.Errorf("unknown engine: %d, want 404", res.StatusCode)
 	}
 	// An environment is only reached through its own project.
-	if res, _ := a.post(page, "/projects/"+projectID+"/e/"+otherEnv.ID+"/databases", valid); res.StatusCode != http.StatusNotFound {
+	if res, _ := a.post(page, "/projects/"+projectID+"/env/"+otherEnv.ID+"/database", valid); res.StatusCode != http.StatusNotFound {
 		t.Errorf("environment of another project: %d, want 404", res.StatusCode)
 	}
 	_ = otherProject
@@ -179,7 +179,7 @@ func TestDatabaseFormValidation(t *testing.T) {
 
 	// And the other way round: an app cannot take a database's name.
 	a.newDatabase(projectID, env, "redis", "cache", nil)
-	res, body := a.post("/projects/"+projectID+"/e/"+env.ID+"/apps/new", "/projects/"+projectID+"/e/"+env.ID+"/apps",
+	res, body := a.post("/projects/"+projectID+"/env/"+env.ID+"/app/new", "/projects/"+projectID+"/env/"+env.ID+"/app",
 		url.Values{"name": {"cache"}, "image": {"nginx"}, "port": {"80"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "already has an app, database or service called cache") {
 		t.Fatalf("an app took a database's name: %d", res.StatusCode)
@@ -192,7 +192,7 @@ func TestDatabaseSettingsAndPublicPort(t *testing.T) {
 	ctx := context.Background()
 	projectID, env := a.project("Shop")
 	m := a.newDatabase(projectID, env, "postgres", "maindb", nil)
-	settings := "/databases/" + m.ID + "/settings"
+	settings := a.databasePath(m.ID) + "/settings"
 	save := func(change url.Values) (*http.Response, string) {
 		form := url.Values{"image": {"postgres:17-alpine"}}
 		for k, v := range change {
@@ -227,13 +227,13 @@ func TestDatabaseSettingsAndPublicPort(t *testing.T) {
 		t.Fatalf("after a second change: %+v", got)
 	}
 
-	_, page := a.get("/databases/" + m.ID)
+	_, page := a.get(a.databasePath(m.ID))
 	page = html.UnescapeString(page)
 	if !strings.Contains(page, "@SERVER_IP:30000/postgres") || !strings.Contains(page, "Replace SERVER_IP") {
 		t.Fatal("the public connection string is not shown")
 	}
 	a.db.Exec(`UPDATE servers SET ip = '203.0.113.9'`)
-	if _, page := a.get("/databases/" + m.ID); !strings.Contains(page, "@203.0.113.9:30000/postgres") {
+	if _, page := a.get(a.databasePath(m.ID)); !strings.Contains(page, "@203.0.113.9:30000/postgres") {
 		t.Fatal("the public connection string does not use the server's address")
 	}
 
@@ -283,12 +283,12 @@ func TestDatabaseSettingsAndPublicPort(t *testing.T) {
 	if run := calls[lastIndexOfCall(calls, "docker run")]; strings.Contains(run, "--publish") {
 		t.Fatalf("the port is still published after being switched off:\n%s", run)
 	}
-	if _, page := a.get("/databases/" + m.ID); !strings.Contains(page, "Only this environment can reach the database") {
+	if _, page := a.get(a.databasePath(m.ID)); !strings.Contains(page, "Only this environment can reach the database") {
 		t.Fatal("the overview does not say the database is private again")
 	}
 
 	// A stopped database is not started by a change of settings.
-	a.post(settings, "/databases/"+m.ID+"/stop", nil)
+	a.post(settings, a.databasePath(m.ID)+"/stop", nil)
 	runs := countCalls(a.fake.Calls(), "docker run")
 	save(url.Values{"memory_mb": {"256"}})
 	if got, _ := a.db.DatabaseByID(ctx, m.ID); got.Status != db.AppStopped || got.MemoryMB != 256 || countCalls(a.fake.Calls(), "docker run") != runs {
@@ -330,7 +330,7 @@ func TestStopStartAndDeleteDatabase(t *testing.T) {
 	projectID, env := a.project("Shop")
 	keep := a.newDatabase(projectID, env, "postgres", "keepdata", nil)
 	drop := a.newDatabase(projectID, env, "mariadb", "dropdata", nil)
-	base := "/databases/" + keep.ID
+	base := a.databasePath(keep.ID)
 
 	res, _ := a.post(base, base+"/stop", nil)
 	wantRedirect(t, res, base)
@@ -372,7 +372,7 @@ func TestStopStartAndDeleteDatabase(t *testing.T) {
 		t.Fatal("deleted without the name being typed")
 	}
 	res, _ = a.post(settings, base+"/delete", url.Values{"confirm": {"keepdata"}})
-	wantRedirect(t, res, "/projects/"+projectID+"/e/"+env.ID)
+	wantRedirect(t, res, "/projects/"+projectID+"/env/"+env.ID)
 	if _, err := a.db.DatabaseByID(ctx, keep.ID); !errors.Is(err, db.ErrNotFound) {
 		t.Fatalf("still there: %v", err)
 	}
@@ -382,9 +382,9 @@ func TestStopStartAndDeleteDatabase(t *testing.T) {
 	res, _ = a.get(base)
 	wantStatus(t, res, http.StatusNotFound)
 
-	dropSettings := "/databases/" + drop.ID + "/settings"
-	res, _ = a.post(dropSettings, "/databases/"+drop.ID+"/delete", url.Values{"confirm": {"dropdata"}, "delete_data": {"1"}})
-	wantRedirect(t, res, "/projects/"+projectID+"/e/"+env.ID)
+	dropSettings := a.databasePath(drop.ID) + "/settings"
+	res, _ = a.post(dropSettings, a.databasePath(drop.ID)+"/delete", url.Values{"confirm": {"dropdata"}, "delete_data": {"1"}})
+	wantRedirect(t, res, "/projects/"+projectID+"/env/"+env.ID)
 	if indexOfCall(a.fake.Calls(), "docker volume rm "+deploy.DatabaseVolume(drop.ID)) < 0 {
 		t.Fatal("the data volume was kept although its deletion was asked for")
 	}
@@ -408,7 +408,7 @@ func TestOtherTeamsDatabaseIsNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := "/databases/" + other.ID
+	base := a.databasePath(other.ID)
 	for _, path := range []string{"", "/status", "/logs", "/logs/stream", "/settings"} {
 		res, body := a.get(base + path)
 		if res.StatusCode != http.StatusNotFound || strings.Contains(body, "secret-db") || strings.Contains(body, "their-password") {
@@ -429,7 +429,7 @@ func TestOtherTeamsDatabaseIsNotFound(t *testing.T) {
 	}
 	// Nor can a database be created in another team's environment.
 	projectID, env := a.project("Mine")
-	res, _ := a.post("/projects/"+projectID+"/e/"+env.ID+"/databases/new?engine=postgres", "/projects/"+projectID+"/e/"+envs[0].ID+"/databases",
+	res, _ := a.post("/projects/"+projectID+"/env/"+env.ID+"/database/new?engine=postgres", "/projects/"+projectID+"/env/"+envs[0].ID+"/database",
 		url.Values{"engine": {"postgres"}, "name": {"x"}, "image": {"postgres:17-alpine"}})
 	wantStatus(t, res, http.StatusNotFound)
 
@@ -448,7 +448,7 @@ func TestFailedDatabaseShowsWhy(t *testing.T) {
 	m := a.newDatabase(projectID, env, "postgres", "maindb", nil)
 	a.db.Exec(`UPDATE databases SET status = 'failed', container = '', last_error = ? WHERE id = ?`,
 		`the database exited with status 1 while starting. Its last output: <b>FATAL</b> wrong ownership`, m.ID)
-	_, page := a.get("/databases/" + m.ID)
+	_, page := a.get(a.databasePath(m.ID))
 	if !strings.Contains(page, "The database did not start") || !strings.Contains(page, "wrong ownership") {
 		t.Fatal("the overview does not explain the failure")
 	}

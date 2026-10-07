@@ -64,7 +64,7 @@ func TestRepositoryPicker(t *testing.T) {
 	}
 
 	projectID, env := a.project("Shop")
-	_, page := a.get("/projects/" + projectID + "/e/" + env.ID + "/apps/new?source=git")
+	_, page := a.get("/projects/" + projectID + "/env/" + env.ID + "/app/new?source=git")
 	repos := "/sources/github/" + src.ID + "/repos"
 	for _, want := range []string{
 		`hx-get="` + repos + `"`, `hx-trigger="select-load"`, "Choose from acme", "Find a repository",

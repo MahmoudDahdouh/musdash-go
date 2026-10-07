@@ -624,7 +624,7 @@ func AppEnvironmentEdit(s ui.Shell, v AppView, f ui.Form) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var30 templ.SafeURL
-			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.base() + "/environment"))
+			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/environment"))
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/variables.templ`, Line: 140, Col: 85}
 			}
@@ -716,7 +716,7 @@ func AppEnvironmentEdit(s ui.Shell, v AppView, f ui.Form) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.LinkButton(v.base()+"/environment", ui.ButtonProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var33), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.LinkButton(v.Path()+"/environment", ui.ButtonProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var33), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -850,7 +850,7 @@ func ServiceVariablesField(v ServiceView, f ui.Form, variables string, shown boo
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var39 string
-			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.base() + "/compose/variables")
+			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Path() + "/compose/variables")
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/variables.templ`, Line: 191, Col: 100}
 			}

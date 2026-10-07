@@ -570,7 +570,7 @@ func AppMetrics(s ui.Shell, v AppView, h History) templ.Component {
 			}
 			ctx = templ.InitializeContext(ctx)
 			if v.App.Container == "" {
-				templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "chart", Title: "Nothing is running", Text: "What the app uses appears here once it is deployed.", Link: "See its deployments", LinkHref: v.base() + "/deployments"}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "chart", Title: "Nothing is running", Text: "What the app uses appears here once it is deployed.", Link: "See its deployments", LinkHref: v.Path() + "/deployments"}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -579,7 +579,7 @@ func AppMetrics(s ui.Shell, v AppView, h History) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = UsagePending(v.base()+"/metrics/now").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = UsagePending(v.Path()+"/metrics/now").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -645,7 +645,7 @@ func DatabaseMetrics(s ui.Shell, v DatabaseView, h History) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = UsagePending(v.base()+"/metrics/now").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = UsagePending(v.Path()+"/metrics/now").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -711,7 +711,7 @@ func ServiceMetrics(s ui.Shell, v ServiceView, h History) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = UsagePending(v.base()+"/metrics/now").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = UsagePending(v.Path()+"/metrics/now").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

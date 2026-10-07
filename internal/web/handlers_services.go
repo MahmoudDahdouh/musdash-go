@@ -84,7 +84,7 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("template")
 	if key == "" {
 		// The templates are on the page every kind of resource is added from.
-		redirect(w, r, envPath(p.ID, env.ID)+"/new")
+		redirect(w, r, pages.EnvPath(p.ID, env.ID)+"/new")
 		return
 	}
 	shell := s.shell(w, r, "New service", "projects", newResourceCrumbs(p, env, "Service")...)
@@ -261,7 +261,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 	} else {
 		setFlash(w, r, ui.ToneOK, "Service created. Choose Deploy to start it.")
 	}
-	redirect(w, r, "/services/"+svc.ID)
+	redirect(w, r, pages.ResourcePath(p.ID, env.ID, db.KindService, svc.ID))
 }
 
 // serviceValues splits a service's stored variables into the generated
@@ -326,7 +326,7 @@ func (s *Server) serviceStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refreshWhenSettled(w, r, svc.Status)
-	s.render(w, r, http.StatusOK, pages.ServiceHeader(sessionFrom(r).CSRFToken, svc))
+	s.render(w, r, http.StatusOK, pages.ServiceHeader(sessionFrom(r).CSRFToken, placeInPath(r, db.KindService), svc))
 }
 
 func (s *Server) serviceDeploy(w http.ResponseWriter, r *http.Request) {
@@ -335,7 +335,7 @@ func (s *Server) serviceDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.queueServiceDeploy(w, r, v.Service, false)
-	redirect(w, r, "/services/"+v.Service.ID)
+	redirect(w, r, v.Path())
 }
 
 // queueServiceDeploy queues a deployment and says so, or why not.
@@ -365,7 +365,7 @@ func (s *Server) serviceStop(w http.ResponseWriter, r *http.Request) {
 	default:
 		setFlash(w, r, ui.ToneOK, "Service stopped. Its data is kept.")
 	}
-	redirect(w, r, "/services/"+v.Service.ID)
+	redirect(w, r, v.Path())
 }
 
 // serviceDeployLog streams the output of the service's latest deployment:
@@ -514,7 +514,7 @@ func (s *Server) serviceSourceSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Source saved. Deploy to read the file from there.")
-	redirect(w, r, "/services/"+svc.ID+"/compose")
+	redirect(w, r, v.Path()+"/compose")
 }
 
 func (s *Server) serviceWebhookSecret(w http.ResponseWriter, r *http.Request) {
@@ -526,7 +526,7 @@ func (s *Server) serviceWebhookSecret(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	s.newHookSecret(w, r, serviceKeyOwner(v.Service, "", s.pushSources(r)))
+	s.newHookSecret(w, r, serviceKeyOwner(v.Service, v.Project.ID, "", s.pushSources(r)))
 }
 
 // serviceDeployToken creates, replaces or revokes the service's deploy
@@ -541,13 +541,13 @@ func (s *Server) serviceDeployToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.PostFormValue("revoke") == "1" {
-		s.revokeDeployToken(w, r, serviceKeyOwner(v.Service, "", s.pushSources(r)))
+		s.revokeDeployToken(w, r, serviceKeyOwner(v.Service, v.Project.ID, "", s.pushSources(r)))
 		return
 	}
 	if s.sentBefore(w, r, pages.TokensPath) {
 		return
 	}
-	s.newDeployToken(w, r, serviceKeyOwner(v.Service, "", s.pushSources(r)))
+	s.newDeployToken(w, r, serviceKeyOwner(v.Service, v.Project.ID, "", s.pushSources(r)))
 }
 
 func (s *Server) serviceCompose(w http.ResponseWriter, r *http.Request) {
@@ -624,11 +624,11 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 		}
 		if r.PostFormValue("deploy") == "1" {
 			s.queueServiceDeploy(w, r, svc, true)
-			redirect(w, r, "/services/"+svc.ID)
+			redirect(w, r, v.Path())
 			return
 		}
 		s.warnMissingShared(w, r, svc.EnvironmentID, svc.ServerID, typed, "Saved. Deploy to apply it.")
-		redirect(w, r, "/services/"+svc.ID+"/compose")
+		redirect(w, r, v.Path()+"/compose")
 		return
 	}
 	if err := s.DB.UpdateServiceCompose(ctx, sessionFrom(r).TeamID, svc); err != nil {
@@ -646,11 +646,11 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.PostFormValue("deploy") == "1" {
 		s.queueServiceDeploy(w, r, svc, true)
-		redirect(w, r, "/services/"+svc.ID)
+		redirect(w, r, v.Path())
 		return
 	}
 	s.warnMissingShared(w, r, svc.EnvironmentID, svc.ServerID, typed, "Saved. Deploy to apply it.")
-	redirect(w, r, "/services/"+svc.ID+"/compose")
+	redirect(w, r, v.Path()+"/compose")
 }
 
 // renderServiceSettings draws a service's Settings page. failed is the
@@ -692,7 +692,7 @@ func (s *Server) serviceEndpointSave(w http.ResponseWriter, r *http.Request) {
 	raw := strings.TrimSpace(r.PostFormValue("host"))
 	f.Set("host", raw)
 	tls := r.PostFormValue("tls") == "1"
-	back := "/services/" + v.Service.ID + "/settings"
+	back := v.Path() + "/settings"
 
 	host := current.Host
 	if !strings.EqualFold(raw, current.Host) {
@@ -734,7 +734,7 @@ func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	back := "/services/" + v.Service.ID + "/settings"
+	back := v.Path() + "/settings"
 	if strings.TrimSpace(r.PostFormValue("confirm")) != v.Service.Name {
 		setFlash(w, r, ui.ToneDanger, "The service was not deleted: the name you typed did not match.")
 		redirect(w, r, back)
@@ -759,5 +759,5 @@ func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) {
 	} else {
 		setFlash(w, r, ui.ToneOK, "Service deleted. Its volumes are still on the server.")
 	}
-	redirect(w, r, envPath(v.Project.ID, v.Env.ID))
+	redirect(w, r, pages.EnvPath(v.Project.ID, v.Env.ID))
 }

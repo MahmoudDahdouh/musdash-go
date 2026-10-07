@@ -154,6 +154,21 @@ func (d *DB) DeleteEnvironment(ctx context.Context, teamID, id string) error {
 	})
 }
 
+// PlaceOf says where one of the team's resources is: its project and its
+// environment. It is what a resource's address is checked against and what
+// the short address (/apps/{id}) is turned into the long one with. A kind
+// that is not one of the three finds nothing.
+func (d *DB) PlaceOf(ctx context.Context, teamID, kind, id string) (projectID, envID string, err error) {
+	table, ok := map[string]string{KindApp: "apps", KindDatabase: "databases", KindService: "services"}[kind]
+	if !ok {
+		return "", "", ErrNotFound
+	}
+	err = d.QueryRowContext(ctx, `SELECT e.project_id, e.id FROM `+table+` r
+		JOIN environments e ON e.id = r.environment_id JOIN projects p ON p.id = e.project_id
+		WHERE r.id = ? AND p.team_id = ?`, id, teamID).Scan(&projectID, &envID)
+	return projectID, envID, notFound(err)
+}
+
 // Place says where an environment is: its project and its own name.
 type Place struct {
 	ProjectID string
