@@ -326,6 +326,7 @@ func (s *Server) Handler() http.Handler {
 	handle("GET /team/variables/values", admin, s.sharedValues(s.sharedTeam))
 	handle("GET /team/variables/edit", admin, s.sharedEdit(s.sharedTeam))
 	handle("POST /team/variables", admin, s.sharedSave(s.sharedTeam))
+	handle("GET /team/invitations", member, s.invitationsPage)
 	handle("POST /team/invitations", admin, s.invitationCreate)
 	handle("POST /team/invitations/{id}/delete", admin, s.invitationDelete)
 	handle("POST /team/members/{id}/role", owner, s.memberRole)

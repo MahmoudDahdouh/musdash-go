@@ -36,6 +36,7 @@ func (v SharedView) example() string { return "{{" + v.Scope + ".NAME}}" }
 func TeamTabs() []ui.Tab {
 	return []ui.Tab{
 		{Key: "members", Label: "Members", Href: "/team", Icon: "users"},
+		{Key: "invitations", Label: "Invitations", Href: "/team/invitations", Icon: "mail"},
 		{Key: "variables", Label: "Shared variables", Href: "/team/variables", Icon: "variable"},
 	}
 }
@@ -85,7 +86,7 @@ func SharedVariablesEdit(s ui.Shell, v SharedView, f ui.Form) templ.Component {
 			var templ_7745c5c3_Var3 templ.SafeURL
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Action))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/shared.templ`, Line: 40, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/shared.templ`, Line: 41, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -281,7 +282,7 @@ func SharedVariables(s ui.Shell, v SharedView, c VarsCard) templ.Component {
 						var templ_7745c5c3_Var10 string
 						templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs("{{" + v.Scope + "." + name + "}}")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/shared.templ`, Line: 93, Col: 88}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/shared.templ`, Line: 94, Col: 88}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 						if templ_7745c5c3_Err != nil {
@@ -314,7 +315,7 @@ func SharedVariables(s ui.Shell, v SharedView, c VarsCard) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(v.example())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/shared.templ`, Line: 110, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/shared.templ`, Line: 111, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -327,7 +328,7 @@ func SharedVariables(s ui.Shell, v SharedView, c VarsCard) templ.Component {
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(v.example())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/shared.templ`, Line: 111, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/shared.templ`, Line: 112, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 			if templ_7745c5c3_Err != nil {
@@ -340,7 +341,7 @@ func SharedVariables(s ui.Shell, v SharedView, c VarsCard) templ.Component {
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs("\\" + v.example())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/shared.templ`, Line: 113, Col: 282}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/shared.templ`, Line: 114, Col: 282}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {

@@ -416,10 +416,10 @@ func TestFormsThatShowASecretActOnce(t *testing.T) {
 	invite := url.Values{"email": {"new@example.com"}, "role": {db.RoleMember}, "_once": {a.onceOf("/team", "/team/invitations")}}
 	res, page = a.post("/team", "/team/invitations", invite)
 	wantStatus(t, res, http.StatusOK)
-	if !linkRE.MatchString(page) {
-		t.Fatal("the invitation link is not shown")
+	if !linkRE.MatchString(page) || !strings.Contains(page, `data-address="/team/invitations"`) {
+		t.Fatal("the invitation link is not shown, or the page does not give its own address")
 	}
-	again("/team/invitations", invite, "/team")
+	again("/team/invitations", invite, "/team/invitations")
 
 	// A form that was let through and then made nothing has spent nothing
 	// either: with as many tokens as a person may have, the form is

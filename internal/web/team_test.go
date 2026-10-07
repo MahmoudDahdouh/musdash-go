@@ -260,9 +260,9 @@ func TestInvitations(t *testing.T) {
 		t.Fatalf("inviting twice:\n%s", body)
 	}
 	// The link is shown once: the page does not carry it again.
-	_, page := a.get("/team")
-	if strings.Contains(page, token) || !strings.Contains(page, "new@example.com") || !strings.Contains(page, "invited by Owner") {
-		t.Fatal("the Team page should list the invitation without its link")
+	_, page := a.get("/team/invitations")
+	if strings.Contains(page, token) || !strings.Contains(page, "new@example.com") {
+		t.Fatal("the Invitations tab should list the invitation without its link")
 	}
 
 	// Whoever is signed in is a member already.
@@ -307,7 +307,7 @@ func TestInvitations(t *testing.T) {
 	cancelled := a.invite("cancelled@example.com", db.RoleMember)
 	inv, _ = a.db.InvitationByHash(ctx, secret.HashToken(cancelled))
 	res, _ = a.post("/team", "/team/invitations/"+inv.ID+"/delete", nil)
-	wantRedirect(t, res, "/team#invitations")
+	wantRedirect(t, res, "/team/invitations")
 	late := a.invite("late@example.com", db.RoleMember)
 	a.db.Exec(`UPDATE invitations SET expires_at = ? WHERE email = 'late@example.com'`, time.Now().Unix()-1)
 	for _, tok := range []string{cancelled, late} {
@@ -329,9 +329,77 @@ func TestInvitations(t *testing.T) {
 	mem := a.newPerson("Member", db.RoleMember)
 	res, _ = mem.post("/team/invitations", url.Values{"email": {"third@example.com"}})
 	wantStatus(t, res, http.StatusForbidden)
-	_, page = mem.get("/team")
-	if strings.Contains(page, "Create invitation link") || strings.Contains(page, "Remove member") {
-		t.Fatal("a Member's Team page shows controls they cannot use")
+	for _, path := range []string{"/team", "/team/invitations"} {
+		_, page = mem.get(path)
+		if strings.Contains(page, "Create invitation link") || strings.Contains(page, "Remove member") {
+			t.Fatalf("a Member's %s shows controls they cannot use", path)
+		}
+	}
+}
+
+// TestTeamTabs: the Team page is three tabs, and the invitations that are
+// waiting are on one of their own, with the button that makes one.
+func TestTeamTabs(t *testing.T) {
+	a := newApp(t, true)
+	a.setup()
+	ctx := context.Background()
+	tabs := []string{"/team", "/team/invitations", "/team/variables"}
+	for _, at := range tabs {
+		res, page := a.get(at)
+		wantStatus(t, res, http.StatusOK)
+		for _, href := range tabs {
+			tab := regexp.MustCompile(`<a class="tab" href="` + href + `"[^>]*>`).FindString(page)
+			if tab == "" {
+				t.Fatalf("%s has no tab to %s", at, href)
+			}
+			if strings.Contains(tab, `aria-current="page"`) != (href == at) {
+				t.Errorf("%s: the tab to %s is marked wrongly: %s", at, href, tab)
+			}
+		}
+	}
+	const opens = `data-open="invite"`
+
+	// With nobody invited the button is in the empty state and not also in
+	// the header. Members, which is never empty, has it in its header.
+	_, page := a.get("/team/invitations")
+	if !strings.Contains(page, "Nobody is invited") || strings.Count(page, opens) != 1 {
+		t.Fatalf("the empty Invitations tab should say so, with one Invite button:\n%s", page)
+	}
+	if _, members := a.get("/team"); strings.Count(members, opens) != 1 || strings.Contains(members, "Nobody is invited") {
+		t.Fatal("Members should have the Invite button and no list of invitations")
+	}
+
+	mem := a.newPerson("Member", db.RoleMember)
+	token := a.invite("waiting@example.com", db.RoleAdmin)
+	inv, err := a.db.InvitationByHash(ctx, secret.HashToken(token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel := `action="/team/invitations/` + inv.ID + `/delete"`
+	_, page = a.get("/team/invitations")
+	// One row says who, as what, by whom and until when.
+	row := regexp.MustCompile(`(?s)<tr>(?:[^<]|<[^/]|</[^t]|</t[^r])*waiting@example\.com.*?</tr>`).FindString(page)
+	for _, want := range []string{"Admin", "Owner", "Just now", "In 7 days", cancel} {
+		if !strings.Contains(row, want) {
+			t.Errorf("the invitation's row lacks %q:\n%s", want, row)
+		}
+	}
+	if strings.Contains(page, "Nobody is invited") || strings.Count(page, opens) != 1 {
+		t.Error("with an invitation waiting, the tab has one Invite button and no empty state")
+	}
+	// A row is what an invitation is, never what opens it.
+	if strings.Contains(page, token) || strings.Contains(page, inv.TokenHash) {
+		t.Fatal("the Invitations tab holds an invitation's token or its hash")
+	}
+	if _, members := a.get("/team"); strings.Contains(members, "waiting@example.com") {
+		t.Fatal("Members still lists the invitations")
+	}
+
+	// A Member reads who is invited and is offered nothing to do about it.
+	res, page := mem.get("/team/invitations")
+	wantStatus(t, res, http.StatusOK)
+	if !strings.Contains(page, "waiting@example.com") || strings.Contains(page, opens) || strings.Contains(page, cancel) || strings.Contains(page, inv.TokenHash) {
+		t.Fatalf("a Member's Invitations tab:\n%s", page)
 	}
 }
 

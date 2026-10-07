@@ -5,10 +5,14 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
 
-// TeamView is what the Team page shows.
+// TeamIntro is what the Team page says under its name, on every tab.
+const TeamIntro = "Who can sign in to this musdash, and what each of them may do."
+
+// TeamView is what the Members and the Invitations tabs of the Team page
+// show. Each is given only its own list.
 type TeamView struct {
 	Team        db.Team
-	Me          string // the reader's own user id
+	Me          string // the reader's own user id, for Members
 	Role        string // and their role
 	Members     []db.Member
 	Invitations []db.Invitation
@@ -71,16 +75,36 @@ templ oneTimeLink(v TeamView) {
 	}
 }
 
-templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
+// inviteButton opens the dialog that makes an invitation (inviteDialog).
+templ inviteButton() {
+	@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "invite"}) {
+		Invite
+	}
+}
+
+// inviteDialog is on both tabs an Admin can invite from. Whatever its form
+// is answered with is the Invitations tab, so only that tab is ever given
+// a form that was refused.
+templ inviteDialog(s ui.Shell, f ui.Form) {
+	@ui.FormDialog(ui.DialogProps{ID: "invite", Title: "Invite someone", Description: "You get a link to send them. It works once, within seven days, and is shown once.", Action: "/team/invitations", CSRF: s.CSRF, Submit: "Create invitation link", Open: !f.OK()}) {
+		@ui.Once()
+		@ui.TextField(f, "Email", "The address they will sign in with.", ui.InputProps{ID: "email", Type: "email", Required: true, Autocomplete: "off"})
+		if s.Owner {
+			@ui.Field(ui.FieldProps{Label: "Role", For: "role", Error: f.E("role")}) {
+				@ui.Select("role", roleOptions[:2], orDefault(f.V("role"), db.RoleMember), nil)
+			}
+		}
+	}
+}
+
+templ Team(s ui.Shell, v TeamView, rename ui.Form) {
 	@ui.Layout(s) {
-		@ui.PageHeader(v.Team.Name, "Who can sign in to this musdash, and what each of them may do.") {
+		@ui.PageHeader(v.Team.Name, TeamIntro) {
 			if s.Admin {
 				@ui.Button(ui.ButtonProps{Icon: "pencil", Opens: "rename-team"}) {
 					Rename
 				}
-				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "invite"}) {
-					Invite
-				}
+				@inviteButton()
 			}
 		}
 		@ui.Tabs(TeamTabs(), "members")
@@ -152,57 +176,70 @@ templ Team(s ui.Shell, v TeamView, invite, rename ui.Form) {
 					}
 				}
 			</section>
-			<section class="card" id="invitations">
-				<div class="card-head">
-					<div>
-						<h2 class="card-title">Invitations</h2>
-						<p class="muted text-sm">An invitation is a link. Whoever opens it chooses a name and a password and becomes a member.</p>
-					</div>
-				</div>
-				if len(v.Invitations) > 0 {
-					<div class="rows">
-						for _, inv := range v.Invitations {
-							<div class="row">
-								@ui.Icon("user", "text-ink-mute")
-								<div class="min-w-0 flex-1">
-									<p class="truncate font-semibold">{ inv.Email }</p>
-									<p class="muted text-sm">
-										{ RoleLabel(inv.Role) }
-										if inv.InviterName != "" {
-											· invited by { inv.InviterName }
-										}
-										· made { ui.Ago(inv.CreatedAt) }
-									</p>
-								</div>
-								if s.Admin {
-									<form method="post" action={ templ.SafeURL("/team/invitations/" + inv.ID + "/delete") }>
-										@ui.CSRF(s.CSRF)
-										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Cancel the invitation of "+inv.Email+"?", "The link stops working at once.", "Cancel invitation", true)}) {
-											Cancel
-										}
-									</form>
-								}
-							</div>
-						}
-					</div>
-				} else {
-					@ui.EmptyState(ui.EmptyProps{Icon: "users", Title: "Nobody is invited at the moment", Text: inviteHint(s.Admin), Size: ui.EmptySmall})
-				}
-			</section>
 		</div>
 		if s.Admin {
-			@ui.FormDialog(ui.DialogProps{ID: "invite", Title: "Invite someone", Description: "You get a link to send them. It works once, within seven days, and is shown once.", Action: "/team/invitations", CSRF: s.CSRF, Submit: "Create invitation link", Open: !invite.OK()}) {
-				@ui.Once()
-				@ui.TextField(invite, "Email", "The address they will sign in with.", ui.InputProps{ID: "email", Type: "email", Required: true, Autocomplete: "off"})
-				if s.Owner {
-					@ui.Field(ui.FieldProps{Label: "Role", For: "role", Error: invite.E("role")}) {
-						@ui.Select("role", roleOptions[:2], orDefault(invite.V("role"), db.RoleMember), nil)
-					}
-				}
-			}
+			@inviteDialog(s, ui.Form{})
 			@ui.FormDialog(ui.DialogProps{ID: "rename-team", Title: "Rename team", Action: "/team", CSRF: s.CSRF, Submit: "Save name", Open: !rename.OK()}) {
 				@ui.TextField(rename, "Name", "", ui.InputProps{ID: "team-name", Name: "name", Value: v.Team.Name, Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
 			}
+		}
+	}
+}
+
+// TeamInvitations is the Invitations tab of the Team page: who was sent a
+// link and has not used it yet.
+templ TeamInvitations(s ui.Shell, v TeamView, invite ui.Form) {
+	@ui.Layout(s) {
+		@ui.PageHeader(v.Team.Name, TeamIntro) {
+			if s.Admin && len(v.Invitations) > 0 {
+				@inviteButton()
+			}
+		}
+		@ui.Tabs(TeamTabs(), "invitations")
+		<div class="grid max-w-4xl gap-6">
+			@oneTimeLink(v)
+			if len(v.Invitations) > 0 {
+				<section class="card">
+					@ui.Table("Email", "Role", "Invited by", "Made", "Expires", "") {
+						for _, inv := range v.Invitations {
+							<tr>
+								<td class="min-w-56 font-semibold break-all">{ inv.Email }</td>
+								<td>
+									@ui.Badge(RoleLabel(inv.Role), roleTone(inv.Role))
+								</td>
+								<td>
+									if inv.InviterName != "" {
+										{ inv.InviterName }
+									} else {
+										<span class="muted">Unknown</span>
+									}
+								</td>
+								<td class="whitespace-nowrap">{ upperFirst(ui.Ago(inv.CreatedAt)) }</td>
+								<td class="whitespace-nowrap">{ upperFirst(ui.Until(inv.ExpiresAt)) }</td>
+								<td class="text-right">
+									if s.Admin {
+										<form method="post" action={ templ.SafeURL("/team/invitations/" + inv.ID + "/delete") }>
+											@ui.CSRF(s.CSRF)
+											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Cancel the invitation of "+inv.Email+"?", "The link stops working at once.", "Cancel invitation", true)}) {
+												Cancel
+											}
+										</form>
+									}
+								</td>
+							</tr>
+						}
+					}
+				</section>
+			} else {
+				@ui.EmptyState(ui.EmptyProps{Icon: "mail", Title: "Nobody is invited at the moment", Text: inviteHint(s.Admin)}) {
+					if s.Admin {
+						@inviteButton()
+					}
+				}
+			}
+		</div>
+		if s.Admin {
+			@inviteDialog(s, invite)
 		}
 	}
 }
@@ -239,7 +276,7 @@ templ InviteInvalid() {
 // inviteHint is what the empty list of invitations says to do about it.
 func inviteHint(admin bool) string {
 	if admin {
-		return "Invite someone to give them a sign-in of their own."
+		return "Invite someone with a link. Whoever opens it chooses a name and a password and becomes a member."
 	}
 	return "An Admin can invite someone."
 }

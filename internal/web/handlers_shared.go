@@ -32,7 +32,7 @@ func (s *Server) sharedTeam(w http.ResponseWriter, r *http.Request) (sharedTarge
 	return sharedTarget{
 		scope: db.ScopeTeam, id: sessionFrom(r).TeamID, active: "team",
 		view: pages.SharedView{
-			Title: "Team", Intro: "Who can sign in to this musdash, and what each of them may do.",
+			Title: "Team", Intro: pages.TeamIntro,
 			Scope: db.ScopeTeam, Action: "/team/variables", CanEdit: may(r, admin), AdminSet: true,
 			Tabs: pages.TeamTabs(), TabActive: "variables",
 		},

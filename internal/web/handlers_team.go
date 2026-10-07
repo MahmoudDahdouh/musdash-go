@@ -33,9 +33,9 @@ func (s *Server) hashPassword(r *http.Request, password string) (string, error) 
 	return auth.HashPassword(password)
 }
 
-// renderTeam draws the Team page. link is a link that was just made, shown
-// this once.
-func (s *Server) renderTeam(w http.ResponseWriter, r *http.Request, status int, v pages.TeamView, invite, rename ui.Form) {
+// renderTeam draws the Members tab of the Team page. A link in v is a
+// member's reset link that was just made, shown this once.
+func (s *Server) renderTeam(w http.ResponseWriter, r *http.Request, status int, v pages.TeamView, rename ui.Form) {
 	ctx := r.Context()
 	sess := sessionFrom(r)
 	var err error
@@ -47,21 +47,44 @@ func (s *Server) renderTeam(w http.ResponseWriter, r *http.Request, status int, 
 		s.fail(w, r, err)
 		return
 	}
-	if v.Invitations, err = s.DB.ListInvitations(ctx, sess.TeamID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	v.Me, v.Role = sess.UserID, sess.Role
 	shell := s.shell(w, r, "Team", "team")
 	if v.Link != "" {
 		// The page answers the POST that made the link: see renderKeys.
 		shell.Address = "/team"
 	}
-	s.render(w, r, status, pages.Team(shell, v, invite, rename))
+	s.render(w, r, status, pages.Team(shell, v, rename))
+}
+
+// renderInvitations draws the Invitations tab. Whatever the invitation
+// form is answered with is this page, from whichever tab it was sent: a
+// link in v is the invitation that was just made, shown this once.
+func (s *Server) renderInvitations(w http.ResponseWriter, r *http.Request, status int, v pages.TeamView, invite ui.Form) {
+	ctx := r.Context()
+	sess := sessionFrom(r)
+	var err error
+	if v.Team, err = s.DB.Team(ctx, sess.TeamID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if v.Invitations, err = s.DB.ListInvitations(ctx, sess.TeamID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	shell := s.shell(w, r, "Team", "team")
+	if v.Link != "" {
+		// As in renderTeam.
+		shell.Address = "/team/invitations"
+	}
+	s.render(w, r, status, pages.TeamInvitations(shell, v, invite))
 }
 
 func (s *Server) teamPage(w http.ResponseWriter, r *http.Request) {
-	s.renderTeam(w, r, http.StatusOK, pages.TeamView{}, ui.Form{}, ui.Form{})
+	s.renderTeam(w, r, http.StatusOK, pages.TeamView{}, ui.Form{})
+}
+
+func (s *Server) invitationsPage(w http.ResponseWriter, r *http.Request) {
+	s.renderInvitations(w, r, http.StatusOK, pages.TeamView{}, ui.Form{})
 }
 
 func (s *Server) teamRename(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +93,7 @@ func (s *Server) teamRename(w http.ResponseWriter, r *http.Request) {
 	f.Set("name", name)
 	if name == "" || len(name) > 60 {
 		f.Fail("name", "Enter a name, up to 60 characters.")
-		s.renderTeam(w, r, http.StatusUnprocessableEntity, pages.TeamView{}, ui.Form{}, f)
+		s.renderTeam(w, r, http.StatusUnprocessableEntity, pages.TeamView{}, f)
 		return
 	}
 	if err := s.DB.RenameTeam(r.Context(), sessionFrom(r).TeamID, name); err != nil {
@@ -115,11 +138,11 @@ func (s *Server) invitationCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.renderTeam(w, r, http.StatusUnprocessableEntity, pages.TeamView{}, f, ui.Form{})
+		s.renderInvitations(w, r, http.StatusUnprocessableEntity, pages.TeamView{}, f)
 		return
 	}
 	// Sent again, this would be refused for the address it has just invited.
-	if s.sentBefore(w, r, "/team") {
+	if s.sentBefore(w, r, "/team/invitations") {
 		return
 	}
 	made := false
@@ -143,16 +166,16 @@ func (s *Server) invitationCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !f.OK() {
-		s.renderTeam(w, r, http.StatusUnprocessableEntity, pages.TeamView{}, f, ui.Form{})
+		s.renderInvitations(w, r, http.StatusUnprocessableEntity, pages.TeamView{}, f)
 		return
 	}
 	made = true
 	s.Log.Info("invitation made", "role", role)
 	// The link is on this page and nowhere else: not in a redirect, a
 	// cookie or the log.
-	s.renderTeam(w, r, http.StatusOK, pages.TeamView{
+	s.renderInvitations(w, r, http.StatusOK, pages.TeamView{
 		Link: s.publicBase(r) + "/invite/" + token, LinkFor: email, LinkKind: "invitation",
-	}, ui.Form{}, ui.Form{})
+	}, ui.Form{})
 }
 
 func (s *Server) invitationDelete(w http.ResponseWriter, r *http.Request) {
@@ -166,7 +189,7 @@ func (s *Server) invitationDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Invitation cancelled. Its link no longer works.")
-	redirect(w, r, "/team#invitations")
+	redirect(w, r, "/team/invitations")
 }
 
 // loadMember fetches the member in the path. It answers 404 itself.
@@ -273,7 +296,7 @@ func (s *Server) memberReset(w http.ResponseWriter, r *http.Request) {
 	s.Log.Info("reset link made", "member", m.UserID, "by", sessionFrom(r).UserID)
 	s.renderTeam(w, r, http.StatusOK, pages.TeamView{
 		Link: s.publicBase(r) + "/reset/" + token, LinkFor: m.Name, LinkKind: "reset",
-	}, ui.Form{}, ui.Form{})
+	}, ui.Form{})
 }
 
 func (s *Server) memberRemove(w http.ResponseWriter, r *http.Request) {
