@@ -19,7 +19,7 @@ check("S5.4", hc and not hc["Privileged"] and port.get("HostIp") == "127.0.0.1" 
 
 # S5.2 domain
 r = c.submit(f"/apps/{aid}/settings", action=f"/apps/{aid}/domains", host=host, tls=False)
-check("S5.2a", host in c.get(f"/apps/{aid}/settings").text, "domain added in Settings")
+check("S5.2a", host in c.get(f"/apps/{aid}/domains").text, "domain added on the Domains tab")
 time.sleep(3)
 out = vcurl("http://127.0.0.1/", host)
 check("S5.2b", out.startswith("200") and "nginx" in out.lower(), f"through the proxy with Host header: {out[:60]!r}")

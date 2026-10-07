@@ -787,8 +787,8 @@ func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
 		"/databases/" + mdb.ID, "/databases/" + mdb.ID + "/backups", "/databases/" + mdb.ID + "/settings",
 		"/apps/" + git.ID + "/settings", "/apps/" + git.ID + "/tasks", "/apps/" + git.ID + "/environment",
 		"/services/" + svc.ID, "/services/" + svc.ID + "/compose", "/services/" + svc.ID + "/settings",
-		"/", "/projects", base, base + "/e/" + env.ID, base + "/e/" + env.ID + "/new", base + "/domains", base + "/settings",
-		"/apps/" + appID, "/apps/" + appID + "/environment", "/apps/" + appID + "/environment/edit", "/apps/" + appID + "/storage", "/apps/" + appID + "/settings",
+		"/", "/projects", base, base + "/e/" + env.ID, base + "/e/" + env.ID + "/new", base + "/settings",
+		"/apps/" + appID, "/apps/" + appID + "/environment", "/apps/" + appID + "/environment/edit", "/apps/" + appID + "/domains", "/apps/" + appID + "/storage", "/apps/" + appID + "/settings",
 		"/tags", "/keys", "/keys/tokens", "/servers", "/sources", "/team", "/team/variables", "/account",
 		"/settings", "/settings/storages", "/settings/notifications", "/_ui",
 	} {

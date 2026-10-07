@@ -152,6 +152,8 @@ def _compat(page, action):
         page = action + "/edit"
     if action and re.match(r"^/(team|projects/[a-z2-7]+|environments/[a-z2-7]+|servers/[a-z2-7]+)/variables$", action) and page == action:
         page = action + "/edit"
+    if action and re.match(r"^/apps/[a-z2-7]+/domains$", action) and page == action[:-len("domains")] + "settings":
+        page = action  # an app's domains moved from its Settings to a tab of their own
     if action == "/projects" and page == "/projects/new":
         page = "/projects"
     if action == "/account/tokens" and page in ("/account", "/keys"):

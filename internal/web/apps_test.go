@@ -315,13 +315,13 @@ func TestAppDomains(t *testing.T) {
 	a.fake.PutFile(a.cfg.ProxyPIDPath(), "4242\n")
 	projectID, env := a.project("Shop")
 	appID := a.newApp(projectID, env, "web", true, nil)
-	page := "/apps/" + appID + "/settings"
+	page := "/apps/" + appID + "/domains"
 
 	res, _ := a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {"Shop.Example.com"}, "tls": {"1"}, "redirect_www": {"1"}})
-	wantRedirect(t, res, page+"#domains")
+	wantRedirect(t, res, page)
 	// A generated name never gets HTTPS, whatever the box says.
 	res, _ = a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {"abc.203.0.113.7.sslip.io"}, "tls": {"1"}})
-	wantRedirect(t, res, page+"#domains")
+	wantRedirect(t, res, page)
 
 	doms, _ := a.db.ListDomains(context.Background(), db.KindApp, appID)
 	if len(doms) != 2 || doms[0].Host != "shop.example.com" || !doms[0].TLS || !doms[0].RedirectWWW || doms[1].TLS {
@@ -349,7 +349,7 @@ func TestAppDomains(t *testing.T) {
 	}
 
 	res, _ = a.post(page, "/apps/"+appID+"/domains/"+doms[0].ID+"/delete", nil)
-	wantRedirect(t, res, page+"#domains")
+	wantRedirect(t, res, page)
 	if strings.Contains(a.routesFile(), "shop.example.com") {
 		t.Fatal("a removed domain is still routed")
 	}
@@ -570,7 +570,7 @@ func TestDomainLimits(t *testing.T) {
 	a.setup()
 	projectID, env := a.project("Shop")
 	appID := a.newApp(projectID, env, "web", false, nil)
-	page := "/apps/" + appID + "/settings"
+	page := "/apps/" + appID + "/domains"
 
 	// Valid on its own, but too long once "www." goes in front.
 	long := strings.Repeat("a", 60) + "." + strings.Repeat("b", 60) + "." + strings.Repeat("c", 60) + "." + strings.Repeat("d", 60) + ".example"
@@ -579,11 +579,11 @@ func TestDomainLimits(t *testing.T) {
 		t.Fatalf("a name too long for its www form was accepted: %d", res.StatusCode)
 	}
 	res, _ = a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {long}})
-	wantRedirect(t, res, page+"#domains")
+	wantRedirect(t, res, page)
 
 	for i := 1; i < maxDomains; i++ {
 		res, _ := a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {"d" + strconv.Itoa(i) + ".example.com"}})
-		wantRedirect(t, res, page+"#domains")
+		wantRedirect(t, res, page)
 	}
 	res, body = a.post(page, "/apps/"+appID+"/domains", url.Values{"host": {"one-too-many.example.com"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "up to 20 domains") {
@@ -630,15 +630,15 @@ func TestAppDomainPathsAndPasswords(t *testing.T) {
 	projectID, env := a.project("Shop")
 	web := a.newApp(projectID, env, "web", true, nil)
 	api := a.newApp(projectID, env, "api", true, nil)
-	webPage, apiPage := "/apps/"+web+"/settings", "/apps/"+api+"/settings"
+	webPage, apiPage := "/apps/"+web+"/domains", "/apps/"+api+"/domains"
 	const password = "correct horse battery"
 
 	res, _ := a.post(webPage, "/apps/"+web+"/domains", url.Values{"host": {"shop.example.com"}, "tls": {"1"}})
-	wantRedirect(t, res, webPage+"#domains")
+	wantRedirect(t, res, webPage)
 	// Typed loosely: no leading slash, one at the end.
 	res, body := a.post(apiPage, "/apps/"+api+"/domains", url.Values{"host": {"shop.example.com"}, "path": {"api/"}, "strip_prefix": {"1"}, "tls": {"1"},
 		"auth_user": {"ada"}, "auth_password": {password}})
-	wantRedirect(t, res, apiPage+"#domains")
+	wantRedirect(t, res, apiPage)
 
 	doms, _ := a.db.ListDomains(context.Background(), db.KindApp, api)
 	if len(doms) != 1 || doms[0].Path != "/api" || !doms[0].StripPrefix || doms[0].AuthUser != "ada" {

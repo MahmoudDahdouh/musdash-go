@@ -1,8 +1,8 @@
 from lib import *
 c = owner_client(); who = state()["who"]; H = f"t-web.{HOST}.sslip.io"
-for f in parse_forms(c.get(f"/apps/{who}/settings").text):
+for f in parse_forms(c.get(f"/apps/{who}/domains").text):
     if f["action"].startswith(f"/apps/{who}/domains/") and f["action"].endswith("/delete") and "/admin" not in f["action"]: pass
-page = c.get(f"/apps/{who}/settings").text
+page = c.get(f"/apps/{who}/domains").text
 rows = [f for f in parse_forms(page) if f["action"].startswith(f"/apps/{who}/domains/") and f["action"].endswith("/delete")]
 for f in rows: c.post_form(f)
 c.submit(f"/apps/{who}/settings", action=f"/apps/{who}/domains", host=H, path="/api", tls=False); time.sleep(3)

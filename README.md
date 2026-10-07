@@ -59,7 +59,7 @@ The installer creates a `musdash` user, installs `/usr/local/bin/musdash` and tw
 1. Open `http://<server address>:8000` and create the owner account.
 2. Check **Servers**: Docker and the proxy should both show as running, and the public IP address should be the server's.
 3. Create a project, then **Add resource** and **Docker image**, with an image such as `nginx:alpine`. The generated `sslip.io` address works at once over HTTP.
-4. For HTTPS, point a domain's DNS at the server and add it under the app's **Settings → Domains**. The certificate is issued on the first request.
+4. For HTTPS, point a domain's DNS at the server and add it on the app's **Domains** tab. The certificate is issued on the first request.
 5. To put the dashboard itself on a domain with HTTPS, set it under **Settings**.
 
 Ports 80 and 443 must be reachable from the internet for certificates to be issued. Run the installer again with a newer binary to upgrade; apps keep serving while the control plane restarts.
@@ -455,7 +455,7 @@ How the pages are laid out:
 - The bar at the top is where you are: the project, its environment and the resource, each a switcher to the others beside it. An environment is part of the address (`/projects/<id>/e/<environment>`); a project's own address leads to its first one.
 - Projects, and what is in an environment, are tiles. Apps, databases and services are all resources and are added from one page, **Add resource**.
 - A form of up to five fields is a dialog, opened from a button beside what it changes. Anything that stops, removes or replaces something asks first; deleting a project, an app, a database or a service asks for its name.
-- Keys, tokens and webhook secrets of the whole team are on one page, **Keys & tokens**, in two tabs: **Private Keys** (SSH key pairs) and **API Tokens** (a person's API tokens, deploy tokens and webhook secrets, in one table). No other page holds them or points at them. A project's domains are on its **Domains** tab.
+- Keys, tokens and webhook secrets of the whole team are on one page, **Keys & tokens**, in two tabs: **Private Keys** (SSH key pairs) and **API Tokens** (a person's API tokens, deploy tokens and webhook secrets, in one table). No other page holds them or points at them. An app's domains are on its own **Domains** tab.
 
 The design system lives in two places:
 

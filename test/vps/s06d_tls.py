@@ -2,8 +2,8 @@ from lib import *
 import ssl, socket, subprocess
 c = owner_client(); web = state()["web"]
 HT = "t-tls." + HOST.replace(".", "-") + ".traefik.me"
-for f in parse_forms(c.get(f"/apps/{web}/settings").text):
-    if f["action"].startswith(f"/apps/{web}/domains/") and f["action"].endswith("/delete") and "t-tls" in c.get(f"/apps/{web}/settings").text[c.get(f"/apps/{web}/settings").text.find(f["action"])-400:c.get(f"/apps/{web}/settings").text.find(f["action"])]: c.post_form(f)
+for f in parse_forms(c.get(f"/apps/{web}/domains").text):
+    if f["action"].startswith(f"/apps/{web}/domains/") and f["action"].endswith("/delete") and "t-tls" in c.get(f"/apps/{web}/domains").text[c.get(f"/apps/{web}/domains").text.find(f["action"])-400:c.get(f"/apps/{web}/domains").text.find(f["action"])]: c.post_form(f)
 c.submit(f"/apps/{web}/settings", action=f"/apps/{web}/domains", host=HT, tls=True); time.sleep(3)
 # S6.4 HTTP redirects a TLS host
 r = Client(f"http://{HT}").get("/page?x=1", follow=False)

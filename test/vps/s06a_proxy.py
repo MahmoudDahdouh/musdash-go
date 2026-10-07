@@ -25,7 +25,7 @@ rec("S6.6", "PASS" if ("Hostname" in a.text and "nginx" in b.text.lower() and "H
 m = re.search(r"GET (\S+) HTTP", a.text); path_seen = m.group(1) if m else None
 check("S6.6b", path_seen == "/api/hello?x=1", f"without strip-prefix the app sees the full path: {path_seen}")
 # S6.7 strip prefix: replace the domain row with strip_prefix
-rows = [f for f in parse_forms(c.get(f"/apps/{who}/settings").text) if f["action"].startswith(f"/apps/{who}/domains/") and f["action"].endswith("/delete")]
+rows = [f for f in parse_forms(c.get(f"/apps/{who}/domains").text) if f["action"].startswith(f"/apps/{who}/domains/") and f["action"].endswith("/delete")]
 for f in rows: c.post_form(f)
 dom(who, H, path="/api", tls=False, strip_prefix=True); routes_ready()
 a = Client(f"http://{H}").get("/api/users/42?x=1"); m = re.search(r"GET (\S+) HTTP", a.text)

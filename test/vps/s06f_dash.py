@@ -12,7 +12,7 @@ for path in ("", "/x"):
     try:
         rr = c.submit(f"/apps/{web}/settings", action=f"/apps/{web}/domains", host=D, path=path, tls=False)
         txt = flash(rr)
-        listed = D in re.sub(r"<[^>]+>", " ", c.get(f"/apps/{web}/settings").text).split("Domains")[-1][:600]
+        listed = D in re.sub(r"<[^>]+>", " ", c.get(f"/apps/{web}/domains").text).split("Domains")[-1][:600]
         check("S6.13c" + ("b" if path else "a"), not listed, f"app refused the dashboard's own domain with path {path!r}: {txt[-120:]!r}", sev="S1")
     except Exception as e:
         rec("S6.13c", "FAIL", repr(e), "S2")

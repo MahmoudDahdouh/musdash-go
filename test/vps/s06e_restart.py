@@ -35,7 +35,7 @@ def ws_echo(host, path="/echo"):
     s.sendall(frame); time.sleep(0.5); data = s.recv(4096); s.close()
     return data[2:] if data else b""
 c = owner_client(); who = state()["who"]
-for f in parse_forms(c.get(f"/apps/{who}/settings").text):
+for f in parse_forms(c.get(f"/apps/{who}/domains").text):
     if f["action"].startswith(f"/apps/{who}/domains/") and f["action"].endswith("/delete"): c.post_form(f)
 HW = f"t-who.{HOST}.sslip.io"
 c.submit(f"/apps/{who}/settings", action=f"/apps/{who}/domains", host=HW, tls=False); time.sleep(3)

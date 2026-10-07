@@ -112,17 +112,17 @@ func parseGitForm(r *http.Request, f *ui.Form, c pages.GitChoices, app *db.App) 
 }
 
 // renderAppSettings draws the Settings page with the given form states.
-func (s *Server) renderAppSettings(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, general, domain, src ui.Form) {
-	s.renderAppSettingsForms(w, r, status, v, general, domain, src, ui.Form{})
+func (s *Server) renderAppSettings(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, general, src ui.Form) {
+	s.renderAppSettingsForms(w, r, status, v, general, src, ui.Form{})
 }
 
 // renderAppSettingsWith draws the Settings page with the previews form in
 // the given state.
 func (s *Server) renderAppSettingsWith(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, previews ui.Form) {
-	s.renderAppSettingsForms(w, r, status, v, ui.Form{}, ui.Form{}, ui.Form{}, previews)
+	s.renderAppSettingsForms(w, r, status, v, ui.Form{}, ui.Form{}, previews)
 }
 
-func (s *Server) renderAppSettingsForms(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, general, domain, src, previews ui.Form) {
+func (s *Server) renderAppSettingsForms(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, general, src, previews ui.Form) {
 	if v.App.IsPreview() {
 		// Nothing of its own to set: where it comes from, and how to
 		// remove it.
@@ -146,7 +146,7 @@ func (s *Server) renderAppSettingsForms(w http.ResponseWriter, r *http.Request, 
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, status, pages.AppSettings(s.appShell(w, r, v), v, general, domain, src, previews, choices))
+	s.render(w, r, status, pages.AppSettings(s.appShell(w, r, v), v, general, src, previews, choices))
 }
 
 func (s *Server) appSourceSave(w http.ResponseWriter, r *http.Request) {
@@ -180,7 +180,7 @@ func (s *Server) appSourceSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, ui.Form{}, f)
+		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, f)
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Source saved. Redeploy to build from it.")

@@ -248,7 +248,7 @@ func TestDeployWithDocker(t *testing.T) {
 
 	// A second address for the same app: a path of the host, with the path
 	// taken off and a password in front. Through the real proxy.
-	post(appPath+"/settings", appPath+"/domains", url.Values{"host": {"docs.127.0.0.1.sslip.io"}, "path": {"/docs"}, "strip_prefix": {"1"},
+	post(appPath+"/domains", appPath+"/domains", url.Values{"host": {"docs.127.0.0.1.sslip.io"}, "path": {"/docs"}, "strip_prefix": {"1"},
 		"auth_user": {"reader"}, "auth_password": {"a password for the test"}})
 	ask := func(path, user, password string) (int, string) {
 		req, _ := http.NewRequest(http.MethodGet, "http://"+proxyAddr+path, nil)

@@ -32,9 +32,9 @@ settings()
 doms = ["evil.com; id", "a b.com", "localhost", "127.0.0.1", "10.0.0.5", "*.example.com", "-bad.example.com", "x" * 260 + ".com", "ünï.example.com", "example.com:8080", "user@example.com", "http://example.com", "example.com/path", "EXAMPLE.COM", "example.com.", "a..b.com", "[::1]", "nodot", "t-web.168.235.65.204.sslip.io"]
 res = {}
 for dm in doms:
-    before = len(re.findall(r"/domains/[a-z2-7]{12}/delete", c.get(f"/apps/{web}/settings").text))
+    before = len(re.findall(r"/domains/[a-z2-7]{12}/delete", c.get(f"/apps/{web}/domains").text))
     c.submit(f"/apps/{web}/settings", action=f"/apps/{web}/domains", host=dm, tls=False)
-    pg = c.get(f"/apps/{web}/settings").text; after = len(re.findall(r"/domains/[a-z2-7]{12}/delete", pg))
+    pg = c.get(f"/apps/{web}/domains").text; after = len(re.findall(r"/domains/[a-z2-7]{12}/delete", pg))
     res[dm[:30]] = after > before
     for f in parse_forms(pg):
         if f["action"].startswith(f"/apps/{web}/domains/") and f["action"].endswith("/delete") and after > before and dm.lower().split("/")[0] in pg[pg.find(f["action"]) - 600: pg.find(f["action"])].lower(): c.post_form(f); break

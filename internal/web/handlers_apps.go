@@ -376,7 +376,7 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if domainTaken {
-		setFlash(w, r, ui.ToneWarn, "App created, but "+host+" was taken in the meantime. Add another domain under Settings.")
+		setFlash(w, r, ui.ToneWarn, "App created, but "+host+" was taken in the meantime. Add another on its Domains tab.")
 	} else {
 		setFlash(w, r, ui.ToneOK, "App created. Choose Deploy to start it.")
 	}
@@ -854,7 +854,7 @@ func (s *Server) appStorageDelete(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) appSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadApp(w, r); ok {
-		s.renderAppSettings(w, r, http.StatusOK, v, ui.Form{}, ui.Form{}, ui.Form{})
+		s.renderAppSettings(w, r, http.StatusOK, v, ui.Form{}, ui.Form{})
 	}
 }
 
@@ -917,7 +917,7 @@ func (s *Server) appSettingsSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, f, ui.Form{}, ui.Form{})
+		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, f, ui.Form{})
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Settings saved. Redeploy to apply them.")
@@ -991,6 +991,17 @@ func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) error {
 	return nil
 }
 
+// renderAppDomains draws an app's Domains tab; f is the Add domain form.
+func (s *Server) renderAppDomains(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, f ui.Form) {
+	s.render(w, r, status, pages.AppDomains(s.appShell(w, r, v), v, f))
+}
+
+func (s *Server) appDomains(w http.ResponseWriter, r *http.Request) {
+	if v, ok := s.loadApp(w, r); ok {
+		s.renderAppDomains(w, r, http.StatusOK, v, ui.Form{})
+	}
+}
+
 func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 	v, ok := s.loadApp(w, r)
 	if !ok {
@@ -1002,12 +1013,12 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !f.OK() {
-		s.renderAppSettings(w, r, http.StatusUnprocessableEntity, v, ui.Form{}, f, ui.Form{})
+		s.renderAppDomains(w, r, http.StatusUnprocessableEntity, v, f)
 		return
 	}
 	s.syncRoutes(r, v.App.ServerID)
 	setFlash(w, r, ui.ToneOK, "Domain added.")
-	redirect(w, r, "/apps/"+v.App.ID+"/settings#domains")
+	redirect(w, r, "/apps/"+v.App.ID+"/domains")
 }
 
 func (s *Server) appDomainDelete(w http.ResponseWriter, r *http.Request) {
@@ -1026,14 +1037,7 @@ func (s *Server) appDomainDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	s.syncRoutes(r, v.App.ServerID)
 	setFlash(w, r, ui.ToneOK, "Domain removed.")
-	// Back to where it was removed from: the project's Domains tab posts
-	// here too, and says so. The address is built here, never taken from
-	// the form.
-	if r.PostFormValue("from") == "project" {
-		redirect(w, r, "/projects/"+v.Project.ID+"/domains")
-		return
-	}
-	redirect(w, r, "/apps/"+v.App.ID+"/settings#domains")
+	redirect(w, r, "/apps/"+v.App.ID+"/domains")
 }
 
 func (s *Server) appDelete(w http.ResponseWriter, r *http.Request) {
