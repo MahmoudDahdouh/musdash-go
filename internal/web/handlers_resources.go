@@ -34,21 +34,25 @@ func (s *Server) loadProjectEnv(w http.ResponseWriter, r *http.Request) (db.Proj
 // envPath is the page of one environment of a project.
 func envPath(projectID, envID string) string { return "/projects/" + projectID + "/e/" + envID }
 
+// projectCrumb is a project's step of the trail: a switcher to the team's
+// other projects.
+func projectCrumb(p db.Project) ui.Crumb {
+	return ui.Crumb{Label: p.Name, Icon: "folder", Filter: "Find a project", Menu: "/switch/projects?at=" + p.ID}
+}
+
 // projectCrumbs is the trail of a page that is the project's own, whatever
-// the environment: its domains, its settings.
+// the environment: its settings, its variables.
 func projectCrumbs(p db.Project, here ...ui.Crumb) []ui.Crumb {
-	if len(here) == 0 {
-		return []ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: p.Name, Icon: "folder"}}
-	}
-	return append([]ui.Crumb{{Label: "Projects", Href: "/projects"}, {Label: p.Name, Href: "/projects/" + p.ID, Icon: "folder"}}, here...)
+	return append([]ui.Crumb{{Label: "Projects", Href: "/projects"}, projectCrumb(p)}, here...)
 }
 
 // envCrumbs is the trail of a page inside one environment: the project,
-// then the environment as a switcher to the project's others.
+// then the environment as a switcher to the project's others. The marked
+// option of that switcher is the way back to the environment's own page.
 func envCrumbs(p db.Project, env db.Environment, here ...ui.Crumb) []ui.Crumb {
 	return append([]ui.Crumb{
 		{Label: "Projects", Href: "/projects"},
-		{Label: p.Name, Href: envPath(p.ID, env.ID), Icon: "folder"},
+		projectCrumb(p),
 		{Label: env.Name, Menu: "/projects/" + p.ID + "/switch/environments?at=" + env.ID},
 	}, here...)
 }
@@ -73,6 +77,19 @@ func (s *Server) menuNote(w http.ResponseWriter, r *http.Request, text string) {
 // was read for this request.
 func (s *Server) switchTeams(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, pages.TeamOptions(sessionFrom(r).TeamName))
+}
+
+// switchProjects answers the project switcher: the team's projects, each a
+// link to its page. Whose they are is the session's to say, so the path
+// names no team.
+func (s *Server) switchProjects(w http.ResponseWriter, r *http.Request) {
+	projects, err := s.DB.ListProjects(r.Context(), sessionFrom(r).TeamID)
+	if err != nil {
+		s.Log.Error("switcher", "route", logRoute(r), "err", err)
+		s.menuNote(w, r, "The projects could not be listed.")
+		return
+	}
+	s.render(w, r, http.StatusOK, pages.ProjectOptions(projects, r.URL.Query().Get("at")))
 }
 
 // switchEnvironments answers the environment switcher: the project's

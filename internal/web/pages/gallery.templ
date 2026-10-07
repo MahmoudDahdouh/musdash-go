@@ -243,7 +243,7 @@ templ Gallery(s ui.Shell) {
 			}
 			@gallerySection("Trail and switcher") {
 				<div class="card card-body">
-					@ui.Trail([]ui.Crumb{{Label: "Projects", Href: "#"}, {Label: "Shop", Href: "#", Icon: "folder"}, {Label: "production", Menu: "/_ui/switch", Icon: "globe"}, {Label: "storefront", Menu: "/_ui/switch", Icon: "app-window", Filter: "Find a resource"}})
+					@ui.Trail([]ui.Crumb{{Label: "Projects", Href: "#"}, {Label: "Shop", Menu: "/_ui/switch", Icon: "folder", Filter: "Find a project"}, {Label: "production", Menu: "/_ui/switch", Icon: "globe"}, {Label: "storefront", Menu: "/_ui/switch", Icon: "app-window", Filter: "Find a resource"}})
 				</div>
 			}
 			@gallerySection("Menu") {

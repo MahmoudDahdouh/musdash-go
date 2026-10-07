@@ -61,6 +61,18 @@ templ ResourceTiles(res Resources) {
 	}
 }
 
+// ProjectOptions is what the project switcher lists: the team's projects.
+// at is the id of the one the person is in.
+templ ProjectOptions(projects []db.Project, at string) {
+	for _, p := range projects {
+		@ui.SwitchOption("/projects/"+p.ID, "folder", p.Name, p.ID == at)
+	}
+	if len(projects) > 0 {
+		@ui.MenuSep()
+	}
+	@ui.MenuAction("/projects", "dashboard", "All projects")
+}
+
 // EnvironmentOptions is what the environment switcher lists.
 templ EnvironmentOptions(p db.Project, envs []db.Environment, at string) {
 	for _, e := range envs {

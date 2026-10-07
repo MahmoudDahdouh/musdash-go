@@ -1276,7 +1276,7 @@ func Gallery(s ui.Shell) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = ui.Trail([]ui.Crumb{{Label: "Projects", Href: "#"}, {Label: "Shop", Href: "#", Icon: "folder"}, {Label: "production", Menu: "/_ui/switch", Icon: "globe"}, {Label: "storefront", Menu: "/_ui/switch", Icon: "app-window", Filter: "Find a resource"}}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Trail([]ui.Crumb{{Label: "Projects", Href: "#"}, {Label: "Shop", Menu: "/_ui/switch", Icon: "folder", Filter: "Find a project"}, {Label: "production", Menu: "/_ui/switch", Icon: "globe"}, {Label: "storefront", Menu: "/_ui/switch", Icon: "app-window", Filter: "Find a resource"}}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

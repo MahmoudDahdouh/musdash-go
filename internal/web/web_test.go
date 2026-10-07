@@ -566,7 +566,7 @@ func TestEnvironmentInThePathAndSwitchers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.newApp(projectID, production, "web", false, nil)
+	appID := a.newApp(projectID, production, "web", false, nil)
 	a.newApp(projectID, staging, "web-next", false, nil)
 	otherID, otherEnv := a.project("Blog")
 
@@ -609,11 +609,29 @@ func TestEnvironmentInThePathAndSwitchers(t *testing.T) {
 		t.Fatalf("resource switcher:\n%s", menu)
 	}
 
+	// The project step of a trail is a switcher too, on every page under
+	// a project.
+	for _, page := range []string{"/projects/" + projectID + "/e/" + staging.ID, "/projects/" + projectID + "/settings", "/apps/" + appID} {
+		if _, body := a.get(page); !strings.Contains(body, `hx-get="/switch/projects?at=`+projectID+`"`) {
+			t.Errorf("%s: the project step is not a switcher", page)
+		}
+	}
+
 	// Another team's project and environment answer a note, not their names.
 	if _, err := a.db.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('otherteam', 'Other', 1)`); err != nil {
 		t.Fatal(err)
 	}
 	theirs, _ := a.db.CreateProject(ctx, "otherteam", "Secret", "")
+	// The project switcher lists the team's projects and no other team's,
+	// marks the one the person is in, and leads to the list.
+	res, menu = a.get("/switch/projects?at=" + projectID)
+	wantStatus(t, res, http.StatusOK)
+	if !strings.Contains(menu, `href="/projects/`+otherID+`"`) || strings.Contains(menu, "Secret") || strings.Contains(menu, theirs.ID) || !strings.Contains(menu, `href="/projects"`) {
+		t.Fatalf("project switcher:\n%s", menu)
+	}
+	if !regexp.MustCompile(`href="/projects/` + projectID + `"[^>]*aria-selected="true"`).MatchString(menu) || regexp.MustCompile(`href="/projects/`+otherID+`"[^>]*aria-selected="true"`).MatchString(menu) {
+		t.Fatal("the switcher does not mark the current project, or marks another")
+	}
 	theirEnvs, _ := a.db.ListEnvironments(ctx, theirs.ID)
 	for _, path := range []string{"/projects/" + theirs.ID + "/switch/environments", "/environments/" + theirEnvs[0].ID + "/switch/resources"} {
 		res, menu := a.get(path)
