@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
 	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
 )
 
@@ -335,7 +337,7 @@ func TestNotificationsPage(t *testing.T) {
 	a.setup()
 	ctx := context.Background()
 	team := firstTeam(t, a)
-	page := "/settings/notifications"
+	page := "/notifications"
 	var got []map[string]any
 	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var m map[string]any
@@ -352,6 +354,34 @@ func TestNotificationsPage(t *testing.T) {
 	}
 	if strings.Contains(body, "data-autoopen") {
 		t.Fatal("a dialog is open on a page nobody sent a form from")
+	}
+	// The page is the sidebar's, not a tab of Settings, whose old address
+	// is gone.
+	if !strings.Contains(body, `href="/notifications" aria-current="page"`) {
+		t.Fatal("the sidebar does not mark Notifications")
+	}
+	if res, _ := a.get("/settings/notifications"); res.StatusCode != http.StatusNotFound {
+		t.Fatalf("the old address answers %d", res.StatusCode)
+	}
+	if _, settings := a.get("/settings"); strings.Contains(settings, `class="tab" href="/notifications"`) || strings.Contains(settings, "/settings/notifications") {
+		t.Fatal("Settings still has a Notifications tab")
+	}
+	// The Add channel menu lists every kind, and each item opens the
+	// kind's dialog. With no channel yet it is in the empty state, and the
+	// header has none.
+	for _, k := range notify.Kinds {
+		if !regexp.MustCompile(`<button type="button" class="menu-item" role="option"[^>]*data-open="add-channel-` + k.Kind + `"`).MatchString(body) {
+			t.Errorf("the Add channel menu has no item that opens the %s dialog", k.Label)
+		}
+	}
+	if strings.Count(body, `id="new-channel"`) != 1 {
+		t.Fatal("the empty page does not have the Add channel menu exactly once")
+	}
+	if empty := between(t, page, body, `<div class="empty"`, `<dialog`); !strings.Contains(empty, `id="new-channel"`) {
+		t.Fatal("the Add channel menu is not in the empty state")
+	}
+	if strings.Contains(body, "<table") {
+		t.Fatal("a table on a page with no channel")
 	}
 
 	secretURL := hook.URL + "/hooks/T0PSECRET"
@@ -377,6 +407,25 @@ func TestNotificationsPage(t *testing.T) {
 		t.Fatal("the list is missing the channel, or shows its address or secret")
 	}
 
+	// The channel is a row of the table: its name, its type, what it is
+	// told about and its state. The Add channel menu moved to the header,
+	// and the channel has an Edit dialog of its own.
+	row := between(t, page, body, "<tbody", "</tbody>")
+	for _, want := range []string{">Ops<", ">Webhook<", ">Everything<", "On", `data-open="edit-channel-` + ch.ID + `"`, `action="/notifications/` + ch.ID + `/test"`, `action="/notifications/` + ch.ID + `/delete"`} {
+		if !strings.Contains(row, want) {
+			t.Errorf("the channel's row is missing %q", want)
+		}
+	}
+	if strings.Contains(body, "No channel yet") || strings.Count(body, `id="new-channel"`) != 1 {
+		t.Fatal("a page with a channel: still the empty state, or not one Add channel menu")
+	}
+	if head := between(t, page, body, `<header`, `</header>`); !strings.Contains(head, `id="new-channel"`) || !strings.Contains(head, "data-menu-end") {
+		t.Fatal("the Add channel menu is not at the end of the header")
+	}
+	if !strings.Contains(body, `id="edit-channel-`+ch.ID+`"`) || !strings.Contains(body, `action="/notifications/`+ch.ID+`"`) {
+		t.Fatal("the channel has no Edit dialog")
+	}
+
 	// Send a test.
 	res, _ = a.post(page, page+"/"+ch.ID+"/test", url.Values{})
 	wantRedirect(t, res, page)
@@ -400,8 +449,8 @@ func TestNotificationsPage(t *testing.T) {
 	if c, _ := a.db.Channel(ctx, team, ch.ID); c.Enabled || c.Events != "backup,disk" {
 		t.Fatalf("%+v", c)
 	}
-	if _, body = a.get(page); !strings.Contains(body, "Switched off") {
-		t.Fatal("a switched-off channel is not marked")
+	if _, body = a.get(page); !strings.Contains(body, "Switched off") || !strings.Contains(body, ">Backups, Disk<") {
+		t.Fatal("a switched-off channel is not marked, or its row does not say what it is told about")
 	}
 	res, _ = a.post(page, page+"/"+ch.ID+"/delete", url.Values{})
 	wantRedirect(t, res, page)
@@ -455,7 +504,7 @@ func TestOtherTeamsOperationsAreNotFound(t *testing.T) {
 			t.Errorf("GET %s: %d", path, res.StatusCode)
 		}
 	}
-	for _, page := range []string{"/settings/storages", "/settings/notifications"} {
+	for _, page := range []string{"/settings/storages", "/notifications"} {
 		if _, body := a.get(page); strings.Contains(body, "their") {
 			t.Errorf("%s lists another team's entry", page)
 		}
@@ -473,9 +522,9 @@ func TestOtherTeamsOperationsAreNotFound(t *testing.T) {
 		"/apps/" + myApp + "/tasks/" + theirTask.ID + "/delete",
 		"/settings/storages/" + theirStorage.ID + "/test",
 		"/settings/storages/" + theirStorage.ID + "/delete",
-		"/settings/notifications/" + theirChannel.ID,
-		"/settings/notifications/" + theirChannel.ID + "/test",
-		"/settings/notifications/" + theirChannel.ID + "/delete",
+		"/notifications/" + theirChannel.ID,
+		"/notifications/" + theirChannel.ID + "/test",
+		"/notifications/" + theirChannel.ID + "/delete",
 	} {
 		form := url.Values{"_csrf": {token}, "confirm": {"maindb"}, "schedule": {"@daily"}, "keep": {"3"}, "enabled": {"1"}, "name": {"x"}, "command": {"true"}}
 		if res, _ := a.postRaw(a.client, path, form, nil); res.StatusCode != http.StatusNotFound {

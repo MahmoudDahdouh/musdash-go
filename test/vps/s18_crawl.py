@@ -1,6 +1,6 @@
 """HTTP-level page sweep: follow every same-site link from Home with a signed-in session; no 5xx, no inline script, security headers present."""
 from lib import *
-c = owner_client(); seen = {}; todo = ["/", "/projects", "/tags", "/servers", "/sources", "/team", "/keys", "/settings", "/settings/storages", "/settings/notifications", "/team/variables", "/account"]
+c = owner_client(); seen = {}; todo = ["/", "/projects", "/tags", "/servers", "/sources", "/team", "/keys", "/settings", "/settings/storages", "/notifications", "/team/variables", "/account"]
 skip = re.compile(r"/(logout|stream|download|webhook-secret|values|status|live|switch)|^/static|\?hide")
 bad = {}; inline = []; hdrs_missing = set()
 while todo and len(seen) < 220:

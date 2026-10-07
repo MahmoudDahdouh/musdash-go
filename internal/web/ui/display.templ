@@ -184,6 +184,9 @@ type MenuItemProps struct {
 	// Href makes the item a link. Without one it is a button that sends the
 	// form it is in.
 	Href string
+	// Opens makes the item a button that opens the dialog with this id, and
+	// sends nothing.
+	Opens string
 	// Danger is for what ends or removes something. It is red in its text
 	// and a pale red under the pointer, never a red block: a menu is read
 	// before it is pressed.
@@ -209,6 +212,10 @@ templ MenuItem(p MenuItemProps) {
 		>
 			@menuItemBody(p)
 		</a>
+	} else if p.Opens != "" {
+		<button type="button" class={ "menu-item", templ.KV("menu-item-danger", p.Danger) } role="option" aria-selected="false" tabindex="-1" data-open={ p.Opens } { p.Attrs... }>
+			@menuItemBody(p)
+		</button>
 	} else {
 		<button type="submit" class={ "menu-item", templ.KV("menu-item-danger", p.Danger) } role="option" aria-selected="false" tabindex="-1" { p.Attrs... }>
 			@menuItemBody(p)

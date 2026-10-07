@@ -12,7 +12,12 @@
   // Dialogs: data-open="<dialog id>" opens, data-close closes the nearest one.
   on("click", "[data-open]", (el) => {
     const dialog = document.getElementById(el.dataset.open);
-    if (dialog instanceof HTMLDialogElement && !dialog.open) dialog.showModal();
+    if (!(dialog instanceof HTMLDialogElement) || dialog.open) return;
+    // A dialog gives the focus back to what had it when it opened. An item
+    // of a menu is not there to take it once the menu has shut; the menu's
+    // own button is.
+    el.closest("[data-select]")?.querySelector("[popovertarget]")?.focus();
+    dialog.showModal();
   });
   on("click", "[data-close]", (el) => el.closest("dialog")?.close());
   // A click on the backdrop lands on the <dialog> element itself.

@@ -489,7 +489,6 @@ func settingsTabs() []ui.Tab {
 	return []ui.Tab{
 		{Key: "dashboard", Label: "Dashboard", Href: "/settings", Icon: "globe"},
 		{Key: "storages", Label: "Backup storage", Href: "/settings/storages", Icon: "archive"},
-		{Key: "notifications", Label: "Notifications", Href: "/settings/notifications", Icon: "bell"},
 	}
 }
 
@@ -581,17 +580,21 @@ func kindLabel(kind string) string {
 	return kind
 }
 
-func eventLabels(c db.Channel) string {
+// channelEvents says in a few words what a channel is told about.
+func channelEvents(c db.Channel) string {
 	var out []string
 	for _, e := range notify.Events {
 		if c.Wants(e.Kind) {
-			out = append(out, e.Label)
+			out = append(out, e.Short)
 		}
 	}
-	if len(out) == 0 {
+	switch len(out) {
+	case 0:
 		return "Nothing"
+	case len(notify.Events):
+		return "Everything"
 	}
-	return strings.Join(out, "; ")
+	return strings.Join(out, ", ")
 }
 
 func fieldType(f notify.Field) string {
@@ -608,85 +611,102 @@ func fieldLabel(f notify.Field) string {
 	return f.Label
 }
 
+// addChannelMenu is the button a channel is added with: it opens a menu of
+// the kinds, and each kind opens its own dialog. end says the button is at
+// the end of a row, so the menu hangs from its right edge.
+templ addChannelMenu(end bool) {
+	@ui.Menu(ui.MenuProps{ID: "new-channel", Label: "Add channel", Class: "btn btn-primary", End: end, Button: addChannelButton()}) {
+		for _, k := range notify.Kinds {
+			@ui.MenuItem(ui.MenuItemProps{Label: k.Label, Opens: "add-channel-" + k.Kind})
+		}
+	}
+}
+
+templ addChannelButton() {
+	@ui.Icon("plus")
+	Add channel
+	@ui.Icon("chevron-down")
+}
+
+// Notifications is the team's channels in one table. kind and f are the
+// Add dialog that was sent and refused, if one was.
 templ Notifications(s ui.Shell, list []db.Channel, kind notify.KindInfo, f ui.Form) {
-	@settingsFrame(s, "notifications") {
-		<div class="grid max-w-3xl gap-6">
-			<section class="card">
-				<div class="card-head">
-					<div>
-						<h2 class="card-title">Notification channels</h2>
-						<p class="muted text-sm">Where musdash tells you what happened. Each channel chooses which events it wants.</p>
-					</div>
-				</div>
-				if len(list) == 0 {
-					@ui.EmptyState(ui.EmptyProps{Icon: "bell", Title: "No channel yet", Text: "Without one, a failed backup or deployment is only visible here in the dashboard.", Size: ui.EmptySmall})
-				}
-				for _, c := range list {
-					<div class="card-body grid gap-3 border-t border-line">
-						<div class="flex flex-wrap items-center justify-between gap-3">
-							<div class="flex flex-wrap items-center gap-2">
-								<span class="font-semibold">{ c.Name }</span>
-								@ui.Badge(kindLabel(c.Kind), ui.ToneNeutral)
-								if !c.Enabled {
-									@ui.Badge("Switched off", ui.ToneWarn)
-								}
-							</div>
-							<div class="flex flex-wrap gap-2">
-								<form method="post" action={ templ.SafeURL("/settings/notifications/" + c.ID + "/test") }>
-									@ui.CSRF(s.CSRF)
-									@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Type: "submit"}) {
-										Send a test
-									}
-								</form>
-								<form method="post" action={ templ.SafeURL("/settings/notifications/" + c.ID + "/delete") }>
-									@ui.CSRF(s.CSRF)
-									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the channel "+c.Name+"?", "Nothing is sent to it any more.", "Remove channel", true)}) {
-										Remove
-									}
-								</form>
-							</div>
-						</div>
-						<form method="post" action={ templ.SafeURL("/settings/notifications/" + c.ID) } class="grid gap-2">
-							@ui.CSRF(s.CSRF)
-							<fieldset class="grid gap-2">
-								<legend class="field-label">Tell this channel when</legend>
-								for _, e := range notify.Events {
-									@ui.Checkbox("ev-"+c.ID+"-"+e.Kind, c.Wants(e.Kind), nil) {
-										{ e.Label }
-									}
-								}
-								@ui.Checkbox("on-"+c.ID, c.Enabled, nil) {
-									<span class="font-semibold">Channel switched on</span>
-								}
-							</fieldset>
-							<div>
-								@ui.Button(ui.ButtonProps{Small: true, Type: "submit"}) {
-									Save
-								}
-							</div>
-						</form>
-					</div>
-				}
-			</section>
-			<section class="card">
-				<div class="card-head">
-					<div>
-						<h2 class="card-title">Add a channel</h2>
-						<p class="muted text-sm">Choose where the messages go.</p>
-					</div>
-				</div>
-				<div class="card-body flex flex-wrap gap-2">
-					for _, k := range notify.Kinds {
-						@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-channel-" + k.Kind}) {
-							{ k.Label }
-						}
-					}
-				</div>
-			</section>
-			for _, k := range notify.Kinds {
-				@channelDialog(s.CSRF, k, channelForm(f, k.Kind == kind.Kind))
+	@ui.Layout(s) {
+		@ui.PageHeader("Notifications", "Where musdash tells you what happened: a deployment, a backup, a task, a container that stopped, a disk that is filling up.") {
+			if len(list) > 0 {
+				@addChannelMenu(true)
 			}
-		</div>
+		}
+		if len(list) == 0 {
+			@ui.EmptyState(ui.EmptyProps{Icon: "bell", Title: "No channel yet", Text: "Without one, a failed backup or deployment is only visible here in the dashboard. Add a channel to be told in chat, by email or through a webhook."}) {
+				@addChannelMenu(false)
+			}
+		} else {
+			<section class="card">
+				@ui.Table("Name", "Type", "Tells about", "State", "") {
+					for _, c := range list {
+						<tr>
+							<td class="font-semibold">{ c.Name }</td>
+							<td>
+								@ui.Badge(kindLabel(c.Kind), ui.ToneNeutral)
+							</td>
+							<td>{ channelEvents(c) }</td>
+							<td>
+								if c.Enabled {
+									@ui.Pill(ui.ToneOK, "On")
+								} else {
+									@ui.Pill(ui.ToneNeutral, "Switched off")
+								}
+							</td>
+							<td class="text-right">
+								<div class="flex flex-wrap justify-end gap-2">
+									<form method="post" action={ templ.SafeURL("/notifications/" + c.ID + "/test") }>
+										@ui.CSRF(s.CSRF)
+										@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Type: "submit"}) {
+											Send a test
+										}
+									</form>
+									@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "edit-channel-" + c.ID}) {
+										Edit
+									}
+									<form method="post" action={ templ.SafeURL("/notifications/" + c.ID + "/delete") }>
+										@ui.CSRF(s.CSRF)
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the channel "+c.Name+"?", "Nothing is sent to it any more.", "Remove channel", true)}) {
+											Remove
+										}
+									</form>
+								</div>
+							</td>
+						</tr>
+					}
+				}
+			</section>
+			for _, c := range list {
+				@editChannelDialog(s.CSRF, c)
+			}
+		}
+		for _, k := range notify.Kinds {
+			@channelDialog(s.CSRF, k, channelForm(f, k.Kind == kind.Kind))
+		}
+	}
+}
+
+// editChannelDialog changes what a channel is told about and whether it is
+// switched on. Every channel has one on the page, so its fields carry the
+// channel's id.
+templ editChannelDialog(csrf string, c db.Channel) {
+	@ui.FormDialog(ui.DialogProps{ID: "edit-channel-" + c.ID, Title: "Edit " + c.Name, Description: "What this " + kindLabel(c.Kind) + " channel is told about. Its address and tokens are not shown again, so they cannot be changed here: remove the channel and add it again.", Action: "/notifications/" + c.ID, CSRF: csrf, Submit: "Save"}) {
+		<fieldset class="grid gap-2">
+			<legend class="field-label">Tell this channel when</legend>
+			for _, e := range notify.Events {
+				@ui.Checkbox("ev-"+c.ID+"-"+e.Kind, c.Wants(e.Kind), nil) {
+					{ e.Label }
+				}
+			}
+		</fieldset>
+		@ui.Checkbox("on-"+c.ID, c.Enabled, nil) {
+			<span class="font-semibold">Channel switched on</span>
+		}
 	}
 }
 
@@ -702,7 +722,7 @@ func channelForm(f ui.Form, sent bool) ui.Form {
 // channelDialog is the form one kind of channel is added with. Every kind
 // has one on the page, so the ids of its fields carry the kind.
 templ channelDialog(csrf string, k notify.KindInfo, f ui.Form) {
-	@ui.FormDialog(ui.DialogProps{ID: "add-channel-" + k.Kind, Title: "Add a " + k.Label + " channel", Description: "Addresses and tokens are stored encrypted and are not shown again.", Action: "/settings/notifications", CSRF: csrf, Submit: "Add channel", Wide: len(k.Fields) > 4, Open: !f.OK()}) {
+	@ui.FormDialog(ui.DialogProps{ID: "add-channel-" + k.Kind, Title: "Add a " + k.Label + " channel", Description: "Addresses and tokens are stored encrypted and are not shown again.", Action: "/notifications", CSRF: csrf, Submit: "Add channel", Wide: len(k.Fields) > 4, Open: !f.OK()}) {
 		<input type="hidden" name="kind" value={ k.Kind }/>
 		if f.E("_form") != "" {
 			@ui.Notice(ui.ToneDanger) {

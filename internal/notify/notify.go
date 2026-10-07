@@ -35,13 +35,14 @@ const (
 	EventTest      = "test"
 )
 
-// Events lists the event kinds with what each means, for forms.
-var Events = []struct{ Kind, Label string }{
-	{EventDeploy, "A deployment finished or failed"},
-	{EventBackup, "A backup finished or failed"},
-	{EventTask, "A scheduled task failed"},
-	{EventContainer, "A container stopped unexpectedly"},
-	{EventDisk, "The server's disk is nearly full"},
+// Events lists the event kinds with what each means, for forms. Short is
+// the word for it where there is no room for the sentence.
+var Events = []struct{ Kind, Label, Short string }{
+	{EventDeploy, "A deployment finished or failed", "Deployments"},
+	{EventBackup, "A backup finished or failed", "Backups"},
+	{EventTask, "A scheduled task failed", "Tasks"},
+	{EventContainer, "A container stopped unexpectedly", "Containers"},
+	{EventDisk, "The server's disk is nearly full", "Disk"},
 }
 
 // Event is one thing worth telling.

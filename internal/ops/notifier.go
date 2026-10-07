@@ -172,6 +172,6 @@ func (o *Ops) TestChannel(ctx context.Context, ch db.Channel) error {
 		Kind: notify.EventTest, OK: true, At: time.Now(),
 		Title: "Test notification from musdash",
 		Body:  "If you can read this, the channel \"" + ch.Name + "\" works.",
-		URL:   o.absolute(ctx, "/settings/notifications"),
+		URL:   o.absolute(ctx, "/notifications"),
 	})
 }

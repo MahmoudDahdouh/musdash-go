@@ -8,6 +8,6 @@ time.sleep(3)
 SINK = f"http://t-sink.{HOST}.sslip.io/hook"
 def sinklog(): return shout(f"docker logs --since 5m $(docker ps -q --filter name=musdash-{sink}) 2>&1 | tail -40")
 # channel form
-pg = c.get("/settings/notifications"); print([ (f["action"], [(x["name"], x["type"], x.get("options", "")) for x in f["fields"] if x["name"] != "_csrf"]) for f in parse_forms(pg.text) if "logout" not in f["action"]])
+pg = c.get("/notifications"); print([ (f["action"], [(x["name"], x["type"], x.get("options", "")) for x in f["fields"] if x["name"] != "_csrf"]) for f in parse_forms(pg.text) if "logout" not in f["action"]])
 t = re.sub(r"\s+", " ", re.sub("<[^>]+>", " ", pg.text)); print(t[150:1600])
 print(re.findall(r'href="([^"]*kind=[^"]*)"', pg.text))

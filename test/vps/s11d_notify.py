@@ -1,15 +1,15 @@
 from lib import *
 c = owner_client(); st = state(); sink = st["sink"]; web = st["web"]
 def channels():
-    pg = c.get("/settings/notifications").text; return list(dict.fromkeys(re.findall(r"/settings/notifications/([a-z2-7]{12})/test", pg)))
-for cid in channels(): c.post(f"/settings/notifications/{cid}/delete", dict(_csrf=csrf_of(c, "/settings/notifications")))
+    pg = c.get("/notifications").text; return list(dict.fromkeys(re.findall(r"/notifications/([a-z2-7]{12})/test", pg)))
+for cid in channels(): c.post(f"/notifications/{cid}/delete", dict(_csrf=csrf_of(c, "/notifications")))
 def add(name, path):
-    r, forms = c.forms("/settings/notifications?kind=webhook"); f = c.find_form(forms, "/settings/notifications", has="name"); c.post_form(f, name=name, cfg_url=f"http://t-sink.{HOST}.sslip.io{path}")
+    r, forms = c.forms("/notifications?kind=webhook"); f = c.find_form(forms, "/notifications", has="name"); c.post_form(f, name=name, cfg_url=f"http://t-sink.{HOST}.sslip.io{path}")
     return [x for x in channels()][0] if len(channels()) == 1 else None
 add("t-hook1", "/hook1"); cid1 = channels()[0]
 add("t-hook2", "/hook2"); cid2 = [x for x in channels() if x != cid1][0]
 def events(cid, on):
-    pg = c.get("/settings/notifications").text; f = [x for x in parse_forms(pg) if x["action"] == f"/settings/notifications/{cid}"][0]
+    pg = c.get("/notifications").text; f = [x for x in parse_forms(pg) if x["action"] == f"/notifications/{cid}"][0]
     o = {f"ev-{cid}-{k}": (k in on) for k in ("deploy", "backup", "task", "container", "disk")}; o[f"on-{cid}"] = True; return c.post_form(f, _o=o)
 T0 = [0]
 def fresh(): T0[0] = int(shout("date +%s")) + 1; time.sleep(2)

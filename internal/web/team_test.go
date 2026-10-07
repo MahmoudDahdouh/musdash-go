@@ -145,7 +145,7 @@ func TestTeamOwnedRoutesNeedAnAdmin(t *testing.T) {
 		changes := method != http.MethodGet
 		var want access
 		switch {
-		case under("/settings"):
+		case under("/settings"), under("/notifications"):
 			want = admin
 		case under("/servers") && changes, under("/team") && changes:
 			want = admin

@@ -1,18 +1,18 @@
 from lib import *
 c = owner_client(); st = state()
 def channels():
-    pg = c.get("/settings/notifications").text; return list(dict.fromkeys(re.findall(r"/settings/notifications/([a-z2-7]{12})/test", pg)))
+    pg = c.get("/notifications").text; return list(dict.fromkeys(re.findall(r"/notifications/([a-z2-7]{12})/test", pg)))
 def try_url(url, kind="webhook"):
     before = set(channels())
-    r, forms = c.forms(f"/settings/notifications?kind={kind}"); f = c.find_form(forms, "/settings/notifications", has="name")
+    r, forms = c.forms(f"/notifications?kind={kind}"); f = c.find_form(forms, "/notifications", has="name")
     r = c.post_form(f, name="t-ssrf", cfg_url=url)
     new = [x for x in channels() if x not in before]
     msg = flash(r)[-200:]
     res = None
     if new:
-        t = c.post(f"/settings/notifications/{new[0]}/test", dict(_csrf=csrf_of(c, "/settings/notifications")), follow=True)
+        t = c.post(f"/notifications/{new[0]}/test", dict(_csrf=csrf_of(c, "/notifications")), follow=True)
         res = flash(t)[-200:]
-        c.post(f"/settings/notifications/{new[0]}/delete", dict(_csrf=csrf_of(c, "/settings/notifications")))
+        c.post(f"/notifications/{new[0]}/delete", dict(_csrf=csrf_of(c, "/notifications")))
     return bool(new), msg, res
 cases = {
   "loopback ip": "http://127.0.0.1:8000/healthz", "localhost": "http://localhost:8000/healthz", "ipv6 loopback": "http://[::1]:8000/healthz",

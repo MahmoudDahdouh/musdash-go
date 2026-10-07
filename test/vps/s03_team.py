@@ -39,7 +39,7 @@ def code_of(c, method, path, data=None):
     t = csrf_of(c)
     d = dict(data or {}); d["_csrf"] = t
     return (c.get(path) if method == "GET" else c.post(path, d)).status
-ADMIN_ONLY = [("GET", "/settings"), ("POST", "/settings"), ("GET", "/settings/notifications"), ("POST", "/settings/notifications"), ("GET", "/settings/storages"),
+ADMIN_ONLY = [("GET", "/settings"), ("POST", "/settings"), ("GET", "/notifications"), ("POST", "/notifications"), ("GET", "/settings/storages"),
               ("POST", "/settings/storages"), ("POST", "/servers"), ("POST", "/sources/github"), ("POST", "/sources/keys"), ("POST", "/team"), ("POST", "/team/invitations"),
               ("POST", "/team/variables")]
 ALL = [("GET", "/servers"), ("GET", "/sources"), ("GET", "/team"), ("GET", "/team/variables"), ("GET", "/tags"), ("GET", "/account"), ("GET", "/")]

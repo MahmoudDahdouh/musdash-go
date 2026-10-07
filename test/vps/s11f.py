@@ -1,11 +1,11 @@
 from lib import *
 c = owner_client(); st = state(); sink = st["sink"]; web = st["web"]
 def channels():
-    pg = c.get("/settings/notifications").text; return list(dict.fromkeys(re.findall(r"/settings/notifications/([a-z2-7]{12})/test", pg)))
+    pg = c.get("/notifications").text; return list(dict.fromkeys(re.findall(r"/notifications/([a-z2-7]{12})/test", pg)))
 chs = channels(); print(chs)
 # find hook1 channel by its edit form having container checked? simply set both: hook1 container only
 def ev(cid, on):
-    pg = c.get("/settings/notifications").text; f = [x for x in parse_forms(pg) if x["action"] == f"/settings/notifications/{cid}"][0]
+    pg = c.get("/notifications").text; f = [x for x in parse_forms(pg) if x["action"] == f"/notifications/{cid}"][0]
     o = {f"ev-{cid}-{k}": (k in on) for k in ("deploy", "backup", "task", "container", "disk")}; o[f"on-{cid}"] = True; c.post_form(f, _o=o)
 t0 = int(shout("date +%s")) + 1
 for i, cid in enumerate(chs): ev(cid, ("container",) if i == 0 else ())

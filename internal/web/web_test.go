@@ -629,7 +629,7 @@ func TestEnvironmentInThePathAndSwitchers(t *testing.T) {
 	if !strings.Contains(menu, `href="/projects/`+otherID+`"`) || strings.Contains(menu, "Secret") || strings.Contains(menu, theirs.ID) || !strings.Contains(menu, `href="/projects"`) {
 		t.Fatalf("project switcher:\n%s", menu)
 	}
-	if !regexp.MustCompile(`href="/projects/` + projectID + `"[^>]*aria-selected="true"`).MatchString(menu) || regexp.MustCompile(`href="/projects/`+otherID+`"[^>]*aria-selected="true"`).MatchString(menu) {
+	if !regexp.MustCompile(`href="/projects/`+projectID+`"[^>]*aria-selected="true"`).MatchString(menu) || regexp.MustCompile(`href="/projects/`+otherID+`"[^>]*aria-selected="true"`).MatchString(menu) {
 		t.Fatal("the switcher does not mark the current project, or marks another")
 	}
 	theirEnvs, _ := a.db.ListEnvironments(ctx, theirs.ID)
@@ -790,7 +790,7 @@ func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
 		"/", "/projects", base, base + "/e/" + env.ID, base + "/e/" + env.ID + "/new", base + "/settings",
 		"/apps/" + appID, "/apps/" + appID + "/environment", "/apps/" + appID + "/environment/edit", "/apps/" + appID + "/domains", "/apps/" + appID + "/storage", "/apps/" + appID + "/settings",
 		"/tags", "/keys", "/keys/tokens", "/servers", "/sources", "/team", "/team/variables", "/account",
-		"/settings", "/settings/storages", "/settings/notifications", "/_ui",
+		"/settings", "/settings/storages", "/notifications", "/_ui",
 	} {
 		res, body := a.get(page)
 		if res.StatusCode != http.StatusOK {
@@ -963,10 +963,17 @@ func TestHeader(t *testing.T) {
 		t.Error("the account item is drawn as a danger item")
 	}
 
-	// Settings is an Admin's, in the menu as in the sidebar.
+	// Settings is an Admin's, in the menu as in the sidebar, and so is
+	// Notifications in the sidebar.
+	if side := between(t, "/", body, `<aside class="sidebar"`, `</aside>`); !strings.Contains(side, `href="/notifications"`) {
+		t.Error("an Owner's sidebar has no Notifications")
+	}
 	member := a.newPerson("Member", db.RoleMember)
-	if _, body := member.get("/"); strings.Contains(body, `href="/settings"`) || !strings.Contains(body, `id="usermenu"`) {
-		t.Error("a Member's menu: Settings shown, or no menu")
+	if _, body := member.get("/"); strings.Contains(body, `href="/settings"`) || strings.Contains(body, `href="/notifications"`) || !strings.Contains(body, `id="usermenu"`) {
+		t.Error("a Member's page: Settings or Notifications shown, or no menu")
+	}
+	if res, _ := member.get("/notifications"); res.StatusCode != http.StatusForbidden {
+		t.Errorf("a Member reading /notifications: %d", res.StatusCode)
 	}
 
 	// What the team switcher lists: the one team, where the person is, and

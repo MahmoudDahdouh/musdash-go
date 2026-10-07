@@ -606,7 +606,7 @@ func (s *Server) renderNotifications(w http.ResponseWriter, r *http.Request, sta
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, status, pages.Notifications(s.shell(w, r, "Notifications", "settings"), list, kind, f))
+	s.render(w, r, status, pages.Notifications(s.shell(w, r, "Notifications", "notifications"), list, kind, f))
 }
 
 func (s *Server) notificationsPage(w http.ResponseWriter, r *http.Request) {
@@ -650,14 +650,14 @@ func (s *Server) notificationCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A new channel starts with every kind of event; what is not wanted is
-	// switched off on the page.
+	// switched off in its Edit dialog.
 	events := []string{notify.EventDeploy, notify.EventBackup, notify.EventTask, notify.EventContainer, notify.EventDisk}
 	if _, err := s.DB.CreateChannel(r.Context(), db.Channel{TeamID: sessionFrom(r).TeamID, Name: name, Kind: kind.Kind, Config: sealed, Events: strings.Join(events, ","), Enabled: true}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Channel added. Send a test to check that it arrives.")
-	redirect(w, r, "/settings/notifications")
+	redirect(w, r, "/notifications")
 }
 
 func (s *Server) loadChannel(w http.ResponseWriter, r *http.Request) (db.Channel, bool) {
@@ -690,7 +690,7 @@ func (s *Server) notificationSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Channel saved.")
-	redirect(w, r, "/settings/notifications")
+	redirect(w, r, "/notifications")
 }
 
 func (s *Server) notificationTest(w http.ResponseWriter, r *http.Request) {
@@ -703,7 +703,7 @@ func (s *Server) notificationTest(w http.ResponseWriter, r *http.Request) {
 	} else {
 		setFlash(w, r, ui.ToneOK, "Test sent to "+ch.Name+".")
 	}
-	redirect(w, r, "/settings/notifications")
+	redirect(w, r, "/notifications")
 }
 
 func (s *Server) notificationDelete(w http.ResponseWriter, r *http.Request) {
@@ -716,5 +716,5 @@ func (s *Server) notificationDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Channel removed.")
-	redirect(w, r, "/settings/notifications")
+	redirect(w, r, "/notifications")
 }

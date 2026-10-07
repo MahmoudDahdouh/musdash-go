@@ -308,11 +308,11 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /settings/storages", admin, s.storageCreate)
 	handle("POST /settings/storages/{sid}/test", admin, s.storageTest)
 	handle("POST /settings/storages/{sid}/delete", admin, s.storageDelete)
-	handle("GET /settings/notifications", admin, s.notificationsPage)
-	handle("POST /settings/notifications", admin, s.notificationCreate)
-	handle("POST /settings/notifications/{cid}", admin, s.notificationSave)
-	handle("POST /settings/notifications/{cid}/test", admin, s.notificationTest)
-	handle("POST /settings/notifications/{cid}/delete", admin, s.notificationDelete)
+	handle("GET /notifications", admin, s.notificationsPage)
+	handle("POST /notifications", admin, s.notificationCreate)
+	handle("POST /notifications/{cid}", admin, s.notificationSave)
+	handle("POST /notifications/{cid}/test", admin, s.notificationTest)
+	handle("POST /notifications/{cid}/delete", admin, s.notificationDelete)
 
 	s.extraRoutes(handle)
 

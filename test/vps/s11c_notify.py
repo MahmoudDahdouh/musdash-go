@@ -1,16 +1,16 @@
 from lib import *
 c = owner_client(); st = state(); sink = st["sink"]; web = st["web"]
 def channels():
-    pg = c.get("/settings/notifications").text
-    return list(dict.fromkeys(re.findall(r"/settings/notifications/([a-z2-7]{12})/test", pg)))
+    pg = c.get("/notifications").text
+    return list(dict.fromkeys(re.findall(r"/notifications/([a-z2-7]{12})/test", pg)))
 def sinklog(since="10m"): return shout(f"docker logs --since {since} $(docker ps -q --filter name=musdash-{sink} | head -1) 2>&1 | grep -E '\"path\"|\"body\"|originalUrl' | tail -30")
 def add(kind, name, **cfg):
-    r, forms = c.forms(f"/settings/notifications?kind={kind}"); f = c.find_form(forms, "/settings/notifications", has="name")
+    r, forms = c.forms(f"/notifications?kind={kind}"); f = c.find_form(forms, "/notifications", has="name")
     return c.post_form(f, name=name, **{("cfg_" + k): v for k, v in cfg.items()})
 def test(cid):
-    return c.post(f"/settings/notifications/{cid}/test", dict(_csrf=csrf_of(c, "/settings/notifications")), follow=True)
+    return c.post(f"/notifications/{cid}/test", dict(_csrf=csrf_of(c, "/notifications")), follow=True)
 def events(cid, on=("deploy", "backup", "task", "container", "disk"), enabled=True):
-    pg = c.get("/settings/notifications").text; f = [x for x in parse_forms(pg) if x["action"] == f"/settings/notifications/{cid}"][0]
+    pg = c.get("/notifications").text; f = [x for x in parse_forms(pg) if x["action"] == f"/notifications/{cid}"][0]
     o = {f"ev-{cid}-{k}": (k in on) for k in ("deploy", "backup", "task", "container", "disk")}; o[f"on-{cid}"] = enabled
     return c.post_form(f, _o=o)
 # existing channel from exploration
@@ -26,7 +26,7 @@ r = test(cid2); time.sleep(3); lg2 = sinklog()
 hdrs = shout("docker logs --since 2m $(docker ps -q --filter name=musdash-%s | head -1) 2>&1 | grep -i -E \"signature|authorization|x-musdash\" | head -3" % sink)
 check("S11.5b", "hook2" in lg2, f"second webhook (with secret) delivered; signature headers seen: {hdrs[:200]!r}")
 # secrets not shown again
-pg = c.get("/settings/notifications").text
+pg = c.get("/notifications").text
 check("S11.5c", "topsecret" not in pg and "t-sink" not in re.sub(r"<[^>]+>", " ", pg).split("Webhook URL")[0], "channel address and secret are not shown again", sev="S1")
 
 # S11.6 event routing: hook1 hears only 'deploy', hook2 only 'task'
