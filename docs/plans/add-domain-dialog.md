@@ -95,3 +95,18 @@ User name                      Password
 **Tests:** the dialog writes no "://"; a port that is not one is refused with the short reason, six digits among them.
 
 **Review of the code.** Measured in a browser: at 1024 the scheme is 81px, the port 57px with four digits or fewer and 65px with five, the domain the remaining 444px, all three on one line; at 375 they are still one line and nothing scrolls sideways.
+
+## 5. The button that makes a domain
+
+**Asked** on 2026-10-08: the button reads "Generate domain" and is at the end.
+
+| # | Decision | Why |
+|---|---|---|
+| 1 | The label is "Generate domain", and the line beside it says "a generated domain" | Asked for. The field it fills is called Domain |
+| 2 | "At the end" is taken as the end of the line under the three fields: the sentence first, the button after it at the line's end (`ms-auto`), under the port. Where the two do not fit on one line the button is on the next, still at the end | In the line of the fields themselves it would take a third of the domain's width at 1024 and leave it none at 375 |
+
+**Review of the plan.** Nothing changed.
+
+**Tests:** the dialog has "Generate domain" after the sentence about a generated domain.
+
+**Review of the code.** In a browser at 1024 the button's right edge is the row's (815px both), and a press fills the domain and sets the scheme to http as before; at 375 the sentence takes the line and the button is under it at the end.

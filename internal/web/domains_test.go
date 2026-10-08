@@ -48,6 +48,11 @@ func TestAppDomainsTab(t *testing.T) {
 			t.Errorf("the Add domain dialog is missing %s", want)
 		}
 	}
+	// The button that makes a domain is so called, and comes after the
+	// line that says what it makes.
+	if hint, button := strings.Index(dialog, "A generated domain needs no DNS"), strings.Index(dialog, "Generate domain"); hint < 0 || button < hint {
+		t.Error("Generate domain is missing, or not at the end of its line")
+	}
 	// The menu names the scheme and nothing more.
 	if strings.Contains(dialog, "://") {
 		t.Error("the scheme's menu still writes ://")

@@ -952,18 +952,20 @@ templ AppDomains(s ui.Shell, v AppView, f ui.Form, at DomainTarget) {
 							@ui.TextField(f, "Port", "", ui.InputProps{ID: "port", Mono: true, Value: strconv.Itoa(v.App.Port), Autocomplete: "off", Attrs: templ.Attributes{"inputmode": "numeric", "maxlength": "5"}})
 						</div>
 					</div>
-					<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-						if at.Suffix != "" {
-							@ui.Button(ui.ButtonProps{Small: true, Icon: "refresh", Attrs: templ.Attributes{"data-generate": "host", "data-suffix": at.Suffix, "data-scheme": "scheme"}}) {
-								Generate an address
-							}
-						}
-						<p class="field-hint">
+					<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+						<p class="field-hint min-w-0 flex-1 basis-56">
 							if at.Suffix != "" {
-								A generated address needs no DNS and is served over plain HTTP.
+								A generated domain needs no DNS and is served over plain HTTP.
 							}
 							The port is the one the app listens on.
 						</p>
+						if at.Suffix != "" {
+							<span class="ms-auto">
+								@ui.Button(ui.ButtonProps{Small: true, Icon: "refresh", Attrs: templ.Attributes{"data-generate": "host", "data-suffix": at.Suffix, "data-scheme": "scheme"}}) {
+									Generate domain
+								}
+							</span>
+						}
 					</div>
 					@ui.TextField(f, "Path", "Optional. With /api, this app answers app.example.com/api and what is below it; another app can take the rest of the domain.", ui.InputProps{ID: "path", Mono: true, Placeholder: "/api", Autocomplete: "off"})
 					@ui.Checkbox("redirect_www", f.V("redirect_www") == "1", nil) {
