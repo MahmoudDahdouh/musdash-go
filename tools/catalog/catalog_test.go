@@ -689,7 +689,7 @@ func TestCleanLogo(t *testing.T) {
   <style>.a{fill:#f00;stroke:none}</style>
   <path class="a" d="M0 0h10v10z"/>
   <circle style="fill:#00f;opacity:.5" fill="#fff" r="2"/>
-</svg>`))
+</svg>`), smallLogo)
 	wantAll(t, good, `<path d="M0 0h10v10z" fill="#f00" stroke="none"/>`, `<circle r="2" fill="#00f" opacity=".5"/>`)
 	wantNone(t, good, "style", "class", "title", "xlink", "<!--", "<?xml")
 	for name, svg := range map[string]string{
@@ -700,10 +700,10 @@ func TestCleanLogo(t *testing.T) {
 		"prop":   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path style="background:url(x)"/></svg>`,
 		"event":  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1" onload="alert(1)"><path d="M0 0"/></svg>`,
 		"remote": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path fill="url(//example.com/a.svg#b)" d="M0 0"/></svg>`,
-		"big":    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="` + strings.Repeat("M0 0h1v1z", 900) + `"/></svg>`,
+		"big":    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="` + strings.Repeat("M0 0h1v1z", maxLogo/9+1) + `"/></svg>`,
 		"nobox":  `<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>`,
 	} {
-		if got := cleanLogo(write(t, dir, name+".svg", svg)); got != "" {
+		if got := cleanLogo(write(t, dir, name+".svg", svg), maxLogo); got != "" {
 			t.Errorf("%s was taken: %s", name, got)
 		}
 	}
@@ -715,9 +715,18 @@ func TestCleanLogoWithADarkModeRule(t *testing.T) {
 	got := cleanLogo(write(t, t.TempDir(), "a.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
   <style>.m { fill: #231e1e; } @media (prefers-color-scheme: dark) { .m { fill: #d7d72e; } }</style>
   <rect class="m" width="10" height="10"/>
-</svg>`))
+</svg>`), smallLogo)
 	wantAll(t, got, `<rect width="10" height="10" fill="#231e1e"/>`)
 	wantNone(t, got, "style", "d7d72e")
+}
+
+// Two rules for one class are one attribute, the later rule's.
+func TestCleanLogoWithARuleSaidTwice(t *testing.T) {
+	got := cleanLogo(write(t, t.TempDir(), "a.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <style>.a{fill:#ead961;stroke:#000}.a{fill:#ecda61}.b{stroke:#111}</style>
+  <path class="a b" style="opacity:.5" d="M0 0h10v10z"/>
+</svg>`), smallLogo)
+	wantAll(t, got, `<path d="M0 0h10v10z" fill="#ecda61" stroke="#111" opacity=".5"/>`)
 }
 
 // A logo that would be an empty square on the page is not taken: one drawn
@@ -735,9 +744,10 @@ func TestCleanLogoRefusesWhatWouldNotBeSeen(t *testing.T) {
 		"only kept":  svg(`><defs><path id="a" d="M0 0h10v10z"/></defs><path fill="#fff" d="M0 0h1v1z"/>`),
 		"no prefix":  svg(`><path its:own="cc" fill="#000" d="M0 0h10v10z"/>`),
 		"not closed": svg(`><g><path d="M0 0h10v10z"/>`),
+		"twice":      svg(`><path fill="#000" d="M0 0h10v10z" fill="#111"/>`),
 		"entity":     svg(`><path style="font-family:&quot;Open Sans&quot;;fill:#000" d="M0 0h10v10z"/>`),
 	} {
-		if got := cleanLogo(write(t, dir, name+".svg", body)); got != "" {
+		if got := cleanLogo(write(t, dir, name+".svg", body), maxLogo); got != "" {
 			t.Errorf("%s was taken: %s", name, got)
 		}
 	}
@@ -748,7 +758,7 @@ func TestCleanLogoRefusesWhatWouldNotBeSeen(t *testing.T) {
 		"a gradient":       svg(`><path fill="url(#g)" d="M0 0h10v10z"/>`),
 		"a short colour":   svg(`><path fill="#08c" d="M0 0h10v10z"/>`),
 	} {
-		if got := cleanLogo(write(t, dir, name+".svg", body)); got == "" {
+		if got := cleanLogo(write(t, dir, name+".svg", body), smallLogo); got == "" {
 			t.Errorf("%s was refused", name)
 		}
 	}
@@ -787,20 +797,25 @@ func TestSmallerLogo(t *testing.T) {
 		}
 	}
 
+	// 37 bytes a step as written and 21 rounded: over the size as it
+	// stands, under it with fewer decimals.
 	dir := t.TempDir()
-	long := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="` + strings.Repeat("M1.123456 2.123456h1.123456v1.123456z", 220) + `"/></svg>`
-	file := write(t, dir, "long.svg", long)
-	if got := cleanLogo(file); got != "" {
-		t.Fatalf("a drawing of %d bytes was taken as it is", len(long))
+	steps := func(n int) string {
+		return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="` + strings.Repeat("M1.123456 2.123456h1.123456v1.123456z", n) + `"/></svg>`
 	}
-	got := smallerLogo(file)
-	wantAll(t, got, `M1.12 2.12h1.12v1.12z`)
-	if len(got) > maxLogo {
-		t.Errorf("%d bytes", len(got))
-	}
-	huge := strings.Replace(long, `"/></svg>`, strings.Repeat("M1.5 2.5h1v1z", 600)+`"/></svg>`, 1)
-	if got := smallerLogo(write(t, dir, "huge.svg", huge)); got != "" {
-		t.Errorf("a drawing that is too large with any decimals was taken: %d bytes", len(got))
+	for _, limit := range []int{smallLogo, maxLogo} {
+		file := write(t, dir, "long.svg", steps(limit/30))
+		if got := cleanLogo(file, limit); got != "" {
+			t.Fatalf("a drawing of %d bytes was taken as it is under %d", len(got), limit)
+		}
+		got := smallerLogo(file, limit)
+		wantAll(t, got, `M1.12 2.12h1.12v1.12z`)
+		if len(got) > limit {
+			t.Errorf("%d bytes under %d", len(got), limit)
+		}
+		if got := smallerLogo(write(t, dir, "huge.svg", steps(limit/20)), limit); got != "" {
+			t.Errorf("a drawing that is too large with any decimals was taken under %d: %d bytes", limit, len(got))
+		}
 	}
 }
 
@@ -835,14 +850,14 @@ func TestLogoPlaces(t *testing.T) {
 	// A collection of every kind of brand is asked only for what was
 	// picked from it, and Simple Icons only where its colour would show.
 	dir := t.TempDir()
-	write(t, dir, "data/simple-icons.json", `[{"title":"Pterodactyl","hex":"10539F"},{"title":"Wiki.js","hex":"1976D2"},{"title":"Pale & Co","hex":"FFFFAA"},{"title":"Other","hex":"000000","slug":"another"}]`)
+	write(t, dir, "data/simple-icons.json", `[{"title":"Foundry Virtual Tabletop","hex":"FE6A1F"},{"title":"Wiki.js","hex":"1976D2"},{"title":"Pale & Co","hex":"FFFFAA"},{"title":"Other","hex":"000000","slug":"another"}]`)
 	c.simple = dir
 	last := func(key string) logoFile {
 		places := logoPlaces(&tmpl{Key: key, Name: key, Source: "coolify"}, nil, c)
 		return places[len(places)-1]
 	}
-	if p := last("pterodactyl"); p.from != "simple:pterodactyl.svg" || p.fill != "#10539F" || p.file != filepath.Join(dir, "icons/pterodactyl.svg") {
-		t.Errorf("pterodactyl: %+v", p)
+	if p := last("foundryvtt"); p.from != "simple:foundryvirtualtabletop.svg" || p.fill != "#FE6A1F" || p.file != filepath.Join(dir, "icons/foundryvirtualtabletop.svg") {
+		t.Errorf("foundryvtt: %+v", p)
 	}
 	if p := last("typesense"); p.from != "svgl:typesense.svg" || p.fill != "" || p.file != "/s/static/library/typesense.svg" {
 		t.Errorf("typesense: %+v", p)

@@ -102,17 +102,29 @@ func TestEveryLogoCanBeShown(t *testing.T) {
 		if handler.MatchString(body) || elsewhere.MatchString(body) {
 			t.Errorf("%s has an event handler, or refers to something outside itself", name)
 		}
-		if len(body) > 6<<10 {
+		if len(body) > 20<<10 {
 			t.Errorf("%s is %d bytes: find a simpler drawing", name, len(body))
 		}
 		// A file the browser cannot read is an empty square on the page,
 		// and nothing else says so.
 		for dec := xml.NewDecoder(strings.NewReader(body)); ; {
-			if _, err := dec.Token(); err == io.EOF {
+			tok, err := dec.Token()
+			if err == io.EOF {
 				break
 			} else if err != nil {
 				t.Errorf("%s is not XML: %v", name, err)
 				break
+			}
+			// The decoder takes an attribute given twice. A browser
+			// does not.
+			if el, ok := tok.(xml.StartElement); ok {
+				seen := map[xml.Name]bool{}
+				for _, a := range el.Attr {
+					if seen[a.Name] {
+						t.Errorf("%s gives <%s> its %s twice", name, el.Name.Local, a.Name.Local)
+					}
+					seen[a.Name] = true
+				}
 			}
 		}
 	}

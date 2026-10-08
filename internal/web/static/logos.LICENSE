@@ -52,11 +52,13 @@ for a light page.
 Changed here, in each of them: a style attribute and a <style> element of
 classes are written as presentation attributes, as above, a rule that
 holds only on a dark page is left out, and comments, titles, descriptions
-and an editor's own metadata are removed. Where a drawing was larger than
-6 KB, the coordinates of its paths are written with fewer decimals (to a
-ten-thousandth of the drawing's size) if that brings it under. A logo that
-could not be written this way, is still larger than 6 KB, or is drawn in
-white for a dark page, was not taken: that service is shown with an icon.
+and an editor's own metadata are removed. A service's logo is a file of at
+most 6 KB wherever one of its files is that small, as it stands or with
+the coordinates of its paths written with fewer decimals (to a
+ten-thousandth of the drawing's size); a service with no such file has one
+of at most 20 KB, written with fewer decimals. A logo that could not be
+written this way, is larger than that, or is drawn in white for a dark
+page, was not taken: that service is shown with an icon.
 
 Each logo is a trademark of its owner and is used only to name that
 owner's service.

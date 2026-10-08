@@ -17,10 +17,17 @@ import (
 // A logo is shown as an <img> under the dashboard's content security
 // policy, which drops a style attribute and a <style> element inside the
 // image. A file is taken only if it can be written without either, reaches
-// for nothing outside itself and is small: internal/web's
-// TestEveryOfferHasALogo holds every logo to the same.
-
-const maxLogo = 6 << 10
+// for nothing outside itself and is small: internal/web/static's
+// TestEveryLogoCanBeShown holds every logo to the same.
+//
+// Small is two sizes. Nearly every logo there is fits in smallLogo, and a
+// service gets a file of that size wherever one of its files is: the page
+// shows several hundred, and all of them are in the binary. maxLogo is for
+// the service that has no such file, so that it has a logo at all.
+const (
+	smallLogo = 6 << 10
+	maxLogo   = 20 << 10
+)
 
 var (
 	xmlNoise  = regexp.MustCompile(`(?s)<\?xml.*?\?>|<!DOCTYPE.*?>|<!--.*?-->|<metadata.*?</metadata>|<title.*?</title>|<desc.*?</desc>|<sodipodi:namedview.*?(/>|</sodipodi:namedview>)`)
@@ -83,8 +90,8 @@ func declarations(css string) (string, bool) {
 
 // cleanLogo returns an SVG file written the way the dashboard can show it,
 // or "" when this one cannot be.
-func cleanLogo(file string) string {
-	if s, _ := drawing(file); s != "" && len(s) < maxLogo {
+func cleanLogo(file string, limit int) string {
+	if s, _ := drawing(file); s != "" && len(s) < limit {
 		return s + "\n"
 	}
 	return ""
@@ -92,12 +99,12 @@ func cleanLogo(file string) string {
 
 // smallerLogo is cleanLogo for a file that is too large as it stands: the
 // same drawing with its coordinates written to fewer places.
-func smallerLogo(file string) string {
+func smallerLogo(file string, limit int) string {
 	s, _ := drawing(file)
 	if s == "" {
 		return ""
 	}
-	if s = shrink(s, places(s)); len(s) < maxLogo {
+	if s = shrink(s, places(s)); len(s) < limit {
 		return s + "\n"
 	}
 	return ""
@@ -173,9 +180,22 @@ func drawing(file string) (string, string) {
 		if add == "" {
 			return tag
 		}
+		// Two rules for one class, or a class and the style, can say the
+		// same thing twice. The later one counts, as in the stylesheet,
+		// and is written once: an attribute given twice is no XML, and
+		// the browser shows nothing of such a file.
+		said, names := map[string]string{}, []string{}
+		for _, m := range regexp.MustCompile(` ([a-z-]+)="([^"]*)"`).FindAllStringSubmatch(add, -1) {
+			if _, twice := said[m[1]]; !twice {
+				names = append(names, m[1])
+			}
+			said[m[1]] = m[2]
+		}
+		add = ""
 		// The style's value is the one that counts where both are given.
-		for _, m := range regexp.MustCompile(` ([a-z-]+)="`).FindAllStringSubmatch(add, -1) {
-			tag = regexp.MustCompile(`\s`+regexp.QuoteMeta(m[1])+`="[^"]*"`).ReplaceAllString(tag, "")
+		for _, name := range names {
+			add += " " + name + `="` + said[name] + `"`
+			tag = regexp.MustCompile(`\s`+regexp.QuoteMeta(name)+`="[^"]*"`).ReplaceAllString(tag, "")
 		}
 		end := len(tag) - 1
 		if strings.HasSuffix(tag, "/>") {
@@ -247,8 +267,10 @@ func unseen(s string) string {
 				return "not XML a browser reads"
 			}
 			now := stack[len(stack)-1]
-			for _, a := range el.Attr {
-				if unbound(a.Name) {
+			for i, a := range el.Attr {
+				// The decoder does not mind an attribute given twice. A
+				// browser does.
+				if unbound(a.Name) || slices.ContainsFunc(el.Attr[:i], func(b xml.Attr) bool { return b.Name == a.Name }) {
 					return "not XML a browser reads"
 				}
 				// Chrome reads a colour written without its "#" in an
@@ -474,13 +496,10 @@ func logoNames(t *tmpl) []string {
 // a name may be another company's (Hermes, Codex, Buzz), so nothing is
 // taken from one by its name: a line here says somebody looked.
 var logoPicked = map[string]string{
-	"firefox":           "simple:firefox",
-	"foundryvtt":        "simple:foundryvirtualtabletop",
-	"mulesoft-esb":      "svgl:mulesoft",
-	"powersync":         "svgl:powersync",
-	"pterodactyl":       "simple:pterodactyl",
-	"pterodactyl-panel": "simple:pterodactyl",
-	"typesense":         "svgl:typesense",
+	"foundryvtt":   "simple:foundryvirtualtabletop",
+	"mulesoft-esb": "svgl:mulesoft",
+	"powersync":    "svgl:powersync",
+	"typesense":    "svgl:typesense",
 }
 
 // logoRefused are files that pass every rule here and are still no logo

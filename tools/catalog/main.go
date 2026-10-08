@@ -241,11 +241,16 @@ func main() {
 				}
 			}
 			tried := logoPlaces(t, others, collections{selfhst: *icons, coolify: *coolify, dashboard: *dashboard, svgl: *svgl, simple: *simple})
-			// A file that can be taken as it is comes before a better
-			// placed one that has to be made smaller first.
-			for _, read := range []func(string) string{cleanLogo, smallerLogo} {
+			// A file under the smaller size comes first, wherever it is:
+			// as it stands, then with fewer decimals. Only a service with
+			// no such file gets a larger one, and that one always with
+			// fewer decimals.
+			for _, try := range []struct {
+				read  func(string, int) string
+				limit int
+			}{{cleanLogo, smallLogo}, {smallerLogo, smallLogo}, {smallerLogo, maxLogo}} {
 				for _, p := range tried {
-					if svg := read(p.file); svg != "" {
+					if svg := try.read(p.file, try.limit); svg != "" {
 						if p.fill != "" {
 							svg = strings.Replace(svg, "<svg ", `<svg fill="`+p.fill+`" `, 1)
 						}

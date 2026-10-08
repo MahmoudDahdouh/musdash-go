@@ -599,3 +599,36 @@ Raising the limit to 10 KB is 13 logos and about 100 KB of binary; to
 20 KB, 26 logos and 300 KB. The 94 need either small raster logos (a 96px
 WebP is 2 to 4 KB) or a logo taken from each project's own repository.
 Both are decisions about what the catalogue ships, not about searching.
+
+### The limit, raised
+
+Asked for the same day, after the table above: raise the limit.
+
+- **20 KB**, the larger of the two sizes offered: it is the one that gives
+  every service in the "over 6 KB" row its logo but Windshift (55 KB).
+- **Two sizes, not one.** With 20 KB as the only limit, 15 logos that are
+  there would have been replaced by a larger file that comes earlier in
+  the order and shows nothing more (EMQX: 0.6 KB to 20 KB). So a file of
+  at most 6 KB is still taken first, wherever it is in the order
+  (`smallLogo`), and only a service without one gets a file of up to 20 KB
+  (`maxLogo`), always with its decimals shortened.
+- **Three picks taken back.** Firefox and Pterodactyl (twice) had Simple
+  Icons' outline in one colour because their own logo was too large. It
+  fits now, so the lines are out of `logoPicked` and they have the logo in
+  its colours (10.6 and 8.8 KB).
+- **A file with an attribute twice.** Chibisafe's logo has two rules for
+  one class; both were written onto the element, and a browser shows
+  nothing of a file with `fill` twice. The later rule is written, once;
+  the converter refuses a file with a doubled attribute, and
+  `TestEveryLogoCanBeShown` looks for one. Go's decoder does not mind it,
+  which is why the check of the first pass did not see it: the sheet in
+  the browser did.
+
+**The numbers.** 26 more services have a logo; 128 of 623 are without one,
+where it was 154. 29 logos are over 6 KB. The logos are 1052 KB together,
+where they were 712: the 300 KB that were said, and 25 for Firefox and
+Pterodactyl.
+
+What is left: 94 with no SVG anywhere, 19 whose SVG has text, a link, a
+script, an animation or `currentColor`, 8 whose SVG is over 20 KB, and 7
+with only a white drawing.
