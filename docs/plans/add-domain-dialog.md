@@ -37,6 +37,10 @@ Asked for on 2026-10-08: the dialog an app's domain is added with gets the schem
 | 8 | Only an app's domains have a port. A service's endpoint already is a port | Nothing was asked of services |
 | 9 | The domain's row in the tab has a "Port 9000" badge when it is not the app's | Stored state is shown |
 
+**Tests:** a domain with a port added to a running app is in no route until the app is deployed again; the deployment publishes the app's port and the other one once, however many domains name it; each domain's route names its own loopback port, and one that names the app's port by its number the app's; a switch that fails puts the earlier container's ports back; a stopped app holds none. The form stores the app's own port as none, another as itself, refuses what is not a port, and says to redeploy.
+
+**Review of the code.** Read the diff. Docker does not say which of several ports was taken, so a try that fails picks all of them anew; with one port the log line is the one it was. A domain that is removed leaves its row in `app_ports`: the container still publishes the port, so the loopback port is still in use, and the next deployment writes the table anew.
+
 ## 3. The dialog
 
 ```

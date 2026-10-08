@@ -2878,6 +2878,12 @@ func domainOptions(d db.Domain) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
+		if d.Port != 0 {
+			templ_7745c5c3_Err = ui.Badge("Port "+strconv.Itoa(d.Port), ui.ToneNeutral).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 148, "</span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -3015,7 +3021,7 @@ func AppDomains(s ui.Shell, v AppView, f ui.Form) templ.Component {
 						var templ_7745c5c3_Var112 templ.SafeURL
 						templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(domainURL(d)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 855, Col: 69}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 858, Col: 69}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var112))
 						if templ_7745c5c3_Err != nil {
@@ -3028,7 +3034,7 @@ func AppDomains(s ui.Shell, v AppView, f ui.Form) templ.Component {
 						var templ_7745c5c3_Var113 string
 						templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinStringErrs(d.Host + d.Path)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 855, Col: 120}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 858, Col: 120}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var113))
 						if templ_7745c5c3_Err != nil {
@@ -3049,7 +3055,7 @@ func AppDomains(s ui.Shell, v AppView, f ui.Form) templ.Component {
 						var templ_7745c5c3_Var114 templ.SafeURL
 						templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/domains/" + d.ID + "/delete"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 861, Col: 94}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/apps.templ`, Line: 864, Col: 94}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var114))
 						if templ_7745c5c3_Err != nil {

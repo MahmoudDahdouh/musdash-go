@@ -630,6 +630,66 @@ func TestLongFlashIsTruncated(t *testing.T) {
 	}
 }
 
+// A domain may lead to another port of the container than the app's own.
+func TestAppDomainPort(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+	projectID, env := a.project("Shop")
+	web := a.newApp(projectID, env, "web", true, nil)
+	page := a.appPath(web) + "/domains"
+	stored := func(host string) db.Domain {
+		t.Helper()
+		doms, _ := a.db.ListDomains(ctx, db.KindApp, web)
+		for _, d := range doms {
+			if d.Host == host {
+				return d
+			}
+		}
+		t.Fatalf("%s was not stored", host)
+		return db.Domain{}
+	}
+
+	// The app's own port is not written down: the domain follows the app.
+	res, _ := a.post(page, page, url.Values{"host": {"own.example.com"}, "port": {"80"}})
+	wantRedirect(t, res, page)
+	if d := stored("own.example.com"); d.Port != 0 {
+		t.Errorf("the app's own port was stored as %d", d.Port)
+	}
+	if _, body := a.get(page); strings.Contains(body, "Redeploy the app") || strings.Contains(body, "Port 80") {
+		t.Error("a domain on the app's own port asks for a deployment, or shows the port")
+	}
+	res, _ = a.post(page, page, url.Values{"host": {"none.example.com"}})
+	wantRedirect(t, res, page)
+	if d := stored("none.example.com"); d.Port != 0 {
+		t.Errorf("no port was stored as %d", d.Port)
+	}
+
+	// Another port is, and the running container does not publish it.
+	res, _ = a.post(page, page, url.Values{"host": {"admin.example.com"}, "port": {" 9000 "}})
+	wantRedirect(t, res, page)
+	if d := stored("admin.example.com"); d.Port != 9000 {
+		t.Errorf("port 9000 was stored as %d", d.Port)
+	}
+	_, body := a.get(page)
+	if !strings.Contains(body, "Redeploy the app") || !strings.Contains(body, "port 9000") {
+		t.Error("the page does not say that the app has to be deployed again for the port")
+	}
+	if !strings.Contains(body, "Port 9000") {
+		t.Error("the domain's row does not show its port")
+	}
+	if strings.Contains(a.routesFile(), "admin.example.com") {
+		t.Error("a port the container does not publish is in the routes")
+	}
+
+	for _, bad := range []string{"0", "65536", "http", "-1", "80a"} {
+		res, _ := a.post(page, page, url.Values{"host": {"bad.example.com"}, "port": {bad}})
+		if res.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("port %q: status %d", bad, res.StatusCode)
+		}
+	}
+}
+
 // A proxy that was running before an upgrade does not read the routes of a
 // domain with a path or a password, and answers that nothing is deployed
 // there. The dashboard is the only place that can say why.

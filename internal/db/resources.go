@@ -23,8 +23,11 @@ type Domain struct {
 	TLS         bool
 	RedirectWWW bool
 	// AuthUser and AuthHash (bcrypt) put a password in front of the route.
-	AuthUser  string
-	AuthHash  string
+	AuthUser string
+	AuthHash string
+	// Port is the port of an app's container the domain leads to, or 0
+	// for the app's own. A service's endpoint is a port already.
+	Port      int
 	CreatedAt int64
 }
 
@@ -39,7 +42,7 @@ var ErrHostTaken = errors.New("this host is routed by someone else")
 var ErrHostElsewhere = errors.New("this host is routed on another server")
 
 func (d *DB) ListDomains(ctx context.Context, kind, id string) ([]Domain, error) {
-	rows, err := d.QueryContext(ctx, `SELECT id, resource_kind, resource_id, host, path, strip_prefix, tls, redirect_www, auth_user, auth_hash, created_at
+	rows, err := d.QueryContext(ctx, `SELECT id, resource_kind, resource_id, host, path, strip_prefix, tls, redirect_www, auth_user, auth_hash, port, created_at
 		FROM domains WHERE resource_kind = ? AND resource_id = ? ORDER BY created_at, rowid`, kind, id)
 	if err != nil {
 		return nil, err
@@ -48,7 +51,7 @@ func (d *DB) ListDomains(ctx context.Context, kind, id string) ([]Domain, error)
 	var out []Domain
 	for rows.Next() {
 		var m Domain
-		if err := rows.Scan(&m.ID, &m.ResourceKind, &m.ResourceID, &m.Host, &m.Path, &m.StripPrefix, &m.TLS, &m.RedirectWWW, &m.AuthUser, &m.AuthHash, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.ResourceKind, &m.ResourceID, &m.Host, &m.Path, &m.StripPrefix, &m.TLS, &m.RedirectWWW, &m.AuthUser, &m.AuthHash, &m.Port, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -113,11 +116,30 @@ func (d *DB) AddDomain(ctx context.Context, teamID, serverID string, m Domain) (
 				return ErrHostTaken
 			}
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO domains (id, resource_kind, resource_id, host, path, strip_prefix, tls, redirect_www, auth_user, auth_hash, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, m.ID, m.ResourceKind, m.ResourceID, m.Host, m.Path, m.StripPrefix, m.TLS, m.RedirectWWW, m.AuthUser, m.AuthHash, m.CreatedAt)
+		_, err := tx.ExecContext(ctx, `INSERT INTO domains (id, resource_kind, resource_id, host, path, strip_prefix, tls, redirect_www, auth_user, auth_hash, port, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, m.ID, m.ResourceKind, m.ResourceID, m.Host, m.Path, m.StripPrefix, m.TLS, m.RedirectWWW, m.AuthUser, m.AuthHash, m.Port, m.CreatedAt)
 		return err
 	})
 	return m, err
+}
+
+// DomainPorts returns the ports an app's domains name, in order, without
+// the ones that leave it to the app.
+func (d *DB) DomainPorts(ctx context.Context, appID string) ([]int, error) {
+	rows, err := d.QueryContext(ctx, `SELECT DISTINCT port FROM domains WHERE resource_kind = ? AND resource_id = ? AND port > 0 ORDER BY port`, KindApp, appID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int
+	for rows.Next() {
+		var p int
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // DeleteDomain removes one domain of the given resource.
@@ -462,9 +484,17 @@ func (d *DB) RoutesForServer(ctx context.Context, serverID string) ([]RouteRow, 
 	// endpoint is routed unless the stack was never started or was stopped
 	// on purpose: while it is being redeployed, and after a redeployment
 	// that failed, the containers from before are still answering.
-	rows, err := d.QueryContext(ctx, `SELECT m.host, m.path, m.strip_prefix, m.tls, m.redirect_www, m.auth_user, m.auth_hash, a.host_port
+	//
+	// A domain that names a port leads to where the serving container
+	// publishes that port, and nowhere until it does: the container was
+	// started before the domain was added, and the app's own port is
+	// another program.
+	rows, err := d.QueryContext(ctx, `SELECT m.host, m.path, m.strip_prefix, m.tls, m.redirect_www, m.auth_user, m.auth_hash,
+			CASE WHEN m.port = 0 THEN a.host_port ELSE ap.host_port END
 		FROM domains m JOIN apps a ON m.resource_kind = 'app' AND m.resource_id = a.id
+			LEFT JOIN app_ports ap ON ap.app_id = a.id AND ap.port = m.port
 		WHERE a.server_id = ? AND a.host_port > 0 AND a.container <> '' AND a.status <> 'stopped'
+			AND (m.port = 0 OR ap.host_port > 0)
 		UNION ALL
 		SELECT m.host, m.path, m.strip_prefix, m.tls, m.redirect_www, m.auth_user, m.auth_hash, ep.host_port
 		FROM domains m JOIN service_endpoints ep ON m.resource_kind = 'service' AND m.resource_id = ep.id

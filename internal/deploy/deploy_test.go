@@ -1451,3 +1451,109 @@ func TestBuildRoutesKeepsTheDashboardsAddress(t *testing.T) {
 		}
 	}
 }
+
+// A domain may lead to another port of the container than the app's own.
+// The container publishes it on a loopback port of its own, and the
+// domain's route names that one.
+func TestADomainsPortIsPublishedAndRouted(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	add := func(host string, port int) {
+		t.Helper()
+		if _, err := e.db.AddDomain(ctx, e.team, e.server.ID, db.Domain{ResourceKind: db.KindApp, ResourceID: e.app.ID, Host: host, Port: port}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	target := func(host string) string {
+		for _, rt := range e.routes().Routes {
+			if rt.Host == host {
+				return rt.Target
+			}
+		}
+		return ""
+	}
+	first := e.deploy()
+	if first.Status != db.DeploySuccess {
+		t.Fatalf("%s %q", first.Status, first.Error)
+	}
+
+	// Added while the app runs: the container does not publish 9000, and
+	// the app's own port is another program.
+	add("admin.example.com", 9000)
+	if err := e.d.SyncRoutes(ctx, e.server); err != nil {
+		t.Fatal(err)
+	}
+	if got := target("admin.example.com"); got != "" {
+		t.Fatalf("a port nothing publishes yet is routed to %s", got)
+	}
+
+	// The app's own port by its number, and the same other port twice.
+	add("same.example.com", e.app.Port)
+	add("admin2.example.com", 9000)
+	second := e.deploy()
+	if second.Status != db.DeploySuccess {
+		t.Fatalf("%s %q\n%s", second.Status, second.Error, e.log(second))
+	}
+	app := e.reload()
+	ports, _ := e.db.AppPorts(ctx, e.app.ID)
+	extra := ports[9000]
+	if extra < portMin || extra > portMax || extra == app.HostPort || ports[e.app.Port] != app.HostPort || len(ports) != 2 {
+		t.Fatalf("ports %v beside the app's %d", ports, app.HostPort)
+	}
+	run := ""
+	for _, c := range e.fake.Calls() {
+		if strings.HasPrefix(c, "docker run") && strings.Contains(c, ContainerName(e.app.ID, second.ID)) {
+			run = c
+		}
+	}
+	for _, want := range []string{
+		"--publish 127.0.0.1:" + strconv.Itoa(app.HostPort) + ":80",
+		"--publish 127.0.0.1:" + strconv.Itoa(extra) + ":9000",
+	} {
+		if !strings.Contains(run, want) {
+			t.Errorf("docker run is without %q:\n%s", want, run)
+		}
+	}
+	if strings.Count(run, "--publish") != 2 {
+		t.Errorf("one publication a port, whatever number of domains name it:\n%s", run)
+	}
+	own, other := "127.0.0.1:"+strconv.Itoa(app.HostPort), "127.0.0.1:"+strconv.Itoa(extra)
+	for host, want := range map[string]string{
+		"shop.example.com": own, "same.example.com": own, "admin.example.com": other, "admin2.example.com": other,
+	} {
+		if got := target(host); got != want {
+			t.Errorf("%s leads to %q, want %q", host, got, want)
+		}
+	}
+	used, _ := e.db.UsedHostPorts(ctx, e.server.ID)
+	if !used[extra] || !used[app.HostPort] {
+		t.Errorf("the ports in use do not hold the container's: %v", used)
+	}
+
+	// A switch that fails leaves the earlier container serving, with the
+	// ports that container publishes.
+	e.fake.FailWrite = func(path string) error {
+		if path == e.cfg.RoutesPath() {
+			return errors.New("disk full")
+		}
+		return nil
+	}
+	if third := e.deploy(); third.Status != db.DeployFailed {
+		t.Fatalf("%s %q", third.Status, third.Error)
+	}
+	e.fake.FailWrite = nil
+	if back, _ := e.db.AppPorts(ctx, e.app.ID); back[9000] != extra || back[e.app.Port] != app.HostPort {
+		t.Fatalf("after a failed switch the ports are %v, want the serving container's %v", back, ports)
+	}
+
+	// Stopped, the app holds no port.
+	if err := e.d.Stop(ctx, e.app.ID); err != nil {
+		t.Fatal(err)
+	}
+	if left, _ := e.db.AppPorts(ctx, e.app.ID); len(left) != 0 {
+		t.Fatalf("a stopped app still has ports: %v", left)
+	}
+	if used, _ := e.db.UsedHostPorts(ctx, e.server.ID); used[extra] {
+		t.Error("a stopped app's port is still counted as in use")
+	}
+}

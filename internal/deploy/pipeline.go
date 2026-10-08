@@ -521,7 +521,31 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 		}
 	}()
 
-	port, err := d.runOnFreePort(ctx, dk, server.ID, spec, log)
+	// A domain may name another port of the container than the app's own.
+	// The container publishes each of them, since nothing can be published
+	// on one that is running.
+	named, err := d.DB.DomainPorts(ctx, app.ID)
+	if err != nil {
+		return err
+	}
+	var also []int
+	for _, p := range named {
+		if p != app.Port {
+			also = append(also, p)
+		}
+	}
+	port, ports, err := d.runOnFreePort(ctx, dk, server.ID, spec, also, log)
+	if err != nil {
+		return err
+	}
+	// A domain that names the app's own port leads where the app's does.
+	for _, p := range named {
+		if p == app.Port {
+			ports[p] = port
+		}
+	}
+	// What the container that serves now publishes, for the way back.
+	before, err := d.DB.AppPorts(ctx, app.ID)
 	if err != nil {
 		return err
 	}
@@ -542,7 +566,7 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 	// disagreeing about which container serves.
 	sw, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
 	defer cancel()
-	if err := d.DB.SetAppRuntime(sw, app.ID, db.AppRunning, container, port, image); err != nil {
+	if err := d.DB.SetAppRuntimePorts(sw, app.ID, db.AppRunning, container, port, image, ports); err != nil {
 		return fmt.Errorf("record the new container: %w", err)
 	}
 	switch serr := d.SyncRoutes(sw, server); {
@@ -554,7 +578,7 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 		// The routes still point at the previous container. Put the record
 		// back and fail: stopping the previous container now would take the
 		// app offline.
-		if rerr := d.DB.SetAppRuntime(sw, app.ID, statusAfterFailure(app), app.Container, app.HostPort, app.DeployedImage); rerr != nil {
+		if rerr := d.DB.SetAppRuntimePorts(sw, app.ID, statusAfterFailure(app), app.Container, app.HostPort, app.DeployedImage, before); rerr != nil {
 			d.Log.Error("restore app after failed switch", "app", app.ID, "err", rerr)
 		}
 		return fmt.Errorf("publish the new routes: %w", serr)
@@ -592,35 +616,53 @@ func (d *Deployer) pruneDeployments(ctx context.Context, appID string) {
 }
 
 // runOnFreePort starts the container on a host port nothing else uses,
-// trying another port when Docker reports the first as taken.
-func (d *Deployer) runOnFreePort(ctx context.Context, dk docker.Client, serverID string, spec docker.RunSpec, log *Log) (int, error) {
+// trying another port when Docker reports the first as taken. Each
+// container port of also gets a host port of its own in the same way; the
+// second result says which.
+func (d *Deployer) runOnFreePort(ctx context.Context, dk docker.Client, serverID string, spec docker.RunSpec, also []int, log *Log) (int, map[int]int, error) {
 	used, err := d.DB.UsedHostPorts(ctx, serverID)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	const tries = 6
 	for range tries {
-		port := pickPort(used)
-		if port == 0 {
-			return 0, errors.New("no free host port is left on this server")
+		// Docker does not say which of several ports was taken, so every
+		// try picks them all anew.
+		picked := make([]int, 0, 1+len(also))
+		for range 1 + len(also) {
+			port := pickPort(used)
+			if port == 0 {
+				return 0, nil, errors.New("no free host port is left on this server")
+			}
+			used[port] = true
+			picked = append(picked, port)
 		}
-		used[port] = true
-		spec.HostPort = port
+		port, ports := picked[0], make(map[int]int, len(also))
+		spec.HostPort, spec.Ports = port, make([]docker.Publish, 0, len(also))
 		log.Step("Starting container on 127.0.0.1:%d", port)
+		for i, c := range also {
+			ports[c] = picked[1+i]
+			spec.Ports = append(spec.Ports, docker.Publish{HostPort: picked[1+i], ContainerPort: c})
+			log.Step("Its port %d, which a domain names, is on 127.0.0.1:%d", c, picked[1+i])
+		}
 		err := dk.Run(ctx, spec)
 		if err == nil {
-			return port, nil
+			return port, ports, nil
 		}
 		if !errors.Is(err, docker.ErrPortTaken) {
-			return 0, fmt.Errorf("start container: %w", err)
+			return 0, nil, fmt.Errorf("start container: %w", err)
 		}
 		// Docker keeps the container it failed to start; clear the name.
-		log.Step("Port %d is in use by something else; trying another", port)
+		if len(also) == 0 {
+			log.Step("Port %d is in use by something else; trying another", port)
+		} else {
+			log.Step("One of these ports is in use by something else; trying others")
+		}
 		if err := dk.Remove(ctx, spec.Name); err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 	}
-	return 0, fmt.Errorf("could not find a free host port after %d tries", tries)
+	return 0, nil, fmt.Errorf("could not find a free host port after %d tries", tries)
 }
 
 // pickPort returns a random unused port from the range, or 0 when full.

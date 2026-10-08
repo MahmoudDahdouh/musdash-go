@@ -675,14 +675,61 @@ func (d *DB) SetAppStatusIf(ctx context.Context, serverID, id, container, status
 // ErrNotFound when the app was deleted in the meantime, so a deployment
 // does not leave a container behind for an app that no longer exists.
 func (d *DB) SetAppRuntime(ctx context.Context, id, status, container string, hostPort int, image string) error {
-	return affected(d.ExecContext(ctx, `UPDATE apps SET status = ?, container = ?, host_port = ?, deployed_image = ?, updated_at = ? WHERE id = ?`,
-		status, container, hostPort, image, now(), id))
+	return d.SetAppRuntimePorts(ctx, id, status, container, hostPort, image, nil)
 }
 
-// SetAppStopping marks an app stopped and takes its port out of the routes,
-// while still remembering its container until that has been removed.
+// SetAppRuntimePorts is SetAppRuntime for a container that also publishes
+// the ports its app's domains name: ports says on which loopback port each
+// of them is. The two are one step, because the routes are built from
+// both and must never name one container's port with another's.
+func (d *DB) SetAppRuntimePorts(ctx context.Context, id, status, container string, hostPort int, image string, ports map[int]int) error {
+	return d.Tx(ctx, func(tx *sql.Tx) error {
+		if err := affected(tx.ExecContext(ctx, `UPDATE apps SET status = ?, container = ?, host_port = ?, deployed_image = ?, updated_at = ? WHERE id = ?`,
+			status, container, hostPort, image, now(), id)); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM app_ports WHERE app_id = ?`, id); err != nil {
+			return err
+		}
+		for port, host := range ports {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO app_ports (app_id, port, host_port) VALUES (?, ?, ?)`, id, port, host); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// AppPorts returns where the app's serving container publishes the ports
+// its domains name: container port to loopback port.
+func (d *DB) AppPorts(ctx context.Context, id string) (map[int]int, error) {
+	rows, err := d.QueryContext(ctx, `SELECT port, host_port FROM app_ports WHERE app_id = ?`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[int]int)
+	for rows.Next() {
+		var port, host int
+		if err := rows.Scan(&port, &host); err != nil {
+			return nil, err
+		}
+		out[port] = host
+	}
+	return out, rows.Err()
+}
+
+// SetAppStopping marks an app stopped and takes its ports out of the
+// routes, while still remembering its container until that has been
+// removed.
 func (d *DB) SetAppStopping(ctx context.Context, id string) error {
-	return affected(d.ExecContext(ctx, `UPDATE apps SET status = ?, host_port = 0, updated_at = ? WHERE id = ?`, AppStopped, now(), id))
+	return d.Tx(ctx, func(tx *sql.Tx) error {
+		if err := affected(tx.ExecContext(ctx, `UPDATE apps SET status = ?, host_port = 0, updated_at = ? WHERE id = ?`, AppStopped, now(), id)); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `DELETE FROM app_ports WHERE app_id = ?`, id)
+		return err
+	})
 }
 
 // ClearAppContainer forgets a container once it has been removed.
@@ -706,7 +753,8 @@ func (d *DB) ResetStuckDeploying(ctx context.Context) error {
 // UsedHostPorts returns the loopback ports already assigned on a server.
 func (d *DB) UsedHostPorts(ctx context.Context, serverID string) (map[int]bool, error) {
 	rows, err := d.QueryContext(ctx, `SELECT host_port FROM apps WHERE server_id = ? AND host_port > 0
-		UNION SELECT ep.host_port FROM service_endpoints ep JOIN services s ON s.id = ep.service_id WHERE s.server_id = ? AND ep.host_port > 0`, serverID, serverID)
+		UNION SELECT ap.host_port FROM app_ports ap JOIN apps a ON a.id = ap.app_id WHERE a.server_id = ?
+		UNION SELECT ep.host_port FROM service_endpoints ep JOIN services s ON s.id = ep.service_id WHERE s.server_id = ? AND ep.host_port > 0`, serverID, serverID, serverID)
 	if err != nil {
 		return nil, err
 	}

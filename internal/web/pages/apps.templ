@@ -821,6 +821,9 @@ templ domainOptions(d db.Domain) {
 		if d.StripPrefix {
 			@ui.Badge("Path removed", ui.ToneNeutral)
 		}
+		if d.Port != 0 {
+			@ui.Badge("Port " + strconv.Itoa(d.Port), ui.ToneNeutral)
+		}
 	</span>
 }
 

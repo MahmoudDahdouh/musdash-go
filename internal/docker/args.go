@@ -26,6 +26,12 @@ type Mount struct {
 	Internal bool
 }
 
+// Publish is one container port on a loopback port of the server.
+type Publish struct {
+	HostPort      int
+	ContainerPort int
+}
+
 // RunSpec describes a container to start.
 type RunSpec struct {
 	Name  string
@@ -38,6 +44,9 @@ type RunSpec struct {
 	Alias         string // DNS name on the network
 	HostPort      int    // published on 127.0.0.1; 0 publishes nothing
 	ContainerPort int
+	// Ports are further container ports published on 127.0.0.1 beside
+	// ContainerPort: the ones an app's domains name.
+	Ports []Publish
 	// PublicPort publishes ContainerPort on every interface of the server.
 	// Only databases whose public port a person switched on use it; apps
 	// are reached through the proxy.
@@ -265,6 +274,12 @@ func (s RunSpec) Args() ([]string, error) {
 		}
 		// Loopback only: the proxy is the single way in from outside.
 		args = append(args, "--publish", "127.0.0.1:"+strconv.Itoa(s.HostPort)+":"+strconv.Itoa(s.ContainerPort))
+	}
+	for _, p := range s.Ports {
+		if !validPort(p.HostPort) || !validPort(p.ContainerPort) {
+			return nil, fmt.Errorf("bad port mapping %d:%d", p.HostPort, p.ContainerPort)
+		}
+		args = append(args, "--publish", "127.0.0.1:"+strconv.Itoa(p.HostPort)+":"+strconv.Itoa(p.ContainerPort))
 	}
 	if s.PublicPort != 0 {
 		if !validPort(s.PublicPort) || !validPort(s.ContainerPort) {

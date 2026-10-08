@@ -986,6 +986,16 @@ func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) (db.Domai
 
 	host := s.checkHost(r.Context(), f, "host", raw)
 	path := domainPath(f, "path", r.PostFormValue("path"))
+	// The port of the container the domain leads to. The app's own is
+	// stored as none, so the domain goes with the app when its port is
+	// changed.
+	port := 0
+	if typed := strings.TrimSpace(r.PostFormValue("port")); typed != "" {
+		f.Set("port", typed)
+		if port = parsePort(f, "port", typed); port == app.Port {
+			port = 0
+		}
+	}
 	authUser, authHash := domainAuth(f, r.PostFormValue("auth_user"), r.PostFormValue("auth_password"))
 	// "www." is added in front for the redirect; the result must still fit
 	// in a host name.
@@ -1003,7 +1013,7 @@ func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) (db.Domai
 	}
 	added, err := s.DB.AddDomain(r.Context(), sessionFrom(r).TeamID, app.ServerID, db.Domain{
 		ResourceKind: db.KindApp, ResourceID: app.ID, Host: host, Path: path, StripPrefix: strip && path != "",
-		TLS: tls, RedirectWWW: www, AuthUser: authUser, AuthHash: authHash,
+		TLS: tls, RedirectWWW: www, AuthUser: authUser, AuthHash: authHash, Port: port,
 	})
 	switch {
 	case db.IsUnique(err) && path != "":
@@ -1049,6 +1059,13 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 	// reads it. One that was running before the upgrade does not know the
 	// domain at all, and nothing else would say why.
 	tone, note := ui.ToneOK, "Domain added."
+	// A container publishes the ports it was started with. One that is
+	// running does not have a port that no domain named until now.
+	if added.Port != 0 && v.App.Container != "" {
+		if ports, err := s.DB.AppPorts(r.Context(), v.App.ID); err == nil && ports[added.Port] == 0 {
+			tone, note = ui.ToneInfo, "Domain added. Redeploy the app to serve it: the container that is running does not publish port "+strconv.Itoa(added.Port)+"."
+		}
+	}
 	if added.Path != "" || added.AuthUser != "" {
 		if advice := s.proxyBehind(r, v.App.ServerID); advice != "" {
 			tone, note = ui.ToneWarn, "Domain added, but the proxy running on the app's server is from an earlier version of musdash: it answers \"nothing is deployed\" for a domain with a path or a password. "+advice
