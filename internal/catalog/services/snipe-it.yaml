@@ -1,6 +1,7 @@
 # name: Snipe-IT
 # about: Snipe-IT is an open-source asset management platform built for IT departments.
-# docs: https://snipe-it.readme.io/docs/introduction
+# docs: https://snipe-it.readme.io/docs/docker
+# website: https://snipeitapp.com/
 # categories: productivity, business
 # source: coolify
 services:

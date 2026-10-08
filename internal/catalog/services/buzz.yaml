@@ -1,6 +1,7 @@
 # name: Buzz
 # about: Self-hostable workspace where humans and AI agents collaborate on a Nostr relay you own.
-# docs: https://github.com/block/buzz
+# docs: https://github.com/block/buzz/blob/main/deploy/compose/README.md
+# website: https://github.com/block/buzz
 # categories: communication, ai, productivity
 # source: coolify
 services:

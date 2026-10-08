@@ -1,6 +1,7 @@
 # name: EZBookkeeping
 # about: EZBookkeeping is a self-hosted bookkeeping application that helps you manage your personal and business finances.
-# docs: https://github.com/mayswind/ezbookkeeping
+# docs: https://ezbookkeeping.mayswind.net/installation/
+# website: https://ezbookkeeping.mayswind.net/
 # categories: finance
 # source: dokploy
 services:

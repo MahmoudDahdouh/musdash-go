@@ -1,6 +1,7 @@
 # name: MetaMCP
 # about: MCP Aggregator, Orchestrator, Middleware, Gateway in one app.
-# docs: https://github.com/metatool-ai/metamcp
+# docs: https://docs.metamcp.com/en/quickstart
+# website: https://metamcp.com/
 # categories: ai, rss
 # source: coolify
 services:

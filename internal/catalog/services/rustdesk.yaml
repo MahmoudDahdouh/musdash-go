@@ -1,6 +1,6 @@
 # name: RustDesk
 # about: RustDesk is a full-featured open source remote control alternative for self-hosting and security with minimal configuration.
-# docs: https://rustdesk.com/docs/
+# docs: https://rustdesk.com/docs/en/self-host/rustdesk-server-oss/docker/
 # website: https://rustdesk.com/
 # categories: devtools, productivity
 # source: dokploy

@@ -1,6 +1,7 @@
 # name: Traccar
 # about: Traccar is a free and open source modern GPS tracking system.
-# docs: https://www.traccar.org/documentation/
+# docs: https://www.traccar.org/docker/
+# website: https://www.traccar.org/
 # categories: monitoring, home, analytics
 # source: coolify
 services:

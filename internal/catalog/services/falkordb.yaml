@@ -1,6 +1,6 @@
 # name: FalkorDB
 # about: A high-performance graph database for knowledge graphs, GraphRAG, agent memory, fraud detection and other relationship-heavy workloads.
-# docs: https://docs.falkordb.com/
+# docs: https://docs.falkordb.com/operations/docker
 # website: https://www.falkordb.com/
 # categories: database, ai
 # source: dokploy

@@ -1,6 +1,7 @@
 # name: Metabase
 # about: Fast analytics with the friendly UX and integrated tooling to let your company explore data on their own.
-# docs: https://www.metabase.com
+# docs: https://www.metabase.com/docs/latest/installation-and-operation/running-metabase-on-docker
+# website: https://www.metabase.com/
 # categories: analytics, business
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: BookStack
 # about: BookStack is a simple, self-hosted, easy-to-use platform for organising and storing information.
-# docs: https://www.bookstackapp.com/docs/
+# docs: https://www.bookstackapp.com/docs/admin/installation/
+# website: https://www.bookstackapp.com/
 # categories: cms, auth, docs
 # source: coolify
 services:

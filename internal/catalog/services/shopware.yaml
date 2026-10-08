@@ -1,7 +1,7 @@
 # name: Shopware
 # about: One-click Shopware 6 blueprint with bundled MySQL, Redis, bootstrap, init, worker, and scheduler services.
-# docs: https://developer.shopware.com/
-# website: https://www.shopware.com/
+# docs: https://developer.shopware.com/docs/guides/installation/
+# website: https://www.shopware.com/en/
 # categories: ecommerce
 # source: dokploy
 services:

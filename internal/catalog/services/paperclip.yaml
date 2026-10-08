@@ -1,6 +1,6 @@
 # name: Paperclip
 # about: Paperclip is an open-source control plane for managing teams of AI agents, goals, budgets, tickets, and recurring work.
-# docs: https://docs.paperclip.ing/
+# docs: https://docs.paperclip.ing/reference/deploy/docker/
 # website: https://paperclip.ing/
 # categories: ai, automation
 # source: dokploy

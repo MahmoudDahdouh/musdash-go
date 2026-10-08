@@ -1,6 +1,7 @@
 # name: DokuWiki
 # about: A lightweight and easy-to-use wiki platform for creating and managing documentation and knowledge bases.
-# docs: https://www.dokuwiki.org/
+# docs: https://www.dokuwiki.org/install
+# website: https://www.dokuwiki.org/
 # categories: cms, docs
 # source: coolify
 services:

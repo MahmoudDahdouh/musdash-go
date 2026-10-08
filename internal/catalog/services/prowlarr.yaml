@@ -1,6 +1,7 @@
 # name: Prowlarr
 # about: Prowlarr⁠ is a indexer manager/proxy built on the popular arr .net/reactjs base stack to integrate with your various PVR apps.
-# docs: https://hub.docker.com/r/linuxserver/prowlarr
+# docs: https://wiki.servarr.com/prowlarr/installation/docker
+# website: https://prowlarr.com/
 # categories: media, search
 # source: coolify
 services:

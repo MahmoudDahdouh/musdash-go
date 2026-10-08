@@ -1,6 +1,7 @@
 # name: PeerTube
 # about: Free, open-source and decentralized video platform.
 # docs: https://docs.joinpeertube.org/install/docker
+# website: https://joinpeertube.org/
 # categories: media, communication
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Sessy
 # about: Email observability platform for monitoring and analyzing email systems.
 # docs: https://github.com/marckohlbrugge/sessy/blob/main/docs/docker-deployment.md
+# website: https://github.com/marckohlbrugge/sessy
 # categories: monitoring, email, analytics
 # source: coolify
 services:

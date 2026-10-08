@@ -1,7 +1,7 @@
 # name: PostgreSQL with PgDog
 # about: PostgreSQL database with PgDog connection pooler, load balancer, and horizontal scaling proxy.
-# docs: https://docs.pgdog.dev
-# website: https://pgdog.dev
+# docs: https://docs.pgdog.dev/
+# website: https://pgdog.dev/
 # categories: database, networking
 # source: dokploy
 # connect: true

@@ -1,6 +1,7 @@
 # name: Quant-UX
 # about: Quant-UX is an open-source UX design and prototyping tool that allows you to create interactive prototypes, conduct user research, and analyze user…
-# docs: https://www.quant-ux.com/
+# docs: https://github.com/KlausSchaefers/quant-ux#readme
+# website: https://www.quant-ux.com/
 # categories: devtools
 # source: dokploy
 services:

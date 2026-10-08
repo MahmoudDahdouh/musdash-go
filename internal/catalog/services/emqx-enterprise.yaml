@@ -1,6 +1,7 @@
 # name: EMQX Enterprise
 # about: Open-source MQTT broker for IoT, IIoT, and connected vehicles.
-# docs: https://www.emqx.io/docs/en/latest/deploy/install-docker.html
+# docs: https://docs.emqx.com/en/emqx/latest/get-started/deploy/install-docker.html
+# website: https://www.emqx.com/en/products/emqx
 # categories: networking, backend, home
 # source: coolify
 services:

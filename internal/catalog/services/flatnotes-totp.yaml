@@ -1,7 +1,7 @@
 # name: Flatnotes (TOTP)
 # about: Flatnotes with TOTP authentication enabled (username + password + one-time passcode).
-# docs: https://github.com/dullage/flatnotes
-# website: https://flatnotes.io
+# docs: https://github.com/dullage/flatnotes/wiki
+# website: https://github.com/dullage/flatnotes
 # categories: docs, productivity, auth
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: Vault
 # about: HashiCorp Vault securely stores and controls access to secrets.
-# docs: https://developer.hashicorp.com/vault/docs/deploy/run-container
+# docs: https://developer.hashicorp.com/vault/docs/get-vault
+# website: https://developer.hashicorp.com/vault
 # categories: security
 # source: coolify
 services:

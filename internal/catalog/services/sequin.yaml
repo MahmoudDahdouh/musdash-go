@@ -1,6 +1,7 @@
 # name: Sequin
 # about: The fastest Postgres change data capture.
-# docs: https://sequinstream.com/docs/
+# docs: https://sequinstream.com/docs/running-sequin
+# website: https://sequinstream.com/
 # categories: analytics, storage
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Observium
 # about: Observium is a comprehensive network monitoring platform designed to deliver powerful monitoring capabilities, combined with an elegant and intuitive…
 # docs: https://docs.observium.org/
+# website: https://www.observium.org/
 # categories: monitoring, networking
 # source: coolify
 services:

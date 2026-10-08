@@ -1,6 +1,7 @@
 # name: Minecraft
 # about: Minecraft Server that will automatically download selected version at startup.
-# docs: https://github.com/itzg/docker-minecraft-server
+# docs: https://docker-minecraft-server.readthedocs.io/en/latest/
+# website: https://github.com/itzg/docker-minecraft-server
 # categories: games
 # source: coolify
 services:

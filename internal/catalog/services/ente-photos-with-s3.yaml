@@ -1,6 +1,7 @@
 # name: Ente Photos with S3
 # about: Ente Photos is a fully open source, End to End Encrypted alternative to Google Photos and Apple Photos.
-# docs: https://help.ente.io/self-hosting/installation/compose
+# docs: https://ente.com/help/self-hosting/installation/compose
+# website: https://ente.com/
 # categories: media, storage, security
 # source: coolify
 services:

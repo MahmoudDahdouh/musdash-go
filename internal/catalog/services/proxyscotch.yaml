@@ -1,6 +1,7 @@
 # name: Proxyscotch
 # about: A simple proxy server created for https://hoppscotch.io - CORS proxy.
-# docs: https://github.com/hoppscotch/proxyscotch
+# docs: https://github.com/hoppscotch/proxyscotch#readme
+# website: https://github.com/hoppscotch/proxyscotch
 # categories: networking
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: MediaWiki
 # about: MediaWiki is a collaboration and documentation platform brought to you by a vibrant community.
-# docs: https://www.mediawiki.org
+# docs: https://www.mediawiki.org/wiki/Manual:Installing_MediaWiki
+# website: https://www.mediawiki.org/wiki/MediaWiki
 # categories: cms, docs, productivity
 # source: coolify
 services:

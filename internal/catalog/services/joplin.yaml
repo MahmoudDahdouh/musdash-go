@@ -1,6 +1,7 @@
 # name: Joplin
 # about: Self-hosted sync server for Joplin.
 # docs: https://github.com/laurent22/joplin/blob/dev/packages/server/README.md
+# website: https://joplinapp.org/
 # categories: productivity
 # source: coolify
 services:

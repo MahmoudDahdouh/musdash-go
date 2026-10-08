@@ -1,7 +1,7 @@
 # name: Typebot
 # about: Typebot is an open-source chatbot builder platform.
-# docs: https://docs.typebot.io/get-started/introduction
-# website: https://typebot.io/
+# docs: https://docs.typebot.com/self-hosting/deploy/docker
+# website: https://typebot.com/
 # categories: ai
 # source: dokploy
 services:

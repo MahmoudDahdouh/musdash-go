@@ -1,6 +1,7 @@
 # name: 9Router
 # about: Free AI coding gateway. Routes Claude Code, Codex, Cursor, Cline, Copilot requests to 40+ LLM providers with auto-fallback and token savings.
-# docs: https://github.com/decolua/9router
+# docs: https://github.com/decolua/9router#readme
+# website: https://9router.com/
 # categories: ai, networking, devtools
 # source: coolify
 services:

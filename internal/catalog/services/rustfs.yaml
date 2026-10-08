@@ -1,6 +1,6 @@
 # name: RustFS
 # about: RustFS is a high-performance, S3-compatible distributed object storage system built in Rust.
-# docs: https://docs.rustfs.com/
+# docs: https://docs.rustfs.com/en/installation/container/docker
 # website: https://rustfs.com/
 # categories: storage
 # source: dokploy

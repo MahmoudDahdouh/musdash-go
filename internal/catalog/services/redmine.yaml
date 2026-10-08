@@ -1,6 +1,7 @@
 # name: Redmine
 # about: Redmine is a flexible project management web application.
-# docs: https://www.redmine.org/
+# docs: https://www.redmine.org/projects/redmine/wiki/RedmineInstall
+# website: https://www.redmine.org/
 # categories: productivity
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Calibre-Web-Automated-Book-Downloader
 # about: An intuitive web interface for searching and requesting book downloads, designed to work seamlessly with Calibre-Web-Automated.
-# docs: https://github.com/calibrain/calibre-web-automated-book-downloader
+# docs: https://github.com/calibrain/shelfmark/tree/main/docs
+# website: https://github.com/calibrain/shelfmark
 # categories: media
 # source: coolify
 services:

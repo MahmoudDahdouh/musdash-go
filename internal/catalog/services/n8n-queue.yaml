@@ -1,6 +1,6 @@
 # name: n8n Queue Mode
 # about: n8n running in queue mode for high-throughput production workloads: the main instance handles the editor and webhooks while a scalable pool of…
-# docs: https://docs.n8n.io/hosting/scaling/queue-mode/
+# docs: https://docs.n8n.io/deploy/host-n8n/configure-n8n/scaling/enable-queue-mode
 # website: https://n8n.io/
 # categories: automation, backend
 # source: dokploy

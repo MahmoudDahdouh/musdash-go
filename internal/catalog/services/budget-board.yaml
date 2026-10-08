@@ -1,6 +1,7 @@
 # name: Budget Board
 # about: Self-hosted budgeting app with a web UI and a server backed by PostgreSQL.
-# docs: https://budgetboard.net/
+# docs: https://budgetboard.net/docs/quick-start-guide
+# website: https://budgetboard.net/
 # categories: finance
 # source: dokploy
 services:

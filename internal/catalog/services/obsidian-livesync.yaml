@@ -1,6 +1,7 @@
 # name: Obsidian LiveSync
 # about: Self-hosted sync backend for Obsidian LiveSync plugin using CouchDB.
 # docs: https://github.com/vrtmrz/obsidian-livesync/blob/main/docs/setup_own_server.md
+# website: https://github.com/vrtmrz/obsidian-livesync
 # categories: storage, docs
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Healthchecks
 # about: Healthchecks is a cron job monitoring service. It listens for HTTP requests and email messages from your cron jobs and scheduled tasks.
-# docs: https://healthchecks.io/docs
+# docs: https://healthchecks.io/docs/self_hosted_docker/
+# website: https://healthchecks.io/
 # categories: monitoring
 # source: coolify
 services:

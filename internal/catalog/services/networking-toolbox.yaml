@@ -1,7 +1,7 @@
 # name: Networking Toolbox
 # about: A collection of handy networking utilities by Lissy93, packaged as a self-hostable web app.
-# docs: https://github.com/lissy93/networking#readme
-# website: https://github.com/lissy93/networking
+# docs: https://github.com/Lissy93/networking-toolbox#readme
+# website: https://networking-toolbox.as93.net/
 # categories: networking, devtools
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: Bitcoin Core
 # about: A self-hosted Bitcoin Core full node.
-# docs: https://hub.docker.com/r/ruimarinho/bitcoin-core/
+# docs: https://github.com/ruimarinho/docker-bitcoin-core#readme
+# website: https://bitcoincore.org/
 # categories: backend, finance
 # source: coolify
 # connect: true

@@ -1,7 +1,7 @@
 # name: Pastefy
 # about: Pastefy is an open-source pastebin with support for syntax highlighting and OAuth2 authentication.
 # docs: https://github.com/interaapps/pastefy/wiki
-# website: https://pastefy.app
+# website: https://pastefy.app/
 # categories: devtools
 # source: dokploy
 services:

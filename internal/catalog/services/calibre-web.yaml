@@ -1,6 +1,7 @@
 # name: Calibre-Web
 # about: Calibre-web is a web app providing a clean interface for browsing, reading and downloading eBooks.
-# docs: https://github.com/linuxserver/docker-calibre-web
+# docs: https://github.com/linuxserver/docker-calibre-web#readme
+# website: https://github.com/janeczku/calibre-web
 # categories: media
 # source: coolify
 services:

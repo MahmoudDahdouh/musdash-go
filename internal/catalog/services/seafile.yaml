@@ -1,6 +1,7 @@
 # name: Seafile
 # about: Open source cloud storage system for file sync, share and document collaboration.
-# docs: https://manual.seafile.com
+# docs: https://manual.seafile.com/latest/setup/setup_ce_by_docker/
+# website: https://www.seafile.com/en/home/
 # categories: storage
 # source: coolify
 services:

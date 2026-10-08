@@ -1,6 +1,7 @@
 # name: PG Back Web
 # about: Effortless PostgreSQL backups with a user-friendly web interface!
-# docs: https://github.com/eduardolat/pgbackweb
+# docs: https://github.com/eduardolat/pgbackweb#readme
+# website: https://github.com/eduardolat/pgbackweb
 # categories: devtools, storage
 # source: coolify
 services:

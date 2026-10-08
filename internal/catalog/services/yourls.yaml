@@ -1,6 +1,6 @@
 # name: YOURLS
 # about: YOURLS (Your Own URL Shortener) is a set of PHP scripts that will allow you to run your own URL shortening service (a la TinyURL or Bitly).
-# docs: https://yourls.org/#documentation
+# docs: https://yourls.org/docs/guide/install
 # website: https://yourls.org/
 # categories: business
 # source: dokploy

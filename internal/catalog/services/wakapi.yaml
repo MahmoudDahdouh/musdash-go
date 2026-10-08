@@ -1,6 +1,7 @@
 # name: Wakapi
 # about: A minimalist, self-hosted WakaTime-compatible backend for coding statistics.
-# docs: https://wakapi.dev/
+# docs: https://github.com/muety/wakapi#readme
+# website: https://wakapi.dev/
 # categories: analytics, productivity, devtools
 # source: coolify
 services:

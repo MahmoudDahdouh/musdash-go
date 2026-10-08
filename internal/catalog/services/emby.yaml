@@ -1,6 +1,7 @@
 # name: Emby
 # about: A media server software that allows you to organize, stream, and access your multimedia content effortlessly.
 # docs: https://emby.media/support/articles/Home.html
+# website: https://emby.media/
 # categories: media
 # source: coolify
 services:

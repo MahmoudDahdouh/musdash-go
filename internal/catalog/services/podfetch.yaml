@@ -1,6 +1,7 @@
 # name: PodFetch
 # about: PodFetch is a sleek, self-hosted podcast manager that automatically downloads new episodes, offers a web UI for listening and managing podcasts, and…
 # docs: https://samtv12345.github.io/PodFetch/
+# website: https://github.com/SamTV12345/PodFetch
 # categories: media
 # source: dokploy
 services:

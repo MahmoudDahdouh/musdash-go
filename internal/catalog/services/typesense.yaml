@@ -1,6 +1,7 @@
 # name: Typesense
 # about: Cutting-edge, in-memory search engine for mere mortals. Knowledge of rocket science optional.
-# docs: https://typesense.org/docs
+# docs: https://typesense.org/docs/guide/install-typesense.html
+# website: https://typesense.org/
 # categories: search
 # source: coolify
 services:

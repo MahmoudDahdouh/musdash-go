@@ -1,6 +1,7 @@
 # name: Terraria Server
 # about: Docker multi-arch Image for Terraria Server.
-# docs: https://github.com/hexlo/terraria-server-docker
+# docs: https://github.com/hexlo/terraria-server-docker#readme
+# website: https://terraria.org/
 # categories: games
 # source: coolify
 services:

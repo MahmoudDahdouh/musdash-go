@@ -1,6 +1,7 @@
 # name: Browserless
 # about: A headless Chrome browser as a service.
-# docs: https://docs.browserless.io/
+# docs: https://docs.browserless.io/docker/quickstart
+# website: https://www.browserless.io/
 # categories: devtools, backend
 # source: coolify
 services:

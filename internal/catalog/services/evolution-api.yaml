@@ -1,6 +1,7 @@
 # name: Evolution API
 # about: Multi-platform messaging (whatsapp and more) integration API.
-# docs: https://doc.evolution-api.com/v2/en/get-started/introduction
+# docs: https://docs.evolutionfoundation.com.br/evolution-api/install/docker
+# website: https://evolutionfoundation.com.br/
 # categories: backend, communication, devtools
 # source: coolify
 services:

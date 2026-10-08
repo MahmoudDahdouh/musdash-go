@@ -1,6 +1,7 @@
 # name: Omni-Tools
 # about: Omni-Tools is a collection of useful tools in a single self-hosted web application.
-# docs: https://github.com/iib0011/omni-tools
+# docs: https://github.com/iib0011/omni-tools#readme
+# website: https://omnitools.app/
 # categories: devtools
 # source: dokploy
 services:

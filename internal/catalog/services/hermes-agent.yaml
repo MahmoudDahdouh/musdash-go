@@ -1,6 +1,7 @@
 # name: Hermes Agent
 # about: Hermes Agent - autonomous AI agent with persistent memory, scheduling, and built-in web dashboard.
-# docs: https://github.com/NousResearch/hermes-agent
+# docs: https://hermes-agent.nousresearch.com/docs/user-guide/docker
+# website: https://hermes-agent.nousresearch.com/
 # categories: ai
 # source: coolify
 services:

@@ -1,6 +1,6 @@
 # name: Frappe LMS
 # about: Easy to use, open source learning management system to structure courses and reach out to learners, built on the Frappe Framework.
-# docs: https://docs.frappe.io/learning
+# docs: https://github.com/frappe/lms#self-hosting
 # website: https://frappe.io/learning
 # categories: home
 # source: dokploy

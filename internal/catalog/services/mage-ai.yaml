@@ -1,6 +1,7 @@
 # name: Mage AI
 # about: Build, run, and manage data pipelines for integrating and transforming data.
-# docs: https://docs.mage.ai
+# docs: https://docs.mage.ai/getting-started/setup
+# website: https://www.mage.ai/
 # categories: automation, analytics
 # source: coolify
 services:

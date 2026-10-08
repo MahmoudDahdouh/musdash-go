@@ -1,6 +1,7 @@
 # name: Shiori
 # about: Shiori is a simple self-hosted bookmark manager with offline archive support and a web interface.
 # docs: https://go-shiori.github.io/shiori/
+# website: https://github.com/go-shiori/shiori
 # categories: productivity, storage
 # source: dokploy
 services:

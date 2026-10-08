@@ -1,6 +1,7 @@
 # name: Stirling PDF
 # about: Stirling is a powerful web based PDF manipulation tool.
-# docs: https://github.com/Stirling-Tools/Stirling-PDF
+# docs: https://docs.stirlingpdf.com/Installation/Docker%20Install/
+# website: https://www.stirling.com/
 # categories: productivity, devtools
 # source: coolify
 services:

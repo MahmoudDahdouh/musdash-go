@@ -1,7 +1,7 @@
 # name: Novu
 # about: Open-source notification infrastructure for multi-channel workflows — in-app Inbox, email, SMS, push, and chat — with a unified API and dashboard.
 # docs: https://docs.novu.co/community/self-hosting-novu/deploy-with-docker
-# website: https://novu.co/
+# website: https://www.novu.co/
 # categories: communication, email, devtools
 # source: dokploy
 services:

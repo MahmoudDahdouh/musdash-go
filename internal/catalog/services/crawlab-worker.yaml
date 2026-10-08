@@ -1,7 +1,7 @@
 # name: Crawlab (Worker)
 # about: Crawlab worker node for distributed web crawling. Connects to an existing Crawlab master node via gRPC.
-# docs: https://docs.crawlab.cn
-# website: https://crawlab.cn
+# docs: https://docs.crawlab.io/
+# website: https://www.crawlab.io/en
 # categories: automation
 # source: dokploy
 # connect: true

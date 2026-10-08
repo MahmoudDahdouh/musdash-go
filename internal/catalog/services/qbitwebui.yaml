@@ -1,7 +1,7 @@
 # name: qBittorrent Web UI
 # about: A modern web interface for managing multiple qBittorrent instances. Built with React, Hono, and Bun.
-# docs: https://github.com/Maciejonos/qbitwebui#readme
-# website: https://github.com/Maciejonos/qbitwebui
+# docs: https://mkbula.github.io/qbitwebui/
+# website: https://github.com/mkbula/qbitwebui
 # categories: media
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: InstantDB
 # about: InstantDB is a real-time database server that provides instant data synchronization and real-time updates for applications.
-# docs: https://github.com/instantdb/instant
+# docs: https://github.com/instantdb/instant#readme
+# website: https://www.instantdb.com/
 # categories: database
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: Paperless-ngx
 # about: Paperless-ngx is a community-supported open-source document management system that transforms your physical documents into a searchable online…
-# docs: https://docs.paperless-ngx.com/configuration/
+# docs: https://docs.paperless-ngx.com/setup/
+# website: https://github.com/paperless-ngx/paperless-ngx
 # categories: productivity
 # source: coolify
 services:

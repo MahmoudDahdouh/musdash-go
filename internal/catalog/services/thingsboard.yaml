@@ -1,6 +1,6 @@
 # name: ThingsBoard
 # about: ThingsBoard is an open-source IoT platform for device management, data collection, processing, visualization, and automation.
-# docs: https://thingsboard.io/docs/
+# docs: https://thingsboard.io/docs/installation/docker/
 # website: https://thingsboard.io/
 # categories: home, monitoring, analytics
 # source: dokploy

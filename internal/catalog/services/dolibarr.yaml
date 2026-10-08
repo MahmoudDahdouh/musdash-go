@@ -1,6 +1,7 @@
 # name: Dolibarr
 # about: Dolibarr is a modern software package to manage your organization's activity (contacts, quotes, invoices, orders, stocks, agenda, hr, expense…
-# docs: https://www.dolibarr.org/documentation-home.php
+# docs: https://github.com/Dolibarr/dolibarr-docker
+# website: https://www.dolibarr.org/
 # categories: productivity, business
 # source: coolify
 services:

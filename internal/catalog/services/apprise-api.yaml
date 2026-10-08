@@ -1,6 +1,7 @@
 # name: Apprise API
 # about: Push Notifications API.
-# docs: https://docs.linuxserver.io/images/docker-apprise-api/
+# docs: https://appriseit.com/api/
+# website: https://appriseit.com/
 # categories: automation, devtools
 # source: coolify
 services:

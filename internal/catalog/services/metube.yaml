@@ -1,6 +1,7 @@
 # name: MeTube
 # about: A web GUI for youtube-dl with playlist support. It enables you to effortlessly download videos from YouTube and dozens of other sites.
-# docs: https://github.com/alexta69/metube
+# docs: https://github.com/alexta69/metube#readme
+# website: https://github.com/alexta69/metube
 # categories: media
 # source: coolify
 services:

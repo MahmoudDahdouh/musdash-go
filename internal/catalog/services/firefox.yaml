@@ -1,6 +1,7 @@
 # name: Firefox
 # about: Fast, private, and self-hosted secure browser for browsing without limits.
 # docs: https://github.com/jlesage/docker-firefox
+# website: https://www.firefox.com/
 # categories: productivity, devtools
 # source: coolify
 services:

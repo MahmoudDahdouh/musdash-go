@@ -1,7 +1,7 @@
 # name: Wanderer
 # about: Wanderer is a self-hosted mapping and geolocation platform powered by Meilisearch, PocketBase, and a web frontend.
-# docs: https://github.com/flomp/wanderer#readme
-# website: https://wanderer.to
+# docs: https://wanderer.to/run/installation/docker
+# website: https://wanderer.to/
 # categories: home
 # source: dokploy
 services:

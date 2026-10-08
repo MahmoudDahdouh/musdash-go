@@ -1,6 +1,7 @@
 # name: Transmission
 # about: Fast, easy, and free BitTorrent client.
 # docs: https://docs.linuxserver.io/images/docker-transmission/
+# website: https://transmissionbt.com/
 # categories: media
 # source: coolify
 services:

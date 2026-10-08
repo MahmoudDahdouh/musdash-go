@@ -1,6 +1,6 @@
 # name: Valkey
 # about: Valkey is an open-source fork of Redis, backed by AWS and the Linux Foundation.
-# docs: https://github.com/valkey-io/valkey
+# docs: https://valkey.io/topics/
 # website: https://valkey.io/
 # categories: database
 # source: dokploy

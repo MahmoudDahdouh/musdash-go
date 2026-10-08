@@ -1,7 +1,7 @@
 # name: WuzAPI
 # about: A RESTful API service for WhatsApp with multiple device support and concurrent sessions.
 # docs: https://github.com/asternic/wuzapi/blob/main/README.md
-# website: https://www.wuzapi.app/
+# website: https://github.com/asternic/wuzapi
 # categories: devtools, communication, automation
 # source: dokploy
 services:

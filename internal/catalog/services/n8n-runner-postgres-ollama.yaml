@@ -1,6 +1,6 @@
 # name: n8n + Worker + Runner with Redis/Postgres and Ollama
 # about: n8n is an open source low-code platform for automating workflows and integrations with PostgreSQL database and Ollama AI model.
-# docs: https://docs.n8n.io/
+# docs: https://docs.n8n.io/deploy/host-n8n/install-options/use-a-cloud-provider/use-docker-compose
 # website: https://n8n.io/
 # categories: ai, automation, backend
 # source: dokploy

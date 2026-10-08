@@ -1,6 +1,7 @@
 # name: Matrix Synapse with SQLite
 # about: Chat securely with your family, friends, community, or build great apps with Matrix!
-# docs: https://element-hq.github.io/synapse/latest/welcome_and_overview.html
+# docs: https://element-hq.github.io/synapse/latest/setup/installation.html
+# website: https://github.com/element-hq/synapse
 # categories: communication, media
 # source: coolify
 services:

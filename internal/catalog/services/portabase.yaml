@@ -1,6 +1,7 @@
 # name: Portabase
 # about: Self-hosted database backup & monitoring platform.
 # docs: https://portabase.io/docs
+# website: https://portabase.io/
 # categories: storage, database, monitoring
 # source: coolify
 services:

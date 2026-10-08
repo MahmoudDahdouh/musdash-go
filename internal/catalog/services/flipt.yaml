@@ -1,6 +1,7 @@
 # name: Flipt
 # about: Flipt is a fully managed feature flag solution that enables you to keep your feature flags and remote config next to your code in Git.
-# docs: https://docs.flipt.io/cloud/overview
+# docs: https://docs.flipt.io/v2/installation
+# website: https://www.flipt.io/
 # categories: backend, devtools, git
 # source: coolify
 services:

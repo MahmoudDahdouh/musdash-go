@@ -1,6 +1,7 @@
 # name: Argilla
 # about: Argilla is a collaboration tool for AI engineers and domain experts who need to build high-quality datasets for their projects.
-# docs: https://docs.argilla.io/latest/
+# docs: https://docs.argilla.io/latest/getting_started/how-to-deploy-argilla-with-docker/
+# website: https://argilla.io/
 # categories: ai, automation, search
 # source: coolify
 services:

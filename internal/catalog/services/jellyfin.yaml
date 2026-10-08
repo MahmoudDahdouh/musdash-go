@@ -1,6 +1,7 @@
 # name: Jellyfin
 # about: Jellyfin is a media server for hosting and streaming your media collection.
-# docs: https://jellyfin.org
+# docs: https://jellyfin.org/docs/general/installation/container/
+# website: https://jellyfin.org/
 # categories: media
 # source: coolify
 services:

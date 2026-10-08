@@ -1,6 +1,6 @@
 # name: Roundcube
 # about: Free and open source webmail software for the masses, written in PHP.
-# docs: https://roundcube.net/about/
+# docs: https://github.com/roundcube/roundcubemail-docker#readme
 # website: https://roundcube.net/
 # categories: email
 # source: dokploy

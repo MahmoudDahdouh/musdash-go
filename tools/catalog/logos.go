@@ -525,7 +525,6 @@ var logoAlias = map[string][]string{
 	"pterodactyl-panel":             {"pterodactyl"},
 	"redis-insight":                 {"redis"},
 	"sure":                          {"sure-finance"},
-	"trilium":                       {"trilium-notes"},
 }
 
 // logoNames are the file names to look for in an icon collection, the
@@ -548,10 +547,9 @@ func logoNames(t *tmpl) []string {
 // a name may be another company's (Hermes, Codex, Buzz), so nothing is
 // taken from one by its name: a line here says somebody looked.
 var logoPicked = map[string]string{
-	"foundryvtt":   "simple:foundryvirtualtabletop",
-	"mulesoft-esb": "svgl:mulesoft",
-	"powersync":    "svgl:powersync",
-	"typesense":    "svgl:typesense",
+	"foundryvtt": "simple:foundryvirtualtabletop",
+	"powersync":  "svgl:powersync",
+	"typesense":  "svgl:typesense",
 }
 
 // logoForDark are files that are a logo for a dark page though not all of

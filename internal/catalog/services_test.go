@@ -165,8 +165,11 @@ func TestServiceCatalogue(t *testing.T) {
 		imageRE   = regexp.MustCompile(`(?m)^\s+image:\s*["']?([^\s"']+)`)
 		commentRE = regexp.MustCompile(`(?m)^#`)
 	)
+	// A card has both links, to two places: the website, and the page
+	// somebody who is about to run the service reads. An imported template
+	// gets them from tools/catalog/links.txt, since Coolify names no website.
 	address := func(u string) bool {
-		return u == "" || strings.HasPrefix(u, "https://") && !strings.ContainsAny(u, " \"'<>")
+		return strings.HasPrefix(u, "https://") && !strings.ContainsAny(u, " \"'<>")
 	}
 	own, last := 0, ""
 	for _, listed := range Services() {
@@ -181,14 +184,14 @@ func TestServiceCatalogue(t *testing.T) {
 		} else {
 			last = name
 		}
-		if tpl.Name == "" || tpl.About == "" || !address(tpl.Docs) || !address(tpl.Website) || tpl.Docs == "" && tpl.Website == "" {
-			t.Errorf("%s: its header is incomplete: %+v", key, listed)
+		if tpl.Name == "" || tpl.About == "" || !address(tpl.Docs) || !address(tpl.Website) || tpl.Docs == tpl.Website {
+			t.Errorf("%s: its header is incomplete, or its two links are one: %+v", key, listed)
 		}
 		switch {
 		case ownTemplates[key]:
 			own++
-			if tpl.Source != "" || tpl.Docs == "" || tpl.Website == "" {
-				t.Errorf("%s is written for musdash: no source, and both addresses", key)
+			if tpl.Source != "" {
+				t.Errorf("%s is written for musdash and has no source", key)
 			}
 		case tpl.Source != "coolify" && tpl.Source != "dokploy":
 			t.Errorf("%s: source %q. A template is one of ownTemplates or says whose it was made from", key, tpl.Source)

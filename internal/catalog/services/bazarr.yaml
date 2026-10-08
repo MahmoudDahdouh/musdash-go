@@ -1,6 +1,6 @@
 # name: Bazarr
 # about: Bazarr is a companion application to Sonarr and Radarr that manages and downloads subtitles based on your requirements.
-# docs: https://wiki.bazarr.media/
+# docs: https://wiki.bazarr.media/Getting-Started/Installation/Docker/docker/
 # website: https://www.bazarr.media/
 # categories: media
 # source: dokploy

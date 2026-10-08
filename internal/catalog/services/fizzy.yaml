@@ -1,6 +1,7 @@
 # name: Fizzy
 # about: Kanban tracking tool for issues and ideas by 37signals.
-# docs: https://github.com/basecamp/fizzy
+# docs: https://github.com/basecamp/fizzy/blob/main/docs/docker-deployment.md
+# website: https://www.fizzy.do/
 # categories: productivity
 # source: coolify
 services:

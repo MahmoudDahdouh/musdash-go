@@ -1,6 +1,7 @@
 # name: code-server
 # about: Code-Server is a web-based code editor that enables remote coding and collaboration from any device, anywhere.
-# docs: https://coder.com/docs/code-server/latest
+# docs: https://coder.com/docs/code-server/install
+# website: https://github.com/coder/code-server
 # categories: devtools, docs, productivity
 # source: coolify
 services:

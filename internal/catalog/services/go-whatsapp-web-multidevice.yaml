@@ -1,6 +1,7 @@
 # name: WhatsApp API Multi Device Version
 # about: WhatsApp API Multi Device Version the open-source, self-hosted whatsapp api. Send a chat, image and voice note with your own server.
-# docs: https://github.com/aldinokemal/go-whatsapp-web-multidevice
+# docs: https://github.com/aldinokemal/go-whatsapp-web-multidevice#readme
+# website: https://github.com/aldinokemal/go-whatsapp-web-multidevice
 # categories: communication, devtools
 # source: dokploy
 services:

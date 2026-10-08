@@ -1,7 +1,7 @@
 # name: ArangoDB
 # about: ArangoDB is a native multi-model database with flexible data models for documents, graphs, and key-values.
-# docs: https://www.arangodb.com/docs/
-# website: https://www.arangodb.com/
+# docs: https://docs.arango.ai/arangodb/stable/operations/installation/docker/
+# website: https://arango.ai/
 # categories: database
 # source: dokploy
 services:

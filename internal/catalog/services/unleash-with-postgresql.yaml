@@ -1,6 +1,7 @@
 # name: Unleash with PostgreSQL
 # about: Open source feature flag management for enterprises.
-# docs: https://docs.getunleash.io
+# docs: https://docs.getunleash.io/deploy/getting-started
+# website: https://www.getunleash.io/
 # categories: devtools, backend
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Cloudreve
 # about: A self-hosted file management and sharing system.
-# docs: https://docs.cloudreve.org/
+# docs: https://docs.cloudreve.org/en/overview/deploy/docker-compose
+# website: https://cloudreve.org/
 # categories: storage
 # source: coolify
 services:

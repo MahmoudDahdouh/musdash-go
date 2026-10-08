@@ -1,7 +1,7 @@
 # name: Billmora
 # about: Billmora (Billing Management, Operation, and Recurring Automation) is a free, open-source platform for hosting providers to manage clients…
-# docs: https://billmora.com/docs/introduction
-# website: https://billmora.com
+# docs: https://billmora.com/docs/installation/linux-server
+# website: https://billmora.com/
 # categories: finance, automation
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: Docling
 # about: Convert documents (PDF, DOCX, PPTX, images, HTML) to Markdown, JSON, and more using AI-powered document processing.
-# docs: https://github.com/DS4SD/docling-serve
+# docs: https://github.com/docling-project/docling-serve/blob/main/docs/deployment.md
+# website: https://docling-project.github.io/docling/
 # categories: ai, devtools, docs
 # source: coolify
 services:

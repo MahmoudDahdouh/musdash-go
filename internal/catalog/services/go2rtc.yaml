@@ -1,6 +1,7 @@
 # name: go2rtc
 # about: Ultimate camera streaming application with support for dozens formats and protocols.
-# docs: https://go2rtc.org/
+# docs: https://github.com/AlexxIT/go2rtc#go2rtc-docker
+# website: https://go2rtc.org/
 # categories: media, communication
 # source: dokploy
 services:

@@ -1,7 +1,7 @@
 # name: FMD Server
 # about: A server to communicate with the FMD Android app, to locate and control your devices.
-# docs: https://fmd-foss.org/docs/fmd-server/overview
-# website: https://fmd-foss.org
+# docs: https://fmd-foss.org/docs/fmd-server/overview/
+# website: https://fmd-foss.org/
 # categories: security, home
 # source: dokploy
 services:

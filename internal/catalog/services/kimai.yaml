@@ -1,6 +1,7 @@
 # name: Kimai
 # about: Open source time-tracking app.
-# docs: https://www.kimai.org/
+# docs: https://www.kimai.org/documentation/docker.html
+# website: https://www.kimai.org/en/
 # categories: productivity, finance
 # source: coolify
 services:

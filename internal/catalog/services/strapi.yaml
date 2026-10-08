@@ -1,6 +1,7 @@
 # name: Strapi
 # about: Open-source headless CMS to build powerful APIs with built-in content management.
-# docs: https://docs.strapi.io/
+# docs: https://docs.strapi.io/cms/installation/docker
+# website: https://strapi.io/
 # categories: backend, cms, devtools
 # source: coolify
 services:

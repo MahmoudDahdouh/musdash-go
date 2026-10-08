@@ -1,6 +1,7 @@
 # name: Plane
 # about: The open source project management tool.
-# docs: https://docs.plane.so/self-hosting/methods/docker-compose
+# docs: https://developers.plane.so/self-hosting/methods/docker-compose
+# website: https://plane.so/
 # categories: productivity, devtools
 # source: coolify
 services:

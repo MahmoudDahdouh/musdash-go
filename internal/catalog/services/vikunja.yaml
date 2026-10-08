@@ -1,6 +1,7 @@
 # name: Vikunja
 # about: The open-source, self-hostable to-do app. Organize everything, on all platforms.
-# docs: https://vikunja.io
+# docs: https://vikunja.io/docs/installing/
+# website: https://vikunja.io/
 # categories: productivity
 # source: coolify
 services:

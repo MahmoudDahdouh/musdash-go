@@ -1,7 +1,7 @@
 # name: Synapse
 # about: Synapse is the reference homeserver implementation for Matrix, an open standard for secure, decentralised, real-time communication.
 # docs: https://element-hq.github.io/synapse/latest/setup/installation.html
-# website: https://element-hq.github.io/synapse/latest/
+# website: https://github.com/element-hq/synapse
 # categories: communication
 # source: dokploy
 services:

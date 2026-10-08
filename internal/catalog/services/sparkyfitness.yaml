@@ -1,6 +1,7 @@
 # name: SparkyFitness
 # about: SparkyFitness is a comprehensive fitness tracking and management application designed to help users monitor their nutrition, exercise, and body…
-# docs: https://codewithcj.github.io/SparkyFitness/
+# docs: https://codewithcj.github.io/SparkyFitness/install/docker-compose
+# website: https://github.com/CodeWithCJ/SparkyFitness
 # categories: home
 # source: coolify
 services:

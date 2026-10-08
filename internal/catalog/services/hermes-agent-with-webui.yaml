@@ -1,6 +1,7 @@
 # name: Hermes Agent with a web UI
 # about: Hermes Agent - autonomous AI agent with persistent memory, scheduling, and a self-hosted web chat UI.
-# docs: https://github.com/nesquena/hermes-webui
+# docs: https://github.com/nesquena/hermes-webui#readme
+# website: https://github.com/nesquena/hermes-webui
 # categories: ai
 # source: coolify
 services:

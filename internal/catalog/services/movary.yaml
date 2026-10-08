@@ -1,7 +1,7 @@
 # name: Movary
 # about: Movary is a self-hosted platform for tracking and managing your watched movies using TMDB.
-# docs: https://docs.movary.org/
-# website: https://movary.org/
+# docs: https://docs.movary.org/install/docker/
+# website: https://github.com/leepeuker/movary
 # categories: media, analytics
 # source: dokploy
 services:

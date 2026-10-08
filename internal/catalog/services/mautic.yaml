@@ -1,7 +1,7 @@
 # name: Mautic
 # about: Mautic is the world's largest open-source marketing automation project.
-# docs: https://docs.mautic.org/en
-# website: https://www.mautic.org/
+# docs: https://docs.mautic.org/en/7.2/getting_started/how_to_install_mautic.html
+# website: https://mautic.org/
 # categories: business, automation, email
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: Chromium
 # about: Chromium is an open-source browser project that is designed to provide a safer, faster, and more stable way for all users to experience the web in a…
 # docs: https://docs.linuxserver.io/images/docker-chromium
+# website: https://www.chromium.org/
 # categories: devtools
 # source: dokploy
 services:

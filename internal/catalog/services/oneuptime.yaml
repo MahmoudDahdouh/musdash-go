@@ -1,6 +1,6 @@
 # name: OneUptime
 # about: OneUptime is an open-source observability platform: uptime monitoring, status pages, incident management, on-call rotations, logs, traces and metrics…
-# docs: https://oneuptime.com/docs
+# docs: https://oneuptime.com/docs/en/installation/docker-compose
 # website: https://oneuptime.com/
 # categories: monitoring
 # source: dokploy

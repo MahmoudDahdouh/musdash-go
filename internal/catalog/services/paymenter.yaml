@@ -1,6 +1,7 @@
 # name: Paymenter
 # about: Open-Source Billing, Built for Hosting.
-# docs: https://paymenter.org/docs/guides/docker
+# docs: https://paymenter.org/docs/installation/docker
+# website: https://paymenter.org/
 # categories: finance, automation
 # source: coolify
 services:

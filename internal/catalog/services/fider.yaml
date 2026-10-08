@@ -1,6 +1,7 @@
 # name: Fider
 # about: Fider is a feedback platform for collecting and managing user feedback.
-# docs: https://fider.io
+# docs: https://docs.fider.io/hosting-instance/
+# website: https://www.fider.io/
 # categories: productivity, business
 # source: coolify
 services:

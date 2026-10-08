@@ -1,6 +1,7 @@
 # name: Karakeep
 # about: A self-hostable bookmark-everything app (links, notes and images) with AI-based automatic tagging and full text search.
-# docs: https://docs.karakeep.app/
+# docs: https://docs.karakeep.app/installation/docker/
+# website: https://karakeep.app/
 # categories: productivity, media
 # source: coolify
 services:

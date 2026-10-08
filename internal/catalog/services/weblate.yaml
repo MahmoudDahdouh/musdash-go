@@ -1,6 +1,7 @@
 # name: Weblate
 # about: Weblate is a libre software web-based continuous localization system.
-# docs: https://weblate.org
+# docs: https://docs.weblate.org/en/latest/admin/install/docker.html
+# website: https://weblate.org/en/
 # categories: productivity, devtools
 # source: coolify
 services:

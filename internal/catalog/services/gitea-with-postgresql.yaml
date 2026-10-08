@@ -1,6 +1,7 @@
 # name: Gitea with PostgreSQL
 # about: Gitea is a self-hosted, lightweight Git service, offering version control, collaboration, and code hosting.
-# docs: https://docs.gitea.com
+# docs: https://docs.gitea.com/installation/install-with-docker/
+# website: https://about.gitea.com/
 # categories: git, productivity, devtools
 # source: coolify
 services:

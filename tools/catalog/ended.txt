@@ -1,0 +1,34 @@
+# Projects that are over: archived by their makers, given up, or gone. A key
+# as either catalogue has it, a tab, the reason. Neither catalogue's template
+# of one is taken, and the reason is what docs/catalogue-left-out.md says.
+alltube	its repository is archived, and nothing has changed since April 2023
+anonupload	its project is given up: nothing has changed since February 2023, and its site is for sale
+barrage	its project is given up: nothing has changed since January 2023
+botpress	Botpress ended v12, the version that is self-hosted: it is no longer to be downloaded or deployed
+budge	its project is given up: nothing has changed since June 2022
+commento	its project is given up: nothing has changed since February 2021, and its site is gone
+commentoplusplus	its project is given up: nothing has changed since October 2022
+confluence	Atlassian ended Confluence Server in February 2024, and its image has not been built since
+doublezero	its project is given up: nothing has changed since September 2024
+embystat	its image is deprecated and its repository archived: EmbyStat is no longer developed
+focalboard	its makers say that it is not maintained
+gel	its makers closed down in December 2025
+hoarder	it is Karakeep now, which the catalogue has
+lodestone	its project is given up: nothing has been released since June 2024
+marketing-dashboard	its repository is gone
+maybe	its repository is archived (July 2025); Sure, which the catalogue has, carries it on
+moltbot	it is OpenClaw now, which the catalogue has
+morphos	its repository is archived (January 2026)
+mulesoft-esb	the repository of Mule Community Edition is archived (September 2026)
+overseerr	its repository is archived (February 2026); it goes on as Seerr
+palmr	its maker says that it is no longer maintained
+peppermint	its repository is archived (July 2026)
+picsur	its maker says that it is not maintained
+postgresus	it is Databasus now, which the catalogue has
+pyrodactyl	its repository is archived (July 2026); it goes on as Hydrodactyl
+snapdrop	its image is deprecated and its repository archived (February 2025); PairDrop, which the catalogue has, took its place
+soketi	its project is given up: nothing has changed since March 2024
+statusnook	its project is given up: nothing has changed since June 2024
+trilium	it is TriliumNext now, which the catalogue has
+whoogle	its repository is archived (2026)
+yt-dlp-webui	its repository is archived (2026)

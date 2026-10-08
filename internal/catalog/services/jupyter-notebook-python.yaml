@@ -1,6 +1,7 @@
 # name: Jupyter Notebook Python
 # about: Jupyter Notebook is an open-source web application that allows you to create and share documents that contain live code, equations, visualizations…
-# docs: https://jupyter.org/
+# docs: https://jupyter-docker-stacks.readthedocs.io/en/latest/
+# website: https://jupyter.org/
 # categories: devtools, analytics
 # source: coolify
 services:

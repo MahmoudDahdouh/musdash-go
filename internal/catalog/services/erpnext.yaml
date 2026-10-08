@@ -1,7 +1,7 @@
 # name: ERPNext
 # about: 100% Open Source and highly customizable ERP software.
-# docs: https://docs.frappe.io/erpnext
-# website: https://erpnext.com
+# docs: https://github.com/frappe/frappe_docker
+# website: https://frappe.io/erpnext
 # categories: business
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: Ollama Chat Tone
 # about: Self-contained Ollama chat client with local auth, streaming responses, and per-user conversations.
-# docs: https://hub.docker.com/r/billnice250/chattone
+# docs: https://github.com/billnice250/ollama-chat-tone#readme
+# website: https://github.com/billnice250/ollama-chat-tone
 # categories: ai
 # source: dokploy
 services:

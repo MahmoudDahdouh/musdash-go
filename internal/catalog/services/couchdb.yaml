@@ -1,6 +1,6 @@
 # name: CouchDB
 # about: CouchDB is a document-oriented NoSQL database that excels at replication and horizontal scaling.
-# docs: https://docs.couchdb.org/en/stable/
+# docs: https://docs.couchdb.org/en/stable/install/docker.html
 # website: https://couchdb.apache.org/
 # categories: database, storage
 # source: dokploy

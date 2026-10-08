@@ -1,7 +1,7 @@
 # name: Java Runtime (Multi-Version)
 # about: Configurable Java runtime environment supporting versions 8, 11, 16, 17, and 21.
-# docs: https://docs.oracle.com/en/java/
-# website: https://java.com/
+# docs: https://github.com/pterodactyl/yolks#readme
+# website: https://www.java.com/en/
 # categories: games
 # source: dokploy
 services:

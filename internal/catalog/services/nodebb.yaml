@@ -1,6 +1,7 @@
 # name: NodeBB
 # about: A next-generation discussion platform.
-# docs: https://docs.nodebb.org/
+# docs: https://docs.nodebb.org/installing/os/
+# website: https://nodebb.org/
 # categories: communication
 # source: coolify
 services:

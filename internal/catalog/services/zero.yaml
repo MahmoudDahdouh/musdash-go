@@ -1,6 +1,7 @@
 # name: Zero
 # about: Query-driven sync engine for TypeScript apps backed by Postgres.
-# docs: https://zero.rocicorp.dev/docs/deployment
+# docs: https://zero.rocicorp.dev/docs/self-host
+# website: https://zero.rocicorp.dev/
 # categories: backend, storage
 # source: coolify
 services:

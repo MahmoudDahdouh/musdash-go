@@ -1,6 +1,7 @@
 # name: SeaweedFS
 # about: SeaweedFS is a simple and highly scalable distributed file system. Compatible with S3, with an admin web interface.
-# docs: https://github.com/seaweedfs/seaweedfs
+# docs: https://github.com/seaweedfs/seaweedfs/wiki
+# website: https://github.com/seaweedfs/seaweedfs
 # categories: storage, devtools
 # source: coolify
 services:

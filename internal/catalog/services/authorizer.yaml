@@ -1,7 +1,7 @@
 # name: Authorizer
 # about: Authorizer is a powerful tool designed to simplify the process of user authentication and authorization in your applications.
-# docs: https://docs.authorizer.dev/
-# website: https://authorizer.dev
+# docs: https://docs.authorizer.dev/deployment/docker
+# website: https://authorizer.dev/
 # categories: auth, security
 # source: dokploy
 services:

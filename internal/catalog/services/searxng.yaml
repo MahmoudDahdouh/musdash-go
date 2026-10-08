@@ -1,6 +1,7 @@
 # name: SearXNG
 # about: SearXNG is a free internet metasearch engine which aggregates results from more than 70 search services.
-# docs: https://docs.searxng.org
+# docs: https://docs.searxng.org/admin/installation-docker.html
+# website: https://docs.searxng.org/
 # categories: search, media, docs
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Keycloak with PostgreSQL
 # about: Keycloak is an open-source Identity and Access Management tool.
-# docs: https://www.keycloak.org
+# docs: https://www.keycloak.org/getting-started/getting-started-docker
+# website: https://www.keycloak.org/
 # categories: auth, security
 # source: coolify
 services:

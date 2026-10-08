@@ -1,6 +1,6 @@
 # name: Adminer
 # about: Adminer is a comprehensive database management tool that supports MySQL, MariaDB, PostgreSQL, SQLite, MS SQL, Oracle, Elasticsearch, MongoDB and…
-# docs: https://www.adminer.org/en/plugins/
+# docs: https://hub.docker.com/_/adminer
 # website: https://www.adminer.org/
 # categories: database, devtools
 # source: dokploy

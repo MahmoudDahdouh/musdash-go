@@ -1,6 +1,7 @@
 # name: Bluesky PDS
 # about: Bluesky PDS (Personal Data Server).
-# docs: https://github.com/bluesky-social/pds
+# docs: https://atproto.com/guides/self-hosting
+# website: https://github.com/bluesky-social/pds
 # categories: backend
 # source: coolify
 services:

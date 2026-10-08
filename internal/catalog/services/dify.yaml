@@ -1,6 +1,6 @@
 # name: Dify
 # about: Dify is an open-source LLM app development platform.
-# docs: https://docs.dify.ai/
+# docs: https://docs.dify.ai/en/self-host/deploy/quick-start/docker-compose
 # website: https://dify.ai/
 # categories: ai
 # source: dokploy

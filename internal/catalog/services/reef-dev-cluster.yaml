@@ -1,7 +1,7 @@
 # name: Reef Chain - Dev Cluster
 # about: Self-contained Reef dev cluster with bootnode, validators, spec server, substrate RPC, EVM RPC, and faucet.
 # docs: https://docs.reef.io/
-# website: https://hub.docker.com/repository/docker/anukulpandey/reef-chain-node
+# website: https://reef.io/
 # categories: finance, devtools
 # source: dokploy
 services:

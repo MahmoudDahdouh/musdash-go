@@ -1,6 +1,7 @@
 # name: Syncthing
 # about: Syncthing synchronizes files between two or more computers in real time.
-# docs: https://syncthing.net/
+# docs: https://github.com/syncthing/syncthing/blob/main/README-Docker.md
+# website: https://syncthing.net/
 # categories: storage, analytics
 # source: coolify
 services:

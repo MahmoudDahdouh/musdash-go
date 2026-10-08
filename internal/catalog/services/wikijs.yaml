@@ -1,6 +1,7 @@
 # name: Wiki.js
 # about: The most powerful and extensible open source Wiki software.
-# docs: https://docs.requarks.io
+# docs: https://docs.requarks.io/install/docker
+# website: https://js.wiki/
 # categories: cms, docs, productivity
 # source: coolify
 services:

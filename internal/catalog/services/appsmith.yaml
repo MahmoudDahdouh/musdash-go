@@ -1,6 +1,7 @@
 # name: Appsmith
 # about: A low-code application platform for building internal tools.
-# docs: https://appsmith.com
+# docs: https://docs.appsmith.com/getting-started/setup/installation-guides/docker
+# website: https://www.appsmith.com/
 # categories: productivity, backend
 # source: coolify
 services:

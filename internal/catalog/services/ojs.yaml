@@ -1,7 +1,7 @@
 # name: Open Journal Systems
 # about: Open Journal Systems (OJS) is a journal management and publishing system that has been developed by the Public Knowledge Project through its…
-# docs: https://pkp.sfu.ca/ojs/docs/
-# website: https://pkp.sfu.ca/ojs/
+# docs: https://github.com/pkp/containers#readme
+# website: https://pkp.sfu.ca/software/ojs/
 # categories: cms, docs
 # source: dokploy
 services:

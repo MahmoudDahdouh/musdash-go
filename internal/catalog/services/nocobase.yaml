@@ -1,6 +1,7 @@
 # name: NocoBase
 # about: NocoBase is the most extensible AI-powered no-code/low-code platform.
-# docs: https://docs.nocobase.com/
+# docs: https://docs.nocobase.com/get-started/installation/docker
+# website: https://www.nocobase.com/
 # categories: devtools, backend, database
 # source: coolify
 services:

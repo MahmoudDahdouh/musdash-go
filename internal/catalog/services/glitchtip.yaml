@@ -1,6 +1,7 @@
 # name: GlitchTip
 # about: GlitchTip is a error tracking system.
-# docs: https://glitchtip.com
+# docs: https://glitchtip.com/documentation/install/
+# website: https://glitchtip.com/
 # categories: monitoring, analytics
 # source: coolify
 services:

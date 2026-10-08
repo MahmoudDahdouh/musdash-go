@@ -1,6 +1,6 @@
 # name: Baserow
 # about: Baserow is an open source database management tool that allows you to create and manage databases.
-# docs: https://baserow.io/docs/index
+# docs: https://baserow.io/docs/installation%2Finstall-with-docker
 # website: https://baserow.io/
 # categories: database
 # source: dokploy

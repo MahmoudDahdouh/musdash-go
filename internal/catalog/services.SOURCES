@@ -17,9 +17,7 @@ akaunting dokploy selfhst:akaunting.svg
 alarik dokploy dokploy:alarik.png
 alexandrie coolify selfhst:alexandrie.svg
 alist dokploy selfhst:alist.svg
-alltube dokploy dokploy:logo.png
 ampache dokploy selfhst:ampache.webp
-anonupload dokploy dokploy:logo.png
 anse dokploy dokploy:image.png
 answer dokploy selfhst:apache-answer.svg
 anubis dokploy selfhst:anubis.webp
@@ -37,7 +35,6 @@ automatisch dokploy dokploy:logo.png
 azuracast dokploy selfhst:azuracast.svg
 babybuddy coolify selfhst:baby-buddy.svg
 baikal dokploy selfhst:baikal.svg
-barrage dokploy dashboard:barrage.svg
 baserow dokploy selfhst:baserow.svg
 bazarr dokploy selfhst:bazarr.svg
 bento-pdf coolify selfhst:bentopdf.svg
@@ -51,9 +48,7 @@ bolt-diy dokploy selfhst:bolt-diy.svg
 bonfire dokploy dokploy:bonfire.svg
 booklore dokploy selfhst:booklore.svg
 bookstack coolify selfhst:bookstack.svg
-botpress dokploy dokploy:logo.png
 browserless coolify coolify:browserless.svg
-budge coolify coolify:budge.png
 budget-board dokploy selfhst:budget-board.svg
 budibase coolify selfhst:budibase.svg
 bugsink coolify coolify:bugsink.svg
@@ -97,10 +92,7 @@ codimd coolify coolify:codimd.png
 colanode dokploy selfhst:colanode.svg
 collabora-office dokploy dokploy:logo.svg
 commafeed dokploy selfhst:commafeed.svg
-commento dokploy selfhst:commento.svg
-commentoplusplus dokploy selfhst:commento.svg
 conduit dokploy selfhst:conduit.svg
-confluence dokploy selfhst:confluence.svg
 convertx dokploy selfhst:convertx.webp
 convex coolify dokploy:convex/convex.svg
 cookie-cloud dokploy dokploy:image.png
@@ -134,7 +126,6 @@ docuseal-with-postgres coolify selfhst:docuseal.svg
 dokuwiki coolify selfhst:dokuwiki.svg
 dolibarr coolify selfhst:dolibarr.svg
 domain-locker dokploy selfhst:domain-locker.svg
-doublezero dokploy dokploy:doublezero.svg
 drawio dokploy selfhst:draw-io.svg
 drawnix dokploy dokploy:image.png
 drizzle-gateway coolify dokploy:drizzle-gateway/drizzle-gateway.svg
@@ -149,7 +140,6 @@ elasticsearch coolify selfhst:elasticsearch.svg
 elasticsearch-with-kibana coolify selfhst:elasticsearch.svg
 electricsql coolify coolify:electricsql.svg
 emby coolify selfhst:emby.svg
-embystat coolify dashboard:embystat.webp
 emqx dokploy selfhst:emqx.svg
 emqx-enterprise coolify selfhst:emqx.svg
 engram coolify coolify:engram.png
@@ -186,7 +176,6 @@ flowise coolify selfhst:flowise.svg
 flowise-with-databases coolify selfhst:flowise.svg
 fluxer dokploy selfhst:fluxer.svg
 fmd-server dokploy dokploy:fmd-server.svg
-focalboard dokploy selfhst:focalboard.svg
 fonoster dokploy dokploy:fonoster.svg
 forgejo coolify selfhst:forgejo.svg
 forgejo-with-mariadb coolify selfhst:forgejo.svg
@@ -206,7 +195,6 @@ freshrss-with-postgresql coolify selfhst:freshrss.svg
 garage coolify selfhst:garage.svg
 garage-with-ui dokploy selfhst:garage.svg
 gatus dokploy selfhst:gatus.svg
-gel dokploy dokploy:gel.png
 geoserver dokploy dokploy:logo.png
 getoutline coolify selfhst:outline.svg
 gitea coolify selfhst:gitea.svg
@@ -244,7 +232,6 @@ hermes-agent coolify selfhst:hermes-agent.svg
 hermes-agent-with-webui coolify selfhst:hermes-agent.svg
 heyform coolify selfhst:heyform.svg
 hi-events dokploy selfhst:hi-events.svg
-hoarder dokploy selfhst:hoarder.svg
 homarr dokploy selfhst:homarr.svg
 homebox coolify selfhst:homebox.svg
 homebridge dokploy selfhst:homebridge.svg
@@ -312,7 +299,6 @@ linkwarden coolify selfhst:linkwarden.svg
 listmonk coolify selfhst:listmonk.svg
 litellm coolify selfhst:litellm.svg
 lobe-chat coolify selfhst:lobe-chat.svg
-lodestone dokploy selfhst:lodestone.svg
 logto coolify selfhst:logto.svg
 louez dokploy dokploy:louez.svg
 lowcoder coolify selfhst:lowcoder.svg
@@ -321,7 +307,6 @@ mage-ai coolify coolify:mage-ai.svg
 mailcatcher-ng dokploy dokploy:mailcatcher-ng.svg
 mailpit coolify selfhst:mailpit.svg
 mailu dokploy selfhst:mailu.webp
-marketing-dashboard dokploy dokploy:logo.svg
 markup dokploy dokploy:markup.svg
 martin coolify coolify:martin.png
 matomo dokploy selfhst:matomo.svg
@@ -330,7 +315,6 @@ matrix-synapse-with-sqlite coolify coolify:matrix.svg
 mattermost coolify musdash
 mautic dokploy selfhst:mautic.svg
 maxio dokploy dokploy:maxio.svg
-maybe dokploy selfhst:maybe.svg
 mazanoke dokploy selfhst:mazanoke.svg
 mealie coolify selfhst:mealie.svg
 mediacms dokploy dokploy:mediacms.svg
@@ -346,12 +330,9 @@ minecraft coolify coolify:minecraft.svg
 miniflux coolify selfhst:miniflux.svg
 misaka-danmu-server dokploy dokploy:misaka-danmu-server.png
 mixpost coolify selfhst:mixpost.svg
-moltbot dokploy dokploy:moltbot.svg
 moodle coolify selfhst:moodle.svg
-morphos dokploy selfhst:morphos.svg
 mosquitto coolify selfhst:mosquitto.svg
 movary dokploy selfhst:movary.svg
-mulesoft-esb dokploy svgl:mulesoft.svg
 mumble dokploy selfhst:mumble.svg
 my-links dokploy dokploy:my-links.svg
 n8n-queue dokploy selfhst:n8n.svg
@@ -417,12 +398,10 @@ orangehrm coolify coolify:orangehrm.svg
 organizr coolify selfhst:organizr.webp
 oryx dokploy dokploy:logo.svg
 otterwiki dokploy dashboard:otter-wiki.svg
-overseerr coolify selfhst:overseerr.svg
 owncast dokploy selfhst:owncast.svg
 owncloud coolify selfhst:owncloud.svg
 owncloud-infinite-scale dokploy dokploy:owncloud-infinite-scale.svg
 pairdrop coolify selfhst:pairdrop.svg
-palmr dokploy selfhst:palmr.svg
 palworld coolify coolify:palworld.svg
 paperclip dokploy dokploy:logo.svg
 paperless coolify selfhst:paperless-ngx.svg
@@ -433,11 +412,9 @@ paymenter coolify selfhst:paymenter.svg
 peertube coolify selfhst:peertube.svg
 penpot coolify selfhst:penpot.svg
 penpot-with-s3 coolify selfhst:penpot.svg
-peppermint dokploy selfhst:peppermint-dark.svg
 pgadmin coolify selfhst:pgadmin.svg
 pgbackweb coolify dashboard:pg-back-web.svg
 phpmyadmin coolify selfhst:phpmyadmin.svg
-picsur dokploy dashboard:picsur.svg
 pinchflat dokploy selfhst:pinchflat.webp
 plane coolify selfhst:plane.svg
 plark dokploy dokploy:plark.svg
@@ -453,7 +430,6 @@ portabase coolify selfhst:portabase.svg
 poste-io dokploy dokploy:poste.io.svg
 postgres-pgadmin dokploy dokploy:postgres-pgadmin.svg
 postgres-pgdog dokploy selfhst:postgresql.svg
-postgresus dokploy dokploy:postgresus.svg
 posthog dokploy selfhst:posthog.svg
 postiz coolify selfhst:postiz.svg
 powersync dokploy svgl:powersync.svg
@@ -464,7 +440,6 @@ prowlarr coolify selfhst:prowlarr-dark.svg
 proxyscotch coolify selfhst:hoppscotch.svg
 pterodactyl dokploy selfhst:pterodactyl.svg
 pterodactyl-panel coolify selfhst:pterodactyl.svg
-pyrodactyl dokploy dokploy:pyrodactyl.png
 qbittorrent coolify selfhst:qbittorrent.svg
 qbitwebui dokploy selfhst:qbitwebui.webp
 qdrant coolify selfhst:qdrant.svg
@@ -515,11 +490,9 @@ silo dokploy dokploy:logo.svg
 silverbullet coolify selfhst:silverbullet.webp
 siyuan coolify selfhst:siyuan.svg
 slash coolify selfhst:slash.svg
-snapdrop coolify selfhst:snapdrop.svg
 snipe-it coolify selfhst:snipe-it.webp
 soft-serve dokploy dokploy:soft-serve.svg
 soju coolify coolify:soju.svg
-soketi coolify coolify:soketi.jpeg
 soketi-app-manager coolify coolify:soketi-app-manager.svg
 sonarr coolify selfhst:sonarr.svg
 spacedrive dokploy dokploy:spacedrive.png
@@ -530,7 +503,6 @@ spliit dokploy selfhst:spliit.svg
 stack-auth dokploy dokploy:stack-auth.png
 stalwart coolify selfhst:stalwart.svg
 statping-ng dokploy selfhst:statping-ng.webp
-statusnook coolify coolify:statusnook.svg
 steedos dokploy dokploy:steedos.png
 stirling-pdf coolify selfhst:stirling-pdf.svg
 storyden dokploy selfhst:storyden.svg
@@ -562,7 +534,6 @@ traccar coolify selfhst:traccar.svg
 trailbase coolify coolify:trailbase.svg
 transmission coolify selfhst:transmission.svg
 trek dokploy selfhst:trek.svg
-trilium dokploy dashboard:trilium.svg
 triliumnext coolify coolify:triliumnext.svg
 trmnl-larapaper dokploy dokploy:larapaper.svg
 tuwunel dokploy dokploy:tuwunel.svg
@@ -602,7 +573,6 @@ weaviate coolify selfhst:weaviate.svg
 web-check coolify selfhst:web-check-dark.svg
 weblate coolify selfhst:weblate.svg
 whatomate dokploy dokploy:whatomate.svg
-whoogle coolify selfhst:whoogle.webp
 wikijs coolify selfhst:wiki-js-dark.svg
 windshift dokploy selfhst:windshift.svg
 wordpress-with-mariadb coolify selfhst:wordpress.svg
@@ -613,7 +583,6 @@ wuzapi dokploy dokploy:wuzapi.png
 yamtrack coolify selfhst:yamtrack.svg
 yamtrack-with-postgresql coolify selfhst:yamtrack.svg
 yourls dokploy selfhst:yourls.svg
-yt-dlp-webui dokploy dokploy:logo.ico
 yuvomi dokploy selfhst:yuvomi.svg
 zabbix dokploy selfhst:zabbix.svg
 zero coolify coolify:zero.svg

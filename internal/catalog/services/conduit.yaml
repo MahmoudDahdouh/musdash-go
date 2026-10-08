@@ -1,6 +1,6 @@
 # name: Conduit
 # about: Conduit is a simple, fast and reliable chat server powered by Matrix.
-# docs: https://docs.conduit.rs/
+# docs: https://docs.conduit.rs/deploying/docker.html
 # website: https://conduit.rs/
 # categories: communication
 # source: dokploy

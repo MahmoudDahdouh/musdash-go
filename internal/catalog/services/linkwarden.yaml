@@ -1,6 +1,7 @@
 # name: Linkwarden
 # about: A self-hostable collaborative bookmark manager to collect, organize, and preserve web pages.
-# docs: https://docs.linkwarden.app/self-hosting/setup
+# docs: https://docs.linkwarden.app/self-hosting/installation
+# website: https://linkwarden.app/
 # categories: productivity, storage, business
 # source: coolify
 services:

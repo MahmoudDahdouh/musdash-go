@@ -1,6 +1,7 @@
 # name: Cockpit
 # about: Cockpit is a headless content platform that is lightweight, fast and ready for takeoff.
-# docs: https://getcockpit.com/documentation/
+# docs: https://getcockpit.com/documentation/core/quickstart/installation
+# website: https://getcockpit.com/
 # categories: cms, backend
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Mealie
 # about: A recipe manager and meal planner.
-# docs: https://docs.mealie.io/
+# docs: https://mealie.io/documentation/getting-started/installation/installation-checklist/
+# website: https://mealie.io/
 # categories: productivity, home
 # source: coolify
 services:

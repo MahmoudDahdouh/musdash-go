@@ -1,6 +1,7 @@
 # name: Termix
 # about: All-in-One SSH & Remote Desktop management app.
 # docs: https://docs.termix.site/install/server/docker
+# website: https://termix.site/
 # categories: devtools, networking
 # source: coolify
 services:

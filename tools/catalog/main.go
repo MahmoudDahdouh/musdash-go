@@ -21,6 +21,11 @@
 // (see oneShots), the one change it makes that is worth reading through,
 // and of every logo it found and could not take, why.
 //
+// Two lists beside it are written by hand. links.txt has the two addresses
+// of a card where the sources' are missing or not the best page (Coolify's
+// templates name no website). ended.txt has the projects that are over
+// (archived, given up, gone): neither catalogue's template of one is taken.
+//
 // A template that converts is not yet one that passes: the test
 // TestCatalogueLoadsInTheSandbox (internal/compose) loads every template the
 // way a deployment does. What it refuses is written to rejected.txt, by
@@ -31,6 +36,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -62,6 +68,8 @@ func main() {
 	chrome := flag.String("chrome", "", "Chrome or Chromium, which draws the logos that are pictures (found by itself where it is usually installed)")
 	repo := flag.String("repo", "../..", "the musdash checkout to write into")
 	rejectedFile := flag.String("rejected", "rejected.txt", "the list of templates the sandbox test refused")
+	endedFile := flag.String("ended", "ended.txt", "the list of projects that are over")
+	linksFile := flag.String("links", "links.txt", "the list of the cards' links")
 	flag.Parse()
 	if *coolify == "" || *dokployDir == "" || *icons == "" || *dashboard == "" || *svgl == "" || *simple == "" {
 		flag.Usage()
@@ -109,6 +117,23 @@ func main() {
 		if id, reason, ok := strings.Cut(line, "\t"); ok && !strings.HasPrefix(line, "#") {
 			rejected[strings.TrimSpace(id)] = strings.TrimSpace(reason)
 		}
+	}
+
+	// The same holds for the two lists beside it: without the one, a
+	// project that is over would be offered again, and without the other
+	// some three hundred cards would lose a link.
+	endedList, err := readList(*endedFile, 2)
+	if err != nil {
+		fatal(err)
+	}
+	// By the key both catalogues' templates of one service share, so that
+	// the other catalogue's does not take the place of the one left out.
+	ended, endedAs := map[string]string{}, map[string]string{}
+	for key, f := range endedList {
+		ended[same(key)], endedAs[same(key)] = f[0], key
+	}
+	if links, err = readList(*linksFile, 3); err != nil {
+		fatal(err)
 	}
 
 	type candidate struct {
@@ -164,6 +189,13 @@ func main() {
 			for _, c := range byKey[k] {
 				out = append(out, leftOut{c.t.Source, c.t.Key, "musdash runs it as a database, with backups and a port of its own: see Databases"})
 			}
+			continue
+		}
+		if reason, over := ended[k]; over {
+			for _, c := range byKey[k] {
+				out = append(out, leftOut{c.t.Source, c.t.Key, reason})
+			}
+			delete(ended, k)
 			continue
 		}
 		var winner *tmpl
@@ -372,10 +404,54 @@ func main() {
 			uncategorised++
 			fmt.Printf("no category: %s (%s) [%s] %v\n", t.Key, t.Source, t.SrcCategory, t.Tags)
 		}
+		delete(links, t.Key)
 	}
-	if uncategorised > 0 {
+	// A line of a list that names nothing is a mistake in the key, or a
+	// service a catalogue has dropped: either way the list is wrong.
+	for _, key := range slices.Sorted(maps.Keys(links)) {
+		fmt.Printf("%s: %s is no template that was written\n", *linksFile, key)
+	}
+	for _, key := range slices.Sorted(maps.Keys(ended)) {
+		fmt.Printf("%s: %s is in neither catalogue\n", *endedFile, endedAs[key])
+	}
+	if uncategorised > 0 || len(links) > 0 || len(ended) > 0 {
 		os.Exit(1)
 	}
+}
+
+// links are the two addresses of a card, by template (links.txt): the
+// website and the page somebody who is about to run the service reads, "-"
+// for the one the source has right. Coolify's templates name no website at
+// all, and either catalogue's addresses go out of date.
+var links map[string][]string
+
+// readList reads a list kept beside this program: a key, a tab, and as many
+// more fields as the list has. A line that starts with "#" is a comment. A
+// key is said once, and a line with a field too few is an error: such a line
+// would otherwise be a card that silently kept its old link.
+func readList(file string, fields int) (map[string][]string, error) {
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("%w (run this from tools/catalog, or name the file)", err)
+	}
+	list := map[string][]string{}
+	for n, line := range strings.Split(string(raw), "\n") {
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		for i := range f {
+			f[i] = strings.TrimSpace(f[i])
+		}
+		if len(f) != fields || slices.Contains(f, "") {
+			return nil, fmt.Errorf("%s:%d: %d fields with a tab between them are wanted", file, n+1, fields)
+		}
+		if _, twice := list[f[0]]; twice {
+			return nil, fmt.Errorf("%s:%d: %s is there twice", file, n+1, f[0])
+		}
+		list[f[0]] = f[1:]
+	}
+	return list, nil
 }
 
 func firstLine(s string) string {
@@ -405,8 +481,13 @@ func (t *tmpl) describe(names nameBook) error {
 	if t.About == "" {
 		t.About = aboutOverrides[t.Key]
 	}
-	if t.Docs == "" && t.Website == "" {
-		t.Docs = docsOverrides[t.Key]
+	if l, ok := links[t.Key]; ok {
+		if l[0] != "-" {
+			t.Website = l[0]
+		}
+		if l[1] != "-" {
+			t.Docs = l[1]
+		}
 	}
 	if t.About == "" {
 		return fmt.Errorf("its catalogue says nothing about it")

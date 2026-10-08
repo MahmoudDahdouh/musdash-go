@@ -1,6 +1,6 @@
 # name: GeoServer & PostGIS
 # about: An open-source server for sharing geospatial data, paired with a PostGIS database.
-# docs: https://docs.geoserver.org/
+# docs: https://docs.geoserver.org/latest/en/user/installation/index.html
 # website: https://geoserver.org/
 # categories: devtools
 # source: dokploy

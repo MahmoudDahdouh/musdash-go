@@ -1,6 +1,7 @@
 # name: SFTPGo
 # about: SFTPGo is an event-driven SFTP, FTP/S, HTTP/S and WebDAV server.
-# docs: https://docs.sftpgo.com/2.7/
+# docs: https://docs.sftpgo.com/latest/docker/
+# website: https://sftpgo.com/
 # categories: storage
 # source: coolify
 services:

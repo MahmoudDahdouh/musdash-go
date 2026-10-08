@@ -1,6 +1,7 @@
 # name: Directus with PostgreSQL
 # about: Directus wraps databases with a dynamic API, and provides an intuitive app for managing its content.
-# docs: https://directus.io
+# docs: https://directus.com/docs/self-hosting/overview
+# website: https://directus.com/
 # categories: cms, database
 # source: coolify
 services:

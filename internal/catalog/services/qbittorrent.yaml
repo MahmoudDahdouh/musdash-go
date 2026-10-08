@@ -1,6 +1,7 @@
 # name: qBittorrent
 # about: The qBittorrent project aims to provide an open-source software alternative to μTorrent.
 # docs: https://docs.linuxserver.io/images/docker-qbittorrent/
+# website: https://www.qbittorrent.org/
 # categories: media
 # source: coolify
 services:

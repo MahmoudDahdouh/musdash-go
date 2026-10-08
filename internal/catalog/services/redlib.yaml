@@ -1,6 +1,7 @@
 # name: Redlib
 # about: An alternative private front-end to Reddit, with its origins in Libreddit.
-# docs: https://github.com/redlib-org/redlib
+# docs: https://github.com/redlib-org/redlib#readme
+# website: https://github.com/redlib-org/redlib
 # categories: productivity, rss
 # source: coolify
 services:

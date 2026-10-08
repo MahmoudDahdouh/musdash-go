@@ -1,6 +1,7 @@
 # name: Cryptgeon
 # about: Secure note / file sharing service inspired by PrivNote.
-# docs: https://github.com/cupcakearmy/cryptgeon
+# docs: https://github.com/cupcakearmy/cryptgeon#deployment
+# website: https://cryptgeon.org/
 # categories: security
 # source: coolify
 services:

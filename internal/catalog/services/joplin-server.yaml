@@ -1,6 +1,6 @@
 # name: Joplin Server
 # about: Joplin Server is the self-hosted sync backend for Joplin notes, notebooks, and attachments.
-# docs: https://github.com/laurent22/joplin/tree/dev/packages/server
+# docs: https://github.com/laurent22/joplin/blob/dev/packages/server/README.md
 # website: https://joplinapp.org/
 # categories: docs, storage, productivity
 # source: dokploy

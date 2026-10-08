@@ -1,6 +1,7 @@
 # name: Palworld
 # about: A dedicated server for Palworld, the multiplayer creature-collecting survival game.
-# docs: https://github.com/thijsvanloef/palworld-server-docker
+# docs: https://palworld-server-docker.loef.dev/
+# website: https://github.com/thijsvanloef/palworld-server-docker
 # categories: games
 # source: coolify
 services:

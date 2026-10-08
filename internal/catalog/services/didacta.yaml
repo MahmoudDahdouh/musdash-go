@@ -1,7 +1,7 @@
 # name: Didacta
 # about: Didacta is a fair-code, self-hosted learning platform (LMS) with multi-tenant isolation, a public course catalog, enrollment flows, gamification and…
 # docs: https://docs.didacta.io
-# website: https://didacta.io
+# website: https://didacta.io/en
 # categories: home
 # source: dokploy
 services:

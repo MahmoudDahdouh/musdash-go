@@ -1,6 +1,6 @@
 # name: ConvertX
 # about: ConvertX is a service for converting media files, with optional user registration and file management features.
-# docs: https://github.com/c4illin/ConvertX#environment-variables
+# docs: https://github.com/c4illin/ConvertX#deployment
 # website: https://github.com/c4illin/ConvertX
 # categories: media, devtools
 # source: dokploy

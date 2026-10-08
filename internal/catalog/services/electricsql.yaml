@@ -1,6 +1,7 @@
 # name: ElectricSQL
 # about: Sync shape-based subsets of your Postgres data over HTTP.
-# docs: https://electric-sql.com/docs/guides/deployment
+# docs: https://electric.ax/docs/sync/guides/deployment
+# website: https://electric.ax/
 # categories: backend, storage
 # source: coolify
 services:

@@ -1,6 +1,6 @@
 # name: Unifi Network
 # about: Unifi Network is an open-source enterprise network management platform for wireless networks.
-# docs: https://help.ui.com/hc/en-us/articles/360012282453-Self-Hosting-a-UniFi-Network-Server
+# docs: https://docs.linuxserver.io/images/docker-unifi-network-application/
 # website: https://www.ui.com/
 # categories: networking
 # source: dokploy

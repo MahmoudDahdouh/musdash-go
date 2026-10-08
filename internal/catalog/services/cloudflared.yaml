@@ -1,6 +1,6 @@
 # name: Cloudflare Tunnel
 # about: Publishes your apps through Cloudflare without opening ports on the server.
-# docs: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+# docs: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/
 # website: https://www.cloudflare.com/
 # categories: networking
 # connect: true

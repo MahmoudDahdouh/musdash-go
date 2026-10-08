@@ -1,6 +1,6 @@
 # name: Carbone
 # about: Carbone is a high-performance, self-hosted document generation engine.
-# docs: https://carbone.io/documentation/design/overview/getting-started.html
+# docs: https://carbone.io/documentation/developer/self-hosted-deployment/deploy-with-docker.html
 # website: https://carbone.io/
 # categories: automation, analytics, productivity
 # source: dokploy

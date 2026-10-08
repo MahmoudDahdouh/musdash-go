@@ -1,6 +1,7 @@
 # name: Zipline
 # about: A ShareX/file upload server that is easy to use, packed with features, and with an easy setup!
-# docs: https://zipline.diced.sh/docs/config
+# docs: https://zipline.diced.sh/docs/get-started/docker
+# website: https://zipline.diced.sh/
 # categories: media, storage
 # source: coolify
 services:

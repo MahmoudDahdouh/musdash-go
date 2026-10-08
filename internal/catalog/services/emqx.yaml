@@ -1,7 +1,7 @@
 # name: EMQX
 # about: A scalable and reliable MQTT broker for AI, IoT, IIoT and connected vehicles.
-# docs: https://docs.emqx.com
-# website: https://www.emqx.com
+# docs: https://docs.emqx.com/en/emqx/latest/get-started/deploy/install-docker.html
+# website: https://www.emqx.com/en
 # categories: home, backend
 # source: dokploy
 services:

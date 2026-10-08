@@ -1,6 +1,7 @@
 # name: Postiz
 # about: Open source social media scheduling tool.
-# docs: https://docs.postiz.com
+# docs: https://docs.postiz.com/self-host/installation/docker-compose
+# website: https://postiz.com/
 # categories: analytics, business, productivity
 # source: coolify
 services:

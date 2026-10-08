@@ -1,6 +1,7 @@
 # name: Soju
 # about: A user-friendly IRC bouncer with a modern web interface.
-# docs: https://soju.im/
+# docs: https://codeberg.org/emersion/soju/src/branch/master/doc/getting-started.md
+# website: https://soju.im/
 # categories: communication
 # source: coolify
 services:

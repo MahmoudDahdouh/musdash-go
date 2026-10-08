@@ -1,6 +1,7 @@
 # name: useSend
 # about: Usesend is an open-source alternative to Resend, Sendgrid, Mailgun and Postmark etc.
 # docs: https://docs.usesend.com/self-hosting/overview
+# website: https://usesend.com/
 # categories: email
 # source: coolify
 services:

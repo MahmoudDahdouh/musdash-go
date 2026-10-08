@@ -1,7 +1,7 @@
 # name: Garage S3 with Web UI
 # about: Garage is an open-source distributed object storage service tailored for self-hosting.
 # docs: https://garagehq.deuxfleurs.fr/documentation/quick-start/
-# website: https://garagehq.deuxfleurs.fr
+# website: https://garagehq.deuxfleurs.fr/
 # categories: storage
 # source: dokploy
 services:

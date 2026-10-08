@@ -1,6 +1,7 @@
 # name: OpenPanel
 # about: Open source alternative to Mixpanel and Plausible for product analytics.
-# docs: https://openpanel.dev/docs
+# docs: https://openpanel.dev/docs/self-hosting/self-hosting
+# website: https://openpanel.dev/
 # categories: analytics
 # source: coolify
 services:

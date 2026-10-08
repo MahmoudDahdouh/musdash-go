@@ -1,6 +1,6 @@
 # name: Prometheus
 # about: Prometheus is an open-source monitoring and alerting toolkit designed for reliability and scalability.
-# docs: https://prometheus.io/docs/introduction/overview/
+# docs: https://prometheus.io/docs/prometheus/latest/installation/
 # website: https://prometheus.io/
 # categories: monitoring
 # source: dokploy

@@ -1,6 +1,7 @@
 # name: Passbolt
 # about: Passbolt Community Edition (CE) API. The JSON API for the open source password manager for teams!
 # docs: https://www.passbolt.com/ce/docker
+# website: https://www.passbolt.com/
 # categories: auth, security
 # source: coolify
 services:

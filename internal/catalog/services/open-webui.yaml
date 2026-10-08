@@ -1,6 +1,7 @@
 # name: Open WebUI
 # about: User-friendly AI Interface (Supports Ollama, OpenAI API, ...).
-# docs: https://docs.openwebui.com
+# docs: https://docs.openwebui.com/getting-started/quick-start
+# website: https://openwebui.com/
 # categories: ai, git, automation
 # source: coolify
 services:

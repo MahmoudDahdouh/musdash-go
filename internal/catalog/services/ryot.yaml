@@ -1,6 +1,7 @@
 # name: Ryot
 # about: Roll your own tracker! Ryot is a self-hosted platform for tracking various aspects of life such as media consumption, fitness activities, and more.
-# docs: https://github.com/ignisda/ryot
+# docs: https://github.com/IgnisDa/ryot#readme
+# website: https://ryot.io/
 # categories: productivity, rss, automation
 # source: coolify
 services:

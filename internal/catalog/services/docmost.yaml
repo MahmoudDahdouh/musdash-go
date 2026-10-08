@@ -1,6 +1,7 @@
 # name: Docmost
 # about: Open-source collaborative wiki and documentation software.
-# docs: https://docmost.com/docs/
+# docs: https://docmost.com/docs/installation
+# website: https://docmost.com/
 # categories: productivity, docs
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: phpMyAdmin
 # about: phpMyAdmin is a web-based database management tool for administering your MySQL and MariaDB databases through a user-friendly interface.
-# docs: https://phpmyadmin.net
+# docs: https://docs.linuxserver.io/images/docker-phpmyadmin/
+# website: https://www.phpmyadmin.net/
 # categories: database
 # source: coolify
 services:

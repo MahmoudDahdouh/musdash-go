@@ -1,7 +1,7 @@
 # name: Matomo
 # about: Leading open-source web analytics platform with global data ownership.
-# docs: https://matomo.org/docs
-# website: https://matomo.org
+# docs: https://matomo.org/faq/on-premise/installing-matomo/
+# website: https://matomo.org/
 # categories: analytics, monitoring
 # source: dokploy
 services:

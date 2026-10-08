@@ -1,6 +1,7 @@
 # name: Open Archiver
 # about: A self-hosted, open-source email archiving solution with full-text search capability.
-# docs: https://docs.openarchiver.com/
+# docs: https://docs.openarchiver.com/user-guides/installation
+# website: https://openarchiver.com/
 # categories: email, security, search
 # source: coolify
 services:

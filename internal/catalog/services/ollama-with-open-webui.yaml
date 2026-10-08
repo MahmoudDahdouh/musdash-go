@@ -1,6 +1,7 @@
 # name: Ollama with Open WebUI
 # about: Ollama with Open Web UI integrates AI model deployment with a user-friendly interface.
-# docs: https://docs.openwebui.com
+# docs: https://docs.openwebui.com/getting-started/quick-start/
+# website: https://ollama.com/
 # categories: ai, git, automation
 # source: coolify
 services:

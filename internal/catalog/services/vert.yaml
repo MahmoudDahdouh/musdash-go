@@ -1,6 +1,7 @@
 # name: VERT
 # about: The next-generation file converter. Open source, fully local and free forever.
-# docs: https://github.com/VERT-sh/VERT
+# docs: https://github.com/VERT-sh/VERT#readme
+# website: https://vert.sh/
 # categories: devtools, storage, docs
 # source: coolify
 services:

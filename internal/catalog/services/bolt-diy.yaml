@@ -1,6 +1,7 @@
 # name: bolt.diy
 # about: Prompt, run, edit, and deploy full-stack web applications using any LLM you want!
 # docs: https://stackblitz-labs.github.io/bolt.diy/
+# website: https://github.com/stackblitz-labs/bolt.diy
 # categories: ai, devtools
 # source: dokploy
 services:

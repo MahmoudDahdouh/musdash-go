@@ -1,6 +1,6 @@
 # name: Ampache
 # about: Ampache is a web-based audio/video streaming application and file manager allowing you to access your music & videos from anywhere, using almost any…
-# docs: https://github.com/ampache/ampache/wiki
+# docs: https://github.com/ampache/ampache-docker#readme
 # website: https://ampache.org/
 # categories: media
 # source: dokploy

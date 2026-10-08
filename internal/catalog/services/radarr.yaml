@@ -1,6 +1,7 @@
 # name: Radarr
 # about: Radarr⁠ - A fork of Sonarr to work with movies à la Couchpotato.
-# docs: https://hub.docker.com/r/linuxserver/radarr
+# docs: https://wiki.servarr.com/radarr/installation/docker
+# website: https://radarr.video/
 # categories: media
 # source: coolify
 services:

@@ -1,7 +1,7 @@
 # name: Akaunting
 # about: Akaunting is a self-hosted, open-source accounting app for small businesses.
-# docs: https://akaunting.com/docs
-# website: https://akaunting.com
+# docs: https://github.com/akaunting/docker#readme
+# website: https://akaunting.com/
 # categories: finance
 # source: dokploy
 services:

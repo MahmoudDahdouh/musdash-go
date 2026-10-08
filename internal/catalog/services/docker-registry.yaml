@@ -1,6 +1,7 @@
 # name: Docker Registry
 # about: The Docker Registry lets you distribute Docker images.
-# docs: https://distribution.github.io/distribution/
+# docs: https://distribution.github.io/distribution/about/deploying/
+# website: https://github.com/distribution/distribution
 # categories: devtools, media
 # source: coolify
 services:

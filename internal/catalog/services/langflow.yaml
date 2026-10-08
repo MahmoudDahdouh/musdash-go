@@ -1,6 +1,7 @@
 # name: Langflow
 # about: Langflow is an open-source, Python-based, customizable framework for building AI applications.
-# docs: https://docs.langflow.org
+# docs: https://docs.langflow.org/deployment-docker
+# website: https://www.langflow.org/
 # categories: ai, automation, backend
 # source: coolify
 services:

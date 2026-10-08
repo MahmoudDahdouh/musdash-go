@@ -1,6 +1,7 @@
 # name: Drupal with PostgreSQL
 # about: Drupal is a free and open-source web content management system written in PHP and distributed under the GNU General Public License.
-# docs: https://www.drupal.org/about
+# docs: https://www.drupal.org/docs/getting-started/installing-drupal
+# website: https://www.drupal.org/
 # categories: cms
 # source: coolify
 services:

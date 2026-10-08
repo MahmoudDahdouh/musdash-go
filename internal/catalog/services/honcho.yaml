@@ -1,6 +1,7 @@
 # name: Honcho
 # about: Honcho is a developer tool to build personalized AI agents with production-ready memory, dialectic reasoning, and stateful dialogue.
 # docs: https://honcho.dev/docs/v3/contributing/self-hosting
+# website: https://honcho.dev/
 # categories: ai
 # source: coolify
 services:

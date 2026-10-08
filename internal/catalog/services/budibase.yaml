@@ -1,6 +1,7 @@
 # name: Budibase
 # about: Low code platform for building business apps and workflows in minutes. Supports PostgreSQL, MySQL, MSSQL, MongoDB, Rest API, Docker, K8s, and more.
 # docs: https://docs.budibase.com/docs/docker-compose
+# website: https://budibase.com/
 # categories: automation, backend, devtools
 # source: coolify
 services:

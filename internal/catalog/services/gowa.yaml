@@ -1,6 +1,7 @@
 # name: Gowa
 # about: Golang WhatsApp - Built with Go for efficient memory use.
-# docs: https://github.com/aldinokemal/go-whatsapp-web-multidevice
+# docs: https://github.com/aldinokemal/go-whatsapp-web-multidevice#readme
+# website: https://github.com/aldinokemal/go-whatsapp-web-multidevice
 # categories: communication, devtools
 # source: coolify
 services:

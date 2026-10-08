@@ -1,6 +1,6 @@
 # name: Etherpad
 # about: Etherpad is a real-time collaborative text editor that allows multiple users to edit documents simultaneously.
-# docs: https://github.com/ether/etherpad-lite/wiki
+# docs: https://docs.etherpad.org/
 # website: https://etherpad.org/
 # categories: productivity, docs
 # source: dokploy

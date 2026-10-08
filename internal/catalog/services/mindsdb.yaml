@@ -1,6 +1,7 @@
 # name: MindsDB
 # about: MindsDB is the platform for building AI from enterprise data, enabling smarter organizations.
-# docs: https://docs.mindsdb.com/what-is-mindsdb
+# docs: https://mindsdb.github.io/engine/#setup-docker
+# website: https://mindshub.ai/
 # categories: ai
 # source: coolify
 services:

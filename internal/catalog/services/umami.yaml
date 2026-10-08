@@ -1,6 +1,7 @@
 # name: Umami
 # about: Umami is web analytics platform which provides insights into visitor behavior without compromising user privacy.
-# docs: https://umami.is
+# docs: https://docs.umami.is/docs/install
+# website: https://umami.is/
 # categories: analytics
 # source: coolify
 services:

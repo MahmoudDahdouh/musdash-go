@@ -1,7 +1,7 @@
 # name: Bytebase
 # about: Bytebase is a database management tool that allows you to manage your databases with ease.
-# docs: https://www.bytebase.com/docs
-# website: https://www.bytebase.com
+# docs: https://docs.bytebase.com/get-started/self-host/deploy-with-docker
+# website: https://www.bytebase.com/
 # categories: database
 # source: dokploy
 services:

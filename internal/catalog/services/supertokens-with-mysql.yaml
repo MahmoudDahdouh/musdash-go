@@ -1,6 +1,7 @@
 # name: SuperTokens with MySQL
 # about: An open-source authentication solution that simplifies the implementation of secure user authentication and session management for web and mobile…
-# docs: https://supertokens.com/docs/guides
+# docs: https://supertokens.com/docs/deployment/self-host-supertokens
+# website: https://supertokens.com/
 # categories: auth, security
 # source: coolify
 services:

@@ -1,7 +1,7 @@
 # name: i18n Blog (Kuno)
 # about: Kuno is an internationalized blogging platform with a backend built in Go and a frontend in Next.js.
 # docs: https://github.com/xuemian168/kuno#readme
-# website: https://qut.edu.kg/
+# website: https://github.com/xuemian168/kuno
 # categories: cms, devtools
 # source: dokploy
 services:

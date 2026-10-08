@@ -1,6 +1,6 @@
 # name: imgproxy
 # about: imgproxy is a fast and secure image processing server, fronted by nginx with built-in response caching for repeated transformations.
-# docs: https://docs.imgproxy.net/
+# docs: https://docs.imgproxy.net/getting_started
 # website: https://imgproxy.net/
 # categories: media, devtools
 # source: dokploy

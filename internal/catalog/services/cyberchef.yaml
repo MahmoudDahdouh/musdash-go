@@ -1,6 +1,7 @@
 # name: CyberChef
 # about: The Cyber Swiss Army Knife - a web app for encryption, encoding, compression and data analysis.
-# docs: https://github.com/gchq/CyberChef
+# docs: https://github.com/gchq/CyberChef#with-docker
+# website: https://gchq.github.io/CyberChef/
 # categories: security, devtools
 # source: coolify
 services:

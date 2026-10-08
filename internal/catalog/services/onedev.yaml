@@ -1,6 +1,7 @@
 # name: OneDev
 # about: Git server with CI/CD, kanban, and packages. Seamless integration. Unparalleled experience.
-# docs: https://docs.onedev.io/
+# docs: https://docs.onedev.io/installation-guide/run-in-docker
+# website: https://onedev.io/
 # categories: git, productivity, devtools
 # source: coolify
 services:

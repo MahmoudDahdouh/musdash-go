@@ -1,7 +1,7 @@
 # name: Frappe Lending
 # about: A comprehensive loan management system built on Frappe Framework.
-# docs: https://docs.frappe.io/lending
-# website: https://frappe.io
+# docs: https://docs.frappe.io/lending/introduction
+# website: https://frappe.io/lending
 # categories: finance, ecommerce
 # source: dokploy
 services:

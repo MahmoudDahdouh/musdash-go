@@ -1,6 +1,7 @@
 # name: Mattermost
 # about: Mattermost is an open source, self-hosted Slack-alternative.
-# docs: https://docs.mattermost.com
+# docs: https://docs.mattermost.com/deployment-guide/server/deploy-containers
+# website: https://mattermost.com/
 # categories: communication
 # source: coolify
 services:

@@ -1,6 +1,6 @@
 # name: Flagsmith
 # about: Flagsmith is an open-source feature flagging and remote config service.
-# docs: https://docs.flagsmith.com/
+# docs: https://docs.flagsmith.com/deployment-self-hosting/hosting-guides/docker
 # website: https://www.flagsmith.com/
 # categories: devtools
 # source: dokploy

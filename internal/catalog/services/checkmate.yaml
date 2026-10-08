@@ -1,6 +1,7 @@
 # name: Checkmate
 # about: An open source server and websites monitoring application.
-# docs: https://docs.checkmate.so/
+# docs: https://checkmate.so/docs/getting-started/installation
+# website: https://checkmate.so/
 # categories: monitoring
 # source: coolify
 services:

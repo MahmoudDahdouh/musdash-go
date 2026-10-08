@@ -1,6 +1,6 @@
 # name: Superset (Unofficial)
 # about: Data visualization and data exploration platform.
-# docs: https://superset.apache.org/docs/intro
+# docs: https://github.com/amancevice/docker-superset
 # website: https://superset.apache.org
 # categories: analytics, database
 # source: dokploy

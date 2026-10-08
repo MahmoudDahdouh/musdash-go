@@ -1,6 +1,7 @@
 # name: Glance
 # about: A self-hosted dashboard that puts all your feeds in one place.
-# docs: https://github.com/glanceapp/glance
+# docs: https://github.com/glanceapp/glance/blob/main/docs/configuration.md
+# website: https://github.com/glanceapp/glance
 # categories: productivity, home
 # source: coolify
 services:

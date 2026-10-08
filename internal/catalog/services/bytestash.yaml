@@ -1,6 +1,7 @@
 # name: ByteStash
 # about: ByteStash is a self-hosted web application designed to store, organise, and manage your code snippets efficiently.
-# docs: https://github.com/jordan-dalby/ByteStash
+# docs: https://github.com/jordan-dalby/ByteStash#readme
+# website: https://github.com/jordan-dalby/ByteStash
 # categories: storage
 # source: dokploy
 services:

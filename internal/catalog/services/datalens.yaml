@@ -1,7 +1,7 @@
 # name: DataLens
 # about: A modern, scalable business intelligence and data visualization system.
-# docs: https://datalens.tech/docs/
-# website: https://datalens.tech/
+# docs: https://github.com/datalens-tech/datalens#readme
+# website: https://github.com/datalens-tech/datalens
 # categories: analytics, monitoring
 # source: dokploy
 services:

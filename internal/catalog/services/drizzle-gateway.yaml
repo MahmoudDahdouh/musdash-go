@@ -1,6 +1,7 @@
 # name: Drizzle Gateway
 # about: Free self-hosted Drizzle Studio on steroids.
 # docs: https://gateway.drizzle.team/
+# website: https://drizzle.team/
 # categories: devtools, networking, backend
 # source: coolify
 services:

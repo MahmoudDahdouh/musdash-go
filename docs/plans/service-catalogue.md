@@ -684,3 +684,48 @@ out of its coloured square: only white paper is cut now.
 folder of the two icon collections and Chrome or Chromium (`-chrome`
 names it where it is not found). `TestPictures` starts the browser and is
 skipped where there is none.
+
+## Fourth pass: the links, and the projects that are over
+
+Asked for on 2026-10-09: every card's Website and Docs link checked, both
+on every card, and the projects that no longer exist taken out.
+
+**What was found.** Of 623 templates, 345 had no website (Coolify's
+templates name only a documentation address) and 3 no docs. Of the 846
+addresses, some sixty did not answer: pages that moved, domains that were
+given up or sold, repositories that were renamed or deleted. Every
+service was then looked up: its site, the page its makers wrote for
+running it oneself, and whether anybody still works on it.
+
+**Decisions**
+
+| Question | Decision | Why |
+|---|---|---|
+| Where the links are | `tools/catalog/links.txt`: a key, the website, the docs page. Every imported template has a line | A list that is the whole truth can be checked in one pass and does not change when a source edits its header. `-` keeps a source's own address, for a line written by hand |
+| What Docs is | The self-hosting or Docker guide where the project has one, then its installation page, then the front of its documentation, then its README | It is read by somebody about to deploy; the front page of a manual is the long way there |
+| What Website is | The project's own site; its repository only where it has no other | |
+| A project that is over | `tools/catalog/ended.txt`, by the key both catalogues share, with the reason | A line in `rejected.txt` names one source's template, and the other catalogue's then takes its place |
+| What "over" is | Archived by its makers; said by them to be ended or unmaintained; gone; no change for two years; or living on under another name that the catalogue already has | A card is an offer to run something, and nobody fixes these |
+| A project that was renamed, with no card of the new name | Kept, with the new project's links | Its image still runs, and the links say where it went |
+| A database engine | Not taken out this way | A database is started from its engine's template every time; a service keeps its own Compose text |
+
+**What was built.** 31 templates left the catalogue (`ended.txt` and
+`docs/catalogue-left-out.md` say why each), 586 imported ones and the six
+written for musdash stay, and all 592 have both links. `TestServiceCatalogue`
+holds every template to two different `https` addresses. The converter
+stops for a line of either list that names nothing.
+
+**Not decided here**
+
+- MinIO, one of the six written for musdash: its repository was archived
+  on 2026-04-25 and says it is no longer maintained. The template runs
+  Chainguard's build of that source. It is left in, because the tests on a
+  real server use it as their S3 store; taking it out is a change to those
+  as well.
+- KeyDB, a database engine: nothing has changed in its repository since
+  April 2024.
+- Some sites could not be reached from the network this was done on
+  (Ghost's, Actual's, Tor's among them) and were checked through a reader
+  on another network. Six more refuse every script (Moodle, DokuWiki,
+  Paperless-ngx, RSSHub, Kutt, Chaskiq) and were taken on the word of the
+  project's own repository.

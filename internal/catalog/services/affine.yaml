@@ -1,6 +1,7 @@
 # name: AFFiNE
 # about: Affine is an open-source, all-in-one workspace and OS for knowledge management, a Notion/Miro alternative.
-# docs: https://docs.affine.pro/docs/self-host-affine
+# docs: https://docs.affine.pro/self-host-affine/
+# website: https://affine.pro/
 # categories: productivity, docs
 # source: coolify
 services:

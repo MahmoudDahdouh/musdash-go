@@ -1,6 +1,7 @@
 # name: GoatCounter
 # about: Lightweight web analytics platform.
-# docs: https://www.goatcounter.com/help
+# docs: https://www.goatcounter.com/help/start
+# website: https://www.goatcounter.com/
 # categories: analytics
 # source: coolify
 services:

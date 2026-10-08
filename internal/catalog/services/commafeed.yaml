@@ -1,6 +1,6 @@
 # name: CommaFeed
 # about: CommaFeed is an open-source feed reader and news aggregator, designed to be lightweight and extensible, with PostgreSQL as its database.
-# docs: https://github.com/Athou/commafeed/wiki
+# docs: https://github.com/Athou/commafeed#readme
 # website: https://www.commafeed.com/
 # categories: rss
 # source: dokploy

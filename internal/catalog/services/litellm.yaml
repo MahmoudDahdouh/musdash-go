@@ -1,6 +1,7 @@
 # name: LiteLLM
 # about: Call all LLM APIs using the OpenAI format. Use Bedrock, Azure, OpenAI, Cohere, Anthropic, Ollama, Sagemaker, HuggingFace, Replicate, Groq (100+ LLMs).
-# docs: https://docs.litellm.ai
+# docs: https://docs.litellm.ai/docs/proxy/deploy
+# website: https://www.litellm.ai/
 # categories: ai
 # source: coolify
 services:

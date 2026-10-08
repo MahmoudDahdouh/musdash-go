@@ -1,6 +1,7 @@
 # name: SiYuan
 # about: A privacy-first, self-hosted, fully open source personal knowledge management software, written in typescript and golang.
-# docs: https://github.com/siyuan-note/siyuan
+# docs: https://github.com/siyuan-note/siyuan#docker-hosting
+# website: https://b3log.org/siyuan/en/
 # categories: docs
 # source: coolify
 services:

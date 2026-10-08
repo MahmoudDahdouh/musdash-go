@@ -1,7 +1,7 @@
 # name: Reef Chain - Keys Generator
 # about: Generates 3 Validators keys for a custom Reef Chain cluster.
 # docs: https://docs.reef.io/
-# website: https://hub.docker.com/repository/docker/anukulpandey/reef-chain-node
+# website: https://reef.io/
 # categories: finance
 # source: dokploy
 services:

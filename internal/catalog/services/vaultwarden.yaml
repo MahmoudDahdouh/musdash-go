@@ -1,6 +1,7 @@
 # name: Vaultwarden
 # about: Vaultwarden is a password manager that allows you to securely store and manage your passwords.
-# docs: https://github.com/dani-garcia/vaultwarden
+# docs: https://github.com/dani-garcia/vaultwarden/wiki
+# website: https://github.com/dani-garcia/vaultwarden
 # categories: auth, security
 # source: coolify
 services:

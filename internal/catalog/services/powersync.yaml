@@ -1,6 +1,6 @@
 # name: PowerSync
 # about: PowerSync is a sync engine for local-first apps. Syncs PostgreSQL data to mobile devices and browsers with real-time replication.
-# docs: https://docs.powersync.com/
+# docs: https://docs.powersync.com/intro/self-hosting
 # website: https://www.powersync.com/
 # categories: storage, database, backend
 # source: dokploy

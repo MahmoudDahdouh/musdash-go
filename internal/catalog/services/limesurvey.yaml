@@ -1,6 +1,7 @@
 # name: LimeSurvey
 # about: Simple, quick and anonymous online survey tool that's bursting with juicy insights.
-# docs: https://www.limesurvey.org/manual/
+# docs: https://www.limesurvey.org/manual/Installation
+# website: https://www.limesurvey.org/
 # categories: productivity, business, backend
 # source: coolify
 services:

@@ -1,6 +1,6 @@
 # name: Discourse
 # about: Discourse is a modern forum software for your community. Use it as a mailing list, discussion forum, or long-form chat room.
-# docs: https://meta.discourse.org/
+# docs: https://github.com/discourse/discourse/blob/main/docs/INSTALL-cloud.md
 # website: https://www.discourse.org/
 # categories: communication
 # source: dokploy

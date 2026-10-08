@@ -1,6 +1,6 @@
 # name: Joomla
 # about: Joomla is a flexible open-source content management system for building websites, portals, and online applications.
-# docs: https://manual.joomla.org/
+# docs: https://hub.docker.com/_/joomla
 # website: https://www.joomla.org/
 # categories: cms
 # source: dokploy

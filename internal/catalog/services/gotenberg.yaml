@@ -1,6 +1,7 @@
 # name: Gotenberg
 # about: Gotenberg is a Docker-powered stateless API for PDF files.
 # docs: https://gotenberg.dev/docs/getting-started/introduction
+# website: https://gotenberg.dev/
 # categories: devtools, backend
 # source: coolify
 services:

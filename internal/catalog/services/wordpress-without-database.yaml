@@ -1,6 +1,7 @@
 # name: WordPress without a database
 # about: WordPress is open source software you can use to create a beautiful website, blog, or app.
-# docs: https://wordpress.org
+# docs: https://hub.docker.com/_/wordpress
+# website: https://wordpress.org/
 # categories: cms
 # source: coolify
 services:

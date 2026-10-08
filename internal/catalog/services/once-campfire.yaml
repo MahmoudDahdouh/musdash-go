@@ -1,6 +1,7 @@
 # name: Campfire
 # about: Super simple group chat, without a subscription.
-# docs: https://github.com/basecamp/once-campfire
+# docs: https://github.com/basecamp/once-campfire#readme
+# website: https://once.com/campfire
 # categories: communication
 # source: coolify
 services:

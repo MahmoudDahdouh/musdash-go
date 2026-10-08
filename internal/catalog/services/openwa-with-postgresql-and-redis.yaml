@@ -1,6 +1,7 @@
 # name: OpenWA with PostgreSQL and Redis
 # about: Production OpenWA with PostgreSQL, Redis, and bundled dashboard.
-# docs: https://github.com/rmyndharis/OpenWA
+# docs: https://docs.open-wa.org/
+# website: https://www.open-wa.org/
 # categories: communication, devtools, networking
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Bugsink
 # about: Self-hosted Error Tracking.
-# docs: https://www.bugsink.com/docs/
+# docs: https://www.bugsink.com/docs/docker-install/
+# website: https://www.bugsink.com/
 # categories: monitoring, devtools
 # source: coolify
 services:

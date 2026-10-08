@@ -1,6 +1,7 @@
 # name: Vvveb with MariaDB
 # about: Powerful and easy to use cms to build websites, blogs or ecommerce stores.
-# docs: https://docs.vvveb.com
+# docs: https://docs.vvveb.com/
+# website: https://www.vvveb.com/
 # categories: cms, ecommerce, backend
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Garage
 # about: Garage is an S3-compatible distributed object storage service designed for self-hosting.
-# docs: https://garagehq.deuxfleurs.fr/documentation/
+# docs: https://garagehq.deuxfleurs.fr/documentation/quick-start/
+# website: https://garagehq.deuxfleurs.fr/
 # categories: storage, devtools
 # source: coolify
 services:

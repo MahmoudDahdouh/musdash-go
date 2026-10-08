@@ -1,6 +1,6 @@
 # name: Verdaccio
 # about: A lightweight Node.js private proxy registry.
-# docs: https://www.verdaccio.org/docs/what-is-verdaccio
+# docs: https://www.verdaccio.org/docs/docker/
 # website: https://www.verdaccio.org/
 # categories: devtools
 # source: dokploy

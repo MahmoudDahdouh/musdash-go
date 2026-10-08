@@ -1,6 +1,7 @@
 # name: Nexus (ARM)
 # about: Open source Universal Repository Manager (ARM version, community edition), default credentials: admin/admin123.
-# docs: https://help.sonatype.com/en/sonatype-nexus-repository.html
+# docs: https://hub.docker.com/r/sonatypecommunity/nexus3
+# website: https://www.sonatype.com/products/sonatype-nexus-repository
 # categories: devtools
 # source: coolify
 services:

@@ -1034,3 +1034,42 @@ func TestPictures(t *testing.T) {
 		t.Error("a service with no file was sent to the browser")
 	}
 }
+
+// A card's links come from links.txt where it has the template: Coolify
+// names no website, and "-" keeps the one address the source has right.
+func TestLinksFromTheList(t *testing.T) {
+	dir := t.TempDir()
+	list := write(t, dir, "links.txt", "# a comment\n\napp-with-postgresql\thttps://example.com/\t-\nother\t-\thttps://other.example/install\n")
+	var err error
+	if links, err = readList(list, 3); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { links = nil })
+
+	tpl, err := readCoolify(write(t, dir, "app-with-postgresql.yaml", coolifySample), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tpl.convert(); err != nil {
+		t.Fatal(err)
+	}
+	if err := tpl.describe(nameBook{}); err != nil {
+		t.Fatal(err)
+	}
+	wantAll(t, string(tpl.render()), "# docs: https://example.com/docs?page=2\n# website: https://example.com/\n")
+
+	// A list is read whole or not at all: a line with a field missing would
+	// be a card that kept an address somebody meant to change.
+	for name, text := range map[string]string{
+		"a field too few": "app\thttps://example.com/\n",
+		"an empty field":  "app\t\thttps://example.com/docs\n",
+		"a key twice":     "app\t-\thttps://example.com/a\napp\t-\thttps://example.com/b\n",
+	} {
+		if _, err := readList(write(t, dir, "bad.txt", text), 3); err == nil {
+			t.Errorf("%s: the list was read", name)
+		}
+	}
+	if _, err := readList(filepath.Join(dir, "none.txt"), 3); err == nil {
+		t.Error("a list that is not there was read as an empty one")
+	}
+}

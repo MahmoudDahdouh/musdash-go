@@ -1,6 +1,6 @@
 # name: Gatus
 # about: Gatus is an automated service health dashboard for monitoring HTTP, DNS, TCP, ICMP, and other endpoints.
-# docs: https://github.com/TwiN/gatus#configuration
+# docs: https://github.com/TwiN/gatus#docker
 # website: https://gatus.io/
 # categories: monitoring
 # source: dokploy

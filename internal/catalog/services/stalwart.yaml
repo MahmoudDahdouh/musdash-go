@@ -1,6 +1,7 @@
 # name: Stalwart
 # about: Modern mail server platform.
-# docs: https://stalw.art/docs/
+# docs: https://stalw.art/docs/install/
+# website: https://stalw.art/
 # categories: email, communication
 # source: coolify
 services:

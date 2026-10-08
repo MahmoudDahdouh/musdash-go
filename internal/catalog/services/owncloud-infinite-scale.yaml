@@ -1,6 +1,6 @@
 # name: ownCloud Infinite Scale
 # about: ownCloud Infinite Scale is a modern file sync and share platform with WebDAV and ownCloud client support.
-# docs: https://doc.owncloud.com/ocis/latest/
+# docs: https://doc.owncloud.com/ocis/8.2/admin/depl-examples/ubuntu-compose/ubuntu-compose-prod.html
 # website: https://owncloud.com/infinite-scale/
 # categories: storage, productivity
 # source: dokploy

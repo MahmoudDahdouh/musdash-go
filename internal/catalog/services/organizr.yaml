@@ -1,6 +1,7 @@
 # name: Organizr
 # about: Homelab Services Organizer.
-# docs: https://docs.organizr.app/
+# docs: https://docs.organizr.app/installation/installing-organizr
+# website: https://github.com/causefx/Organizr
 # categories: productivity
 # source: coolify
 services:

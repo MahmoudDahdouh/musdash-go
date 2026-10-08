@@ -1,6 +1,7 @@
 # name: Hatchet
 # about: Hatchet allows you to run background tasks at scale with a high-throughput, low-latency computing service built on an open-source, fault-tolerant…
 # docs: https://docs.hatchet.run/self-hosting/docker-compose
+# website: https://hatchet.run/
 # categories: automation, ai
 # source: coolify
 services:

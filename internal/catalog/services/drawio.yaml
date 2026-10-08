@@ -1,6 +1,6 @@
 # name: draw.io
 # about: draw.io is a configurable diagramming/whiteboarding visualization application.
-# docs: https://www.drawio.com/docs/
+# docs: https://github.com/jgraph/docker-drawio
 # website: https://www.drawio.com/
 # categories: docs, devtools
 # source: dokploy

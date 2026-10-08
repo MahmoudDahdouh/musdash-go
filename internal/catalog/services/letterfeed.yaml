@@ -1,6 +1,7 @@
 # name: Letterfeed
 # about: Convert email newsletters into RSS feeds.
-# docs: https://github.com/leonmuscoden/letterfeed
+# docs: https://github.com/leonmuscoden/letterfeed#readme
+# website: https://github.com/leonmuscoden/letterfeed
 # categories: email, productivity
 # source: dokploy
 services:

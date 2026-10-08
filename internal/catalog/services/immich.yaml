@@ -1,6 +1,7 @@
 # name: Immich
 # about: Self-hosted photo and video management solution.
-# docs: https://immich.app/docs/overview/introduction
+# docs: https://docs.immich.app/install/docker-compose/
+# website: https://immich.app/
 # categories: media, storage
 # source: coolify
 services:

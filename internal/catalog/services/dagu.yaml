@@ -1,6 +1,6 @@
 # name: Dagu
 # about: Dagu is a self-contained workflow engine with a Web UI. Schedule and orchestrate jobs as DAGs defined in declarative YAML, with no DBMS required.
-# docs: https://docs.dagu.sh
+# docs: https://docs.dagu.sh/getting-started/installation
 # website: https://dagu.sh
 # categories: automation, devtools
 # source: dokploy

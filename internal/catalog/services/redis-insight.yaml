@@ -1,6 +1,7 @@
 # name: Redis Insight
 # about: Redis Insight lets you do both GUI- and CLI-based interactions in a fully-featured desktop GUI client.
-# docs: https://redis.io/docs/latest/operate/redisinsight/
+# docs: https://redis.io/docs/latest/operate/redisinsight/install/install-on-docker/
+# website: https://redis.io/insight/
 # categories: database, monitoring, devtools
 # source: coolify
 services:

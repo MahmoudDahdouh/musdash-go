@@ -1,6 +1,7 @@
 # name: Nextcloud
 # about: NextCloud is a self-hosted, open-source platform that provides file storage, collaboration, and communication tools for seamless data management.
-# docs: https://docs.nextcloud.com
+# docs: https://docs.nextcloud.com/server/latest/admin_manual/installation/
+# website: https://nextcloud.com/
 # categories: storage, productivity, communication
 # source: coolify
 services:

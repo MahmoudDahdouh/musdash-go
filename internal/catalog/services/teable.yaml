@@ -1,6 +1,7 @@
 # name: Teable
 # about: Teable is a powerful visual interface built on relational databases (PostgreSQL).
-# docs: https://help.teable.io/
+# docs: https://help.teable.ai/en/deploy/docker
+# website: https://teable.ai/
 # categories: productivity, backend, database
 # source: coolify
 services:

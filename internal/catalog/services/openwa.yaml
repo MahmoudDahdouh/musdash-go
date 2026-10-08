@@ -1,6 +1,7 @@
 # name: OpenWA
 # about: Free, open source, self-hosted WhatsApp API gateway with bundled dashboard.
-# docs: https://github.com/rmyndharis/OpenWA
+# docs: https://docs.open-wa.org/
+# website: https://www.open-wa.org/
 # categories: communication, devtools, networking
 # source: coolify
 services:

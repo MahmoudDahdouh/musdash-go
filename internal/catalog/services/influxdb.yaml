@@ -1,6 +1,7 @@
 # name: InfluxDB
 # about: Open source time series database for metrics, events, and analytics.
-# docs: https://docs.influxdata.com/influxdb/
+# docs: https://docs.influxdata.com/influxdb/v2/install/
+# website: https://www.influxdata.com/products/influxdb/
 # categories: database, monitoring, home
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: PrivateBin
 # about: PrivateBin is a minimalist, open source online pastebin where the server has zero knowledge of pasted data.
-# docs: https://github.com/PrivateBin/PrivateBin/blob/master/doc/README.md
+# docs: https://github.com/PrivateBin/docker-nginx-fpm-alpine#readme
+# website: https://privatebin.info/
 # categories: security, storage
 # source: coolify
 services:

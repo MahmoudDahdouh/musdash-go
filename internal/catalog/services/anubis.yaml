@@ -1,7 +1,7 @@
 # name: Anubis
 # about: Anubis is a bot protector, It will block bots from accessing your website.
-# docs: https://anubis.techaro.lol/docs/
-# website: https://anubis.techaro.lol
+# docs: https://anubis.techaro.lol/docs/admin/installation
+# website: https://anubis.techaro.lol/
 # categories: security
 # source: dokploy
 services:

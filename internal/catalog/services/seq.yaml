@@ -1,7 +1,7 @@
 # name: Seq
 # about: Seq is a self-hosted search, analysis, and alerting server for structured application logs and events.
-# docs: https://datalust.co/docs
-# website: https://datalust.co/seq
+# docs: https://datalust.co/docs/getting-started?platform=docker
+# website: https://datalust.co/
 # categories: monitoring
 # source: dokploy
 services:

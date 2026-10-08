@@ -1,6 +1,7 @@
 # name: Nexus
 # about: Open source Universal Repository Manager (x86_64 version, official), default credentials: admin/admin123.
-# docs: https://help.sonatype.com/en/sonatype-nexus-repository.html
+# docs: https://hub.docker.com/r/sonatype/nexus3
+# website: https://www.sonatype.com/products/sonatype-nexus-repository
 # categories: devtools
 # source: coolify
 services:

@@ -1,7 +1,7 @@
 # name: SendDock
 # about: Open-source, self-hosted email marketing platform with BYO SMTP. Manage subscribers, templates, broadcasts, and scheduled campaigns from one place.
-# docs: https://docs.senddock.dev
-# website: https://senddock.dev
+# docs: https://docs.senddock.dev/
+# website: https://senddock.dev/
 # categories: email, business
 # source: dokploy
 services:

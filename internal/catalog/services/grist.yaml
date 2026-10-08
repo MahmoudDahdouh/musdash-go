@@ -1,6 +1,7 @@
 # name: Grist
 # about: Grist is a modern relational spreadsheet. It combines the flexibility of a spreadsheet with the robustness of a database.
-# docs: https://support.getgrist.com/
+# docs: https://support.getgrist.com/self-managed/
+# website: https://www.getgrist.com/
 # categories: productivity, backend, database
 # source: coolify
 services:

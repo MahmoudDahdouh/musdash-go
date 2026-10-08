@@ -1,6 +1,6 @@
 # name: SurrealDB
 # about: SurrealDB is a native, open-source, multi-model database that lets you store and manage data across relational, document, graph, time-series, vector…
-# docs: https://surrealdb.com/docs/surrealdb
+# docs: https://surrealdb.com/docs/running/docker
 # website: https://surrealdb.com
 # categories: database
 # source: dokploy

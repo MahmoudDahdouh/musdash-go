@@ -1,7 +1,7 @@
 # name: Uptimekit
 # about: The modern open-source status page and monitoring solution.
 # docs: https://docs.uptimekit.dev/
-# website: https://uptimekit.dev/
+# website: https://github.com/uptimekit/uptimekit
 # categories: monitoring
 # source: dokploy
 services:

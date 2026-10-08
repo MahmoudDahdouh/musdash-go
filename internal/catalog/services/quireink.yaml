@@ -1,7 +1,7 @@
 # name: Quire Ink
 # about: A self-hosted blog in one container: a real editor over Markdown with tables, footnotes and mathematics, scheduled publishing, newsletters over your…
 # docs: https://github.com/joiha-steven/quireink/blob/main/docs/self-host-docker.md
-# website: https://quireink.com
+# website: https://quireink.com/
 # categories: cms
 # source: dokploy
 services:

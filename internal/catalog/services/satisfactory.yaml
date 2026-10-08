@@ -1,6 +1,7 @@
 # name: Satisfactory
 # about: Satisfactory Dedicated Server for hosting your own Satisfactory game sessions.
-# docs: https://github.com/wolveix/satisfactory-server
+# docs: https://github.com/robtme/satisfactory-server#readme
+# website: https://github.com/robtme/satisfactory-server
 # categories: games
 # source: coolify
 services:

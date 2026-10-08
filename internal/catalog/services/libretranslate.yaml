@@ -1,6 +1,7 @@
 # name: LibreTranslate
 # about: Free and open-source machine translation API, entirely self-hosted.
-# docs: https://libretranslate.com/docs/
+# docs: https://docs.libretranslate.com/guides/installation/
+# website: https://libretranslate.com/
 # categories: ai, devtools
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Grimoire
 # about: Grimoire is a self-hosted bookmarking app designed for speed and simplicity.
-# docs: https://github.com/goniszewski/grimoire
+# docs: https://github.com/goniszewski/grimoire#readme
+# website: https://github.com/goniszewski/grimoire
 # categories: productivity, docs
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: Grocy
 # about: Grocy is a web-based household management and grocery list application.
-# docs: https://github.com/grocy/grocy
+# docs: https://docs.linuxserver.io/images/docker-grocy/
+# website: https://grocy.info/
 # categories: productivity, home, ecommerce
 # source: coolify
 services:

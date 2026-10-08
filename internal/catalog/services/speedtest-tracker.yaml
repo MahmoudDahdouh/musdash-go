@@ -1,6 +1,7 @@
 # name: Speedtest Tracker
 # about: Speedtest Tracker runs scheduled internet speed tests and stores the results in a self-hosted dashboard.
-# docs: https://docs.speedtest-tracker.dev/
+# docs: https://docs.speedtest-tracker.dev/getting-started/installation
+# website: https://github.com/alexjustesen/speedtest-tracker
 # categories: monitoring, networking
 # source: dokploy
 services:

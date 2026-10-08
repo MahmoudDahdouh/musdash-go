@@ -1,6 +1,7 @@
 # name: Martin
 # about: Martin is a tile server able to generate and serve vector tiles on the fly from large PostGIS databases, PMTiles (local or remote), and MBTiles…
-# docs: https://maplibre.org/martin/introduction.html/
+# docs: https://maplibre.org/martin/run-with-docker/
+# website: https://maplibre.org/martin/
 # categories: backend, ai
 # source: coolify
 services:

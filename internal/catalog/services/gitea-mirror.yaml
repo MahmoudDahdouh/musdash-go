@@ -1,7 +1,7 @@
 # name: Gitea Mirror
 # about: Gitea Mirror is a modern web app for automatically mirroring repositories from GitHub to your self-hosted Gitea instance.
-# docs: https://github.com/arunavo4/gitea-mirror#readme
-# website: https://github.com/arunavo4/gitea-mirror
+# docs: https://gitea-mirror.raylabs.io/docs/
+# website: https://gitea-mirror.raylabs.io/
 # categories: git, automation
 # source: dokploy
 services:

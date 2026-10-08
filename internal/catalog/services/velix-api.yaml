@@ -1,7 +1,7 @@
 # name: Velix API
 # about: Self-hosted WhatsApp API with multi-instance support, webhooks, n8n node, and Chatwoot integration.
 # docs: https://github.com/paulolinder/velix-api#readme
-# website: https://velix.dev
+# website: https://github.com/paulolinder/velix-api
 # categories: communication, devtools, ai
 # source: dokploy
 services:

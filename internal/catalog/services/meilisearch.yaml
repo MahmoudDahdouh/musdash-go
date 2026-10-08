@@ -1,6 +1,7 @@
 # name: Meilisearch
 # about: MeiliSearch is a powerful, fast, easy to use and deploy search engine.
-# docs: https://www.meilisearch.com
+# docs: https://www.meilisearch.com/docs/resources/self_hosting/getting_started/docker
+# website: https://www.meilisearch.com/
 # categories: search
 # source: coolify
 services:

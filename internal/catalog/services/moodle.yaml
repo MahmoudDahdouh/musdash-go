@@ -1,6 +1,7 @@
 # name: Moodle
 # about: Moodle is the world’s most customisable and trusted eLearning solution that empowers educators to improve our world.
-# docs: https://moodle.org
+# docs: https://docs.moodle.org/en/Installing_Moodle
+# website: https://moodle.org/
 # categories: cms, home, devtools
 # source: coolify
 services:

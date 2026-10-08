@@ -1,6 +1,7 @@
 # name: Grimmory
 # about: Grimmory is a self-hosted application for managing your entire book collection in one place.
-# docs: https://github.com/grimmory-tools/grimmory
+# docs: https://grimmory.org/docs/installation/
+# website: https://grimmory.org/
 # categories: media
 # source: coolify
 services:

@@ -1,7 +1,7 @@
 # name: HortusFox
 # about: HortusFox is an open source task and photo management app, designed for photographers and creatives to manage projects, tasks, and images effectively.
 # docs: https://github.com/danielbrendel/hortusfox-web#readme
-# website: https://www.hortusfox.com
+# website: https://www.hortusfox.com/
 # categories: home
 # source: dokploy
 services:

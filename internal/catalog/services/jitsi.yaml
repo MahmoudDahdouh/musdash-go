@@ -1,6 +1,7 @@
 # name: Jitsi Meet
 # about: Self-hosted Jitsi Meet — open-source video conferencing platform.
 # docs: https://jitsi.github.io/handbook/docs/devops-guide/devops-guide-docker/
+# website: https://jitsi.org/jitsi-meet/
 # categories: productivity, media, communication
 # source: coolify
 services:

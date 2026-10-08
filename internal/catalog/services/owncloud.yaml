@@ -1,6 +1,7 @@
 # name: ownCloud
 # about: OwnCloud with Open Web UI integrates file management with a powerful, user-friendly interface.
-# docs: https://owncloud.com/docs-guides/
+# docs: https://doc.owncloud.com/server/11.0/admin_manual/installation/installing_with_docker.html
+# website: https://owncloud.com/
 # categories: storage, productivity
 # source: coolify
 services:

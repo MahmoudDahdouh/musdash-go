@@ -1,7 +1,7 @@
 # name: Open Analytics
 # about: Open Analytics is an open-source, AI-native web analytics platform: realtime dashboards, funnels, visitor journeys, custom events, revenue analytics…
 # docs: https://github.com/OpenLabs-so/openanalytics/blob/main/infra/selfhost/DOKPLOY.md
-# website: https://getopen.so
+# website: https://getopen.so/
 # categories: analytics
 # source: dokploy
 services:

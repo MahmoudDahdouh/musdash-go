@@ -1,6 +1,6 @@
 # name: Mailu
 # about: Full-featured open-source mail server as a set of Docker containers: SMTP (Postfix), IMAP (Dovecot), Rspamd antispam, admin UI with DKIM management…
-# docs: https://mailu.io/2024.06/
+# docs: https://mailu.io/2024.06/compose/setup.html
 # website: https://mailu.io/
 # categories: email
 # source: dokploy

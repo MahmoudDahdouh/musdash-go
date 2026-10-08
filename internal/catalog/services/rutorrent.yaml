@@ -1,7 +1,7 @@
 # name: ruTorrent
 # about: ruTorrent + rTorrent BitTorrent client (crazy-max image). Web UI on 8080, XMLRPC on 8000, with P2P ports exposed for seeding.
-# docs: https://github.com/crazy-max/docker-rtorrent-rutorrent
-# website: https://crazymax.dev/
+# docs: https://github.com/crazy-max/docker-rtorrent-rutorrent#readme
+# website: https://github.com/Novik/ruTorrent
 # categories: media
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: Databasus
 # about: Databasus is a free, open source and self-hosted tool to backup PostgreSQL, MySQL, and MongoDB.
 # docs: https://databasus.com/installation
+# website: https://databasus.com/
 # categories: devtools, storage
 # source: coolify
 services:

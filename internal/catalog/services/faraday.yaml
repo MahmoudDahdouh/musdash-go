@@ -1,6 +1,7 @@
 # name: Faraday
 # about: Faraday is a powerful, open-source, web-based vulnerability management tool.
-# docs: https://faradaysec.com/
+# docs: https://docs.faradaysec.com/
+# website: https://faradaysec.com/
 # categories: security
 # source: coolify
 services:

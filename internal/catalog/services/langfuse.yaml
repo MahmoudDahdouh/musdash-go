@@ -1,6 +1,7 @@
 # name: Langfuse
 # about: Langfuse is an open-source LLM engineering platform that helps teams collaboratively debug, analyze, and iterate on their LLM applications.
-# docs: https://langfuse.com/docs
+# docs: https://langfuse.com/self-hosting/deployment/docker-compose
+# website: https://langfuse.com/
 # categories: ai, monitoring
 # source: coolify
 services:

@@ -6,7 +6,9 @@ One-click services from the catalogue, a Docker Compose file of your own, and st
 
 ## The catalogue and your own Compose file
 
-A service is a stack of containers described by a Docker Compose file. **Add resource** offers a catalogue of more than 600 services, "Your own Compose file" and a Compose file in a Git repository.
+A service is a stack of containers described by a Docker Compose file. **Add resource** offers a catalogue of nearly 600 services, "Your own Compose file" and a Compose file in a Git repository.
+
+Every card has two links: **Website** is the project's own site, and **Docs** is the page to read before you run it, the project's self-hosting or Docker guide where it has one.
 
 The catalogue is sorted into categories (AI, Analytics, Databases, Monitoring, Storage and so on); a service can be in up to three. The **Category** menu above the list narrows it to the categories you tick, and the field beside it finds a service by name or by what it does; several words narrow further (`wordpress mysql`). Both work together, and both are in the page's address, so a narrowed list can be refreshed, bookmarked or sent to somebody. The list shows 48 services at a time and brings the next 48 as you scroll; the heading says how many there are in all, and Back from a service's form returns to where you were in the list.
 
@@ -18,7 +20,7 @@ Six of the templates were written for musdash (n8n, WordPress, Ghost, Uptime Kum
 - A value its makers left for you to set (an API key, a mail server) starts empty. It is listed under Variables.
 - A dozen keep a database password their makers wrote into the file, where the other end of it is the image's own default. Such a password is reachable only inside the stack's network.
 - A template asks on its form for what only you can give it: an address to sign in with, or the password of the app's first account where its makers had written one into the file for everybody.
-- About 110 services of the two catalogues are not there. Most need what a stack may not have (the Docker socket, the server's own network or directories, extra capabilities); some are reached on a port of their own rather than a web address (a game server, a VPN). [catalogue-left-out.md](catalogue-left-out.md) lists each with the reason.
+- About 130 services of the two catalogues are not there. Most need what a stack may not have (the Docker socket, the server's own network or directories, extra capabilities); some are reached on a port of their own rather than a web address (a game server, a VPN); and some thirty are projects that are over: archived by their makers, given up, or replaced by another that the catalogue has. [catalogue-left-out.md](catalogue-left-out.md) lists each with the reason. A service you made from a template that has since left the catalogue keeps running: it has its own copy of the Compose file.
 
 - Give a service of the stack a web address by adding `SERVICE_FQDN_<NAME>_<PORT>` to its environment: `NAME` is the Compose service, `PORT` the port it listens on. musdash gives it a domain (a generated one at first; change it under Settings) and routes it.
 - `SERVICE_URL_<NAME>` is the same address with its scheme, `SERVICE_HTTPS_<NAME>` is `true` or `false`.

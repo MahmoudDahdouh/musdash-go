@@ -1,6 +1,7 @@
 # name: Deno KV
 # about: The Denoland key-value database.
-# docs: https://docs.deno.com/deploy/kv/manual/
+# docs: https://github.com/denoland/denokv#readme
+# website: https://deno.com/
 # categories: database
 # source: coolify
 services:

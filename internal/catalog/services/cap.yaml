@@ -1,6 +1,7 @@
 # name: Cap
 # about: Cap is the open source alternative to Loom. Lightweight, powerful, and cross-platform. Record and share in seconds.
-# docs: https://cap.so
+# docs: https://cap.so/docs/self-hosting
+# website: https://cap.so/
 # categories: media, devtools
 # source: coolify
 services:

@@ -1,7 +1,7 @@
 # name: Tooljet
 # about: Tooljet is an open-source low-code platform that allows you to build internal tools quickly and efficiently.
-# docs: https://docs.tooljet.ai/
-# website: https://tooljet.ai/
+# docs: https://docs.tooljet.ai/docs/setup/docker/
+# website: https://tooljet.com/
 # categories: backend, devtools
 # source: dokploy
 services:

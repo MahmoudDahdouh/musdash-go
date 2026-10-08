@@ -1,6 +1,7 @@
 # name: Waxum
 # about: Waxum is a WhatsApp REST API gateway written in Rust, shipped as a single native binary.
-# docs: https://waxum.imtaqin.id
+# docs: https://waxum.imtaqin.id/
+# website: https://github.com/imtaqin/waxum
 # categories: devtools, communication, automation
 # source: dokploy
 services:

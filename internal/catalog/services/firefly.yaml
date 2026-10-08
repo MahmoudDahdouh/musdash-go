@@ -1,6 +1,7 @@
 # name: Firefly
 # about: A personal finances manager that can help you save money.
-# docs: https://firefly-iii.org
+# docs: https://docs.firefly-iii.org/how-to/firefly-iii/installation/docker/
+# website: https://www.firefly-iii.org/
 # categories: finance, home
 # source: coolify
 services:

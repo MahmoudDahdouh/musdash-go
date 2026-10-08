@@ -1,6 +1,7 @@
 # name: OpenObserve
 # about: Cloud-native observability platform for logs, metrics, traces, RUM, errors and session replays — a 140x cheaper alternative to Elasticsearch…
-# docs: https://openobserve.ai/docs/
+# docs: https://openobserve.ai/docs/getting-started/
+# website: https://openobserve.ai/
 # categories: monitoring, search
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Heimdall
 # about: Heimdall is a dashboard for managing and organizing your server applications.
-# docs: https://github.com/linuxserver/Heimdall
+# docs: https://docs.linuxserver.io/images/docker-heimdall/
+# website: https://heimdall.site/
 # categories: productivity, home
 # source: coolify
 services:

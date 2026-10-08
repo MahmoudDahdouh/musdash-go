@@ -1,6 +1,6 @@
 # name: Rustrak (Full Stack)
 # about: Self-hosted error tracking compatible with Sentry SDKs. Full stack: Rust server, web dashboard and PostgreSQL.
-# docs: https://rustrak.github.io/rustrak/getting-started/overview
+# docs: https://rustrak.github.io/rustrak/getting-started/installation
 # website: https://rustrak.github.io/rustrak/
 # categories: monitoring, devtools
 # source: dokploy

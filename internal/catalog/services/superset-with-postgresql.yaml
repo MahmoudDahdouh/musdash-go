@@ -1,6 +1,7 @@
 # name: Superset with PostgreSQL
 # about: Modern data exploration and visualization platform (unofficial community docker image).
 # docs: https://github.com/amancevice/docker-superset
+# website: https://superset.apache.org
 # categories: analytics, home, database
 # source: coolify
 services:

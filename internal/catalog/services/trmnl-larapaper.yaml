@@ -1,7 +1,7 @@
 # name: TRMNL LaraPaper
 # about: LaraPaper is a self-hosted application (BYOS) to manage TRMNL e-ink devices.
-# docs: https://github.com/usetrmnl/larapaper/blob/main/README.md
-# website: https://docs.usetrmnl.com/go/diy/byos
+# docs: https://github.com/usetrmnl/larapaper#readme
+# website: https://trmnl.com/
 # categories: home
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: CloudBeaver
 # about: CloudBeaver is a lightweight web application designed for comprehensive data management.
-# docs: https://dbeaver.com/docs/cloudbeaver/
+# docs: https://dbeaver.com/docs/cloudbeaver/CloudBeaver-Deployment/
+# website: https://dbeaver.com/
 # categories: devtools, analytics, database
 # source: coolify
 services:

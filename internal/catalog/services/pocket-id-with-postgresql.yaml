@@ -1,6 +1,7 @@
 # name: Pocket ID with PostgreSQL
 # about: A simple and secure OIDC provider with passkey authentication.
 # docs: https://pocket-id.org/docs/setup/installation
+# website: https://pocket-id.org/
 # categories: auth
 # source: coolify
 services:

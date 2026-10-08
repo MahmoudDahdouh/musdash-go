@@ -1,6 +1,7 @@
 # name: Memos
 # about: An open-source, lightweight note-taking solution. The pain-less way to create your meaningful notes. Your Notes, Your Way.
-# docs: https://github.com/usememos/memos
+# docs: https://usememos.com/docs/deploy/docker
+# website: https://usememos.com/
 # categories: productivity, docs, communication
 # source: coolify
 services:

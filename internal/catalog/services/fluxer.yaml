@@ -1,7 +1,7 @@
 # name: Fluxer
 # about: Fluxer is a self-hosted, scalable chat and community platform.
-# docs: https://github.com/fluxerapp
-# website: https://fluxer.app
+# docs: https://docs.fluxer.app/operator/get-started/
+# website: https://fluxer.app/
 # categories: communication
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: TriliumNext
 # about: Build your personal knowledge base with TriliumNext Notes.
-# docs: https://github.com/TriliumNext/Trilium
+# docs: https://docs.triliumnotes.org/user-guide/setup/server/installation/docker
+# website: https://triliumnotes.org/
 # categories: productivity, docs
 # source: coolify
 services:

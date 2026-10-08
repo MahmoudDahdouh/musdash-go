@@ -1,6 +1,7 @@
 # name: Qdrant
 # about: Qdrant is a vector similarity search engine that provides a production-ready service with a convenient API to store, search, and manage points (i.e.
-# docs: https://qdrant.tech/documentation/
+# docs: https://qdrant.tech/documentation/operations/installation/
+# website: https://qdrant.tech/
 # categories: database, ai
 # source: coolify
 services:

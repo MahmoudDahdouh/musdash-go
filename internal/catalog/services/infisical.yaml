@@ -1,6 +1,7 @@
 # name: Infisical
 # about: Infisical is the open source secret management platform that developers use to centralize their application configuration and secrets like API keys…
-# docs: https://infisical.com/docs/documentation/getting-started/introduction
+# docs: https://infisical.com/docs/self-hosting/overview
+# website: https://infisical.com/
 # categories: security, database, devtools
 # source: coolify
 services:

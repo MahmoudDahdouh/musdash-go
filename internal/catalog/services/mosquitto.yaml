@@ -1,6 +1,7 @@
 # name: Mosquitto
 # about: Mosquitto is lightweight and suitable for use on all devices, from low-power single-board computers to full servers.
 # docs: https://mosquitto.org/documentation/
+# website: https://mosquitto.org/
 # categories: communication, backend
 # source: coolify
 services:

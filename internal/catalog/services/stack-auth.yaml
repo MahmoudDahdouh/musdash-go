@@ -1,7 +1,7 @@
 # name: Stack Auth
 # about: Open-source Auth0/Clerk alternative. Stack Auth is a free and open source authentication tool that allows you to authenticate your users.
-# docs: https://docs.stack-auth.com/next/overview
-# website: https://stack-auth.com/
+# docs: https://docs.hexclave.com/
+# website: https://www.hexclave.com/
 # categories: auth
 # source: dokploy
 services:

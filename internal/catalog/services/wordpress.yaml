@@ -1,6 +1,6 @@
 # name: WordPress
 # about: The publishing platform, with its own MariaDB database.
-# docs: https://wordpress.org/documentation/
+# docs: https://hub.docker.com/_/wordpress
 # website: https://wordpress.org/
 # categories: cms
 services:

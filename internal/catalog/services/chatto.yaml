@@ -1,7 +1,7 @@
 # name: Chatto (single binary)
 # about: A fully-featured real-time chat application for teams and communities.
-# docs: https://docs.chatto.run
-# website: https://chatto.run
+# docs: https://docs.chatto.run/
+# website: https://chatto.run/
 # categories: communication
 # source: dokploy
 services:

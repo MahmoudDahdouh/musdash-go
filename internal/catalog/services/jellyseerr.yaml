@@ -1,6 +1,7 @@
 # name: Jellyseerr
 # about: Jellyseerr is a media request and discovery manager for Jellyfin, Plex, and Emby users.
-# docs: https://docs.jellyseerr.dev/
+# docs: https://docs.seerr.dev/getting-started/docker/
+# website: https://seerr.dev/
 # categories: media
 # source: dokploy
 services:

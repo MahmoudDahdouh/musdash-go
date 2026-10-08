@@ -1,6 +1,6 @@
 # name: Docling Serve
 # about: Running Docling as an API service for document processing and conversion with AI-powered capabilities.
-# docs: https://github.com/docling-project/docling-serve/blob/main/docs/README.md
+# docs: https://github.com/docling-project/docling-serve/blob/main/docs/deployment.md
 # website: https://github.com/docling-project/docling-serve
 # categories: devtools, ai, docs
 # source: dokploy

@@ -1,6 +1,7 @@
 # name: Logto
 # about: A comprehensive identity solution covering both the front and backend, complete with pre-built infrastructure and enterprise-grade solutions.
-# docs: https://docs.logto.io/docs/tutorials/get-started/#logto-oss-self-hosted
+# docs: https://docs.logto.io/logto-oss/get-started-with-oss
+# website: https://logto.io/
 # categories: auth
 # source: coolify
 services:

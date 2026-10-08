@@ -1,6 +1,6 @@
 # name: Zitadel
 # about: Open-source identity and access management platform with multi-tenancy, OpenID Connect, SAML, and OAuth 2.0 support.
-# docs: https://zitadel.com/docs/
+# docs: https://zitadel.com/docs/self-hosting/deploy/compose
 # website: https://zitadel.com/
 # categories: auth, security
 # source: dokploy

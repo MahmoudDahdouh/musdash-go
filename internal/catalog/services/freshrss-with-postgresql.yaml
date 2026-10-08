@@ -1,6 +1,7 @@
 # name: FreshRSS with PostgreSQL
 # about: A free, self-hostable feed aggregator.
-# docs: https://freshrss.org/index.html
+# docs: https://github.com/FreshRSS/FreshRSS/tree/edge/Docker
+# website: https://freshrss.org/
 # categories: rss
 # source: coolify
 services:

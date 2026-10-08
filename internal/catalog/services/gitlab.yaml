@@ -1,6 +1,7 @@
 # name: GitLab
 # about: The all-in-one DevOps platform for seamless collaboration and continuous delivery.
-# docs: https://docs.gitlab.com/ee/install/docker.html
+# docs: https://docs.gitlab.com/install/docker/
+# website: https://about.gitlab.com/
 # categories: git, devtools, productivity
 # source: coolify
 services:

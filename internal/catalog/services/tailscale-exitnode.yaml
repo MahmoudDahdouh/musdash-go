@@ -1,6 +1,6 @@
 # name: Tailscale Exit nodes
 # about: Tailscale ExitNode is a feature that lets you route your internet traffic through a specific device in your Tailscale network.
-# docs: https://tailscale.com/kb/1408/quick-guide-exit-nodes
+# docs: https://tailscale.com/docs/features/exit-nodes/how-to/setup
 # website: https://tailscale.com/
 # categories: networking
 # source: dokploy

@@ -1,6 +1,7 @@
 # name: Rocket.Chat
 # about: Self-hosted, secure and highly customizable open-source communication platform for organizations with sophisticated security and privacy concerns.
-# docs: https://github.com/RocketChat/Rocket.Chat
+# docs: https://docs.rocket.chat/docs/deploy-with-docker-docker-compose
+# website: https://www.rocket.chat/
 # categories: communication
 # source: coolify
 services:

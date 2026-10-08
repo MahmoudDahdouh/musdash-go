@@ -1,6 +1,7 @@
 # name: Reactive Resume
 # about: A one-of-a-kind resume builder that keeps your privacy in mind.
-# docs: https://rxresu.me/
+# docs: https://docs.rxresu.me/self-hosting/docker
+# website: https://rxresu.me/
 # categories: productivity, auth
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Chroma
 # about: Chroma is the open-source search and retrieval database for AI applications.
-# docs: https://cookbook.chromadb.dev/
+# docs: https://docs.trychroma.com/guides/deploy/docker
+# website: https://www.trychroma.com/
 # categories: ai
 # source: coolify
 services:

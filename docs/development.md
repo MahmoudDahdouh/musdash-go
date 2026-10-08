@@ -17,7 +17,7 @@ One static binary runs as two processes:
 | 1 | Deploy Docker images with domains, HTTPS, storage, live logs and rolling updates | Done |
 | 2 | Deploy from Git: Dockerfile and static builds, GitHub App, GitLab token, deploy keys, push webhooks, deploy token | Done |
 | 3 | Databases: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, KeyDB, Dragonfly, ClickHouse | Done |
-| 4 | Services: Docker Compose stacks from a catalogue of more than 600 (the services Coolify and Dokploy offer, by category), your own file, or a Git repository | Done |
+| 4 | Services: Docker Compose stacks from a catalogue of nearly 600 (the services Coolify and Dokploy offer, by category), your own file, or a Git repository | Done |
 | 5 | Operations: scheduled database backups with S3 copies, retention and restore; scheduled commands; notifications; Docker clean-up | Done |
 | 6 | More servers: deploy to machines reached over SSH, each with its own proxy; build on one server and run on another | Done |
 | 7 | Deploy polish: rollback, domains by path, a password in front of a domain, a preview for every pull request | Done |
@@ -112,7 +112,7 @@ Starts each of the eight engines in turn and waits for its health check. It down
 MUSDASH_DOCKER_TEST=1 go test ./internal/compose ./internal/deploy -run 'Sandbox|Catalogue|TestServiceWithDocker' -v
 ```
 
-Loads Compose files in the sandbox (including ones that try to read files of the server, and every catalogue template, which takes several minutes: there are more than 600), then runs a two-container stack through deploy, redeploy, stop and delete.
+Loads Compose files in the sandbox (including ones that try to read files of the server, and every catalogue template, which takes several minutes: there are nearly 600), then runs a two-container stack through deploy, redeploy, stop and delete.
 
 ```bash
 MUSDASH_DOCKER_TEST_SERVICES=1 go test ./internal/deploy -run TestCatalogueWithDocker -v -timeout 90m
@@ -121,10 +121,16 @@ MUSDASH_DOCKER_TEST_SERVICES=1 go test ./internal/deploy -run TestCatalogueWithD
 Installs the six templates written for musdash for real, fetches each web address, redeploys and deletes. `MUSDASH_SERVICES=wordpress,umami` installs just those, which is how one of the imported templates is tried.
 
 ```bash
-cd tools/catalog && go run . -coolify ~/src/coolify -dokploy ~/src/dokploy-templates -icons ~/src/selfhst-icons
+cd tools/catalog && go run . -coolify ~/src/coolify -dokploy ~/src/dokploy-templates \
+    -icons ~/src/selfhst-icons -dashboard ~/src/dashboard-icons -svgl ~/src/svgl -simple ~/src/simple-icons
 ```
 
-Makes the imported part of the catalogue again from checkouts of Coolify, Dokploy's templates and the selfh.st icons. It is a Go module of its own (it needs a YAML parser, which musdash does without) and no part of the binary. Run the sandbox test afterwards; what it refuses goes into `tools/catalog/rejected.txt`.
+Makes the imported part of the catalogue again from checkouts of Coolify, Dokploy's templates and four icon collections (it also needs Chrome or Chromium, which draws the logos that are pictures). It is a Go module of its own (it needs a YAML parser, which musdash does without) and no part of the binary. Run the sandbox test afterwards; what it refuses goes into `tools/catalog/rejected.txt`.
+
+Two more lists beside it are written by hand, and the converter stops when a line of one names nothing:
+
+- `links.txt` has the two links of every card: the website, and the page to read before running the service. Coolify's templates name no website, and either catalogue's addresses go out of date, so a new template gets a line here; `TestServiceCatalogue` fails for a template with one link.
+- `ended.txt` has the projects that are over (archived, given up, replaced). A key and the reason: neither catalogue's template of it is taken, and the reason is what `docs/catalogue-left-out.md` says. This is how a service is taken out of the catalogue; deleting its file would only last until the next run.
 
 ```bash
 go test ./test -run TestInstall -v

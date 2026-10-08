@@ -1,6 +1,7 @@
 # name: New API
 # about: The next-generation LLM gateway and AI asset management system supports multiple languages.
-# docs: https://docs.newapi.pro/en/getting-started/
+# docs: https://docs.newapi.ai/en/docs/installation/deployment-methods/docker-compose-installation
+# website: https://www.newapi.ai/en
 # categories: devtools, ai, backend
 # source: coolify
 services:

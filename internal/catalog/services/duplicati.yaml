@@ -1,6 +1,7 @@
 # name: Duplicati
 # about: Duplicati is a backup solution, allowing you to make scheduled backups with encryption.
-# docs: https://duplicati.readthedocs.io
+# docs: https://docs.duplicati.com/
+# website: https://duplicati.com/
 # categories: storage, security
 # source: coolify
 services:

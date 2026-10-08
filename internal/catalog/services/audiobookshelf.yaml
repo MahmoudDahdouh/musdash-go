@@ -1,6 +1,7 @@
 # name: Audiobookshelf
 # about: Self-hosted audiobook, ebook, and podcast server.
-# docs: https://www.audiobookshelf.org/
+# docs: https://audiobookshelf.org/docs/documentation/install/docker/
+# website: https://audiobookshelf.org/
 # categories: media
 # source: coolify
 services:

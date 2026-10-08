@@ -1,6 +1,7 @@
 # name: GLPI
 # about: GLPI (Gestionnaire Libre de Parc Informatique) is a free, open-source IT Service Management (ITSM) platform used for IT asset management, helpdesk…
-# docs: https://help.glpi-project.org/documentation
+# docs: https://glpi-install.readthedocs.io/en/latest/
+# website: https://www.glpi-project.org/en/
 # categories: support
 # source: coolify
 services:

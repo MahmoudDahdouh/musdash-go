@@ -1,6 +1,7 @@
 # name: Grafana with PostgreSQL
 # about: Grafana is the open source analytics & monitoring solution for every database.
-# docs: https://grafana.com
+# docs: https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/
+# website: https://grafana.com/oss/grafana/
 # categories: monitoring, analytics, home
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Readeck
 # about: Simple web application that lets you save the precious readable content of web pages you like and want to keep forever.
 # docs: https://readeck.org/en/docs/
+# website: https://readeck.org/en/
 # categories: productivity
 # source: coolify
 services:

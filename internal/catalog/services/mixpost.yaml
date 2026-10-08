@@ -1,6 +1,7 @@
 # name: Mixpost
 # about: Mixpost is a robust and versatile social media management software, designed to streamline social media operations and enhance content marketing…
-# docs: https://docs.mixpost.app/lite
+# docs: https://docs.mixpost.app/lite/installation/docker
+# website: https://mixpost.app/
 # categories: business
 # source: coolify
 services:

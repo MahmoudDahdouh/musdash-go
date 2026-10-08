@@ -1,6 +1,7 @@
 # name: Mailpit
 # about: Email & SMTP testing tool with API for developers.
-# docs: https://mailpit.axllent.org/docs/
+# docs: https://mailpit.axllent.org/docs/install/docker/
+# website: https://mailpit.axllent.org/
 # categories: email, devtools
 # source: coolify
 services:

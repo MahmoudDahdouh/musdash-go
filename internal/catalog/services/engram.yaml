@@ -1,6 +1,7 @@
 # name: Engram
 # about: Persistent memory sync server for AI coding agents (MCP).
-# docs: https://github.com/Gentleman-Programming/engram
+# docs: https://github.com/Gentleman-Programming/engram#readme
+# website: https://github.com/Gentleman-Programming/engram
 # categories: ai
 # source: coolify
 services:

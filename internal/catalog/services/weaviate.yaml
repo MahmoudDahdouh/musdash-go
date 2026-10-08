@@ -1,6 +1,7 @@
 # name: Weaviate
 # about: Weaviate is an open-source vector database that stores both objects and vectors, allowing for combining vector search with structured filtering.
-# docs: https://weaviate.io/developers/weaviate
+# docs: https://docs.weaviate.io/deploy/installation-guides/docker-installation
+# website: https://weaviate.io/
 # categories: ai
 # source: coolify
 services:

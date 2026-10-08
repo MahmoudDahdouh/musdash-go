@@ -1,7 +1,7 @@
 # name: Booklore
 # about: Booklore is an application for managing and serving book-related data, backed by a MariaDB database.
-# docs: https://github.com/booklore-app/BookLore/tree/develop/docs
-# website: https://github.com/booklore-app/BookLore
+# docs: https://github.com/booklore-app/booklore/tree/develop/docs
+# website: https://github.com/booklore-app/booklore
 # categories: media
 # source: dokploy
 services:

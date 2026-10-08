@@ -1,6 +1,6 @@
 # name: TimescaleDB
 # about: TimescaleDB is an open-source time-series database packaged as a PostgreSQL extension, optimized for fast ingest and real-time analytics with…
-# docs: https://docs.timescale.com/
+# docs: https://www.tigerdata.com/docs/get-started/choose-your-path/install-timescaledb
 # website: https://www.tigerdata.com/
 # categories: database, analytics
 # source: dokploy

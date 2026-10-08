@@ -1,6 +1,7 @@
 # name: Lowcoder
 # about: Lowcoder (forked from OpenBlocks) is a self-hosted, open-source, low-code platform for building internal tools.
-# docs: https://docs.lowcoder.cloud/
+# docs: https://docs.lowcoder.cloud/lowcoder-documentation/setup-and-run/self-hosting
+# website: https://www.lowcoder.cloud/
 # categories: productivity, devtools
 # source: coolify
 services:

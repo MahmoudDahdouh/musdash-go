@@ -1,7 +1,7 @@
 # name: Tuwunel
 # about: High performance Matrix homeserver written in Rust. Official successor to conduwuit - a scalable, low-cost, enterprise-ready alternative to Synapse.
-# docs: https://matrix-construct.github.io/tuwunel/
-# website: https://tuwunel.chat
+# docs: https://matrix-construct.github.io/tuwunel/deploying/docker.html
+# website: https://matrix-construct.github.io/tuwunel/
 # categories: communication
 # source: dokploy
 services:

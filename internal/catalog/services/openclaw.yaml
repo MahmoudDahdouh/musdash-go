@@ -1,6 +1,7 @@
 # name: OpenClaw
 # about: AI-powered coding assistant with multi-provider support and browser automation.
-# docs: https://coolify.io/docs/services/openclaw
+# docs: https://docs.openclaw.ai/install/docker
+# website: https://openclaw.ai/
 # categories: ai, devtools, automation
 # source: coolify
 services:

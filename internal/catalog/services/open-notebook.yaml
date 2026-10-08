@@ -1,6 +1,6 @@
 # name: Open Notebook
 # about: Open Notebook with SurrealDB for data storage and AI-powered features.
-# docs: https://www.open-notebook.ai/get-started.html
+# docs: https://github.com/lfnovo/open-notebook/blob/main/docs/1-INSTALLATION/docker-compose.md
 # website: https://www.open-notebook.ai/
 # categories: devtools, ai, database
 # source: dokploy

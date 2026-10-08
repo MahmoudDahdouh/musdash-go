@@ -1,6 +1,7 @@
 # name: Lobe Chat
 # about: An open-source, modern-design AI chat framework.
-# docs: https://github.com/lobehub/lobe-chat?tab=readme-ov-file#b-deploying-with-docker
+# docs: https://lobehub.com/docs/self-hosting/start
+# website: https://lobehub.com/
 # categories: ai, communication
 # source: coolify
 services:

@@ -1,6 +1,6 @@
 # name: Agent DVR
 # about: Agent DVR is a comprehensive video surveillance software with motion detection, alerts, and remote access capabilities.
-# docs: https://www.ispyconnect.com/userguide-agent-dvr.aspx
+# docs: https://hub.docker.com/r/ispysoftware/agentdvr
 # website: https://www.ispyconnect.com/
 # categories: security, media, monitoring
 # source: dokploy

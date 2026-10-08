@@ -1,6 +1,7 @@
 # name: Gramps Web
 # about: Open Source Online Genealogy System.
 # docs: https://www.grampsweb.org/install_setup/setup/
+# website: https://www.grampsweb.org/
 # categories: home
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: OpenHabitTracker
 # about: Take notes, plan tasks and track habits - free, ad-free, open source, with all data on your own server.
-# website: https://openhabittracker.net
+# docs: https://openhabittracker.net/self-hosted-habit-tracker.html
+# website: https://openhabittracker.net/
 # categories: productivity, docs, home
 # source: dokploy
 services:

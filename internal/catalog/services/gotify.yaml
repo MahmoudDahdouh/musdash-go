@@ -1,6 +1,7 @@
 # name: Gotify
 # about: Gotify is an open-source self-hosted notification server.
 # docs: https://gotify.net/docs/install
+# website: https://gotify.net/
 # categories: communication, productivity
 # source: coolify
 services:

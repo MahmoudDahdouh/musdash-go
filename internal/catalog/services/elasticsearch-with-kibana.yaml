@@ -1,6 +1,7 @@
 # name: Elasticsearch with Kibana
 # about: Elastic + Kibana is a Free and Open Source Search, Monitoring, and Visualization Stack.
 # docs: https://www.elastic.co/docs/deploy-manage/deploy/self-managed/install-kibana-with-docker
+# website: https://www.elastic.co/elasticsearch
 # categories: monitoring, search, analytics
 # source: coolify
 services:

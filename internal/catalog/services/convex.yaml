@@ -1,6 +1,7 @@
 # name: Convex
 # about: Convex is the open-source reactive database for app developers.
 # docs: https://github.com/get-convex/convex-backend/blob/main/self-hosted/README.md
+# website: https://www.convex.dev/
 # categories: backend, database, ai
 # source: coolify
 services:

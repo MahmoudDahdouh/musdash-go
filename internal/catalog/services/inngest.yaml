@@ -1,6 +1,7 @@
 # name: Inngest
 # about: Durable workflow engine for background jobs, queues and scheduled tasks.
 # docs: https://www.inngest.com/docs/self-hosting
+# website: https://www.inngest.com/
 # categories: automation, business
 # source: coolify
 services:

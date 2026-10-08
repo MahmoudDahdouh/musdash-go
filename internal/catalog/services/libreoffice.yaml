@@ -1,6 +1,7 @@
 # name: LibreOffice
 # about: LibreOffice is a free and powerful office suite.
 # docs: https://docs.linuxserver.io/images/docker-libreoffice/
+# website: https://www.libreoffice.org/
 # categories: productivity, docs
 # source: coolify
 services:

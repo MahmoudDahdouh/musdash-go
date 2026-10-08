@@ -1,6 +1,7 @@
 # name: Label Studio
 # about: Label Studio is a multi-type data labeling and annotation tool with standardized output format.
-# docs: https://labelstud.io/guide/
+# docs: https://labelstud.io/guide/install.html
+# website: https://labelstud.io/
 # categories: ai, automation, search
 # source: coolify
 services:

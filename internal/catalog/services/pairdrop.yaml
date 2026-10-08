@@ -1,6 +1,7 @@
 # name: PairDrop
 # about: Pairdrop is a self-hosted file sharing and collaboration platform, offering secure file sharing and collaboration capabilities for efficient teamwork.
-# docs: https://pairdrop.net/
+# docs: https://github.com/schlagmichdoch/PairDrop/blob/master/docs/host-your-own.md
+# website: https://pairdrop.net/
 # categories: productivity, storage
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Linkding Plus
 # about: A self-hosted bookmark manager designed to be minimal, fast, and easy to set up. (Includes feature for archiving websites as HTML snapshots).
-# docs: https://linkding.link/
+# docs: https://linkding.link/installation/
+# website: https://linkding.link/
 # categories: rss
 # source: coolify
 services:

@@ -1,6 +1,6 @@
 # name: SpacetimeDB
 # about: SpacetimeDB is a relational database with a built-in server runtime.
-# docs: https://spacetimedb.com/docs
+# docs: https://spacetimedb.com/docs/deploying/spacetimedb-standalone/
 # website: https://spacetimedb.com/
 # categories: database, backend
 # source: dokploy

@@ -1,6 +1,7 @@
 # name: Shlink
 # about: The definitive self-hosted URL shortener.
-# docs: https://shlink.io/
+# docs: https://shlink.io/documentation/install-docker-image/
+# website: https://shlink.io/
 # categories: productivity, business, storage
 # source: coolify
 services:

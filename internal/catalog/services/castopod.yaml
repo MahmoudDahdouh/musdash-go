@@ -1,6 +1,7 @@
 # name: Castopod
 # about: Castopod is a free & open-source hosting platform made for podcasters who want engage and interact with their audience.
-# docs: https://docs.castopod.org/main/en/
+# docs: https://docs.castopod.org/main/en/getting-started/docker/
+# website: https://castopod.org/
 # categories: media
 # source: coolify
 services:

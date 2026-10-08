@@ -1,7 +1,7 @@
 # name: Openinary
 # about: Openinary is a self-hosted Cloudinary alternative.
-# docs: https://docs.openinary.dev
-# website: https://openinary.dev
+# docs: https://docs.openinary.dev/quickstart
+# website: https://openinary.dev/
 # categories: media, devtools
 # source: dokploy
 services:

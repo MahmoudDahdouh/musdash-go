@@ -1,7 +1,7 @@
 # name: Oryx
 # about: Oryx (formerly SRS Stack) is an all-in-one, open-source video streaming server with a web console.
 # docs: https://ossrs.io/lts/en-us/docs/v6/doc/getting-started-oryx
-# website: https://ossrs.io/
+# website: https://ossrs.io/lts/en-us/
 # categories: media, communication
 # source: dokploy
 services:

@@ -1,6 +1,7 @@
 # name: n8n with PostgreSQL and a worker
 # about: n8n is an extendable workflow automation tool with queue mode and workers.
-# docs: https://n8n.io
+# docs: https://docs.n8n.io/deploy/host-n8n/install-options/use-a-cloud-provider/use-docker-compose
+# website: https://n8n.io/
 # categories: automation, devtools
 # source: coolify
 services:

@@ -1,7 +1,7 @@
 # name: GitLab CE
 # about: GitLab Community Edition is a free and open source platform for managing Git repositories, CI/CD pipelines, and project management.
-# docs: https://docs.gitlab.com/ee/
-# website: https://gitlab.com/
+# docs: https://docs.gitlab.com/install/docker/
+# website: https://about.gitlab.com/
 # categories: git, productivity
 # source: dokploy
 services:

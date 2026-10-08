@@ -1,6 +1,7 @@
 # name: SilverBullet
 # about: SilverBullet is a tool to develop, organize, and structure your personal knowledge and to make it universally accessible across all your devices.
-# docs: https://v2.silverbullet.md/Install/Configuration
+# docs: https://docs.silverbullet.md/Install/Docker
+# website: https://silverbullet.md/
 # categories: productivity, docs
 # source: coolify
 services:

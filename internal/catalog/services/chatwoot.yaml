@@ -1,6 +1,7 @@
 # name: Chatwoot
 # about: Delightful customer relationships at scale.
-# docs: https://www.chatwoot.com/docs/self-hosted/
+# docs: https://developers.chatwoot.com/self-hosted/deployment/docker
+# website: https://www.chatwoot.com/
 # categories: support, communication, devtools
 # source: coolify
 services:

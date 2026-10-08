@@ -1,6 +1,6 @@
 # name: n8n
 # about: Workflow automation with a visual editor.
-# docs: https://docs.n8n.io/hosting/
+# docs: https://docs.n8n.io/deploy/host-n8n/install-options/install-with-docker
 # website: https://n8n.io/
 # categories: automation, ai
 services:

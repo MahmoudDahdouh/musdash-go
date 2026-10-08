@@ -1,7 +1,7 @@
 # name: Checkcle
 # about: Checkcle is a security and compliance tool by Operacle, providing insights into system configuration and runtime checks.
-# docs: https://github.com/Operacle/checkcle#readme
-# website: https://operacle.com/
+# docs: https://docs.checkcle.io/getting-started/quickstart
+# website: https://github.com/Operacle/checkcle
 # categories: security, monitoring
 # source: dokploy
 services:

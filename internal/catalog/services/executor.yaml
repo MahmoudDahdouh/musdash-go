@@ -1,6 +1,7 @@
 # name: Executor
 # about: Self-hosted AI agent integrations and code execution server.
-# docs: https://executor.sh/docs/hosted/docker
+# docs: https://executor.sh/docs/run/self-host
+# website: https://executor.sh/
 # categories: devtools, ai, automation
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Evolution GO
 # about: Evolution Go is a high-performance implementation of the WhatsApp API, written in Go.
-# docs: https://docs.evolutionfoundation.com.br/evolution-go
+# docs: https://docs.evolutionfoundation.com.br/evolution-go/installation
+# website: https://evolutionfoundation.com.br/
 # categories: devtools, communication
 # source: dokploy
 services:

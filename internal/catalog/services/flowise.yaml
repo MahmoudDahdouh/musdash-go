@@ -1,6 +1,7 @@
 # name: Flowise
 # about: Flowise is an open source low-code tool for developers to build customized LLM orchestration flows & AI agents.
-# docs: https://docs.flowiseai.com/
+# docs: https://docs.flowiseai.com/getting-started
+# website: https://flowiseai.com/
 # categories: ai, backend, devtools
 # source: coolify
 services:

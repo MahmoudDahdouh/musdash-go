@@ -1,7 +1,7 @@
 # name: Soft Serve
 # about: Soft Serve is a self-hosted Git server with an SSH TUI, HTTP Git access, Git LFS support, and simple repository management.
-# docs: https://github.com/charmbracelet/soft-serve/blob/main/README.md
-# website: https://charm.sh/
+# docs: https://github.com/charmbracelet/soft-serve#readme
+# website: https://charm.land/
 # categories: git, devtools
 # source: dokploy
 services:

@@ -1,6 +1,6 @@
 # name: Homebridge
 # about: Bringing HomeKit support where there is none. Homebridge allows you to integrate with smart home devices that do not natively support HomeKit.
-# docs: https://github.com/homebridge/homebridge/wiki
+# docs: https://github.com/homebridge/docker-homebridge
 # website: https://homebridge.io/
 # categories: home
 # source: dokploy

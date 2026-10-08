@@ -1,6 +1,7 @@
 # name: Elasticsearch
 # about: Elasticsearch is free and Open Source, Distributed, RESTful Search Engine.
-# docs: https://www.elastic.co/products/elasticsearch
+# docs: https://www.elastic.co/docs/deploy-manage/deploy/self-managed/install-elasticsearch-with-docker
+# website: https://www.elastic.co/elasticsearch
 # categories: search
 # source: coolify
 services:

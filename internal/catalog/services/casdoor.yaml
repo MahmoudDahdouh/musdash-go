@@ -1,7 +1,7 @@
 # name: Casdoor
 # about: An open-source UI-first Identity and Access Management (IAM) / Single-Sign-On (SSO) platform with web UI supporting OAuth 2.0, OIDC, SAML, CAS, LDAP…
-# docs: https://casdoor.org/docs/overview
-# website: https://casdoor.org/
+# docs: https://casdoor.ai/docs/basic/server-installation/
+# website: https://casdoor.ai/
 # categories: auth, security
 # source: dokploy
 services:

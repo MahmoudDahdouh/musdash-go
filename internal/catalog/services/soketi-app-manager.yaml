@@ -1,6 +1,7 @@
 # name: Soketi App Manager
 # about: Manage soketi websocket server and apps with ease.
-# docs: https://github.com/rahulhaque/soketi-app-manager-filament
+# docs: https://github.com/rahulhaque/soketi-app-manager-filament#readme
+# website: https://github.com/rahulhaque/soketi-app-manager-filament
 # categories: devtools, backend, home
 # source: coolify
 services:

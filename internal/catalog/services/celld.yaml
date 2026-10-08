@@ -1,6 +1,7 @@
 # name: Celld
 # about: Self-hosted, distributed Durable Objects powered by Deno.
-# docs: https://celld.dev/docs
+# docs: https://celld.dev/docs/
+# website: https://celld.dev/
 # categories: backend
 # source: coolify
 services:

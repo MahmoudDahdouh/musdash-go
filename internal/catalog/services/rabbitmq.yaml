@@ -1,6 +1,7 @@
 # name: RabbitMQ
 # about: With tens of thousands of users, RabbitMQ is one of the most popular open source message brokers.
-# docs: https://www.rabbitmq.com/documentation.html
+# docs: https://www.rabbitmq.com/docs/download
+# website: https://www.rabbitmq.com/
 # categories: communication, backend
 # source: coolify
 services:

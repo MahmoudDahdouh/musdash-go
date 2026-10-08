@@ -1,6 +1,7 @@
 # name: Miniflux
 # about: Miniflux is a minimalist and opinionated feed reader.
-# docs: https://miniflux.app/docs/index.html
+# docs: https://miniflux.app/docs/docker.html
+# website: https://miniflux.app/
 # categories: rss
 # source: coolify
 services:

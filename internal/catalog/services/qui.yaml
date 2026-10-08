@@ -1,6 +1,7 @@
 # name: qui
 # about: A fast, modern web interface for qBittorrent. Manage multiple qBittorrent instances from a single, lightweight application built by autobrr.
-# docs: https://getqui.com
+# docs: https://github.com/autobrr/qui#readme
+# website: https://getqui.com
 # categories: media
 # source: dokploy
 services:

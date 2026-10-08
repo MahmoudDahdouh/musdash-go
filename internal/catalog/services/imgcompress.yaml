@@ -1,6 +1,7 @@
 # name: ImgCompress
 # about: Offline image compression, conversion, and AI background removal for Docker homelabs.
-# docs: https://imgcompress.karimzouine.com
+# docs: https://github.com/karimz1/imgcompress#readme
+# website: https://imgcompress.karimzouine.com/
 # categories: media
 # source: coolify
 services:

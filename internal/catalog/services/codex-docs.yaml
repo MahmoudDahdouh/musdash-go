@@ -1,7 +1,7 @@
 # name: CodeX Docs
 # about: CodeX is a comprehensive platform that brings together passionate engineers, designers, and specialists to create high-quality open-source projects.
-# docs: https://docs.codex.so
-# website: https://codex.so
+# docs: https://docs.codex.so/codex-docs
+# website: https://github.com/codex-team/codex.docs
 # categories: docs, devtools, productivity
 # source: dokploy
 services:

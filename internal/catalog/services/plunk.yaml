@@ -1,6 +1,7 @@
 # name: Plunk
 # about: Plunk, The Open-Source Email Platform for AWS.
-# docs: https://docs.useplunk.com/getting-started/introduction
+# docs: https://docs.useplunk.com/self-hosting/introduction
+# website: https://www.useplunk.com/
 # categories: email, automation
 # source: coolify
 services:

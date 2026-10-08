@@ -1,6 +1,7 @@
 # name: Rivet Engine
 # about: Build and scale stateful workloads with long-lived processes.
-# docs: https://www.rivet.dev/docs
+# docs: https://rivet.dev/docs/deploy/self-host/control-plane/docker-compose/
+# website: https://rivet.dev/
 # categories: devtools, backend
 # source: coolify
 services:

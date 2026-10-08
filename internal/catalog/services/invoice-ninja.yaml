@@ -1,6 +1,7 @@
 # name: Invoice Ninja
 # about: The leading open-source invoicing platform.
-# docs: https://invoiceninja.github.io/selfhost.html
+# docs: https://invoiceninja.github.io/en/self-host-installation/
+# website: https://invoiceninja.com/
 # categories: finance
 # source: coolify
 services:

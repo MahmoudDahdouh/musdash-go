@@ -1,6 +1,7 @@
 # name: Baby Buddy
 # about: It helps parents track their baby's daily activities, growth, and health with ease.
-# docs: https://docs.baby-buddy.net
+# docs: https://docs.baby-buddy.net/setup/deployment/
+# website: https://github.com/babybuddy/babybuddy
 # categories: productivity, home
 # source: coolify
 services:

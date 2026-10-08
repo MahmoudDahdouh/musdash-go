@@ -1,6 +1,7 @@
 # name: LibreSpeed
 # about: Self-hosted lightweight Speed Test.
-# docs: https://github.com/librespeed/speedtest
+# docs: https://github.com/librespeed/speedtest#readme
+# website: https://librespeed.org/
 # categories: devtools, monitoring
 # source: coolify
 services:

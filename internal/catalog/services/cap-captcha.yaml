@@ -1,6 +1,7 @@
 # name: Cap (CAPTCHA)
 # about: The self-hosted CAPTCHA for the modern web.
-# docs: https://capjs.js.org/guide/
+# docs: https://capjs.js.org/guide/standalone/
+# website: https://capjs.js.org/
 # categories: security
 # source: coolify
 services:

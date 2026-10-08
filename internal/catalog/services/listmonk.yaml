@@ -1,6 +1,7 @@
 # name: Listmonk
 # about: Self-hosted newsletter and mailing list manager.
-# docs: https://listmonk.app/
+# docs: https://listmonk.app/docs/installation/
+# website: https://listmonk.app/
 # categories: email, business
 # source: coolify
 services:

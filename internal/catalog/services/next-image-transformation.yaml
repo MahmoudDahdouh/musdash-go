@@ -1,6 +1,7 @@
 # name: Next Image Transformation
 # about: Drop-in replacement for Vercel's Nextjs image optimization service.
-# docs: https://github.com/coollabsio/next-image-transformation
+# docs: https://github.com/coollabsio/next-image-transformation#readme
+# website: https://github.com/coollabsio/next-image-transformation
 # categories: media
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: Sure
 # about: An all-in-one personal finance platform.
-# docs: https://github.com/we-promise/sure
+# docs: https://github.com/we-promise/sure/blob/main/docs/hosting/docker.md
+# website: https://sure.am/
 # categories: finance
 # source: coolify
 services:

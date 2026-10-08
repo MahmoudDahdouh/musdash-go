@@ -1,6 +1,7 @@
 # name: Activepieces
 # about: Open source no-code business automation.
-# docs: https://www.activepieces.com/docs/getting-started/introduction
+# docs: https://www.activepieces.com/docs/install/options/docker
+# website: https://www.activepieces.com/
 # categories: automation, backend
 # source: coolify
 services:

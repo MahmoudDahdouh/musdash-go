@@ -1,7 +1,7 @@
 # name: Gitea (SQLite)
 # about: Self-hosted Git service using SQLite for a simple one-container setup.
-# docs: https://docs.gitea.com/
-# website: https://gitea.io/
+# docs: https://docs.gitea.com/installation/install-with-docker/
+# website: https://about.gitea.com/
 # categories: git, devtools
 # source: dokploy
 services:

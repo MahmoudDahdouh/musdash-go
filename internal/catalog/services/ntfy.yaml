@@ -1,6 +1,7 @@
 # name: ntfy
 # about: ntfy is a simple HTTP-based pub-sub notification service.
-# docs: https://docs.ntfy.sh/
+# docs: https://docs.ntfy.sh/install/#docker
+# website: https://ntfy.sh/
 # categories: communication
 # source: coolify
 services:

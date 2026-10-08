@@ -1,6 +1,7 @@
 # name: LibreChat
 # about: Self-hosted, powerful, and privacy-focused chat UI for multiple AI models.
-# docs: https://docs.librechat.ai/install/configuration/dotenv.html
+# docs: https://www.librechat.ai/docs/local/docker
+# website: https://www.librechat.ai/
 # categories: ai, communication
 # source: coolify
 services:

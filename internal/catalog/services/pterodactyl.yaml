@@ -1,7 +1,7 @@
 # name: Pterodactyl
 # about: A free, open-source game server management panel.
-# docs: https://pterodactyl.io/project/introduction.html
-# website: https://pterodactyl.io
+# docs: https://docs.pterodactyl.io/v1/panel/getting-started
+# website: https://pterodactyl.io/
 # categories: games
 # source: dokploy
 services:

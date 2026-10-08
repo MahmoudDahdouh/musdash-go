@@ -1,6 +1,7 @@
 # name: Actual Budget
 # about: A local-first personal finance app.
 # docs: https://actualbudget.org/docs/install/docker
+# website: https://actualbudget.org/
 # categories: finance
 # source: coolify
 services:

@@ -1,6 +1,7 @@
 # name: BentoPDF
 # about: Process PDFs entirely in your browser. No uploads. No servers. Complete privacy.
-# docs: https://bentopdf.com/docs
+# docs: https://www.bentopdf.com/docs/self-hosting
+# website: https://www.bentopdf.com/
 # categories: productivity, devtools
 # source: coolify
 services:
