@@ -7,10 +7,12 @@ func TestGuessPack(t *testing.T) {
 		files       []string
 		pack, found string
 	}{
-		{[]string{"README.md", "Dockerfile", "package.json"}, PackDockerfile, "Dockerfile"},
-		{[]string{"package.json", "index.html"}, PackNixpacks, "package.json"},
-		{[]string{"main.go", "go.mod", "go.sum"}, PackNixpacks, "go.mod"},
-		{[]string{"railpack.json", "package.json"}, PackRailpack, "railpack.json"},
+		{[]string{"README.md", "Dockerfile", "package.json", "nixpacks.toml"}, PackDockerfile, "Dockerfile"},
+		{[]string{"package.json", "index.html"}, PackRailpack, "package.json"},
+		{[]string{"main.go", "go.mod", "go.sum"}, PackRailpack, "go.mod"},
+		{[]string{"railpack.json", "nixpacks.toml", "package.json"}, PackRailpack, "railpack.json"},
+		// Written for Nixpacks: it stays with Nixpacks.
+		{[]string{"nixpacks.toml", "package.json"}, PackNixpacks, "nixpacks.toml"},
 		{[]string{"index.html", "style.css"}, PackStatic, "index.html"},
 		// A name is compared as it is: this is not a Dockerfile.
 		{[]string{"dockerfile.txt", "README.md"}, "", ""},

@@ -242,7 +242,7 @@ func TestBuildIsWorkedOut(t *testing.T) {
 
 	for _, c := range []struct{ branch, dir, pack, found string }{
 		{"main", "", "dockerfile", "Dockerfile"},
-		{"develop", "", "nixpacks", "package.json"},
+		{"develop", "", "railpack", "package.json"},
 		{"main", "site", "static", "index.html"},
 		{"main", "/site/", "static", "index.html"},
 	} {

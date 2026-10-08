@@ -900,7 +900,7 @@ func (d Detected) says() string {
 	case "dockerfile":
 		return ": the app is built with it."
 	case "railpack":
-		return ": Railpack builds the app."
+		return " and no Dockerfile: Railpack works out the build."
 	case "nixpacks":
 		return " and no Dockerfile: Nixpacks works out the build."
 	case "static":
