@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
 
@@ -831,18 +832,64 @@ templ domainOptions(d db.Domain) {
 // what a domain of one's own gets.
 var schemeOptions = []ui.Option{{Value: "https", Label: "https://"}, {Value: "http", Label: "http://"}}
 
+// DomainTarget is what the Domains tab knows of the app's server: where a
+// domain has to lead. All of it is empty when the server could not be read.
+type DomainTarget struct {
+	// Suffix is what a generated address of the server ends with.
+	Suffix string
+	// Record is the type of DNS record a domain of one's own needs ("A",
+	// "AAAA") and IP its value; both are empty when the server has no
+	// public IP address stored.
+	Record string
+	IP     string
+}
+
+// dnsStep says what a person has to do at their DNS provider before a
+// domain of their own is served.
+func (t DomainTarget) dnsStep() string {
+	if t.Record == "" {
+		return "Point each domain's DNS at the app's server first, so its certificate can be issued. The server's public IP address is set under Servers."
+	}
+	return "For a domain of your own, add an " + t.Record + " record with the value " + t.IP + " at your DNS provider first, so its certificate can be issued."
+}
+
+// DNSLine is what Check DNS found for one name.
+type DNSLine struct {
+	Host  string
+	Tone  string // the pill's
+	Label string // the pill's words
+	Text  string // what it means and what to do
+}
+
+// DomainDNS is the answer to Check DNS: a line a name, put in the row
+// under the domain's.
+templ DomainDNS(lines []DNSLine) {
+	<div class="grid gap-2 pb-3">
+		for _, l := range lines {
+			<div class="grid gap-1">
+				<p class="flex flex-wrap items-center gap-2">
+					@ui.Pill(l.Tone, l.Label)
+					if len(lines) > 1 {
+						<span class="fact break-all">{ l.Host }</span>
+					}
+				</p>
+				<p class="muted text-sm">{ l.Text }</p>
+			</div>
+		}
+	</div>
+}
+
 // AppDomains is an app's Domains tab: the addresses it answers at, and the
-// dialog one is added with. f is that dialog's form. suffix is what a
-// generated address of the app's server ends with, or "" when there is no
-// saying.
-templ AppDomains(s ui.Shell, v AppView, f ui.Form, suffix string) {
+// dialog one is added with. f is that dialog's form, at where a domain of
+// the app has to lead.
+templ AppDomains(s ui.Shell, v AppView, f ui.Form, at DomainTarget) {
 	@appFrame(s, v, "domains") {
 		<div class="grid max-w-3xl gap-6">
 			<section class="card">
 				<div class="card-head">
 					<div>
 						<h2 class="card-title">Domains</h2>
-						<p class="muted text-sm">Where the app is reached from outside. Point each domain's DNS at the app's server first, so its certificate can be issued.</p>
+						<p class="muted text-sm">Where the app is reached from outside. { at.dnsStep() }</p>
 					</div>
 					if len(v.Domains) > 0 {
 						@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-domain"}) {
@@ -866,20 +913,34 @@ templ AppDomains(s ui.Shell, v AppView, f ui.Form, suffix string) {
 								<td>
 									@domainOptions(d)
 								</td>
-								<td class="text-right">
-									<form method="post" action={ templ.SafeURL(v.Path() + "/domains/" + d.ID + "/delete") }>
-										@ui.CSRF(s.CSRF)
-										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove "+d.Host+d.Path+"?", v.App.Name+" stops answering at this address at once.", "Remove domain", true)}) {
-											Remove
+								<td>
+									<div class="flex items-center justify-end gap-2">
+										if !deploy.Generated(d.Host) {
+											@ui.Button(ui.ButtonProps{Small: true, Icon: "search", Attrs: templ.Attributes{"hx-get": v.Path() + "/domains/" + d.ID + "/dns", "hx-target": "#dns-" + d.ID, "hx-swap": "innerHTML", "hx-disabled-elt": "this"}}) {
+												Check DNS
+											}
 										}
-									</form>
+										<form method="post" action={ templ.SafeURL(v.Path() + "/domains/" + d.ID + "/delete") }>
+											@ui.CSRF(s.CSRF)
+											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove "+d.Host+d.Path+"?", v.App.Name+" stops answering at this address at once.", "Remove domain", true)}) {
+												Remove
+											}
+										</form>
+									</div>
 								</td>
 							</tr>
+							if !deploy.Generated(d.Host) {
+								<tr class="table-under">
+									<td colspan="3">
+										<div id={ "dns-" + d.ID } aria-live="polite"></div>
+									</td>
+								</tr>
+							}
 						}
 					}
 				}
 			</section>
-			@ui.FormDialog(ui.DialogProps{ID: "add-domain", Title: "Add domain", Description: "Point the domain's DNS at the app's server first, so its certificate can be issued.", Action: v.Path() + "/domains", CSRF: s.CSRF, Submit: "Add domain", Wide: true, Open: !f.OK()}) {
+			@ui.FormDialog(ui.DialogProps{ID: "add-domain", Title: "Add domain", Description: at.dnsStep(), Action: v.Path() + "/domains", CSRF: s.CSRF, Submit: "Add domain", Wide: true, Open: !f.OK()}) {
 					<div class="address-row">
 						@ui.Field(ui.FieldProps{Label: "Scheme", For: "scheme", Error: f.E("scheme")}) {
 							@ui.Select("scheme", schemeOptions, f.V("scheme"), nil)
@@ -888,13 +949,13 @@ templ AppDomains(s ui.Shell, v AppView, f ui.Form, suffix string) {
 						@ui.TextField(f, "Port", "", ui.InputProps{ID: "port", Mono: true, Value: strconv.Itoa(v.App.Port), Autocomplete: "off", Attrs: templ.Attributes{"inputmode": "numeric"}})
 					</div>
 					<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-						if suffix != "" {
-							@ui.Button(ui.ButtonProps{Small: true, Icon: "refresh", Attrs: templ.Attributes{"data-generate": "host", "data-suffix": suffix, "data-scheme": "scheme"}}) {
+						if at.Suffix != "" {
+							@ui.Button(ui.ButtonProps{Small: true, Icon: "refresh", Attrs: templ.Attributes{"data-generate": "host", "data-suffix": at.Suffix, "data-scheme": "scheme"}}) {
 								Generate an address
 							}
 						}
 						<p class="field-hint">
-							if suffix != "" {
+							if at.Suffix != "" {
 								A generated address needs no DNS and is served over plain HTTP.
 							}
 							The port is the one the app listens on.

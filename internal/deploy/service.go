@@ -669,6 +669,13 @@ func GeneratedDomain(server db.Server) string {
 	return strings.ToLower(secret.RandomID()[:8]) + GeneratedSuffix(server)
 }
 
+// Generated reports whether a host is one of the shared wildcard DNS
+// names, which resolve to the address written in them and need no record
+// of anybody's.
+func Generated(host string) bool {
+	return strings.HasSuffix(host, ".sslip.io") || strings.HasSuffix(host, ".nip.io")
+}
+
 // GeneratedSuffix is what every generated address of a server ends with,
 // from the dot on: a name in front of it makes one.
 func GeneratedSuffix(server db.Server) string {

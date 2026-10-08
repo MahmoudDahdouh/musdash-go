@@ -137,9 +137,7 @@ func generatedDomain(server db.Server) string { return deploy.GeneratedDomain(se
 // DNS names. They are served over plain HTTP: the certificate authority
 // limits how many certificates such a shared suffix may get, and a refused
 // certificate would look like a broken deploy.
-func isGeneratedDomain(host string) bool {
-	return strings.HasSuffix(host, ".sslip.io") || strings.HasSuffix(host, ".nip.io")
-}
+func isGeneratedDomain(host string) bool { return deploy.Generated(host) }
 
 // checkHost normalises and validates a host name for routing.
 //
@@ -1041,13 +1039,15 @@ func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) (db.Domai
 
 // renderAppDomains draws an app's Domains tab; f is the Add domain form.
 func (s *Server) renderAppDomains(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, f ui.Form) {
-	// What an address made for the app's server ends with. Without the
-	// server the page is drawn all the same, less the button that makes one.
-	suffix := ""
+	// What an address made for the app's server ends with, and the record
+	// a domain of one's own needs. Without the server the page is drawn
+	// all the same, less the button that makes an address and the record.
+	var at pages.DomainTarget
 	if server, err := s.DB.ServerByID(r.Context(), v.App.ServerID); err == nil {
-		suffix = deploy.GeneratedSuffix(server)
+		at.Suffix = deploy.GeneratedSuffix(server)
+		at.Record, at.IP = dnsRecord(server.IP)
 	}
-	s.render(w, r, status, pages.AppDomains(s.appShell(w, r, v), v, f, suffix))
+	s.render(w, r, status, pages.AppDomains(s.appShell(w, r, v), v, f, at))
 }
 
 func (s *Server) appDomains(w http.ResponseWriter, r *http.Request) {

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/pprof"
+	"net/netip"
 	"strconv"
 	"time"
 
@@ -48,6 +49,9 @@ type Server struct {
 	// GitLab is the client for a GitLab instance's API. Nil uses one that
 	// connects only where netguard allows.
 	GitLab *source.GitLab
+	// Resolve looks a host name up for Check DNS. Nil uses the system's
+	// resolver; tests put their own in.
+	Resolve func(ctx context.Context, host string) ([]netip.Addr, error)
 
 	logins *auth.Limiter
 	// accounts counts attempts at one account's password and second step.
@@ -229,6 +233,7 @@ func (s *Server) Handler() http.Handler {
 	app("POST", "/settings", member, s.ownSettings(s.appSettingsSave))
 	app("GET", "/domains", member, s.ownSettings(s.appDomains))
 	app("POST", "/domains", member, s.ownSettings(s.appDomainAdd))
+	app("GET", "/domains/{did}/dns", member, s.ownSettings(s.appDomainDNS))
 	app("POST", "/domains/{did}/delete", member, s.ownSettings(s.appDomainDelete))
 	app("POST", "/delete", member, s.appDelete)
 	app("GET", "/tasks", member, s.ownSettings(s.appTasks))

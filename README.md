@@ -122,6 +122,8 @@ Every deployment's image stays on the server under a name of that deployment's o
 
 ### Domains, paths and passwords
 
+A domain of your own (one you bought, such as `example.com`) needs one thing done outside musdash: a DNS record at your provider that leads it to the server, an `A` record with the server's public IP address (`AAAA` for an IPv6 address). The app's **Domains** tab names the record and its value. Add the domain there with `https://`; its certificate is ordered from Let's Encrypt at the first request once the record is in place. Tick the www box to have `www.example.com` redirect to it; that name needs a record too. **Check DNS** in a domain's row looks the name up and says whether it leads to the server, somewhere else, or nowhere yet.
+
 A domain can be limited to a path: with `/api`, the app answers `app.example.com/api` and what is below it, and another app of yours on the same server can take the rest of the domain. The longest path that matches wins, on whole segments (`/api` is not `/apix`). The path can be removed before the request is passed on, for apps that expect to live at `/`.
 
 A domain can also ask for a user name and password before anything reaches the app. The password is stored as a hash. Over plain HTTP it travels unencrypted, so use it with HTTPS. When one app is routed both openly and, under a path, behind a password, anything an app might read as that path asks for the password too: `/Admin` as well as `/admin`.

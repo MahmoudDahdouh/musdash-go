@@ -63,10 +63,7 @@ func BuildRoutes(rows []db.RouteRow, email, instanceDomain, instanceTarget strin
 			continue
 		}
 		// The other form of the name redirects to the one that was entered.
-		other := "www." + r.Host
-		if strings.HasPrefix(r.Host, "www.") {
-			other = strings.TrimPrefix(r.Host, "www.")
-		}
+		other := OtherForm(r.Host)
 		switch {
 		case taken[other]:
 		case !proxy.ValidHost(other):
@@ -77,6 +74,16 @@ func BuildRoutes(rows []db.RouteRow, email, instanceDomain, instanceTarget strin
 		}
 	}
 	return file, skipped
+}
+
+// OtherForm is the name a domain's www redirect comes from: the www form
+// of a bare name, the bare name of a www form. Both need DNS records, and
+// the redirect a certificate of its own.
+func OtherForm(host string) string {
+	if bare, ok := strings.CutPrefix(host, "www."); ok {
+		return bare
+	}
+	return "www." + host
 }
 
 // SyncRoutes rewrites a server's routes file from the database and tells the

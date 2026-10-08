@@ -1010,6 +1010,23 @@
   .table tbody tr:hover {
     background: var(--color-sunk);
   }
+  /* A row that holds what was found out about the row above it (a check's
+     answer), over the whole width. Empty, it is the line between two rows
+     and nothing else; the row above gives its own line up to it. */
+  .table tr:has(+ .table-under) td {
+    border-bottom: 0;
+  }
+  .table .table-under td {
+    padding-block: 0;
+  }
+  /* The columns are as wide as the rows above need. A sentence in here
+     would otherwise widen them and squeeze the first. */
+  .table .table-under td > * {
+    contain: inline-size;
+  }
+  .table tbody .table-under:hover {
+    background: none;
+  }
 
   /* Row list: stacked clickable rows inside a card. Clipping keeps each
      row's state rail inside the card's rounded corners. */
