@@ -581,6 +581,12 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 		if rerr := d.DB.SetAppRuntimePorts(sw, app.ID, statusAfterFailure(app), app.Container, app.HostPort, app.DeployedImage, before); rerr != nil {
 			d.Log.Error("restore app after failed switch", "app", app.ID, "err", rerr)
 		}
+		// The file may have been written before the failure (the signal
+		// is what failed, say). The proxy reads it by itself in a few
+		// seconds, and the container it names is about to be removed.
+		if rerr := d.SyncRoutes(sw, server); rerr != nil && !errors.Is(rerr, ErrProxyDown) {
+			d.Log.Error("publish the routes of the previous container again", "app", app.ID, "err", rerr)
+		}
 		return fmt.Errorf("publish the new routes: %w", serr)
 	default:
 		log.Step("Traffic switched to the new container")

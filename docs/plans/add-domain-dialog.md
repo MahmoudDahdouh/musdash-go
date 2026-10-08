@@ -41,6 +41,8 @@ Asked for on 2026-10-08: the dialog an app's domain is added with gets the schem
 
 **Review of the code.** Read the diff. Docker does not say which of several ports was taken, so a try that fails picks all of them anew; with one port the log line is the one it was. A domain that is removed leaves its row in `app_ports`: the container still publishes the port, so the loopback port is still in use, and the next deployment writes the table anew.
 
+A second reader, given the commit and nothing else, found no way for a route to name a removed container, for two apps to end up on one loopback port, or for a port to reach `docker` unchecked, and two smaller things, both taken. When publishing the routes fails after the file was written (the signal is what failed), the record went back to the earlier container but the file stayed, naming a container about to be removed: the routes are now published once more after the record is put back. And a domain with a new port added while a first deployment was under way got "Domain added." and nothing else, because the app has no serving container yet: the note to redeploy is shown then as well.
+
 ## 3. The dialog
 
 ```
