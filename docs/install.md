@@ -41,6 +41,20 @@ sudo sh install.sh
 
 When a step fails, the installer names it and prints the end of that step's output. The whole output is in `/var/log/musdash-install.log`.
 
+In a terminal the steps are drawn as a list that fills in. Where the output is not a terminal (a file, a pipe, cloud-init), or the window is smaller than 20 rows by 66 columns, each step is a plain line. Three settings change what the installer does:
+
+| Variable | What it does |
+|---|---|
+| `MUSDASH_ADDRESS` | The address shown for the dashboard at the end. Without it the installer uses the server's own, and asks one public service (`ipv4.icanhazip.com`) when the server only knows a private one |
+| `MUSDASH_VERSION` | Installs that release (`v0.1.0`) and not the latest |
+| `NO_COLOR` | Any value turns colour off |
+
+They go between `sudo` and `sh`, with `env`:
+
+```bash
+curl -fsSL https://github.com/MahmoudDahdouh/musdash-go/releases/latest/download/install.sh | sudo env MUSDASH_ADDRESS=203.0.113.10 sh
+```
+
 ## First steps
 
 1. Open `http://<server address>:8000` and create the owner account.
@@ -89,7 +103,7 @@ scp -r dist/musdash-linux-amd64 install root@your-server:/root/
 ssh root@your-server 'cd /root && ./install/install.sh ./musdash-linux-amd64'
 ```
 
-Use `musdash-linux-arm64` on ARM servers.
+Use `musdash-linux-arm64` on ARM servers. Everything else is as with the command above: Docker and git are installed when missing, and nothing is downloaded but those.
 
 ## Commands
 
@@ -126,7 +140,7 @@ The link it prints starts with `http://localhost:8000` unless `MUSDASH_URL` is s
 
 Back up `<data>/master.key` together with the database. Without the key, stored secrets cannot be decrypted.
 
-The two services get their settings from their systemd units, `/etc/systemd/system/musdash-server.service` and `musdash-proxy.service`.
+The two services get their settings from their systemd units, `/etc/systemd/system/musdash-server.service` and `musdash-proxy.service`. The installer writes both again when their text changes with a release, so a setting changed by hand belongs in a drop-in (`systemctl edit musdash-server`), which it leaves alone.
 
 ## Where things are
 

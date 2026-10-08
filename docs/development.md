@@ -38,6 +38,26 @@ make build-linux
 
 `make build` writes `bin/musdash` for your machine. `make build-linux` writes `dist/musdash-linux-amd64` and `dist/musdash-linux-arm64` for servers.
 
+## Releasing
+
+A release is four files: the two Linux binaries, `checksums.txt`, and `install.sh` with the release's version written into it, which is what the one-line install command downloads. Pushing a tag makes one:
+
+```bash
+git tag v0.2.0
+```
+
+```bash
+git push origin v0.2.0
+```
+
+The workflow in `.github/workflows/release.yml` then runs vet and the tests, runs the installer's own tests in a container, builds the four files with `make release` and publishes them. A tag is `v` and three numbers; the installer refuses any other shape, and so does the workflow. When a step fails nothing is published: fix it and push the next version, since the install command asks for the latest release whatever its number. Started by hand from the Actions page, the workflow builds and tests everything and publishes nothing.
+
+```bash
+make release VERSION=v0.2.0
+```
+
+makes the same four files in `dist/` on your machine.
+
 ## Run locally
 
 ```bash
@@ -105,6 +125,16 @@ cd tools/catalog && go run . -coolify ~/src/coolify -dokploy ~/src/dokploy-templ
 ```
 
 Makes the imported part of the catalogue again from checkouts of Coolify, Dokploy's templates and the selfh.st icons. It is a Go module of its own (it needs a YAML parser, which musdash does without) and no part of the binary. Run the sandbox test afterwards; what it refuses goes into `tools/catalog/rejected.txt`.
+
+```bash
+go test ./test -run TestInstall -v
+```
+
+```bash
+MUSDASH_DOCKER_TEST=1 go test ./test -run TestInstall -v
+```
+
+The installer (`install/install.sh`). The first command calls its functions and its drawing from a shell that sourced it, under `sh`, `dash` and `bash`. The second also runs whole installs in a Debian container: a first install, the same again (nothing restarts), an upgrade, a download that does not match its checksum, a processor musdash is not built for, a server without Docker, and the list as it is drawn on a terminal. A container has no systemd, so `systemctl` and `docker` are stand-ins there; the dashboard that the last step waits for is the real binary.
 
 ## Memory
 
@@ -175,6 +205,6 @@ internal/jobs      persistent job queue
 internal/proxy     edge proxy
 internal/web       handlers, pages, components, static assets
 migrations         numbered SQL files, embedded in the binary
-install            systemd units and the install script
+install            the installer: one script, with the two systemd units in it
 test               whole-binary tests
 ```

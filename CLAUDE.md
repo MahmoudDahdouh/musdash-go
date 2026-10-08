@@ -22,12 +22,14 @@ go test ./internal/jobs -run TestLockKeySerialises -v  # one test
 make generate     # templ → *_templ.go, and input.css → static/app.css (run after editing either)
 make build        # release build into bin/musdash
 make build-linux  # dist/musdash-linux-{amd64,arm64}
+make release VERSION=v1.2.3  # the four files of a release in dist/; a pushed tag does this on GitHub
 make dev          # server against ./data with the component gallery at /_ui
 make rss          # idle-memory test on this machine
 make rss-linux    # the same test in a Linux container: the authoritative figure
 make catalog-test # vet and test tools/catalog, a module of its own that ./... does not reach
 ```
 
+- `MUSDASH_DOCKER_TEST=1 go test ./test -run TestInstall` runs the installer in a container; without the variable only its functions and drawing are tested. The release workflow (`.github/workflows/release.yml`) runs both before it publishes.
 - `bin/` is git-ignored. `bin/tailwindcss` is the Tailwind v4 standalone CLI, downloaded by `make tools`; there is no Node toolchain.
 - Generated files (`*_templ.go`, `internal/web/static/app.css`) are committed so a plain `go build` needs only Go. Regenerate both after editing any `.templ` file, `input.css`, or class names in `app.js`. `internal/web/static` embeds `app.css` by name, so the package does not compile until that file exists.
 - Subcommand flags fall back to env vars: `--data` / `MUSDASH_DATA`, `--dev` / `MUSDASH_DEV=1`. `MUSDASH_MASTER_KEY` (base64, 32 bytes) overrides `<data>/master.key`.
@@ -48,6 +50,13 @@ One binary, two long-running processes: `musdash server` (UI, API, webhooks, job
 
 How the existing packages fit together:
 
+- `install/install.sh` — the installer, and the one file a person pipes into a root shell (`docs/plans/one-line-install.md`, and its plan beside it). It is POSIX `sh` for dash and bash alike, and everything is in it: the two systemd units are text in `unit_server` and `unit_proxy` (`test/testdata/*.service` are the test's pinned copies, so a change to a unit is made in both, on purpose).
+  - The whole file is definitions and its last line calls `main`: a download that stopped half way runs nothing. `MUSDASH_INSTALL_LIB=1` keeps that line from running, which is how `test/install_test.go` calls the functions.
+  - A step is a function run in the script's own shell, so what it finds out (`ARCH`, `NEW`, `CHANGED`) is there for the next one, with its output in the log and its input `/dev/null` (under `curl | sudo sh` the shell's input is the script). It is called as a condition, where `set -e` is off: every command of a step that may fail ends in `|| return 1`, and what the step echoes before that is what the person is shown.
+  - The list is drawn by `painter`, another process, from one small state file a step (`set_state`), read with `read`, never sourced: a detail is what a server said of itself, and goes through `clean` (printable ASCII, cut) before it is stored. The loop stops only between two frames. No name of a variable is local in `sh`, so each function's own carry a prefix.
+  - What is not a terminal, and a window under 20 rows by 66 columns, get plain lines and no escape sequence at all (`look`). Colour and the UTF-8 look are separate from that (`NO_COLOR`; `utf8_ok`).
+  - Nothing is installed unchecked: the binary must match the release's `checksums.txt`, and it is tried as `/usr/local/bin/musdash.new`, not in `/tmp`, which may be `noexec`. When the binary and both units are what is there already, nothing is restarted.
+  - A release's copy has its tag in `RELEASE` (`make release`), so it installs that release; the copy here takes the latest. The README's command fetches the release's copy, never `main`'s.
 - `cmd/musdash` — subcommand dispatch with plain `flag` sets. `commonFlags` registers the shared flags; `openDB` creates the data directory tree and returns a migrated database.
 - `internal/config` — owns the data directory layout (every path under `DataDir` is a method here; add new paths here rather than joining strings elsewhere) and loads or creates the master key, refusing a key file readable by group or others.
 - `internal/auth` — password hashing and rules, the `Limiter` every attempt counter uses (bounded at 4096 keys), and TOTP (`totp.go`: RFC 6238, checked against the RFC's vectors). `TOTPCheck` takes the last accepted step and accepts only a later one; the caller stores the step with `db.UseTOTPStep`, which is one statement, so a code works once even for two requests at the same moment.
