@@ -156,6 +156,23 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 	if !strings.Contains(menu, `data-filter-clear="kinds" hidden`) || strings.Count(page, `data-filter-clear="kinds"`) != 2 {
 		t.Errorf("no way to clear the filters by the field and in the empty state")
 	}
+	// A person's own Compose file is under Apps, with what else is their
+	// own. Services are the ready-made ones, and their heading says how
+	// many: the one count on the page.
+	apps := between(t, "the page", page, `aria-label="Kinds of app"`, `aria-label="Database engines"`)
+	services := between(t, "the page", page, `aria-label="Kinds of service"`, `data-filter-empty="kinds"`)
+	for _, own := range []string{db.TemplateCustom, db.TemplateGit} {
+		if link := `/service/new?template=` + own + `"`; !strings.Contains(apps, link) || strings.Contains(services, link) {
+			t.Errorf("a person's own Compose file (%s) is not under Apps, or is under Services too", own)
+		}
+	}
+	heading := between(t, "the page", page, `<h2 class="section-title">Services`, `</h2>`)
+	if want := `(<span data-filter-count>` + strconv.Itoa(len(catalog.Services())) + `</span>)`; !strings.Contains(heading, want) || strings.Count(page, "data-filter-count") != 1 {
+		t.Errorf("the Services heading does not say how many there are, or another heading counts too: %s", heading)
+	}
+	if n := strings.Count(services, `class="tile offer"`); n != len(catalog.Services()) {
+		t.Errorf("%d cards under Services for %d templates", n, len(catalog.Services()))
+	}
 	for _, tpl := range catalog.Services() {
 		at := strings.Index(page, `/service/new?template=`+tpl.Key+`"`)
 		start := strings.LastIndex(page[:at], "<li")

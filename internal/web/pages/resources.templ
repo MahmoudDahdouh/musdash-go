@@ -215,14 +215,18 @@ func (v NewResource) categoryOptions() []ui.MultiOption {
 	return options
 }
 
-func servicesAbout(n int) string {
-	return "One or more containers described by a Docker Compose file: your own, or one of " + strconv.Itoa(n) + " ready-made ones. A ready-made one is its makers' Compose file, held to the same rules as your own."
-}
-
-templ kindGroup(title, about string) {
+// kindGroup is one kind of thing the page lists, under its heading. A count
+// is said after the title; static/app.js keeps it at what a filter has left
+// of the group (data-filter-count). 0 says none.
+templ kindGroup(title string, count int, about string) {
 	<section class="grid gap-3" data-filter-group>
 		<div>
-			<h2 class="section-title">{ title }</h2>
+			<h2 class="section-title">
+				{ title }
+				if count > 0 {
+					<span class="font-normal text-ink-mute">(<span data-filter-count>{ strconv.Itoa(count) }</span>)</span>
+				}
+			</h2>
 			<p class="muted text-sm">{ about }</p>
 		</div>
 		{ children... }
@@ -246,26 +250,26 @@ templ ResourceNew(s ui.Shell, v NewResource) {
 				}
 			</div>
 			<div class="grid gap-8" id="kinds">
-				@kindGroup("Apps", "Your own code or image. musdash builds it, runs it and gives it a domain.") {
+				@kindGroup("Apps", 0, "Your own code, image or Compose file. musdash builds it, runs it and gives it a domain.") {
 					@ui.Offers("Kinds of app") {
 						@ui.Offer(ui.OfferProps{Href: v.Path() + "/app/new?source=git", Logo: "git", Icon: "git-branch", Title: "Public repository", Text: "Build from a public Git repository on any host.", Search: "public repository git github gitlab bitbucket gitea dockerfile nixpacks railpack static", Shared: true})
 						@ui.Offer(ui.OfferProps{Href: v.privateRepo("app", v.HasApp), Logo: "github", Icon: "github", Title: "Private repository, with a GitHub App", Text: gitHubAppText(v.HasApp), Action: setUp(v.HasApp, "Connect"), Search: "private repository github app git", Shared: true})
 						@ui.Offer(ui.OfferProps{Href: v.privateRepo("gitlab", v.HasGitLab), Logo: "gitlab", Icon: "gitlab", Title: "Private repository, with GitLab", Text: gitLabText(v.HasGitLab), Action: setUp(v.HasGitLab, "Connect"), Search: "private repository gitlab token git", Shared: true})
 						@ui.Offer(ui.OfferProps{Href: v.privateRepo("key", v.HasKey), Icon: "key", Title: "Private repository, with a deploy key", Text: deployKeyText(v.HasKey), Action: setUp(v.HasKey, "Add key"), Search: "private repository deploy key ssh git gitlab bitbucket gitea", Shared: true})
 						@ui.Offer(ui.OfferProps{Href: v.Path() + "/app/new", Logo: "docker", Icon: "box", Title: "Docker image", Text: "Run an image from a registry, such as nginx:alpine or ghcr.io/you/app:1.4.", Search: "docker image registry container", Shared: true})
+						@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + db.TemplateCustom, Logo: "docker", Icon: "code", Title: "Your own Compose file", Text: "Paste a docker-compose.yml. Templates written for Coolify work as they are.", Search: "service compose docker-compose yaml custom own coolify", Shared: true})
+						@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + db.TemplateGit, Logo: "git", Icon: "git-branch", Title: "Compose file in a Git repository", Text: "Read from the repository at every deployment. It may build the repository's own Dockerfiles.", Search: "service compose git repository", Shared: true})
 					}
 				}
-				@kindGroup("Databases", "One container with a volume, a user and a generated password. Backups can be scheduled.") {
+				@kindGroup("Databases", 0, "One container with a volume, a user and a generated password. Backups can be scheduled.") {
 					@ui.Offers("Database engines") {
 						for _, t := range v.Engines {
 							@ui.Offer(ui.OfferProps{Href: v.Path() + "/database/new?engine=" + t.Engine, Logo: t.Engine, Icon: KindIcon(db.KindDatabase), Title: t.Label, Text: t.About, Docs: t.Docs, Website: t.Website, Search: "database " + t.Engine, Tags: []string{engineCategory}, Shared: true})
 						}
 					}
 				}
-				@kindGroup("Services", servicesAbout(len(v.Templates))) {
+				@kindGroup("Services", len(v.Templates), "One or more containers described by a Docker Compose file, ready to deploy. Each is its makers' Compose file, held to the same rules as your own.") {
 					@ui.Offers("Kinds of service") {
-						@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + db.TemplateCustom, Logo: "docker", Icon: "code", Title: "Your own Compose file", Text: "Paste a docker-compose.yml. Templates written for Coolify work as they are.", Search: "service compose docker-compose yaml custom own coolify", Shared: true})
-						@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + db.TemplateGit, Logo: "git", Icon: "git-branch", Title: "Compose file in a Git repository", Text: "Read from the repository at every deployment. It may build the repository's own Dockerfiles.", Search: "service compose git repository", Shared: true})
 						for _, t := range v.Templates {
 							@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + t.Key, Logo: t.Key, Icon: KindIcon(db.KindService), Title: t.Name, Text: t.About, Docs: t.Docs, Website: t.Website, Search: "service " + t.Key, Tags: t.Categories, TagLabels: categoryLabels(t.Categories), Shared: true})
 						}

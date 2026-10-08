@@ -164,3 +164,18 @@ Approved with the one fix.
   redesign nobody asked for. Reported with a picture.
 - `TestOffer` now also holds a category to no class of its own, and a card
   with no categories to no empty row.
+
+### Step 3
+
+- Apps ends with "Your own Compose file" and "Compose file in a Git
+  repository"; their addresses and forms are the service's, unchanged, and
+  the "Nothing matches" link still leads to the first.
+- "Services (623)" with everything shown, "(41)" under CMS, "(79)" under
+  CMS and Analytics together, and 623 again after Clear filters. Under
+  Services there is one card a template and no other, which the test now
+  counts.
+- The test first read "Services" to the end of the page and found the
+  empty state's link to a person's own file there: the section is read up
+  to the empty state.
+- At 375px the field is the page's width with Category under it, nothing
+  scrolls sideways, and a card is a screen high: one at a time.
