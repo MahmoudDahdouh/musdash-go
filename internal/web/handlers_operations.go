@@ -89,7 +89,7 @@ func (s *Server) databaseBackupList(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.BackupList(sessionFrom(r).CSRFToken, v, b))
+	s.renderPolled(w, r, pages.BackupList(sessionFrom(r).CSRFToken, v, b))
 }
 
 func (s *Server) databaseBackupSchedule(w http.ResponseWriter, r *http.Request) {
@@ -396,7 +396,9 @@ func (s *Server) appTaskRuns(w http.ResponseWriter, r *http.Request) {
 	if !busy {
 		w.Header().Set("HX-Refresh", "true")
 	}
-	s.render(w, r, http.StatusOK, pages.TaskRuns(v, t, runs, ""))
+	// What the request names is only compared with the ids of this task's
+	// own runs.
+	s.renderPolled(w, r, pages.TaskRuns(v, t, runs, r.URL.Query().Get("shown")))
 }
 
 func (s *Server) appTaskSave(w http.ResponseWriter, r *http.Request) {

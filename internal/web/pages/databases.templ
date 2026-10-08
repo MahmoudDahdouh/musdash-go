@@ -63,43 +63,46 @@ templ DatabaseHeader(csrf, base string, m db.Database) {
 	<header
 		id="database-header"
 		class="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3"
-		hx-get={ base + "/status?was=" + m.Status }
-		hx-trigger={ databasePoll(m) }
-		hx-swap="outerHTML"
+		{ ui.Poll(ctx, base+"/status?was="+m.Status, databasePoll(m), databaseHeaderBody(csrf, base, m))... }
 	>
-		<div class="min-w-0">
-			<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-				<h1 class="text-xl font-semibold tracking-tight">{ m.Name }</h1>
-				@ui.StatusPill(databaseState(m))
-			</div>
-			<p class="mt-0.5 truncate text-ink-mute">{ engineLabel(m.Engine) } <span class="fact">{ m.Image }</span></p>
-		</div>
-		if m.Status != db.AppDeploying {
-			<div class="flex flex-wrap items-center gap-2">
-				if m.Container != "" {
-					<form method="post" action={ templ.SafeURL(base + "/stop") }>
-						@ui.CSRF(csrf)
-						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+m.Name+"?", "Apps that use the database get errors until it is started again. Its data is kept.", "Stop database", false)}) {
-							Stop
-						}
-					</form>
-					<form method="post" action={ templ.SafeURL(base + "/start") }>
-						@ui.CSRF(csrf)
-						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh", Attrs: ui.Ask("Restart "+m.Name+"?", "The database does not answer for a few seconds. Apps that use it may see errors meanwhile.", "Restart database", false)}) {
-							Restart
-						}
-					</form>
-				} else {
-					<form method="post" action={ templ.SafeURL(base + "/start") }>
-						@ui.CSRF(csrf)
-						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "play"}) {
-							Start
-						}
-					</form>
-				}
-			</div>
-		}
+		@databaseHeaderBody(csrf, base, m)
 	</header>
+}
+
+// databaseHeaderBody is what the header shows, and so what its poll compares.
+templ databaseHeaderBody(csrf, base string, m db.Database) {
+	<div class="min-w-0">
+		<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+			<h1 class="text-xl font-semibold tracking-tight">{ m.Name }</h1>
+			@ui.StatusPill(databaseState(m))
+		</div>
+		<p class="mt-0.5 truncate text-ink-mute">{ engineLabel(m.Engine) } <span class="fact">{ m.Image }</span></p>
+	</div>
+	if m.Status != db.AppDeploying {
+		<div class="flex flex-wrap items-center gap-2">
+			if m.Container != "" {
+				<form method="post" action={ templ.SafeURL(base + "/stop") }>
+					@ui.CSRF(csrf)
+					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+m.Name+"?", "Apps that use the database get errors until it is started again. Its data is kept.", "Stop database", false)}) {
+						Stop
+					}
+				</form>
+				<form method="post" action={ templ.SafeURL(base + "/start") }>
+					@ui.CSRF(csrf)
+					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh", Attrs: ui.Ask("Restart "+m.Name+"?", "The database does not answer for a few seconds. Apps that use it may see errors meanwhile.", "Restart database", false)}) {
+						Restart
+					}
+				</form>
+			} else {
+				<form method="post" action={ templ.SafeURL(base + "/start") }>
+					@ui.CSRF(csrf)
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "play"}) {
+						Start
+					}
+				</form>
+			}
+		</div>
+	}
 }
 
 templ databaseFrame(s ui.Shell, v DatabaseView, tab string) {

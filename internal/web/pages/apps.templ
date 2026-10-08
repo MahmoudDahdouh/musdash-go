@@ -99,38 +99,41 @@ templ AppHeader(csrf, base string, app db.App) {
 	<header
 		id="app-header"
 		class="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3"
-		hx-get={ base + "/status" }
-		hx-trigger={ headerPoll(app) }
-		hx-swap="outerHTML"
+		{ ui.Poll(ctx, base+"/status", headerPoll(app), appHeaderBody(csrf, base, app))... }
 	>
-		<div class="min-w-0">
-			<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-				<h1 class="text-xl font-semibold tracking-tight">{ app.Name }</h1>
-				@ui.StatusPill(app.Status)
-			</div>
-			<p class="fact mt-0.5 truncate text-ink-mute">{ appSourceLine(app) }</p>
+		@appHeaderBody(csrf, base, app)
+	</header>
+}
+
+// appHeaderBody is what the header shows, and so what its poll compares.
+templ appHeaderBody(csrf, base string, app db.App) {
+	<div class="min-w-0">
+		<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+			<h1 class="text-xl font-semibold tracking-tight">{ app.Name }</h1>
+			@ui.StatusPill(app.Status)
 		</div>
-		<div class="flex flex-wrap items-center gap-2">
-			if app.Container != "" {
-				<form method="post" action={ templ.SafeURL(base + "/stop") }>
-					@ui.CSRF(csrf)
-					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+app.Name+"?", "The app stops answering until it is deployed again. Its settings, variables and storage are kept.", "Stop app", false)}) {
-						Stop
-					}
-				</form>
-			}
-			<form method="post" action={ templ.SafeURL(base + "/deploy") }>
+		<p class="fact mt-0.5 truncate text-ink-mute">{ appSourceLine(app) }</p>
+	</div>
+	<div class="flex flex-wrap items-center gap-2">
+		if app.Container != "" {
+			<form method="post" action={ templ.SafeURL(base + "/stop") }>
 				@ui.CSRF(csrf)
-				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy"}) {
-					if app.Container != "" {
-						Redeploy
-					} else {
-						Deploy
-					}
+				@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+app.Name+"?", "The app stops answering until it is deployed again. Its settings, variables and storage are kept.", "Stop app", false)}) {
+					Stop
 				}
 			</form>
-		</div>
-	</header>
+		}
+		<form method="post" action={ templ.SafeURL(base + "/deploy") }>
+			@ui.CSRF(csrf)
+			@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy"}) {
+				if app.Container != "" {
+					Redeploy
+				} else {
+					Deploy
+				}
+			}
+		</form>
+	</div>
 }
 
 // appFrame is the header and tabs shared by every app page.
@@ -573,18 +576,34 @@ func (v AppView) canRollBack(d db.Deployment) bool {
 	return d.Status == db.DeploySuccess && d.KeptImage != "" && !v.serving(d) && v.App.DeployedImage != d.KeptImage
 }
 
-// DeploymentStatus is the status line above a deployment's log. While the
-// deployment runs it refreshes itself; once finished it stops.
+// deploymentPoll is how often a deployment's status asks for itself: only
+// until the deployment has finished.
+func deploymentPoll(d db.Deployment) string {
+	if deploymentDone(d) {
+		return ""
+	}
+	return "every 2s"
+}
+
+// DeploymentStatus is the status line above a deployment's log, and what
+// went wrong under it. While the deployment runs it asks for itself; once
+// finished it stops. The error is part of it because it is stored with the
+// end of the deployment: a page that was open while a deployment failed
+// says why without being loaded again.
 templ DeploymentStatus(base string, d db.Deployment) {
 	<div
 		id="deployment-status"
-		class="flex flex-wrap items-center gap-x-3 gap-y-1"
-		if !deploymentDone(d) {
-			hx-get={ base + "/deployments/" + d.ID + "/status" }
-			hx-trigger="every 2s"
-			hx-swap="outerHTML"
-		}
+		class="grid gap-4"
+		{ ui.Poll(ctx, base+"/deployments/"+d.ID+"/status", deploymentPoll(d), deploymentStatusBody(d))... }
 	>
+		@deploymentStatusBody(d)
+	</div>
+}
+
+// deploymentStatusBody is what the status shows, and so what its poll
+// compares.
+templ deploymentStatusBody(d db.Deployment) {
+	<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
 		@ui.JobPill(d.Status)
 		<span class="fact">{ orDefault(d.Image, "building from "+ui.StateLabel(d.Trigger)) }</span>
 		<span class="muted text-sm">{ ui.Ago(d.CreatedAt) }</span>
@@ -592,17 +611,17 @@ templ DeploymentStatus(base string, d db.Deployment) {
 			<span class="muted text-sm">took { took }</span>
 		}
 	</div>
+	if d.Error != "" {
+		@ui.Notice(ui.ToneDanger) {
+			{ d.Error }
+		}
+	}
 }
 
 templ AppDeployment(s ui.Shell, v AppView, d db.Deployment) {
 	@appFrame(s, v, "deployments") {
 		<div class="grid gap-4">
 			@DeploymentStatus(v.Path(), d)
-			if d.Error != "" {
-				@ui.Notice(ui.ToneDanger) {
-					{ d.Error }
-				}
-			}
 			if d.RollbackOf != "" {
 				<p class="muted text-sm">
 					A rollback: it runs the image of

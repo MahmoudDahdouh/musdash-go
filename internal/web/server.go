@@ -3,6 +3,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"net/http"
@@ -387,6 +388,29 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, c te
 	if err := c.Render(r.Context(), w); err != nil {
 		s.Log.Error("render", "route", logRoute(r), "err", err)
 	}
+}
+
+// renderPolled answers the poll of an element that asks for itself again
+// (ui.Poll). The request says what the page holds; when a fresh rendering
+// is the same, the answer is 204 and htmx leaves the page as it is, so an
+// element is put into the page again only when it has something new.
+//
+// The fragment is rendered before anything is sent, since which answer it
+// is depends on it. It is a part of a page, a few kilobytes.
+func (s *Server) renderPolled(w http.ResponseWriter, r *http.Request, c templ.Component) {
+	ctx, mark := ui.WatchPoll(r.Context())
+	var page bytes.Buffer
+	if err := c.Render(ctx, &page); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	if seen := r.URL.Query().Get("seen"); seen != "" && seen == *mark {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(page.Bytes())
 }
 
 // shell builds the frame data for a signed-in page and consumes the flash.

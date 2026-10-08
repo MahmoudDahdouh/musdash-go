@@ -88,6 +88,15 @@ func backupBusy(list []db.Backup) bool {
 	return false
 }
 
+// backupPoll is how often the list asks for itself: only while a backup or
+// a restore is going.
+func backupPoll(list []db.Backup) string {
+	if backupBusy(list) {
+		return "every 2s"
+	}
+	return ""
+}
+
 func backupWhere(v BackupsView, b db.Backup) string {
 	if b.Status != db.RunSuccess {
 		return ""
@@ -179,102 +188,103 @@ templ BackupList(csrf string, v DatabaseView, b BackupsView) {
 	<section
 		class="card"
 		id="backup-list"
-		if backupBusy(b.List) {
-			hx-get={ v.Path() + "/backups/list" }
-			hx-trigger="every 2s"
-			hx-swap="outerHTML"
-		}
+		{ ui.Poll(ctx, v.Path()+"/backups/list", backupPoll(b.List), backupListBody(csrf, v, b))... }
 	>
-		<div class="card-head">
-			<h2 class="card-title">Backups</h2>
-		</div>
-		if len(b.List) == 0 {
-			@ui.EmptyState(ui.EmptyProps{Icon: "archive", Title: "No backup has been made yet", Text: "Backups are listed here as they are made.", Size: ui.EmptySmall})
-		} else {
-			@ui.Table("Made", "Status", "Size", "Kept on", "") {
-				for _, m := range b.List {
-					<tr>
-						<td class="whitespace-nowrap">
-							{ ui.Ago(m.StartedAt) }
-							<span class="muted">· { ui.StateLabel(m.Trigger) }</span>
-						</td>
-						<td>
-							@ui.JobPill(m.Status)
-							if m.Error != "" {
-								<p class="muted mt-1 max-w-md break-words text-sm">{ m.Error }</p>
-							}
-							if m.RestoreStatus == db.RunRunning {
-								<p class="mt-1 text-sm">Being restored…</p>
-							} else if m.RestoreStatus == db.RunSuccess {
-								<p class="muted mt-1 text-sm">Restored { ui.Ago(m.RestoredAt) }</p>
-							} else if m.RestoreStatus == db.RunFailed {
-								<p class="mt-1 max-w-md break-words text-sm text-danger">Restore failed: { m.RestoreError }</p>
-							}
-						</td>
-						<td class="fact whitespace-nowrap">
-							if m.Status == db.RunSuccess {
-								{ ops.HumanSize(m.Size) }
-							}
-						</td>
-						<td>{ backupWhere(b, m) }</td>
-						<td class="text-right">
-							if m.Status == db.RunSuccess && m.RestoreStatus != db.RunRunning {
-								<div class="flex justify-end gap-2">
-									@ui.LinkButton(v.Path()+"/backups/"+m.ID+"/download", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
-										Download
+		@backupListBody(csrf, v, b)
+	</section>
+}
+
+// backupListBody is what the list shows, and so what its poll compares.
+templ backupListBody(csrf string, v DatabaseView, b BackupsView) {
+	<div class="card-head">
+		<h2 class="card-title">Backups</h2>
+	</div>
+	if len(b.List) == 0 {
+		@ui.EmptyState(ui.EmptyProps{Icon: "archive", Title: "No backup has been made yet", Text: "Backups are listed here as they are made.", Size: ui.EmptySmall})
+	} else {
+		@ui.Table("Made", "Status", "Size", "Kept on", "") {
+			for _, m := range b.List {
+				<tr>
+					<td class="whitespace-nowrap">
+						{ ui.Ago(m.StartedAt) }
+						<span class="muted">· { ui.StateLabel(m.Trigger) }</span>
+					</td>
+					<td>
+						@ui.JobPill(m.Status)
+						if m.Error != "" {
+							<p class="muted mt-1 max-w-md break-words text-sm">{ m.Error }</p>
+						}
+						if m.RestoreStatus == db.RunRunning {
+							<p class="mt-1 text-sm">Being restored…</p>
+						} else if m.RestoreStatus == db.RunSuccess {
+							<p class="muted mt-1 text-sm">Restored { ui.Ago(m.RestoredAt) }</p>
+						} else if m.RestoreStatus == db.RunFailed {
+							<p class="mt-1 max-w-md break-words text-sm text-danger">Restore failed: { m.RestoreError }</p>
+						}
+					</td>
+					<td class="fact whitespace-nowrap">
+						if m.Status == db.RunSuccess {
+							{ ops.HumanSize(m.Size) }
+						}
+					</td>
+					<td>{ backupWhere(b, m) }</td>
+					<td class="text-right">
+						if m.Status == db.RunSuccess && m.RestoreStatus != db.RunRunning {
+							<div class="flex justify-end gap-2">
+								@ui.LinkButton(v.Path()+"/backups/"+m.ID+"/download", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+									Download
+								}
+								if v.Engine.RestoreCmd != "" {
+									@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Attrs: templ.Attributes{"data-open": "restore-" + m.ID}}) {
+										Restore
 									}
-									if v.Engine.RestoreCmd != "" {
-										@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Attrs: templ.Attributes{"data-open": "restore-" + m.ID}}) {
-											Restore
-										}
-									}
-									<form method="post" action={ templ.SafeURL(v.Path() + "/backups/" + m.ID + "/delete") }>
-										@ui.CSRF(csrf)
-										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Delete this backup?", "The backup made "+ui.Ago(m.StartedAt)+" is deleted from this server and from the bucket it was uploaded to. This cannot be undone.", "Delete backup", true)}) {
-											Delete
-										}
-									</form>
-								</div>
-							} else if m.Status == db.RunFailed {
+								}
 								<form method="post" action={ templ.SafeURL(v.Path() + "/backups/" + m.ID + "/delete") }>
 									@ui.CSRF(csrf)
-									@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Type: "submit"}) {
-										Dismiss
+									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Delete this backup?", "The backup made "+ui.Ago(m.StartedAt)+" is deleted from this server and from the bucket it was uploaded to. This cannot be undone.", "Delete backup", true)}) {
+										Delete
 									}
 								</form>
-							}
-						</td>
-					</tr>
-				}
-			}
-		}
-		for _, m := range b.List {
-			if m.Status == db.RunSuccess && v.Engine.RestoreCmd != "" {
-				@ui.Modal("restore-"+m.ID, "Restore this backup") {
-					<form method="post" action={ templ.SafeURL(v.Path() + "/backups/" + m.ID + "/restore") }>
-						@ui.CSRF(csrf)
-						<div class="card-body grid gap-4">
-							<div class="grid gap-3 text-ink-soft">
-								<p>The content of <strong>{ v.DB.Name }</strong> is replaced with what it held { ui.Ago(m.StartedAt) }. Everything written since then is lost.</p>
-								<p>The database keeps running. Apps that use it may see errors until the restore has finished.</p>
 							</div>
-							@ui.Field(ui.FieldProps{Label: "Type " + v.DB.Name + " to confirm", For: "restore-" + m.ID + "-confirm"}) {
-								@ui.Input(ui.InputProps{ID: "restore-" + m.ID + "-confirm", Name: "confirm", Mono: true, Autocomplete: "off", Required: true, Attrs: templ.Attributes{"data-match": v.DB.Name}})
-							}
-						</div>
-						<div class="card-foot">
-							@ui.Button(ui.ButtonProps{Attrs: templ.Attributes{"data-close": true}}) {
-								Cancel
-							}
-							@ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Disabled: true}) {
-								Restore backup
-							}
-						</div>
-					</form>
-				}
+						} else if m.Status == db.RunFailed {
+							<form method="post" action={ templ.SafeURL(v.Path() + "/backups/" + m.ID + "/delete") }>
+								@ui.CSRF(csrf)
+								@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Type: "submit"}) {
+									Dismiss
+								}
+							</form>
+						}
+					</td>
+				</tr>
 			}
 		}
-	</section>
+	}
+	for _, m := range b.List {
+		if m.Status == db.RunSuccess && v.Engine.RestoreCmd != "" {
+			@ui.Modal("restore-"+m.ID, "Restore this backup") {
+				<form method="post" action={ templ.SafeURL(v.Path() + "/backups/" + m.ID + "/restore") }>
+					@ui.CSRF(csrf)
+					<div class="card-body grid gap-4">
+						<div class="grid gap-3 text-ink-soft">
+							<p>The content of <strong>{ v.DB.Name }</strong> is replaced with what it held { ui.Ago(m.StartedAt) }. Everything written since then is lost.</p>
+							<p>The database keeps running. Apps that use it may see errors until the restore has finished.</p>
+						</div>
+						@ui.Field(ui.FieldProps{Label: "Type " + v.DB.Name + " to confirm", For: "restore-" + m.ID + "-confirm"}) {
+							@ui.Input(ui.InputProps{ID: "restore-" + m.ID + "-confirm", Name: "confirm", Mono: true, Autocomplete: "off", Required: true, Attrs: templ.Attributes{"data-match": v.DB.Name}})
+						}
+					</div>
+					<div class="card-foot">
+						@ui.Button(ui.ButtonProps{Attrs: templ.Attributes{"data-close": true}}) {
+							Cancel
+						}
+						@ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Disabled: true}) {
+							Restore backup
+						}
+					</div>
+				</form>
+			}
+		}
+	}
 }
 
 // TaskRow is a task with its latest run, for the list.
@@ -367,6 +377,15 @@ func runBusy(runs []db.TaskRun) bool {
 	return false
 }
 
+// runPoll is how often the history asks for itself: only while a run is
+// going.
+func runPoll(runs []db.TaskRun) string {
+	if runBusy(runs) {
+		return "every 2s"
+	}
+	return ""
+}
+
 func exitText(r db.TaskRun) string {
 	if r.Status == db.RunRunning {
 		return ""
@@ -444,46 +463,49 @@ templ AppTask(s ui.Shell, v AppView, t db.Task, runs []db.TaskRun, shown string,
 	}
 }
 
-// TaskRuns is a task's history. It refreshes itself while a run is going.
+// TaskRuns is a task's history. It refreshes itself while a run is going,
+// and says which run the page shows the output of when it asks: the answer
+// has to mark the same row, or it would never be what the page holds.
 templ TaskRuns(v AppView, t db.Task, runs []db.TaskRun, shown string) {
 	<div
 		id="task-runs"
-		if runBusy(runs) {
-			hx-get={ v.Path() + "/tasks/" + t.ID + "/runs" }
-			hx-trigger="every 2s"
-			hx-swap="outerHTML"
-		}
+		{ ui.Poll(ctx, v.Path()+"/tasks/"+t.ID+"/runs?shown="+shown, runPoll(runs), taskRunsBody(v, t, runs, shown))... }
 	>
-		if len(runs) == 0 {
-			@ui.EmptyState(ui.EmptyProps{Icon: "clock", Title: "This task has not run yet", Text: "Each run is listed here with its output.", Size: ui.EmptySmall})
-		} else {
-			@ui.Table("Started", "Trigger", "Status", "Exit status", "Took", "") {
-				for _, r := range runs {
-					<tr>
-						<td class="whitespace-nowrap">{ ui.Ago(r.StartedAt) }</td>
-						<td>{ ui.StateLabel(r.Trigger) }</td>
-						<td>
-							@ui.JobPill(r.Status)
-							if r.Error != "" {
-								<p class="muted mt-1 max-w-md break-words text-sm">{ r.Error }</p>
+		@taskRunsBody(v, t, runs, shown)
+	</div>
+}
+
+// taskRunsBody is what the history shows, and so what its poll compares.
+templ taskRunsBody(v AppView, t db.Task, runs []db.TaskRun, shown string) {
+	if len(runs) == 0 {
+		@ui.EmptyState(ui.EmptyProps{Icon: "clock", Title: "This task has not run yet", Text: "Each run is listed here with its output.", Size: ui.EmptySmall})
+	} else {
+		@ui.Table("Started", "Trigger", "Status", "Exit status", "Took", "") {
+			for _, r := range runs {
+				<tr>
+					<td class="whitespace-nowrap">{ ui.Ago(r.StartedAt) }</td>
+					<td>{ ui.StateLabel(r.Trigger) }</td>
+					<td>
+						@ui.JobPill(r.Status)
+						if r.Error != "" {
+							<p class="muted mt-1 max-w-md break-words text-sm">{ r.Error }</p>
+						}
+					</td>
+					<td class="fact">{ exitText(r) }</td>
+					<td class="fact">{ ui.Took(r.StartedAt, r.FinishedAt) }</td>
+					<td class="text-right">
+						if r.ID == shown {
+							<span class="muted text-sm">Shown below</span>
+						} else if r.Status != db.RunRunning {
+							@ui.LinkButton(v.Path()+"/tasks/"+t.ID+"?run="+r.ID, ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+								Output
 							}
-						</td>
-						<td class="fact">{ exitText(r) }</td>
-						<td class="fact">{ ui.Took(r.StartedAt, r.FinishedAt) }</td>
-						<td class="text-right">
-							if r.ID == shown {
-								<span class="muted text-sm">Shown below</span>
-							} else if r.Status != db.RunRunning {
-								@ui.LinkButton(v.Path()+"/tasks/"+t.ID+"?run="+r.ID, ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
-									Output
-								}
-							}
-						</td>
-					</tr>
-				}
+						}
+					</td>
+				</tr>
 			}
 		}
-	</div>
+	}
 }
 
 func settingsTabs() []ui.Tab {

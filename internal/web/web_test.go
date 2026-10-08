@@ -834,7 +834,7 @@ func TestResourceAddressSaysWhereItIs(t *testing.T) {
 	}
 	res, page := a.get(long)
 	wantStatus(t, res, http.StatusOK)
-	for _, want := range []string{`hx-get="` + long + `/status"`, `action="` + long + `/deploy"`, `href="` + long + `/settings"`} {
+	for _, want := range []string{`hx-get="` + long + `/status?seen=`, `action="` + long + `/deploy"`, `href="` + long + `/settings"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the app's page lacks %s", want)
 		}

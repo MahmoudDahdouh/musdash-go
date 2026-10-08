@@ -210,7 +210,7 @@ func (s *Server) databaseStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refreshWhenSettled(w, r, m.Status)
-	s.render(w, r, http.StatusOK, pages.DatabaseHeader(sessionFrom(r).CSRFToken, placeInPath(r, db.KindDatabase), m))
+	s.renderPolled(w, r, pages.DatabaseHeader(sessionFrom(r).CSRFToken, placeInPath(r, db.KindDatabase), m))
 }
 
 // databaseStart starts a stopped database, or restarts a running one.

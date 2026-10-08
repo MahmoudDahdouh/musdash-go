@@ -326,7 +326,7 @@ func (s *Server) serviceStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refreshWhenSettled(w, r, svc.Status)
-	s.render(w, r, http.StatusOK, pages.ServiceHeader(sessionFrom(r).CSRFToken, placeInPath(r, db.KindService), svc))
+	s.renderPolled(w, r, pages.ServiceHeader(sessionFrom(r).CSRFToken, placeInPath(r, db.KindService), svc))
 }
 
 func (s *Server) serviceDeploy(w http.ResponseWriter, r *http.Request) {

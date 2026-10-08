@@ -68,40 +68,43 @@ templ ServiceHeader(csrf, base string, s db.Service) {
 	<header
 		id="service-header"
 		class="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3"
-		hx-get={ base + "/status?was=" + s.Status }
-		hx-trigger={ servicePoll(s) }
-		hx-swap="outerHTML"
+		{ ui.Poll(ctx, base+"/status?was="+s.Status, servicePoll(s), serviceHeaderBody(csrf, base, s))... }
 	>
-		<div class="min-w-0">
-			<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-				<h1 class="text-xl font-semibold tracking-tight">{ s.Name }</h1>
-				@ui.StatusPill(serviceState(s))
-			</div>
-			<p class="mt-0.5 truncate text-ink-mute">{ templateName(s.Template) }</p>
+		@serviceHeaderBody(csrf, base, s)
+	</header>
+}
+
+// serviceHeaderBody is what the header shows, and so what its poll compares.
+templ serviceHeaderBody(csrf, base string, s db.Service) {
+	<div class="min-w-0">
+		<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+			<h1 class="text-xl font-semibold tracking-tight">{ s.Name }</h1>
+			@ui.StatusPill(serviceState(s))
 		</div>
-		if s.Status != db.AppDeploying {
-			<div class="flex flex-wrap items-center gap-2">
-				if serviceDeployed(s) {
-					<form method="post" action={ templ.SafeURL(base + "/stop") }>
-						@ui.CSRF(csrf)
-						@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+s.Name+"?", "Every container of the service is stopped and its endpoints stop answering. Its volumes and settings are kept.", "Stop service", false)}) {
-							Stop
-						}
-					</form>
-				}
-				<form method="post" action={ templ.SafeURL(base + "/deploy") }>
+		<p class="mt-0.5 truncate text-ink-mute">{ templateName(s.Template) }</p>
+	</div>
+	if s.Status != db.AppDeploying {
+		<div class="flex flex-wrap items-center gap-2">
+			if serviceDeployed(s) {
+				<form method="post" action={ templ.SafeURL(base + "/stop") }>
 					@ui.CSRF(csrf)
-					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy"}) {
-						if serviceDeployed(s) {
-							Redeploy
-						} else {
-							Deploy
-						}
+					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+s.Name+"?", "Every container of the service is stopped and its endpoints stop answering. Its volumes and settings are kept.", "Stop service", false)}) {
+						Stop
 					}
 				</form>
-			</div>
-		}
-	</header>
+			}
+			<form method="post" action={ templ.SafeURL(base + "/deploy") }>
+				@ui.CSRF(csrf)
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Icon: "deploy"}) {
+					if serviceDeployed(s) {
+						Redeploy
+					} else {
+						Deploy
+					}
+				}
+			</form>
+		</div>
+	}
 }
 
 templ serviceFrame(s ui.Shell, v ServiceView, tab string) {

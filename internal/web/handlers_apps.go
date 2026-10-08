@@ -415,7 +415,7 @@ func (s *Server) appStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.AppHeader(sessionFrom(r).CSRFToken, placeInPath(r, db.KindApp), app))
+	s.renderPolled(w, r, pages.AppHeader(sessionFrom(r).CSRFToken, placeInPath(r, db.KindApp), app))
 }
 
 func (s *Server) appDeploy(w http.ResponseWriter, r *http.Request) {
@@ -513,7 +513,7 @@ func (s *Server) appDeploymentStatus(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.DeploymentStatus(v.Path(), dep))
+	s.renderPolled(w, r, pages.DeploymentStatus(v.Path(), dep))
 }
 
 // streamContext is the context of a live stream: it ends when the browser
