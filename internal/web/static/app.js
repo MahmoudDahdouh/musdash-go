@@ -162,16 +162,6 @@
     }, 1500);
   });
 
-  // data-fill="<input id>" with data-value puts the value into that input,
-  // for pick lists such as the repository browser.
-  on("click", "[data-fill]", (el) => {
-    const input = document.getElementById(el.dataset.fill);
-    if (!input) return;
-    input.value = el.dataset.value;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.focus();
-  });
-
   // Select, Combobox, Picker and the trail's switchers (ui): a button and a
   // popover listing the options, with a hidden input for the value, a field
   // to fill or, in a switcher, options that are links. The
@@ -196,15 +186,43 @@
   };
   const shut = (list) => list?.isConnected && list.matches(":popover-open") && list.hidePopover();
   const optionsOf = (list) => [...list.querySelectorAll("[role=option]")];
+  // hold makes a Select or a Picker have a value and say it on its button.
+  // A Picker's button (data-select-fact) says a machine's word once it has
+  // one, where its placeholder was a person's.
+  const hold = (box, value, label) => {
+    box.querySelector(":scope > input[type=hidden]").value = value;
+    const said = box.querySelector("[data-select-label]");
+    said.textContent = label;
+    if (said.dataset.selectFact !== undefined) said.classList.add("fact");
+  };
   // choose makes an option the chosen one of its Select: the hidden input
   // has its value and the button its label.
   const choose = (box, option) => {
     const input = box.querySelector(":scope > input[type=hidden]");
     if (!input) return;
     optionsOf(box.querySelector("[popover]")).forEach((o) => o.setAttribute("aria-selected", String(o === option)));
-    box.querySelector("[data-select-label]").textContent = option.textContent.trim();
-    if (input.value === option.dataset.value) return;
-    input.value = option.dataset.value;
+    const changed = input.value !== option.dataset.value;
+    // A Picker's option says what the button shows (data-label): the option
+    // itself holds more than its name.
+    hold(box, option.dataset.value, option.dataset.label ?? option.textContent.trim());
+    if (!changed) return;
+    // data-sets="<button id>" on an option: another Picker's list was about
+    // what was chosen here before, so it is forgotten and asked for again
+    // when that Picker is next opened; with data-sets-value that Picker also
+    // takes the value, as a repository's own branch.
+    const other = option.dataset.sets && document.getElementById(option.dataset.sets)?.closest("[data-select]");
+    if (other) {
+      if (option.dataset.setsValue !== undefined) hold(other, option.dataset.setsValue, option.dataset.setsValue);
+      const note = document.createElement("p");
+      note.className = "menu-note";
+      note.textContent = "Loading…";
+      other.querySelector("[role=listbox]").replaceChildren(note);
+    }
+    // data-suggest on an option is a name for what is being made. The field
+    // marked data-suggest-here takes it while it is empty or still holds the
+    // suggestion before: what a person typed is theirs.
+    const named = option.dataset.suggest && box.closest("form")?.querySelector("[data-suggest-here]");
+    if (named && (!named.value || named.value === named.dataset.suggested)) named.value = named.dataset.suggested = option.dataset.suggest;
     input.dispatchEvent(new Event("change", { bubbles: true }));
   };
   const place = (list, button) => {
@@ -250,6 +268,21 @@
     // else the menu offers; it stays whatever is typed.
     const keep = (o) => o.dataset.keep !== undefined;
     all.forEach((o) => (o.hidden = !keep(o) && !(o.dataset.search ?? o.textContent).toLowerCase().includes(text)));
+    // The option marked data-typed stands for what the list does not have:
+    // the text itself, after the option's data-prefix. It is offered unless
+    // an option is exactly that, and with data-needs only once the text
+    // holds that.
+    const typed = all.find((o) => o.dataset.typed !== undefined);
+    if (typed) {
+      const prefix = typed.dataset.prefix ?? "";
+      let raw = list.querySelector("[data-select-filter]").value.trim();
+      // Pasted with the prefix, it is not put in front again.
+      if (prefix && raw.startsWith(prefix)) raw = raw.slice(prefix.length);
+      typed.hidden = !raw || !raw.includes(typed.dataset.needs ?? "") || all.some((o) => o !== typed && o.dataset.label?.toLowerCase() === raw.toLowerCase());
+      typed.dataset.value = prefix + raw;
+      typed.dataset.label = raw;
+      typed.querySelector("[data-typed-text]").textContent = raw;
+    }
     const shown = all.filter((o) => !o.hidden);
     const none = list.querySelector("[data-select-empty]");
     if (none) none.hidden = shown.some((o) => !keep(o)) || all.length === 0;
@@ -273,7 +306,9 @@
       }
       openList = list;
       // A Picker asks the server for its options (hx-trigger) until it has some.
-      if (!list.querySelector("[role=option]")) list.dispatchEvent(new Event("select-load"));
+      // The typed option is not one of them: a list that could not be had
+      // ends with it too, and is asked for again.
+      if (!list.querySelector("[role=option]:not([data-typed])")) list.dispatchEvent(new Event("select-load"));
       const filter = list.querySelector("[data-select-filter]");
       if (filter) {
         filter.value = "";
@@ -291,6 +326,9 @@
   // meanwhile, and place the list again now that it has its real height.
   document.addEventListener("htmx:afterSettle", (e) => {
     const list = e.target.closest?.("[data-select] [popover]");
+    // What a Picker holds is marked in the list it has just been given.
+    const held = list?.closest("[data-select]").querySelector(":scope > input[type=hidden]")?.value;
+    if (held) optionsOf(list).forEach((o) => o.dataset.typed === undefined && o.setAttribute("aria-selected", String(o.dataset.value === held)));
     if (!list || list !== openList) return;
     // Without a filter field nothing had the focus yet: there were no options.
     if (list.querySelector("[data-select-filter]")) narrow(list);
@@ -352,6 +390,36 @@
   document.addEventListener("mousedown", spend, true);
   document.addEventListener("click", spend, true);
   on("input", "[data-select-filter]", (el) => narrow(el.closest("[popover]")));
+  // What is typed into a menu's filter is no change to the form around it:
+  // the field has no name. Its change event is kept from whatever listens
+  // for the form's.
+  document.addEventListener("change", (e) => e.target.matches?.("[data-select-filter]") && e.stopPropagation(), true);
+  // data-pick="<button id>" with data-value, on something htmx has put on
+  // the page: the Select with that button takes the value, as if it had
+  // been chosen there. It is how an answer from the server sets a menu.
+  document.addEventListener("htmx:afterSettle", (e) => {
+    e.target.querySelectorAll?.("[data-pick]").forEach((el) => {
+      const box = document.getElementById(el.dataset.pick)?.closest("[data-select]");
+      const option = box && optionsOf(box).find((o) => o.dataset.value === el.dataset.value);
+      if (option) choose(box, option);
+    });
+  });
+  // data-when="<field name>" with data-is="<values>": shown only while that
+  // field of the form it is in has one of the values, which are separated
+  // by spaces. A fieldset is disabled as well, so what is in it is not sent:
+  // a form can hold the same fields once for each way of filling them in.
+  const when = (el) => {
+    // By its name alone: a Select's button has the field's name as its id.
+    const field = el.closest("form")?.querySelector(`[name="${CSS.escape(el.dataset.when)}"]`);
+    const show = !!field && el.dataset.is.split(" ").includes(field.value);
+    el.hidden = !show;
+    if (el instanceof HTMLFieldSetElement) el.disabled = !show;
+  };
+  document.addEventListener("change", (e) => {
+    if (!e.target.name) return;
+    e.target.form?.querySelectorAll("[data-when]").forEach((el) => el.dataset.when === e.target.name && when(el));
+  });
+  document.querySelectorAll("[data-when]").forEach(when);
   on("mouseover", "[data-select] [role=option]", (el) => {
     const list = el.closest("[popover]");
     if (list.querySelector("[data-select-filter]")) setActive(list, el, false);
@@ -392,10 +460,9 @@
     }
     shut(list);
     box.querySelector("[popovertarget]").focus();
-    // A Picker's option has filled its field already (data-fill), a
-    // switcher's is a link the browser now follows: no value here to keep.
-    // Only the box's own input says so: a form inside a menu has hidden
-    // fields too.
+    // A switcher's option is a link the browser now follows: no value here
+    // to keep. Only the box's own input says so: a form inside a menu has
+    // hidden fields too.
     choose(box, el);
   });
   // data-generate="<input id>" on a button puts a made-up name in front of

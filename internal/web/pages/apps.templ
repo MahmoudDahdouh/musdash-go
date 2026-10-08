@@ -6,6 +6,7 @@ import (
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
+	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
 
@@ -175,42 +176,168 @@ var buildPackOptions = []ui.Option{
 	{Value: "railpack", Label: "Railpack (no Dockerfile needed)"},
 }
 
-// gitSourceFields are the fields describing a repository and how to build
-// it. The New app form and the app's Source settings share them.
-templ gitSourceFields(f ui.Form, c GitChoices, app db.App) {
-	@gitRepoFields(f, c, app)
-	@ui.Field(ui.FieldProps{Label: "Build with", For: "build_pack", Hint: "Dockerfile builds the repository's own Dockerfile. Static site serves a folder of ready-made files. Nixpacks and Railpack work out how to build the code themselves; the app must listen on the port given below, which it is told as PORT.", Error: f.E("build_pack")}) {
-		@ui.Select("build_pack", buildPackOptions, orDefault(f.V("build_pack"), orDefault(app.BuildPack, "dockerfile")), templ.Attributes{"aria-describedby": "build_pack-hint"})
+// currentAccess is the way into the repository a Git form shows as chosen:
+// what was sent, else what is stored, else the first there is.
+func currentAccess(f ui.Form, c GitChoices, app db.App) string {
+	want := orDefault(f.V("access"), appAccess(app))
+	for _, a := range c.Access {
+		if a.Value == want {
+			return want
+		}
 	}
+	if len(c.Access) > 0 {
+		return c.Access[0].Value
+	}
+	return want
+}
+
+// typedAccess lists the ways in that have no list to choose from, so the
+// repository and the branch are typed: a public repository, a deploy key.
+func typedAccess(c GitChoices) string {
+	var typed []string
+	for _, a := range c.Access {
+		if !strings.HasPrefix(a.Value, "source:") {
+			typed = append(typed, a.Value)
+		}
+	}
+	return strings.Join(typed, " ")
+}
+
+// repoShown is what a repository picker's button says of an address: the
+// repository's name under its owner.
+func repoShown(address string) string {
+	repo, err := source.ParseRepo(address)
+	if err != nil {
+		return address
+	}
+	return repo.FullName()
+}
+
+func repoHint(g db.GitSource) string {
+	if g.Kind == db.GitSourceGitLab {
+		return "The projects the token is a member of. Another one it can read is named by typing its path, such as group/shop."
+	}
+	return "The repositories the App is installed on. For one that is missing, use Choose repositories on the Sources page."
+}
+
+// buildPack is the build a Git form shows as chosen.
+func buildPack(f ui.Form, app db.App) string {
+	return orDefault(f.V("build_pack"), orDefault(app.BuildPack, "dockerfile"))
+}
+
+// gitSourceFields are the fields describing a repository and how to build
+// it, as the app's Source settings have them.
+templ gitSourceFields(f ui.Form, c GitChoices, app db.App) {
+	@gitWhereFields(f, c, app)
 	@gitBuildFields(f, c, app)
+}
+
+// gitWhereFields say where the code is: the repository, the branch and the
+// folder. When one of them changes, the folder is looked at and the line
+// under Build with says what was found (BuildDetected). The request waits a
+// moment after the change: the fields of the way in that was just chosen
+// are enabled by then, and the others, which are not sent, disabled. The
+// pickers inside ask their own questions and inherit nothing of this one.
+templ gitWhereFields(f ui.Form, c GitChoices, app db.App) {
+	<div
+		id="git-where"
+		class="grid gap-4"
+		hx-get="/sources/detect"
+		hx-trigger="change delay:150ms"
+		hx-include="#git-where"
+		hx-target="#build-detected"
+		hx-swap="innerHTML"
+		hx-sync="this:replace"
+		hx-indicator="#build-found"
+		hx-disinherit="*"
+	>
+		@gitRepoFields(f, c, app)
+		@ui.TextField(f, "Base directory", "The folder inside the repository to build from. Empty for the repository root.", ui.InputProps{ID: "base_dir", Mono: true, Value: app.BaseDir, Placeholder: "apps/web"})
+	</div>
 }
 
 // gitRepoFields say which repository and branch to read, and how. Apps
 // and services deployed from Git share them; app carries the stored values.
+//
+// Each way in has the two fields in a fieldset of its own: a source's are
+// pickers, since the source can be asked what there is, and the rest type
+// them. Only the fieldset of the way in that is chosen is shown and enabled
+// (data-when), so one repository and one branch are sent.
 templ gitRepoFields(f ui.Form, c GitChoices, app db.App) {
 	@ui.Field(ui.FieldProps{Label: "Read the repository through", For: "access", Hint: "Private repositories need a GitHub App, a GitLab token or, on any host (Bitbucket, Gitea), a deploy key. GitHub and GitLab are connected under Sources, a key is added under Keys & tokens.", Error: f.E("access")}) {
-		@ui.Select("access", accessOptions(c), orDefault(f.V("access"), appAccess(app)), templ.Attributes{"aria-describedby": "access-hint"})
+		@ui.Select("access", accessOptions(c), currentAccess(f, c, app), templ.Attributes{"aria-describedby": "access-hint"})
 	}
-	@ui.TextField(f, "Repository", "For example https://github.com/acme/shop or https://gitlab.com/group/shop, or with a deploy key git@github.com:acme/shop.git.", ui.InputProps{ID: "repo", Mono: true, Required: true, Value: app.RepoURL, Placeholder: "https://github.com/acme/shop"})
-	if len(c.Sources) > 0 {
-		<div class="flex flex-wrap gap-2">
-			for _, g := range c.Sources {
-				@ui.Picker(ui.PickerProps{ID: "repos-" + g.ID, Label: "Choose from " + g.Name, Icon: "git-branch", Filter: "Find a repository", Src: reposPath(g)})
-			}
-		</div>
+	for _, g := range c.Sources {
+		@sourceRepoFields(f, g, app, currentAccess(f, c, app) == "source:"+g.ID)
 	}
-	@ui.TextField(f, "Branch", "", ui.InputProps{ID: "branch", Mono: true, Required: true, Value: orDefault(app.Branch, "main")})
+	<fieldset class="grid min-w-0 gap-4" data-when="access" data-is={ typedAccess(c) } hidden?={ strings.HasPrefix(currentAccess(f, c, app), "source:") } disabled?={ strings.HasPrefix(currentAccess(f, c, app), "source:") }>
+		@ui.TextField(f, "Repository", "For example https://github.com/acme/shop or https://gitlab.com/group/shop, or with a deploy key git@github.com:acme/shop.git.", ui.InputProps{ID: "repo", Mono: true, Required: true, Value: app.RepoURL, Placeholder: "https://github.com/acme/shop"})
+		@ui.TextField(f, "Branch", "", ui.InputProps{ID: "branch", Mono: true, Required: true, Value: orDefault(app.Branch, defaultBranch)})
+	</fieldset>
 }
 
-templ gitBuildFields(f ui.Form, c GitChoices, app db.App) {
-	@ui.TextField(f, "Base directory", "The folder inside the repository to build from. Empty for the repository root.", ui.InputProps{ID: "base_dir", Mono: true, Value: app.BaseDir, Placeholder: "apps/web"})
-	<div class="grid items-start gap-4 sm:grid-cols-2">
-		@ui.TextField(f, "Dockerfile", "For the Dockerfile build. Relative to the base directory.", ui.InputProps{ID: "dockerfile_path", Mono: true, Value: app.DockerfilePath, Placeholder: "Dockerfile"})
-		@ui.TextField(f, "Folder to serve", "For a static site. Relative to the base directory.", ui.InputProps{ID: "publish_dir", Mono: true, Value: app.PublishDir, Placeholder: "dist"})
-	</div>
-	@ui.Checkbox("spa_fallback", checked(f, "spa_fallback", app.SPAFallback), nil) {
-		Static site: answer unknown paths with index.html (for single-page apps)
+// sourceRepoFields are the repository and the branch of one source, each a
+// picker. chosen says whether this is the way in the form shows: only then
+// does it hold what was sent or is stored, and the form's errors.
+templ sourceRepoFields(f ui.Form, g db.GitSource, app db.App, chosen bool) {
+	<fieldset class="grid min-w-0 gap-4" data-when="access" data-is={ "source:" + g.ID } hidden?={ !chosen } disabled?={ !chosen }>
+		@ui.Field(ui.FieldProps{Label: "Repository", For: repoPickerID(g.ID), Hint: repoHint(g), Error: ifChosen(chosen, f.E("repo"))}) {
+			@ui.Picker(ui.PickerProps{
+				ID:          repoPickerID(g.ID),
+				Name:        "repo",
+				Value:       ifChosen(chosen, orDefault(f.V("repo"), app.RepoURL)),
+				Shown:       ifChosen(chosen, repoShown(orDefault(f.V("repo"), app.RepoURL))),
+				Placeholder: "Choose a repository",
+				Icon:        sourceIcon(g),
+				Filter:      "Find a repository",
+				Src:         reposPath(g),
+				Attrs:       templ.Attributes{"aria-describedby": repoPickerID(g.ID) + "-hint"},
+			})
+		}
+		@ui.Field(ui.FieldProps{Label: "Branch", For: branchPickerID(g.ID), Error: ifChosen(chosen, f.E("branch"))}) {
+			@ui.Picker(ui.PickerProps{
+				ID:      branchPickerID(g.ID),
+				Name:    "branch",
+				Value:   orDefault(ifChosen(chosen, orDefault(f.V("branch"), app.Branch)), defaultBranch),
+				Icon:    "git-branch",
+				Filter:  "Find a branch",
+				Src:     branchesPath(g),
+				Include: "#" + repoPickerID(g.ID) + "-value",
+			})
+		}
+	</fieldset>
+}
+
+func ifChosen(chosen bool, v string) string {
+	if chosen {
+		return v
 	}
+	return ""
+}
+
+// gitBuildFields say how the code is built. The fields that belong to one
+// build are shown for that build only (data-when); they are optional, and
+// are sent whether shown or not.
+templ gitBuildFields(f ui.Form, c GitChoices, app db.App) {
+	@ui.Field(ui.FieldProps{Label: "Build with", For: "build_pack", Hint: "Worked out from the repository where it can be read through a source. Nixpacks and Railpack need no Dockerfile; the app they build must listen on its port, which it is told as PORT.", Error: f.E("build_pack")}) {
+		@ui.Select("build_pack", buildPackOptions, buildPack(f, app), templ.Attributes{"aria-describedby": "build_pack-hint"})
+		<div id="build-found">
+			<p class="found-line busy-line">
+				@ui.Icon("refresh", "animate-spin text-ink-mute")
+				<span>Looking at the repository…</span>
+			</p>
+			<div id="build-detected" aria-live="polite"></div>
+		</div>
+	}
+	<div class="grid gap-4" data-when="build_pack" data-is="dockerfile" hidden?={ buildPack(f, app) != "dockerfile" }>
+		@ui.TextField(f, "Dockerfile", "Where the Dockerfile is, from the base directory.", ui.InputProps{ID: "dockerfile_path", Mono: true, Value: app.DockerfilePath, Placeholder: "Dockerfile"})
+	</div>
+	<div class="grid gap-4" data-when="build_pack" data-is="static" hidden?={ buildPack(f, app) != "static" }>
+		@ui.TextField(f, "Folder to serve", "The folder of ready-made files, from the base directory. Empty for the base directory itself.", ui.InputProps{ID: "publish_dir", Mono: true, Value: app.PublishDir, Placeholder: "dist"})
+		@ui.Checkbox("spa_fallback", checked(f, "spa_fallback", app.SPAFallback), nil) {
+			Answer unknown paths with index.html (for single-page apps)
+		}
+	</div>
 	@ui.Checkbox("auto_deploy", checked(f, "auto_deploy", app.AutoDeploy), nil) {
 		Deploy automatically when the branch is pushed
 	}
@@ -236,6 +363,8 @@ func appAccess(app db.App) string {
 	return "public"
 }
 
+// AppNew is the form a new app is made with. From Git it is three groups,
+// the repository first: the build and the name follow from it.
 templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedDomain, source string, choices GitChoices, serverList []db.Server) {
 	@ui.Layout(s) {
 		if source == db.SourceGit {
@@ -244,14 +373,25 @@ templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedD
 			@ui.PageHeader("New app from a Docker image", "Runs in "+env.Name+".")
 		}
 		<div class="max-w-xl">
-			<form class="card" method="post" action={ templ.SafeURL(EnvPath(p.ID, env.ID) + "/app") }>
+			<form class="card card-groups" method="post" action={ templ.SafeURL(EnvPath(p.ID, env.ID) + "/app") }>
 				@ui.CSRF(s.CSRF)
 				<input type="hidden" name="source" value={ source }/>
+				if source == db.SourceGit {
+					<div class="card-body grid gap-4">
+						<h2 class="card-title">Repository</h2>
+						@gitWhereFields(f, choices, db.App{AutoDeploy: true})
+					</div>
+					<div class="card-body grid gap-4">
+						<h2 class="card-title">Build</h2>
+						@gitBuildFields(f, choices, db.App{AutoDeploy: true})
+					</div>
+				}
 				<div class="card-body grid gap-4">
-					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens. Other containers in this environment reach the app by this name.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: true, Placeholder: "web", Attrs: templ.Attributes{"maxlength": "32"}})
-					if source == "git" {
-						@gitSourceFields(f, choices, db.App{AutoDeploy: true})
-					} else {
+					if source == db.SourceGit {
+						<h2 class="card-title">App</h2>
+					}
+					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens. Other containers in this environment reach the app by this name.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: source != db.SourceGit, Placeholder: "web", Attrs: templ.Attributes{"maxlength": "32", "data-suggest-here": source == db.SourceGit}})
+					if source != db.SourceGit {
 						@ui.TextField(f, "Docker image", "For example nginx:alpine or ghcr.io/you/app:1.4.", ui.InputProps{ID: "image", Mono: true, Required: true, Placeholder: "nginx:alpine"})
 					}
 					@ui.TextField(f, "Port", "The port the app listens on inside its container. A static site listens on 80.", ui.InputProps{ID: "port", Mono: true, Required: true, Value: "80", Attrs: templ.Attributes{"inputmode": "numeric"}})

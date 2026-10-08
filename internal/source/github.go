@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -306,4 +307,98 @@ func (g *GitHub) Repositories(ctx context.Context, appID int64, key []byte) ([]R
 // token: "Authorization: Basic base64(x-access-token:<token>)".
 func BasicAuthHeader(token string) string {
 	return "Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte("x-access-token:"+token))
+}
+
+// maxBranches bounds the branch picker; beyond it a person types the name.
+const maxBranches = 300
+
+// ErrNotThere is a Git host's answer for a repository, branch or folder it
+// does not have, or does not show to these credentials.
+var ErrNotThere = errors.New("the repository has no such branch or folder")
+
+// escapeDir escapes a folder inside a repository for an address, segment
+// by segment. The folder has passed ValidRelPath.
+func escapeDir(dir string) string {
+	parts := strings.Split(strings.Trim(dir, "/"), "/")
+	for i, part := range parts {
+		parts[i] = url.PathEscape(part)
+	}
+	return strings.Join(parts, "/")
+}
+
+// Branches lists a repository's branches, up to maxBranches.
+func (g *GitHub) Branches(ctx context.Context, appID int64, key []byte, owner, repo string) ([]string, error) {
+	token, err := g.InstallationToken(ctx, appID, key, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	var all []string
+	for page := 1; len(all) < maxBranches; page++ {
+		var out []struct {
+			Name string `json:"name"`
+		}
+		if err := g.call(ctx, http.MethodGet, "/repos/"+url.PathEscape(owner)+"/"+url.PathEscape(repo)+"/branches?per_page=100&page="+strconv.Itoa(page), token, nil, &out); err != nil {
+			return nil, notThere(err)
+		}
+		for _, b := range out {
+			// A name is the host's to choose and ends up in a form: one
+			// that is not written as a branch is left out.
+			if ValidBranch(b.Name) {
+				all = append(all, b.Name)
+			}
+		}
+		if len(out) < 100 {
+			break
+		}
+	}
+	if len(all) > maxBranches {
+		all = all[:maxBranches]
+	}
+	return all, nil
+}
+
+// Files lists the names of the files in one folder of a repository at a
+// branch; dir "" is the root. Only the names are asked for: nothing a
+// repository holds is read. ErrNotThere when the branch has no such folder.
+func (g *GitHub) Files(ctx context.Context, appID int64, key []byte, owner, repo, branch, dir string) ([]string, error) {
+	if !ValidBranch(branch) || !ValidRelPath(dir) {
+		return nil, ErrNotThere
+	}
+	token, err := g.InstallationToken(ctx, appID, key, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	path := "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo) + "/contents"
+	if dir = strings.Trim(dir, "/"); dir != "" && dir != "." {
+		path += "/" + escapeDir(dir)
+	}
+	var out []struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}
+	// A file where a folder was asked for is answered as one object, which
+	// does not decode into a list.
+	if err := g.call(ctx, http.MethodGet, path+"?ref="+url.QueryEscape(branch), token, nil, &out); err != nil {
+		var object *json.UnmarshalTypeError
+		if errors.As(err, &object) {
+			return nil, ErrNotThere
+		}
+		return nil, notThere(err)
+	}
+	names := make([]string, 0, len(out))
+	for _, f := range out {
+		if f.Type == "file" {
+			names = append(names, f.Name)
+		}
+	}
+	return names, nil
+}
+
+// notThere turns GitHub's 404 into ErrNotThere and leaves any other error.
+func notThere(err error) error {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound {
+		return ErrNotThere
+	}
+	return err
 }

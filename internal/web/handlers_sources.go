@@ -1,14 +1,17 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
@@ -298,7 +301,7 @@ func (s *Server) githubRepos(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	list := pages.RepoPick{Base: "https://github.com", None: "This App is not installed on any repository yet. Use Choose repositories on the Sources page."}
+	list := pages.RepoPick{Base: "https://github.com", Source: src.ID, None: "This App is not installed on any repository yet. Use Choose repositories on the Sources page."}
 	key, err := s.Box.Open(src.PrivateKey)
 	if err != nil {
 		list.Problem = "The App's key cannot be decrypted. Was the master key changed?"
@@ -315,7 +318,7 @@ func (s *Server) gitlabRepos(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	list := pages.RepoPick{Base: src.BaseURL, None: "This token is not a member of any project. Type the repository's address instead."}
+	list := pages.RepoPick{Base: src.BaseURL, Source: src.ID, None: "This token is not a member of any project. Type the path of one it can read, such as group/shop."}
 	token, err := s.Box.OpenString(src.Token)
 	if err != nil {
 		list.Problem = "The token cannot be decrypted. Was the master key changed?"
@@ -323,6 +326,143 @@ func (s *Server) gitlabRepos(w http.ResponseWriter, r *http.Request) {
 		list.Problem = sentence(err)
 	}
 	s.render(w, r, http.StatusOK, pages.RepoList(list))
+}
+
+// hostTimeout bounds one question to a Git host that a form asks while a
+// person waits.
+const hostTimeout = 10 * time.Second
+
+// hostOf is the one host a source reads repositories on: github.com for a
+// GitHub App, its own instance for a GitLab source.
+func hostOf(g db.GitSource) string {
+	if g.Kind == db.GitSourceGitLab {
+		return source.GitLabHost(g.BaseURL)
+	}
+	return "github.com"
+}
+
+// sourceBranches asks a source's host for a repository's branches.
+func (s *Server) sourceBranches(ctx context.Context, src db.GitSource, repo source.Repo) ([]string, error) {
+	if src.Kind == db.GitSourceGitLab {
+		token, err := s.Box.OpenString(src.Token)
+		if err != nil {
+			return nil, errSealed
+		}
+		return s.GitLab.Branches(ctx, src.BaseURL, token, repo.FullName())
+	}
+	key, err := s.Box.Open(src.PrivateKey)
+	if err != nil {
+		return nil, errSealed
+	}
+	return s.GitHub.Branches(ctx, src.AppID, key, repo.Owner, repo.Name)
+}
+
+// sourceFiles asks a source's host for the names of the files in one
+// folder of a repository at a branch.
+func (s *Server) sourceFiles(ctx context.Context, src db.GitSource, repo source.Repo, branch, dir string) ([]string, error) {
+	if src.Kind == db.GitSourceGitLab {
+		token, err := s.Box.OpenString(src.Token)
+		if err != nil {
+			return nil, errSealed
+		}
+		return s.GitLab.Files(ctx, src.BaseURL, token, repo.FullName(), branch, dir)
+	}
+	key, err := s.Box.Open(src.PrivateKey)
+	if err != nil {
+		return nil, errSealed
+	}
+	return s.GitHub.Files(ctx, src.AppID, key, repo.Owner, repo.Name, branch, dir)
+}
+
+// errSealed is a source whose credentials cannot be opened.
+var errSealed = errors.New("the source's credentials cannot be decrypted: was the master key changed?")
+
+// hostProblem words why a Git host could not be asked about a repository.
+func hostProblem(src db.GitSource, err error) string {
+	switch {
+	case errors.Is(err, source.ErrNotInstalled):
+		return "The App is not installed on this repository. Use Choose repositories on the Sources page."
+	case errors.Is(err, source.ErrNotThere):
+		return "The repository has no such branch or folder, or " + pages.SourceKind(src) + " " + src.Name + " cannot read it."
+	}
+	return sentence(err)
+}
+
+// sourceRepo reads the repository a form names for a source. It must be on
+// the source's own host: its credentials go nowhere else.
+func sourceRepo(src db.GitSource, raw string) (source.Repo, bool) {
+	repo, err := source.ParseRepo(raw)
+	return repo, err == nil && repo.Host == hostOf(src)
+}
+
+// repoBranches lists the branches of the repository a form has chosen, as
+// the fragment the branch picker loads. kind is the source's.
+func (s *Server) repoBranches(kind string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		src, ok := s.loadRepoSource(w, r, kind)
+		if !ok {
+			return
+		}
+		var list pages.BranchPick
+		raw := strings.TrimSpace(r.URL.Query().Get("repo"))
+		repo, ok := sourceRepo(src, raw)
+		switch {
+		case raw == "":
+			list.Note = "Choose a repository first."
+		case !ok:
+			list.Problem = pages.SourceKind(src) + " " + src.Name + " can only read repositories on " + hostOf(src) + "."
+		default:
+			ctx, cancel := context.WithTimeout(r.Context(), hostTimeout)
+			defer cancel()
+			var err error
+			if list.Branches, err = s.sourceBranches(ctx, src, repo); err != nil {
+				list.Problem = hostProblem(src, err)
+			}
+		}
+		s.render(w, r, http.StatusOK, pages.BranchList(list))
+	}
+}
+
+// gitDetect works out how a repository is built from the names of the
+// files in the folder a form names, and answers the line under Build with.
+// Without a source there is nobody to ask, and the line is empty; so it is
+// for values the form itself will refuse.
+func (s *Server) gitDetect(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var found pages.Detected
+	answer := func() { s.render(w, r, http.StatusOK, pages.BuildDetected(found)) }
+
+	kind, id, _ := strings.Cut(q.Get("access"), ":")
+	branch := strings.TrimSpace(q.Get("branch"))
+	dir := strings.Trim(strings.TrimSpace(q.Get("base_dir")), "/")
+	if kind != "source" || !source.ValidBranch(branch) || !source.ValidRelPath(dir) {
+		answer()
+		return
+	}
+	src, err := s.DB.GitSource(r.Context(), sessionFrom(r).TeamID, id)
+	if errors.Is(err, db.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	repo, ok := sourceRepo(src, q.Get("repo"))
+	if !ok {
+		answer()
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), hostTimeout)
+	defer cancel()
+	files, err := s.sourceFiles(ctx, src, repo, branch, dir)
+	if err != nil {
+		found.Problem = hostProblem(src, err)
+	} else {
+		found.Looked = true
+		found.Pack, found.Found = deploy.GuessPack(files)
+	}
+	answer()
 }
 
 func (s *Server) sshKeyCreate(w http.ResponseWriter, r *http.Request) {

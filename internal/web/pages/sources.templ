@@ -1,6 +1,8 @@
 package pages
 
 import (
+	"strings"
+
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
@@ -44,6 +46,15 @@ func reposPath(g db.GitSource) string {
 		return "/sources/gitlab/" + g.ID + "/repos"
 	}
 	return "/sources/github/" + g.ID + "/repos"
+}
+
+// branchesPath is where a source's branch picker asks for a repository's
+// branches; the repository is sent with the request.
+func branchesPath(g db.GitSource) string {
+	if g.Kind == db.GitSourceGitLab {
+		return "/sources/gitlab/" + g.ID + "/branches"
+	}
+	return "/sources/github/" + g.ID + "/branches"
 }
 
 func removeSourcePath(g db.GitSource) string {
@@ -180,32 +191,146 @@ type RepoPick struct {
 	// Base is the address the repositories are under, without a slash at
 	// its end: https://github.com, or a GitLab instance.
 	Base string
+	// Source is the id of the source whose picker this is: choosing a
+	// repository sets the branch picker beside it.
+	Source string
 	// None is said when the source can read no repository; Problem, when
 	// its list could not be had.
 	None    string
 	Problem string
 }
 
+// repoPickerID and branchPickerID are the two pickers a source has in a
+// Git form. A form has a pair for each of the team's sources.
+func repoPickerID(sourceID string) string { return "repo-" + sourceID }
+
+func branchPickerID(sourceID string) string { return "branch-" + sourceID }
+
+// defaultBranch is the branch a form starts with.
+const defaultBranch = "main"
+
+// SuggestName turns a repository's name into one an app may have, or ""
+// when nothing of it is left: lower case, with a hyphen for whatever else
+// is not a letter or a digit.
+func SuggestName(fullName string) string {
+	name := fullName[strings.LastIndex(fullName, "/")+1:]
+	var b strings.Builder
+	for _, c := range strings.ToLower(name) {
+		switch {
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9':
+			b.WriteRune(c)
+		case b.Len() > 0 && !strings.HasSuffix(b.String(), "-"):
+			b.WriteByte('-')
+		}
+	}
+	name = b.String()
+	if len(name) > 32 {
+		name = name[:32]
+	}
+	return strings.Trim(name, "-")
+}
+
+// repoChoice is what choosing a repository does besides: the branch picker
+// beside it takes the repository's own branch and forgets its list, and a
+// new app is offered the repository's name.
+func repoChoice(v RepoPick, repo source.RepoInfo) templ.Attributes {
+	attrs := templ.Attributes{"data-sets": branchPickerID(v.Source), "data-sets-value": orDefault(repo.DefaultBranch, defaultBranch)}
+	if name := SuggestName(repo.FullName); name != "" {
+		attrs["data-suggest"] = name
+	}
+	return attrs
+}
+
 // RepoList is what the repository picker (ui.Picker) loads when it is first
-// opened. Choosing a repository fills the repository field of the form the
-// picker is in.
+// opened. It ends with the option for a repository the list does not have,
+// by its name: the list is cut, and a source can read more than it lists.
 templ RepoList(v RepoPick) {
 	if v.Problem != "" {
 		@ui.MenuNote(v.Problem, true)
 	} else if len(v.Repos) == 0 {
 		@ui.MenuNote(v.None, false)
-	} else {
-		for _, repo := range v.Repos {
-			@ui.PickerOption("repo", v.Base+"/"+repo.FullName, repo.FullName) {
-				@ui.Icon("git-branch", "text-ink-mute")
-				<span class="fact min-w-0 flex-1 break-all">{ repo.FullName }</span>
-				if repo.Private {
-					@ui.Badge("Private", ui.ToneNeutral)
-				}
-				if repo.DefaultBranch != "" {
-					<span class="muted text-xs">{ repo.DefaultBranch }</span>
-				}
+	}
+	for _, repo := range v.Repos {
+		@ui.PickerOption(ui.PickOption{Value: v.Base + "/" + repo.FullName, Label: repo.FullName, Attrs: repoChoice(v, repo)}) {
+			<span class="fact min-w-0 flex-1 break-all">{ repo.FullName }</span>
+			if repo.Private {
+				@ui.Badge("Private", ui.ToneNeutral)
 			}
 		}
+	}
+	@ui.PickerTyped(v.Base+"/", "/", templ.Attributes{"data-sets": branchPickerID(v.Source), "data-sets-value": defaultBranch})
+}
+
+// BranchPick is what a source's branch picker is answered with.
+type BranchPick struct {
+	Branches []string
+	// Note is said in place of a list that was not asked for: no
+	// repository is chosen yet. Problem, when the list could not be had.
+	Note    string
+	Problem string
+}
+
+// BranchList is what the branch picker loads when it is opened.
+templ BranchList(v BranchPick) {
+	if v.Note != "" {
+		@ui.MenuNote(v.Note, false)
+	} else {
+		if v.Problem != "" {
+			@ui.MenuNote(v.Problem, true)
+		} else if len(v.Branches) == 0 {
+			@ui.MenuNote("This repository has no branch yet.", false)
+		}
+		for _, branch := range v.Branches {
+			@ui.PickerOption(ui.PickOption{Value: branch, Label: branch}) {
+				<span class="fact min-w-0 flex-1 break-all">{ branch }</span>
+			}
+		}
+		@ui.PickerTyped("", "", nil)
+	}
+}
+
+// Detected is what was worked out about how a repository is built.
+type Detected struct {
+	// Pack is the build that was found and Found the file that says so;
+	// both are from musdash's own lists, never a repository's words.
+	Pack  string
+	Found string
+	// Looked is set when the folder was listed, whatever was found.
+	Looked  bool
+	Problem string
+}
+
+func (d Detected) says() string {
+	switch d.Pack {
+	case "dockerfile":
+		return ": the app is built with it."
+	case "railpack":
+		return ": Railpack builds the app."
+	case "nixpacks":
+		return " and no Dockerfile: Nixpacks works out the build."
+	case "static":
+		return " and nothing to build: it is served as a static site."
+	}
+	return ""
+}
+
+// BuildDetected is the line under Build with. With a build found it also
+// sets the menu (data-pick), which static/app.js does as if it were chosen.
+templ BuildDetected(d Detected) {
+	if d.Problem != "" {
+		<p class="found-line">
+			@ui.Icon("alert", "text-warn")
+			<span>{ d.Problem }</span>
+		</p>
+	} else if d.Pack != "" {
+		<p class="found-line" data-pick="build_pack" data-value={ d.Pack }>
+			@ui.Icon("check", "text-ok")
+			<span>Found <span class="fact">{ d.Found }</span>{ d.says() }</span>
+		</p>
+	} else if d.Looked {
+		<p class="found-line">
+			@ui.Icon("info", "text-ink-mute")
+			<span>Nothing in this folder says how it is built. Choose it here.</span>
+		</p>
 	}
 }

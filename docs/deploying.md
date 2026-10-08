@@ -44,7 +44,9 @@ An app can be built from a repository instead of pulling an image. Step 1 above 
 | Private, on GitLab | An access token: connect GitLab under **Sources** with a personal, group or project token that has the `read_api` and `read_repository` scopes. gitlab.com or your own instance, over HTTPS |
 | Private, anywhere | A deploy key: generate one under **Sources** and add its public half to the repository |
 
-Four build packs:
+Through a GitHub App or a GitLab token the form asks the host what there is: the repository is chosen from the ones the source can read (one the list does not show is named by typing `owner/name` into the menu's field), and the branch from the repository's own, starting at its default branch. With a public repository or a deploy key there is nobody to ask, and the address and the branch are typed.
+
+Four build packs. Through a source, the form looks at the folder the app is built from and chooses one, naming the file that decided: a `Dockerfile` is the Dockerfile build, a `railpack.json` Railpack, a file a builder knows (`package.json`, `go.mod`, `requirements.txt`, …) Nixpacks, and an `index.html` with nothing to build a static site. It looks again when the repository, the branch or the base directory changes; what you choose yourself stays until then. Only the names of the files are read.
 
 - **Dockerfile**: a path inside the repository.
 - **Static site**: a directory served by nginx, with an optional single-page-app fallback.

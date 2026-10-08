@@ -381,37 +381,63 @@ templ menuNoMatch() {
 
 // PickerProps configures a Picker.
 type PickerProps struct {
-	ID     string
-	Label  string // on the button: what there is to choose from
-	Icon   string
-	Filter string // the filter field's label, such as "Find a repository"
-	Src    string // answers with the options: PickerOption and MenuNote
+	ID string
+	// Name is the form field the choice is sent under; the ID when empty.
+	Name  string
+	Value string
+	// Shown is what the button says of Value: a repository's name for its
+	// address. Placeholder is what it says while there is no value.
+	Shown       string
+	Placeholder string
+	Icon        string
+	Filter      string // the filter field's label, such as "Find a repository"
+	Src         string // answers with the options: PickerOption, PickerTyped and MenuNote
+	// Include is a selector for the fields sent along when the options are
+	// asked for: what the list depends on, such as the repository whose
+	// branches these are.
+	Include string
+	// Attrs go on the button: aria-describedby.
+	Attrs templ.Attributes
 }
 
-// Picker is a menu that fills another field instead of holding a value, with
-// options that come from the server the first time it is opened: a list
-// that is slow to fetch or long, such as an account's repositories. It
-// always has a filter field.
+// Picker is a Select whose options come from the server the first time it
+// is opened: a list that is slow to fetch or long, such as an account's
+// repositories. It always has a filter field. The hidden input with the
+// value has the id "<ID>-value".
 templ Picker(p PickerProps) {
 	<div class="select" data-select>
+		<input type="hidden" id={ p.ID + "-value" } name={ orDefault(p.Name, p.ID) } value={ p.Value }/>
 		<button
 			type="button"
 			id={ p.ID }
-			class="btn btn-secondary btn-sm select-button"
+			class="btn btn-secondary select-button"
+			role="combobox"
 			aria-haspopup="listbox"
 			aria-expanded="false"
 			aria-controls={ p.ID + "-list" }
 			popovertarget={ p.ID + "-menu" }
+			{ p.Attrs... }
 		>
 			if p.Icon != "" {
 				@Icon(p.Icon)
 			}
-			<span class="truncate">{ p.Label }</span>
+			<span class={ "truncate", templ.KV("fact", p.Value != "") } data-select-label data-select-fact>{ orDefault(orDefault(p.Shown, p.Value), p.Placeholder) }</span>
 			@Icon("chevron-down")
 		</button>
-		<div class="menu" id={ p.ID + "-menu" } popover hx-get={ p.Src } hx-trigger="select-load" hx-target="find [role=listbox]" hx-swap="innerHTML">
+		<div
+			class="menu"
+			id={ p.ID + "-menu" }
+			popover
+			hx-get={ p.Src }
+			hx-trigger="select-load"
+			hx-target="find [role=listbox]"
+			hx-swap="innerHTML"
+			if p.Include != "" {
+				hx-include={ p.Include }
+			}
+		>
 			@menuFilter(p.ID+"-list", p.Filter)
-			<div class="menu-options" id={ p.ID + "-list" } role="listbox" aria-label={ p.Label }>
+			<div class="menu-options" id={ p.ID + "-list" } role="listbox" aria-labelledby={ p.ID }>
 				@MenuNote("Loading…", false)
 			</div>
 			@menuNoMatch()
@@ -419,12 +445,35 @@ templ Picker(p PickerProps) {
 	</div>
 }
 
-// PickerOption is one option a Picker's Src answers with. Choosing it puts
-// value into the field whose id is fill. search is the text the filter
-// looks in; the children are what is shown.
-templ PickerOption(fill, value, search string) {
-	<button type="button" class="menu-item" role="option" tabindex="-1" data-fill={ fill } data-value={ value } data-search={ search }>
+// PickOption is one option a Picker's Src answers with.
+type PickOption struct {
+	Value string
+	// Label is what the button says once the option is chosen, and what
+	// the filter looks in.
+	Label string
+	// Attrs are what else choosing it does: data-sets, data-suggest.
+	Attrs templ.Attributes
+}
+
+// PickerOption is one option of a Picker. Its children are what is shown
+// in the list.
+templ PickerOption(o PickOption) {
+	<button type="button" class="menu-item" role="option" aria-selected="false" tabindex="-1" data-value={ o.Value } data-label={ o.Label } data-search={ o.Label } { o.Attrs... }>
+		@Icon("check", "menu-tick")
 		{ children... }
+	</button>
+}
+
+// PickerTyped is the last option of a Picker's list: what is in the filter
+// field, offered as it was typed when no option is exactly that. A list is
+// cut somewhere, and this is how what it left out is still named. Its value
+// is prefix and the text; static/app.js keeps both and shows the option.
+// With needs, the text is offered only once it holds that: the slash of a
+// repository under its owner.
+templ PickerTyped(prefix, needs string, attrs templ.Attributes) {
+	<button type="button" class="menu-item" role="option" aria-selected="false" tabindex="-1" data-typed data-prefix={ prefix } data-needs={ needs } hidden { attrs... }>
+		@Icon("plus", "text-ink-mute")
+		<span class="min-w-0 flex-1 break-all">Use <span class="fact" data-typed-text></span></span>
 	</button>
 }
 

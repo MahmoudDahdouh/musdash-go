@@ -2,6 +2,7 @@ package source
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -33,6 +34,24 @@ func fakeGitLab(t *testing.T, projects func(page int) string) (*GitLab, string, 
 				return
 			}
 			io.WriteString(w, projects(page))
+		case "/api/v4/projects/acme/platform/api/repository/branches":
+			// The project's path is one segment of the address.
+			if r.URL.EscapedPath() != "/api/v4/projects/acme%2Fplatform%2Fapi/repository/branches" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			io.WriteString(w, `[{"name":"trunk"},{"name":"--upload-pack=x"},{"name":"release/1.x"}]`)
+		case "/api/v4/projects/acme/platform/api/repository/tree":
+			q := r.URL.Query()
+			switch {
+			case q.Get("ref") == "trunk" && q.Get("path") == "":
+				io.WriteString(w, `[{"name":"src","type":"tree"},{"name":"index.html","type":"blob"}]`)
+			case q.Get("ref") == "trunk" && q.Get("path") == "apps/web":
+				io.WriteString(w, `[{"name":"Dockerfile","type":"blob"}]`)
+			default:
+				w.WriteHeader(http.StatusNotFound)
+				io.WriteString(w, `{"message":"404 Tree Not Found"}`)
+			}
 		case "/api/v4/elsewhere":
 			http.Redirect(w, r, "https://example.invalid/api/v4/user", http.StatusFound)
 		default:
@@ -171,5 +190,34 @@ func TestGitLabBaseAndToken(t *testing.T) {
 	}
 	if h := GitLabAuthHeader("glpat-x"); h != "Authorization: Basic b2F1dGgyOmdscGF0LXg=" {
 		t.Errorf("the clone header: %q", h)
+	}
+}
+
+func TestGitLabBranchesAndFiles(t *testing.T) {
+	ctx := context.Background()
+	g, base, _ := fakeGitLab(t, func(int) string { return `[]` })
+	const token, project = "glpat-good-token", "acme/platform/api"
+
+	branches, err := g.Branches(ctx, base, token, project)
+	if err != nil || strings.Join(branches, " ") != "trunk release/1.x" {
+		t.Fatalf("branches: %v %v", branches, err)
+	}
+	files, err := g.Files(ctx, base, token, project, "trunk", "")
+	if err != nil || strings.Join(files, " ") != "index.html" {
+		t.Fatalf("the root: %v %v", files, err)
+	}
+	if files, err = g.Files(ctx, base, token, project, "trunk", "apps/web"); err != nil || strings.Join(files, " ") != "Dockerfile" {
+		t.Fatalf("a folder: %v %v", files, err)
+	}
+	for _, c := range [][2]string{{"gone", ""}, {"trunk", "../etc"}, {"-x", ""}} {
+		if _, err := g.Files(ctx, base, token, project, c[0], c[1]); !errors.Is(err, ErrNotThere) {
+			t.Errorf("Files(%q, %q): %v, want ErrNotThere", c[0], c[1], err)
+		}
+	}
+	if _, err := g.Branches(ctx, base, token, "acme/unknown"); !errors.Is(err, ErrNotThere) {
+		t.Fatalf("the branches of a project that is not there: %v", err)
+	}
+	if _, err := g.Branches(ctx, base, "glpat-wrong-token", project); err == nil || errors.Is(err, ErrNotThere) {
+		t.Fatalf("a wrong token: %v", err)
 	}
 }

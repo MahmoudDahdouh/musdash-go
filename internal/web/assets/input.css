@@ -289,6 +289,31 @@
     line-height: var(--text-xs--line-height);
     color: var(--color-ink-mute);
   }
+  /* What was found out about a field's value, under its control: an icon
+     and a sentence, as small as a hint. */
+  .found-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-block-start: 4px;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    color: var(--color-ink-soft);
+  }
+  .found-line .icon {
+    flex: none;
+  }
+  /* A line that says a request is in flight, shown in place of what the
+     request replaces: htmx marks the element both are in (hx-indicator). */
+  .busy-line {
+    display: none;
+  }
+  .htmx-request > .busy-line {
+    display: flex;
+  }
+  .htmx-request > .busy-line ~ * {
+    display: none;
+  }
   .field-error {
     font-size: var(--text-xs);
     line-height: var(--text-xs--line-height);
@@ -650,6 +675,11 @@
   }
   .card-body {
     padding: 16px;
+  }
+  /* A form in several groups, each under its own title: a rule between
+     them. */
+  .card-groups > .card-body + .card-body {
+    border-top: 1px solid var(--color-line);
   }
   .card-foot {
     display: flex;

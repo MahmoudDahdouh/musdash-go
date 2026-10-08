@@ -124,7 +124,7 @@ func (g *GitLab) call(ctx context.Context, base, token, path string, out any) er
 	case res.StatusCode < 200 || res.StatusCode > 299:
 		// The answer's own words are not passed on: at an address that is
 		// not a GitLab they could be anything.
-		return fmt.Errorf("GitLab answered %d %s: is this the address of a GitLab instance?", res.StatusCode, http.StatusText(res.StatusCode))
+		return &gitlabStatus{res.StatusCode}
 	}
 	if err := json.NewDecoder(body).Decode(out); err != nil {
 		return errors.New("GitLab's answer could not be read: is this the address of a GitLab instance?")
@@ -182,4 +182,85 @@ func (g *GitLab) Projects(ctx context.Context, base, token string) ([]RepoInfo, 
 		all = all[:maxRepos]
 	}
 	return all, nil
+}
+
+// gitlabStatus is an answer that is neither a success nor about the token.
+type gitlabStatus struct{ status int }
+
+func (e *gitlabStatus) Error() string {
+	return fmt.Sprintf("GitLab answered %d %s: is this the address of a GitLab instance?", e.status, http.StatusText(e.status))
+}
+
+// gitlabNotThere turns a 404 about a project into ErrNotThere: asked for a
+// branch or a folder of a project, that is what it means.
+func gitlabNotThere(err error) error {
+	var st *gitlabStatus
+	if errors.As(err, &st) && st.status == http.StatusNotFound {
+		return ErrNotThere
+	}
+	return err
+}
+
+// Branches lists a project's branches, up to maxBranches. project is its
+// path with the namespace, such as group/shop.
+func (g *GitLab) Branches(ctx context.Context, base, token, project string) ([]string, error) {
+	const perPage = 100
+	var all []string
+	for page := 1; len(all) < maxBranches; page++ {
+		var out []struct {
+			Name string `json:"name"`
+		}
+		if err := g.call(ctx, base, token, "/api/v4/projects/"+url.PathEscape(project)+"/repository/branches?per_page="+
+			strconv.Itoa(perPage)+"&page="+strconv.Itoa(page), &out); err != nil {
+			return nil, gitlabNotThere(err)
+		}
+		for _, b := range out {
+			if ValidBranch(b.Name) {
+				all = append(all, b.Name)
+			}
+		}
+		if len(out) < perPage {
+			break
+		}
+	}
+	if len(all) > maxBranches {
+		all = all[:maxBranches]
+	}
+	return all, nil
+}
+
+// maxTreePages bounds how much of one folder's listing is asked for.
+const maxTreePages = 3
+
+// Files lists the names of the files in one folder of a project at a
+// branch; dir "" is the root. ErrNotThere when the branch has no such
+// folder.
+func (g *GitLab) Files(ctx context.Context, base, token, project, branch, dir string) ([]string, error) {
+	if !ValidBranch(branch) || !ValidRelPath(dir) {
+		return nil, ErrNotThere
+	}
+	const perPage = 100
+	query := "?ref=" + url.QueryEscape(branch) + "&per_page=" + strconv.Itoa(perPage)
+	if dir = strings.Trim(dir, "/"); dir != "" && dir != "." {
+		query += "&path=" + url.QueryEscape(dir)
+	}
+	var names []string
+	for page := 1; page <= maxTreePages; page++ {
+		var out []struct {
+			Name string `json:"name"`
+			Type string `json:"type"`
+		}
+		if err := g.call(ctx, base, token, "/api/v4/projects/"+url.PathEscape(project)+"/repository/tree"+query+"&page="+strconv.Itoa(page), &out); err != nil {
+			return nil, gitlabNotThere(err)
+		}
+		for _, f := range out {
+			if f.Type == "blob" {
+				names = append(names, f.Name)
+			}
+		}
+		if len(out) < perPage {
+			break
+		}
+	}
+	return names, nil
 }

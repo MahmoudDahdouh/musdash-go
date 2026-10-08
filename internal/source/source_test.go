@@ -323,6 +323,21 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		f.comments[id] = body.Body
 		io.WriteString(w, `{"id":`+strconv.FormatInt(id, 10)+`}`)
+	case r.Method == "GET" && r.URL.Path == "/repos/acme/shop/branches":
+		if bearer != "ghs_installation_token" {
+			f.t.Errorf("branches called with %q", bearer)
+		}
+		// The second name is not one git would be given.
+		io.WriteString(w, `[{"name":"main"},{"name":"--upload-pack=x"},{"name":"feature/cart"}]`)
+	case r.Method == "GET" && r.URL.Path == "/repos/acme/shop/contents" && r.URL.Query().Get("ref") == "main":
+		io.WriteString(w, `[{"name":"Dockerfile","type":"file"},{"name":"src","type":"dir"},{"name":"go.mod","type":"file"}]`)
+	case r.Method == "GET" && r.URL.EscapedPath() == "/repos/acme/shop/contents/apps/web" && r.URL.Query().Get("ref") == "feature/cart":
+		io.WriteString(w, `[{"name":"package.json","type":"file"}]`)
+	case r.Method == "GET" && r.URL.Path == "/repos/acme/shop/contents/go.mod":
+		io.WriteString(w, `{"name":"go.mod","type":"file"}`)
+	case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/repos/acme/shop/contents"):
+		w.WriteHeader(http.StatusNotFound)
+		io.WriteString(w, `{"message":"Not Found"}`)
 	default:
 		w.WriteHeader(http.StatusTeapot)
 		io.WriteString(w, `{"message":"unexpected request"}`)
@@ -383,6 +398,38 @@ func TestGitHubClient(t *testing.T) {
 	list, err := gh.Repositories(ctx, 777, key)
 	if err != nil || len(list) != 2 || list[0].FullName != "acme/shop" || list[1].DefaultBranch != "trunk" {
 		t.Fatalf("repositories: %+v %v", list, err)
+	}
+
+	// A repository's branches, without the name that is not a branch.
+	branches, err := gh.Branches(ctx, 777, key, "acme", "shop")
+	if err != nil || strings.Join(branches, " ") != "main feature/cart" {
+		t.Fatalf("branches: %v %v", branches, err)
+	}
+	if _, err := gh.Branches(ctx, 777, key, "acme", "not-installed"); !errors.Is(err, ErrNotInstalled) {
+		t.Fatalf("the branches of a repository the App is not on: %v", err)
+	}
+
+	// The files of a folder, by name: the root, and a folder at a branch
+	// whose name has a slash.
+	files, err := gh.Files(ctx, 777, key, "acme", "shop", "main", "")
+	if err != nil || strings.Join(files, " ") != "Dockerfile go.mod" {
+		t.Fatalf("the root: %v %v", files, err)
+	}
+	fake.mu.Lock()
+	perms, _ = fake.tokenReq["permissions"].(map[string]any)
+	fake.mu.Unlock()
+	if perms["contents"] != "read" || len(perms) != 1 {
+		t.Fatalf("the listing asked for more than reading: %v", perms)
+	}
+	if files, err = gh.Files(ctx, 777, key, "acme", "shop", "feature/cart", "apps/web"); err != nil || len(files) != 1 || files[0] != "package.json" {
+		t.Fatalf("a folder: %v %v", files, err)
+	}
+	// No such folder, a file where a folder was asked for, and what is
+	// not a branch or a path at all.
+	for _, c := range [][2]string{{"main", "nowhere"}, {"main", "go.mod"}, {"-x", ""}, {"main", "../etc"}} {
+		if _, err := gh.Files(ctx, 777, key, "acme", "shop", c[0], c[1]); !errors.Is(err, ErrNotThere) {
+			t.Errorf("Files(%q, %q): %v, want ErrNotThere", c[0], c[1], err)
+		}
 	}
 }
 

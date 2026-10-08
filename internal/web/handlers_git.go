@@ -63,6 +63,8 @@ func parseRepoForm(r *http.Request, f *ui.Form, c pages.GitChoices, app *db.App)
 	app.RepoURL = field("repo")
 	repo, err := source.ParseRepo(app.RepoURL)
 	switch {
+	case app.RepoURL == "" && app.GitSourceID != "":
+		f.Fail("repo", "Choose a repository.")
 	case err != nil:
 		f.Fail("repo", sentence(err))
 	case app.SSHKeyID != "" && !repo.SSH:
@@ -95,14 +97,8 @@ func chosenSource(c pages.GitChoices, id string) db.GitSource {
 	return db.GitSource{}
 }
 
-// sourceHost is the one host a source reads repositories on: github.com
-// for a GitHub App, its own instance for a GitLab source.
-func sourceHost(c pages.GitChoices, id string) string {
-	if g := chosenSource(c, id); g.Kind == db.GitSourceGitLab {
-		return source.GitLabHost(g.BaseURL)
-	}
-	return "github.com"
-}
+// sourceHost is the one host the source with this id reads repositories on.
+func sourceHost(c pages.GitChoices, id string) string { return hostOf(chosenSource(c, id)) }
 
 // insideRepo is the message for a path that must lie in the repository.
 const insideRepo = "Enter a path inside the repository, such as apps/web, without a leading slash."
