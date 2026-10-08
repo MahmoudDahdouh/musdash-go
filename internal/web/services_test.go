@@ -177,7 +177,7 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 	if len(page) > 800<<10 {
 		t.Errorf("the page is %d KB: a card's markup has grown", len(page)>>10)
 	}
-	if !strings.Contains(page, `data-tags="database"`) || !strings.Contains(page, `<p class="offer-tags">CMS</p>`) {
+	if !strings.Contains(page, `data-tags="database"`) || !strings.Contains(page, `<p class="offer-tags"><span>CMS</span></p>`) {
 		t.Error("the engines are not found under Databases, or a card does not name its categories")
 	}
 

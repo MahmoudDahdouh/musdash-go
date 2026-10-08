@@ -198,6 +198,7 @@ templ Gallery(s ui.Shell) {
 					@ui.Badge("HTTPS", ui.ToneOK)
 					@ui.Badge("Build-time", ui.ToneWarn)
 					@ui.Badge("Public port", ui.ToneDanger)
+					@ui.Badge("Analytics", ui.ToneSoft)
 				</div>
 			}
 			@gallerySection("Table") {
@@ -243,7 +244,7 @@ templ Gallery(s ui.Shell) {
 				}
 				@ui.Offers("Kinds of resource") {
 					@ui.Offer(ui.OfferProps{Href: "#", Logo: "postgres", Icon: "database", Title: "PostgreSQL", Text: "The general-purpose relational database.", Docs: "https://www.postgresql.org/docs/", Website: "https://www.postgresql.org/"})
-					@ui.Offer(ui.OfferProps{Href: "#", Logo: "docker", Icon: "box", Title: "Docker image", Text: "Run an image from a registry."})
+					@ui.Offer(ui.OfferProps{Href: "#", Logo: "docker", Icon: "box", Title: "Docker image", Text: "Run an image from a registry.", TagLabels: []string{"Developer tools", "Automation"}})
 					@ui.Offer(ui.OfferProps{Href: "#", Icon: "key", Title: "Private repository, with a deploy key", Text: "No logo of its own: its icon, in the brand's blue.", Action: "Add key"})
 				}
 			}

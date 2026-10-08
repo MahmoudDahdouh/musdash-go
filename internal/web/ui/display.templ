@@ -394,6 +394,10 @@ const ToneBusy = "busy"
 // yet, as waiting in the queue is.
 const ToneInfo = "info"
 
+// ToneSoft is a badge's alone: outlined in a pale blue, for a label that
+// sorts a thing (a category) and says nothing of its state.
+const ToneSoft = "soft"
+
 templ Badge(text, tone string) {
 	<span class={ "badge", templ.KV("badge-"+tone, tone != "") }>{ text }</span>
 }

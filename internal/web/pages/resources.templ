@@ -2,7 +2,6 @@ package pages
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
@@ -184,15 +183,15 @@ func setUp(has bool, otherwise string) string {
 	return otherwise
 }
 
-// categoryText is how a card names a template's categories.
-func categoryText(keys []string) string {
+// categoryLabels is how a card names a template's categories.
+func categoryLabels(keys []string) []string {
 	labels := make([]string, 0, len(keys))
 	for _, k := range keys {
 		if l := catalog.CategoryLabel(k); l != "" {
 			labels = append(labels, l)
 		}
 	}
-	return strings.Join(labels, " · ")
+	return labels
 }
 
 // engineCategory is the category the database engines are found under, with
@@ -268,7 +267,7 @@ templ ResourceNew(s ui.Shell, v NewResource) {
 						@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + db.TemplateCustom, Logo: "docker", Icon: "code", Title: "Your own Compose file", Text: "Paste a docker-compose.yml. Templates written for Coolify work as they are.", Search: "service compose docker-compose yaml custom own coolify", Shared: true})
 						@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + db.TemplateGit, Logo: "git", Icon: "git-branch", Title: "Compose file in a Git repository", Text: "Read from the repository at every deployment. It may build the repository's own Dockerfiles.", Search: "service compose git repository", Shared: true})
 						for _, t := range v.Templates {
-							@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + t.Key, Logo: t.Key, Icon: KindIcon(db.KindService), Title: t.Name, Text: t.About, Docs: t.Docs, Website: t.Website, Search: "service " + t.Key, Tags: t.Categories, TagText: categoryText(t.Categories), Shared: true})
+							@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + t.Key, Logo: t.Key, Icon: KindIcon(db.KindService), Title: t.Name, Text: t.About, Docs: t.Docs, Website: t.Website, Search: "service " + t.Key, Tags: t.Categories, TagLabels: categoryLabels(t.Categories), Shared: true})
 						}
 					}
 				}

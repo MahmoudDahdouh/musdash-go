@@ -81,6 +81,7 @@
   --size-rail: 3px;
   --size-logo: 3rem; /* 48px: a logo on the card of something to add */
   --size-mark: 4rem; /* 64px: the square it stands on */
+  --size-offer: 28.125rem; /* 450px: the least height of that card */
 }
 
 @layer base {
@@ -746,6 +747,7 @@
   }
   .offer {
     gap: 16px;
+    min-height: var(--size-offer);
   }
   .offer-head {
     display: flex;
@@ -812,11 +814,16 @@
     box-shadow: var(--shadow-raised);
   }
 
-  /* What kinds of thing an offer is, under its description. */
+  /* What kinds of thing an offer is, under its description: a row of soft
+     badges. Each is a bare span drawn by the badge's own rules (.badge and
+     .badge-soft name it), because a page of several hundred cards has
+     about a thousand of them and a class on each is paid for in every
+     one. */
   .offer-tags {
-    font-size: var(--text-xs);
-    line-height: var(--text-xs--line-height);
-    color: var(--color-ink-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-block-start: 4px;
   }
 
   /* State rail: a coloured left edge that says what a resource is doing.
@@ -917,7 +924,8 @@
 
   /* Badge: a plain label with no icon, outlined and unfilled so a row of
      them stays quieter than the one pill beside it. */
-  .badge {
+  .badge,
+  .offer-tags > span {
     display: inline-flex;
     align-items: center;
     height: 20px;
@@ -945,6 +953,13 @@
   .badge-danger {
     border-color: var(--color-danger);
     color: var(--color-danger);
+  }
+  /* Soft: the outline and the text in the info tone's pale blue, for a
+     label that sorts a thing and says nothing of its state. */
+  .badge-soft,
+  .offer-tags > span {
+    border-color: var(--color-info-line);
+    color: var(--color-info);
   }
 
   /* Table -------------------------------------------------------------- */

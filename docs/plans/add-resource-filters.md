@@ -150,3 +150,17 @@ Approved with the one fix.
   not at every key.
 - A `change` in the menu's own filter field also reaches both handlers. It
   does the same work again and changes nothing.
+
+### Step 2
+
+- Every one of the 638 cards is 450px high; the page is 100,196px (it was
+  48,821) and 784 KB (it was 767; the test's limit is 800).
+- A badge is 20px high, the info tone's line around it and its blue in the
+  text, no fill: `ui.Badge("Analytics", ui.ToneSoft)` in the gallery is the
+  same rule as a card's bare span.
+- A card's content is 143 to 246px, so between the text and the foot there
+  is 200px and more of nothing. Not changed: the height is what was asked
+  for, and filling it (the logo on a band across the top, say) is a
+  redesign nobody asked for. Reported with a picture.
+- `TestOffer` now also holds a category to no class of its own, and a card
+  with no categories to no empty row.

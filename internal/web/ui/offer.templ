@@ -25,9 +25,9 @@ type OfferProps struct {
 	// its text and its tags, which it reads from the card.
 	Search string
 	// Tags are the keys a choice of categories narrows by (data-filter-pick),
-	// and TagText is how the card names them.
-	Tags    []string
-	TagText string
+	// and TagLabels is how the card names them: a soft badge each.
+	Tags      []string
+	TagLabels []string
 	// Shared is set on a page that lists offers by the hundred and has
 	// drawn their icons once with IconDefs (OfferIcons, and this card's
 	// Icon): the card then refers to them.
@@ -93,8 +93,12 @@ templ Offer(p OfferProps) {
 			<div class="grid min-w-0 gap-1">
 				<h3 class="tile-title">{ p.Title }</h3>
 				<p class="tile-text">{ p.Text }</p>
-				if p.TagText != "" {
-					<p class="offer-tags">{ p.TagText }</p>
+				if len(p.TagLabels) > 0 {
+					<p class="offer-tags">
+						for _, label := range p.TagLabels {
+							<span>{ label }</span>
+						}
+					</p>
 				}
 			</div>
 		</div>

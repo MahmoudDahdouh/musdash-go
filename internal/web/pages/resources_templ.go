@@ -10,7 +10,6 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
@@ -471,15 +470,15 @@ func setUp(has bool, otherwise string) string {
 	return otherwise
 }
 
-// categoryText is how a card names a template's categories.
-func categoryText(keys []string) string {
+// categoryLabels is how a card names a template's categories.
+func categoryLabels(keys []string) []string {
 	labels := make([]string, 0, len(keys))
 	for _, k := range keys {
 		if l := catalog.CategoryLabel(k); l != "" {
 			labels = append(labels, l)
 		}
 	}
-	return strings.Join(labels, " · ")
+	return labels
 }
 
 // engineCategory is the category the database engines are found under, with
@@ -535,7 +534,7 @@ func kindGroup(title, about string) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 226, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 225, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -548,7 +547,7 @@ func kindGroup(title, about string) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(about)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 227, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 226, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -785,7 +784,7 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					for _, t := range v.Templates {
-						templ_7745c5c3_Err = ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + t.Key, Logo: t.Key, Icon: KindIcon(db.KindService), Title: t.Name, Text: t.About, Docs: t.Docs, Website: t.Website, Search: "service " + t.Key, Tags: t.Categories, TagText: categoryText(t.Categories), Shared: true}).Render(ctx, templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + t.Key, Logo: t.Key, Icon: KindIcon(db.KindService), Title: t.Name, Text: t.About, Docs: t.Docs, Website: t.Website, Search: "service " + t.Key, Tags: t.Categories, TagLabels: categoryLabels(t.Categories), Shared: true}).Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
