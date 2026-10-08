@@ -1,6 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -865,14 +869,168 @@ func TestLogoPlaces(t *testing.T) {
 	if p := last("something"); strings.HasPrefix(p.from, "simple:") || strings.HasPrefix(p.from, "svgl:") {
 		t.Errorf("something: %+v", p)
 	}
-	for _, p := range logoPlaces(&tmpl{Key: "appsmith", Name: "Appsmith", Source: "coolify", Logos: []string{"/c/public/svgs/appsmith.svg"}}, nil, c) {
-		if p.file == "/c/public/svgs/appsmith.svg" {
-			t.Errorf("a file that was looked at and refused is tried: %+v", p)
-		}
-	}
 	for name, want := range map[string]string{"wikidotjs": "#1976D2", "paleandco": "", "another": "#000000", "other": "", "nobody": ""} {
 		if got := simpleColour(dir, name); got != want {
 			t.Errorf("%s: %q, want %q", name, got, want)
 		}
+	}
+}
+
+// A logo drawn in white is shown on a dark square, as the drawing it is.
+func TestOnDark(t *testing.T) {
+	dir := t.TempDir()
+	white := write(t, dir, "white.svg", `<svg xmlns="http://www.w3.org/2000/svg" width="215" height="32" viewBox="0 0 215 32" fill="none"><path d="M0 0h215v32z" fill="white"/></svg>`)
+	got := onDark(white, false, smallLogo)
+	wantAll(t, got,
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#1f2328"/>`,
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 215 32" fill="none" x="7" y="7" width="34" height="34"><path d="M0 0h215v32z" fill="white"/></svg></svg>`)
+	if why := unseen(strings.TrimSpace(got)); why != "" {
+		t.Errorf("the square itself is not seen: %s", why)
+	}
+	// One that has a size and no viewBox is given the box of its size, or
+	// it would not be made to fit.
+	sized := write(t, dir, "sized.svg", `<svg xmlns="http://www.w3.org/2000/svg" width="45" height="31"><path d="M0 0h45v31z" fill="#fff"/></svg>`)
+	wantAll(t, onDark(sized, false, smallLogo), `viewBox="0 0 45 31" x="7" y="7" width="34" height="34">`)
+
+	// A logo with a colour in it is one for a dark page only where
+	// somebody said so, and a file the dashboard cannot show stays one.
+	colour := write(t, dir, "colour.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 0h10v10z" fill="#fff"/><path d="M0 9h3v1z" fill="#ff6d2d"/></svg>`)
+	if got := onDark(colour, false, smallLogo); got != "" {
+		t.Errorf("a logo that shows was put on a dark square: %s", got)
+	}
+	if got := onDark(colour, true, smallLogo); !strings.Contains(got, darkPage) {
+		t.Errorf("a logo named as one for a dark page was not: %q", got)
+	}
+	text := write(t, dir, "text.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text fill="#fff">a</text></svg>`)
+	if got := onDark(text, true, smallLogo); got != "" {
+		t.Errorf("a file with text in it was taken: %s", got)
+	}
+	if got := onDark(white, false, 100); got != "" {
+		t.Errorf("larger than it may be: %s", got)
+	}
+}
+
+// webpSize reads the size of a WebP picture from its first chunk.
+func webpSize(t *testing.T, b []byte) (int, int) {
+	t.Helper()
+	if len(b) < 30 || string(b[:4]) != "RIFF" || string(b[8:12]) != "WEBP" {
+		t.Fatalf("no WebP file: % x", b[:min(len(b), 16)])
+	}
+	switch string(b[12:16]) {
+	case "VP8X":
+		return 1 + int(b[24]) | int(b[25])<<8 | int(b[26])<<16, 1 + int(b[27]) | int(b[28])<<8 | int(b[29])<<16
+	case "VP8 ":
+		return int(b[26]) | int(b[27]&0x3f)<<8, int(b[28]) | int(b[29]&0x3f)<<8
+	case "VP8L":
+		bits := uint32(b[21]) | uint32(b[22])<<8 | uint32(b[23])<<16 | uint32(b[24])<<24
+		return int(bits&0x3fff) + 1, int(bits>>14&0x3fff) + 1
+	}
+	t.Fatalf("a WebP file of an unknown kind: %q", b[12:16])
+	return 0, 0
+}
+
+// The browser makes a picture of the first file that is a logo. It needs
+// Chrome or Chromium, as a run of the converter does.
+func TestPictures(t *testing.T) {
+	browser, err := findBrowser(os.Getenv("CATALOG_CHROME"))
+	if err != nil {
+		t.Skip(err)
+	}
+	if testing.Short() {
+		t.Skip("starts a browser")
+	}
+	dir := t.TempDir()
+	// A square of one colour in the middle of a transparent picture.
+	drawn := func(name string, size int, c color.Color) string {
+		img := image.NewNRGBA(image.Rect(0, 0, size, size))
+		for y := size / 3; y < 2*size/3; y++ {
+			for x := size / 3; x < 2*size/3; x++ {
+				img.Set(x, y, c)
+			}
+		}
+		var b bytes.Buffer
+		if err := png.Encode(&b, img); err != nil {
+			t.Fatal(err)
+		}
+		return write(t, dir, name, b.String())
+	}
+	blue := drawn("blue.png", 600, color.NRGBA{9, 105, 218, 255})
+	white := drawn("white.png", 300, color.NRGBA{255, 255, 255, 255})
+	small := drawn("small.png", 150, color.NRGBA{9, 105, 218, 255})
+	tiny := drawn("tiny.png", 16, color.NRGBA{9, 105, 218, 255})
+	text := write(t, dir, "text.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="100" height="50" fill="#0969da"/><text x="10" y="35" fill="#fff" font-size="30">Hi</text><script>fetch("/done", {method: "POST", body: "[]"})</script></svg>`)
+	pale := drawn("pale.png", 300, color.NRGBA{120, 220, 160, 255})
+	// The same square on white paper, and on a ground of its own.
+	ground := func(name string, c color.Color) string {
+		img := image.NewNRGBA(image.Rect(0, 0, 400, 200))
+		for y := 0; y < 200; y++ {
+			for x := 0; x < 400; x++ {
+				img.Set(x, y, c)
+				if x >= 150 && x < 250 && y >= 50 && y < 150 {
+					img.Set(x, y, color.NRGBA{9, 105, 218, 255})
+				}
+			}
+		}
+		var b bytes.Buffer
+		if err := png.Encode(&b, img); err != nil {
+			t.Fatal(err)
+		}
+		return write(t, dir, name, b.String())
+	}
+	paper := ground("paper.png", color.NRGBA{255, 255, 255, 255})
+	icon := ground("icon.png", color.NRGBA{20, 20, 20, 255})
+	blank := ground("blank.png", color.NRGBA{9, 105, 218, 255})
+	logoForDark["test:pale.png"] = true
+	defer delete(logoForDark, "test:pale.png")
+
+	made, err := pictures(browser, []wanted{
+		{Key: "first", files: []logoFile{{from: "a:gone.png", file: filepath.Join(dir, "gone.png")}, {from: "a:tiny.png", file: tiny}, {from: "a:white.png", file: white}, {from: "a:blue.png", file: blue}, {from: "a:small.png", file: small}}},
+		{Key: "white", files: []logoFile{{from: "a:white.png", file: white}, {from: "a:tiny.png", file: tiny}}},
+		{Key: "small", files: []logoFile{{from: "a:small.png", file: small}}},
+		{Key: "text", files: []logoFile{{from: "a:text.svg", file: text}}},
+		{Key: "pale", files: []logoFile{{from: "test:pale.png", file: pale}, {from: "a:blue.png", file: blue}}},
+		{Key: "paleonly", files: []logoFile{{from: "test:pale.png", file: pale}}},
+		{Key: "paper", files: []logoFile{{from: "a:blank.png", file: blank}, {from: "a:paper.png", file: paper}}},
+		{Key: "icon", files: []logoFile{{from: "a:icon.png", file: icon}}},
+		{Key: "none", files: []logoFile{{from: "a:tiny.png", file: tiny}, {from: "a:readme.txt", file: write(t, dir, "readme.txt", "x")}}},
+		{Key: "nothing", files: []logoFile{{from: "a:gone.png", file: filepath.Join(dir, "gone.png")}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]struct {
+		from string
+		dark bool
+		w, h int
+	}{
+		"first":    {"a:blue.png", false, 96, 96},   // not the one before it that is too small, nor the white one
+		"white":    {"a:white.png", true, 96, 96},   // on its dark square
+		"small":    {"a:small.png", false, 50, 50},  // cut to what is drawn, and not made larger
+		"text":     {"a:text.svg", false, 96, 48},   // a drawing is made the size it is needed in
+		"pale":     {"a:blue.png", false, 96, 96},   // a logo named as one for a dark page waits for a better one
+		"paleonly": {"test:pale.png", true, 96, 96}, // and is on a dark square where there is none
+		"paper":    {"a:paper.png", false, 96, 96},  // white paper is cut off, and a picture of one colour is none
+		"icon":     {"a:icon.png", false, 96, 48},   // a ground of its own is the logo's
+	} {
+		p := made[key]
+		if p.From != want.from || p.Dark != want.dark {
+			t.Errorf("%s: from %q, dark %v; want %q, %v (%v)", key, p.From, p.Dark, want.from, want.dark, p.Notes)
+			continue
+		}
+		if w, h := webpSize(t, p.WebP); w != want.w || h != want.h {
+			t.Errorf("%s: %dx%d, want %dx%d", key, w, h, want.w, want.h)
+		}
+		if len(p.WebP) > smallLogo {
+			t.Errorf("%s: %d bytes", key, len(p.WebP))
+		}
+	}
+	if p := made["first"]; len(p.Notes) != 2 {
+		t.Errorf("first: the notes do not say why two files were passed over: %q", p.Notes)
+	}
+	if p := made["none"]; p.From != "" || len(p.WebP) != 0 || len(p.Notes) != 1 {
+		t.Errorf("none: %+v", p)
+	}
+	if _, ok := made["nothing"]; ok {
+		t.Error("a service with no file was sent to the browser")
 	}
 }

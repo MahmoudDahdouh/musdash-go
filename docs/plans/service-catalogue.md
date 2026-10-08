@@ -632,3 +632,55 @@ Pterodactyl.
 What is left: 94 with no SVG anywhere, 19 whose SVG has text, a link, a
 script, an animation or `currentColor`, 8 whose SVG is over 20 KB, and 7
 with only a white drawing.
+
+### Pictures, and white logos on a dark square
+
+Asked for the same day: do the 128 that are left, by the best practice
+and as light as it can be. They were 94 with no SVG anywhere, 19 whose SVG
+has text, a link, a script, an animation or `currentColor`, 8 whose SVG is
+over 20 KB and 7 with only a white drawing.
+
+**Decisions**
+
+| | Decision | Why |
+|---|---|---|
+| What a logo without a drawing is | A WebP picture, `logo-<key>.webp`, at most 96px a side and at most 6 KB | A card shows a logo at 48px; 96 is that on a screen of twice the density, and more is never shown. Lossy WebP is the smallest format every browser reads: these are 3 KB each, where the PNG they are made of is 20 to 500 |
+| What makes the picture | Chrome or Chromium without a window, started by the converter (`tools/catalog/pictures.go`). It is given a page from this machine that draws each file on a canvas and sends back the WebP | It reads every kind of file the catalogues have (PNG, JPEG, WebP, ICO, and an SVG with text in it), it is what will show the result, and it adds no module: it is run as a program, as musdash runs docker and git |
+| A file is an image to the browser, nothing else | `<img>` only | An image runs no script and fetches nothing: Evershop's SVG has a `<script>` in it. The test's SVG has one too, and it must not run |
+| Where a picture is looked for | The same places in the same order as a drawing, with the collections' `webp` folders and whatever file a template names as its logo | One order to know. selfh.st's picture comes before a catalogue's: it is square, cut to the logo and transparent |
+| What is cut off | The transparent edge; or white paper, where a picture has no transparency. A ground of another colour stays | A logo then fills the card as the drawings do. A coloured square is an app's icon and the logo itself |
+| Never larger than the file | A picture of 64px stays 64px; one under 48px is no logo | Made larger, it is only blurred |
+| A white logo | On a dark square with round corners, `#1f2328`. A drawing stays a drawing, inside an SVG that is the square (`onDark`); a picture gets the square painted under it | It is the logo as its owner drew it, on the ground it was drawn for. Many logos in the catalogue are a dark square already |
+| A picture in the logo's colours, or a white drawing on a dark square? | The picture | It is what the owner shows on a page like this one |
+| A logo for a dark page that is not all white | `logoForDark`, by hand, where `logoRefused` was: Appsmith, Evolution API, MediaCMS | Pale grey and green letters are seen by no rule that would not also take a real logo for one |
+| In musdash | `static.Logo(name)` says which of the two files a name has; the embed line takes `logo-*.webp`; a picture is served as a drawing is, from the embedded file | Nothing else knew that a logo is an SVG file |
+
+**Review of this plan**
+
+- *Does the binary's memory change?* No: a logo is never read onto the
+  heap, and a picture is not compressed a second time.
+- *Is the result the same on every run?* A drawing is. A picture depends
+  on the browser's WebP writer, so another version of Chrome can write
+  other bytes for the same file: the next full run may change pictures
+  that look the same. Accepted; the alternative was a WebP writer as a
+  module and still no way to draw an SVG with text.
+- *Can a picture do what a drawing must not?* No: WebP has no script, no
+  style and no address. The test holds it to its size and to being the
+  only logo of its name.
+
+**What was built.** 127 of the 128 have a logo: 124 pictures (108 from a
+picture, 16 from an SVG the dashboard could not show) and 3 white drawings
+on a dark square (Huly, Libredesk, Quant-UX). The pictures are 363 KB
+together, 3 KB each; with the 515 drawings (1058 KB) the logos are
+1.4 MB. One service has none: Celld, whose template names a file Coolify
+does not have.
+
+Every one was looked at on a sheet in a browser, at the size and on the
+grey a card has. That found the two pale wordmarks now in `logoForDark`,
+and that cutting to "what differs from the corner" took a white letter
+out of its coloured square: only white paper is cut now.
+
+**To run the converter** one needs, besides the six checkouts, the `webp`
+folder of the two icon collections and Chrome or Chromium (`-chrome`
+names it where it is not found). `TestPictures` starts the browser and is
+skipped where there is none.

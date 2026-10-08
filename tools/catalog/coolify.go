@@ -110,7 +110,8 @@ func readCoolify(file, svgs string) (*tmpl, error) {
 				}
 			}
 		case "logo":
-			if strings.HasSuffix(strings.ToLower(value), ".svg") {
+			// Of any kind: what is no SVG is a picture (pictures.go).
+			if value != "" {
 				t.Logos = append(t.Logos, filepath.Join(svgs, strings.TrimPrefix(value, "svgs/")))
 			}
 		case "port":

@@ -90,6 +90,13 @@ func TestCreateDatabase(t *testing.T) {
 			t.Errorf("%s: its card has more than one link to the form", tpl.Label)
 		}
 	}
+	// A service's logo is its drawing or, where there is none, its
+	// picture; a service with neither has the icon and no image.
+	for file, has := range map[string]bool{"logo-gitea.svg": true, "logo-dashy.webp": true, "logo-dashy.svg": false, "logo-celld": false} {
+		if strings.Contains(engines, `<img src="/static/`+file) != has {
+			t.Errorf("%s in the page: want %v", file, has)
+		}
+	}
 	// A way into a private repository that the team does not have yet does
 	// not say Deploy: its card leads to where the access is added.
 	for title, action := range map[string]string{"Private repository, with a GitHub App": "Connect", "Private repository, with GitLab": "Connect", "Private repository, with a deploy key": "Add key"} {

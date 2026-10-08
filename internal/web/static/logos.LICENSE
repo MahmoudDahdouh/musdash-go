@@ -57,8 +57,23 @@ most 6 KB wherever one of its files is that small, as it stands or with
 the coordinates of its paths written with fewer decimals (to a
 ten-thousandth of the drawing's size); a service with no such file has one
 of at most 20 KB, written with fewer decimals. A logo that could not be
-written this way, is larger than that, or is drawn in white for a dark
-page, was not taken: that service is shown with an icon.
+written this way or is larger than that was not taken as a drawing.
+
+A logo-<key>.webp file is a picture of a logo, for a service whose logo
+none of these has as a drawing the dashboard can show. services.SOURCES
+names the file it was made of, as above: "selfhst:<file>.webp" and
+"dashboard:<file>.webp" are those collections' own pictures of the logo;
+a ".png", ".jpg", ".jpeg", ".webp" or ".ico" file of Coolify's or
+Dokploy's is the logo that catalogue shows for the service; an ".svg"
+file is a drawing that has text, a link or a picture in it, or is larger
+than 20 KB. Changed here: what is around the logo is cut off (a
+transparent edge, or white paper), the picture is made at most 96 pixels
+a side, never larger than its file, and written as WebP of at most 6 KB.
+
+A logo that is drawn in white, for a dark page, is shown on a dark square
+with round corners (#1f2328): a drawing inside an SVG file that is the
+square, a picture on a square that is part of the picture. Nothing of the
+logo itself is changed.
 
 Each logo is a trademark of its owner and is used only to name that
 owner's service.

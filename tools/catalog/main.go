@@ -5,9 +5,12 @@
 //	    -icons ~/src/selfhst-icons -dashboard ~/src/dashboard-icons \
 //	    -svgl ~/src/svgl -simple ~/src/simple-icons -repo ../..
 //
+// The two icon collections are read in their svg and webp folders, and a
+// logo that is a picture is drawn by Chrome or Chromium (pictures.go).
+//
 // It writes internal/catalog/services/<key>.yaml for every template it can
 // turn into one musdash's rules accept, internal/web/static/logo-<key>.svg
-// where there is a logo the dashboard can show, and the lists of what it
+// (or .webp, see pictures.go) where there is a logo, and the lists of what it
 // did (internal/catalog/services.SOURCES, docs/catalogue-left-out.md).
 // Templates written for musdash (no "source" line in their header) are
 // never touched, and nothing of this program is part of musdash: it is a
@@ -56,6 +59,7 @@ func main() {
 	dashboard := flag.String("dashboard", "", "a checkout of github.com/homarr-labs/dashboard-icons")
 	svgl := flag.String("svgl", "", "a checkout of github.com/pheralb/svgl")
 	simple := flag.String("simple", "", "a checkout of github.com/simple-icons/simple-icons")
+	chrome := flag.String("chrome", "", "Chrome or Chromium, which draws the logos that are pictures (found by itself where it is usually installed)")
 	repo := flag.String("repo", "../..", "the musdash checkout to write into")
 	rejectedFile := flag.String("rejected", "rejected.txt", "the list of templates the sandbox test refused")
 	flag.Parse()
@@ -90,7 +94,7 @@ func main() {
 	if raw, err := os.ReadFile(manifest); err == nil {
 		for _, line := range strings.Split(string(raw), "\n") {
 			if f := strings.Fields(line); len(f) >= 3 && strings.Contains(f[2], ":") && !strings.HasPrefix(line, "#") {
-				imported = append(imported, filepath.Join(static, "logo-"+f[0]+".svg"))
+				imported = append(imported, filepath.Join(static, "logo-"+f[0]+".svg"), filepath.Join(static, "logo-"+f[0]+".webp"))
 			}
 		}
 	}
@@ -223,61 +227,114 @@ func main() {
 
 	var sources bytes.Buffer
 	sources.WriteString("# Written by tools/catalog. One line for each imported template:\n# its key, whose template it was made from, and where its logo is from\n# (\"-\" for none, \"musdash\" for one musdash had already). See\n# services.LICENSE and ../web/static/logos.LICENSE.\n")
-	logos := 0
+	// A template's logo, by its key, as services.SOURCES names it.
+	logoOf := map[string]string{}
+	var without []wanted
 	for _, t := range taken {
-		logo := "-"
-		if _, err := os.Stat(filepath.Join(static, "logo-"+t.Key+".svg")); err == nil {
-			logo = "musdash"
-			logos++
-		} else {
-			// The same service in the other catalogue, and what it is
-			// called elsewhere: their logos are this one's too.
-			var others []*tmpl
-			for _, k := range append([]string{t.Key}, logoAlias[t.Key]...) {
-				for _, c := range byKey[same(k)] {
-					if c.t != t {
-						others = append(others, c.t)
-					}
-				}
-			}
-			tried := logoPlaces(t, others, collections{selfhst: *icons, coolify: *coolify, dashboard: *dashboard, svgl: *svgl, simple: *simple})
-			// A file under the smaller size comes first, wherever it is:
-			// as it stands, then with fewer decimals. Only a service with
-			// no such file gets a larger one, and that one always with
-			// fewer decimals.
-			for _, try := range []struct {
-				read  func(string, int) string
-				limit int
-			}{{cleanLogo, smallLogo}, {smallerLogo, smallLogo}, {smallerLogo, maxLogo}} {
-				for _, p := range tried {
-					if svg := try.read(p.file, try.limit); svg != "" {
-						if p.fill != "" {
-							svg = strings.Replace(svg, "<svg ", `<svg fill="`+p.fill+`" `, 1)
-						}
-						if err := os.WriteFile(filepath.Join(static, "logo-"+t.Key+".svg"), []byte(svg), 0o644); err != nil {
-							fatal(err)
-						}
-						logo = p.from
-						break
-					}
-				}
-				if logo != "-" {
-					logos++
-					break
-				}
-			}
-			if logo == "-" && os.Getenv("CATALOG_NOTES") != "" {
-				for _, p := range tried {
-					if why := whyNot(p.file); why != "not there" {
-						fmt.Printf("no logo: %s: %s: %s\n", t.Key, p.from, why)
-					}
-				}
-			}
-		}
 		if err := os.WriteFile(filepath.Join(services, t.Key+".yaml"), t.render(), 0o644); err != nil {
 			fatal(err)
 		}
-		fmt.Fprintf(&sources, "%s %s %s\n", t.Key, t.Source, logo)
+		if hasLogo(static, t.Key) {
+			logoOf[t.Key] = "musdash"
+			continue
+		}
+		// The same service in the other catalogue, and what it is
+		// called elsewhere: their logos are this one's too.
+		var others []*tmpl
+		for _, k := range append([]string{t.Key}, logoAlias[t.Key]...) {
+			for _, c := range byKey[same(k)] {
+				if c.t != t {
+					others = append(others, c.t)
+				}
+			}
+		}
+		tried := logoPlaces(t, others, collections{selfhst: *icons, coolify: *coolify, dashboard: *dashboard, svgl: *svgl, simple: *simple})
+		// A file under the smaller size comes first, wherever it is:
+		// as it stands, then with fewer decimals. Only a service with
+		// no such file gets a larger one, and that one always with
+		// fewer decimals.
+	sizes:
+		for _, try := range []struct {
+			read  func(string, int) string
+			limit int
+		}{{cleanLogo, smallLogo}, {smallerLogo, smallLogo}, {smallerLogo, maxLogo}} {
+			for _, p := range tried {
+				if logoForDark[p.from] {
+					continue
+				}
+				if svg := try.read(p.file, try.limit); svg != "" {
+					if p.fill != "" {
+						svg = strings.Replace(svg, "<svg ", `<svg fill="`+p.fill+`" `, 1)
+					}
+					if err := os.WriteFile(filepath.Join(static, "logo-"+t.Key+".svg"), []byte(svg), 0o644); err != nil {
+						fatal(err)
+					}
+					logoOf[t.Key] = p.from
+					break sizes
+				}
+			}
+		}
+		if logoOf[t.Key] == "" {
+			without = append(without, wanted{Key: t.Key, files: tried})
+		}
+	}
+
+	// What has no drawing may have a picture, and a logo drawn in white
+	// can be shown on a dark square. A picture in the logo's own colours
+	// comes before a white drawing: it is the logo as its owner shows it
+	// on a page like this one.
+	if len(without) > 0 {
+		browser, err := findBrowser(*chrome)
+		if err != nil {
+			fatal(err)
+		}
+		made, err := pictures(browser, without)
+		if err != nil {
+			fatal(err)
+		}
+		for _, w := range without {
+			p := made[w.Key]
+			var file string
+			var body []byte
+			if p.From != "" && !p.Dark {
+				file, body = "logo-"+w.Key+".webp", p.WebP
+			} else {
+				for _, f := range w.files {
+					if svg := onDark(f.file, logoForDark[f.from], maxLogo); svg != "" {
+						p.From, file, body = f.from, "logo-"+w.Key+".svg", []byte(svg)
+						break
+					}
+				}
+				if file == "" && p.From != "" {
+					file, body = "logo-"+w.Key+".webp", p.WebP
+				}
+			}
+			if file != "" {
+				if err := os.WriteFile(filepath.Join(static, file), body, 0o644); err != nil {
+					fatal(err)
+				}
+				logoOf[w.Key] = p.From
+				continue
+			}
+			logoOf[w.Key] = "-"
+			if os.Getenv("CATALOG_NOTES") != "" {
+				for _, f := range w.files {
+					if why := whyNot(f.file); why != "not there" && strings.HasSuffix(f.file, ".svg") {
+						fmt.Printf("no logo: %s: %s: %s\n", w.Key, f.from, why)
+					}
+				}
+				for _, note := range p.Notes {
+					fmt.Printf("no logo: %s: %s\n", w.Key, note)
+				}
+			}
+		}
+	}
+	logos := 0
+	for _, t := range taken {
+		if logoOf[t.Key] != "-" {
+			logos++
+		}
+		fmt.Fprintf(&sources, "%s %s %s\n", t.Key, t.Source, logoOf[t.Key])
 	}
 	if err := os.WriteFile(manifest, sources.Bytes(), 0o644); err != nil {
 		fatal(err)
@@ -420,4 +477,15 @@ func stripComments(n *yaml.Node) {
 	for _, c := range n.Content {
 		stripComments(c)
 	}
+}
+
+// hasLogo reports whether a service has a logo in the folder, a drawing or
+// a picture.
+func hasLogo(static, key string) bool {
+	for _, kind := range []string{".svg", ".webp"} {
+		if _, err := os.Stat(filepath.Join(static, "logo-"+key+kind)); err == nil {
+			return true
+		}
+	}
+	return false
 }

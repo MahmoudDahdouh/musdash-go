@@ -123,6 +123,19 @@ func whyNot(file string) string {
 // drawing is the file as the dashboard can show it, whatever its size, or
 // "" and what it has that the dashboard would not show.
 func drawing(file string) (string, string) {
+	s, why := draw(file)
+	if why != "" {
+		return "", why
+	}
+	return s, ""
+}
+
+// white is what unseen says of a logo for a dark page.
+const white = "white on white: a logo for a dark page"
+
+// draw is drawing, and it also returns the drawing when all that is wrong
+// with it is that it is white: darkSquare has a use for that one.
+func draw(file string) (string, string) {
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		return "", "not there"
@@ -226,11 +239,49 @@ func drawing(file string) (string, string) {
 	if regexp.MustCompile(`(?i)\son[a-z]+\s*=`).MatchString(s) || regexp.MustCompile(`(?i)url\(\s*['"]?[^#'"\s]`).MatchString(s) {
 		return "", "an event handler, or an address outside the file"
 	}
-	if why := unseen(s); why != "" {
+	if why := unseen(s); why == white {
+		return s, why
+	} else if why != "" {
 		return "", why
 	}
 	return s, ""
 }
+
+var (
+	rootTag  = regexp.MustCompile(`^<svg[^>]*>`)
+	rootSize = regexp.MustCompile(`\s(x|y|width|height)="[^"]*"`)
+)
+
+// onDark is a logo that was drawn for a dark page, on one: the drawing as
+// it is, in the middle of a dark square with round corners. It returns ""
+// for a file that is not such a logo, or is not one the dashboard can show
+// for another reason. forDark says that this file is one though it has
+// something in it that is not white (logoForDark).
+func onDark(file string, forDark bool, limit int) string {
+	s, why := draw(file)
+	if s == "" || why != white && !forDark {
+		return ""
+	}
+	root := rootTag.FindString(s)
+	inner := rootSize.ReplaceAllString(root, "")
+	if !strings.Contains(root, "viewBox") {
+		w, h := svgWidth.FindStringSubmatch(root), svgHeight.FindStringSubmatch(root)
+		if w == nil || h == nil {
+			return ""
+		}
+		inner = inner[:len(inner)-1] + ` viewBox="0 0 ` + w[1] + " " + h[1] + `">`
+	}
+	inner = inner[:len(inner)-1] + ` x="7" y="7" width="34" height="34">`
+	s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="` + darkPage + `"/>` + inner + s[len(root):] + `</svg>`
+	if unseen(s) != "" || len(s) >= limit {
+		return ""
+	}
+	return s + "\n"
+}
+
+// darkPage is the square a white logo is put on, in an SVG file and in a
+// picture alike: the dashboard's own darkest grey, the colour of its text.
+const darkPage = "#1f2328"
 
 // What is drawn, and what is only kept to be used by something drawn.
 var (
@@ -301,7 +352,7 @@ func unseen(s string) string {
 		}
 	}
 	if !seen {
-		return "white on white: a logo for a dark page"
+		return white
 	}
 	return ""
 }
@@ -448,32 +499,33 @@ func shrink(s string, n int) string {
 // name. A line here is a claim that the two are one product, or that the
 // first is published by the second's owner as a part of it.
 var logoAlias = map[string][]string{
-	"affinepro":                  {"affine"},
-	"answer":                     {"apache-answer"},
-	"apprise-api":                {"apprise"},
-	"calcom":                     {"cal-com"},
-	"code-server":                {"coder"},
-	"collabora-office":           {"collabora-online"},
-	"coralproject":               {"voxmedia-coral"},
-	"docker-registry":            {"docker"},
-	"docling-serve":              {"docling"},
-	"emqx-enterprise":            {"emqx"},
-	"evolutiongo":                {"evolution-api"},
-	"flatnotes-totp":             {"flatnotes"},
-	"gitea-sqlite":               {"gitea"},
-	"hermes":                     {"hermes-agent"},
-	"joplin-server":              {"joplin"},
-	"jupyter-notebook-python":    {"jupyter"},
-	"n8n-queue":                  {"n8n"},
-	"n8n-runner-postgres-ollama": {"n8n"},
-	"newt-pangolin":              {"pangolin"},
-	"nexus-arm":                  {"nexus"},
-	"otterwiki":                  {"an-otter-wiki", "otter-wiki"},
-	"proxyscotch":                {"hoppscotch"},
-	"pterodactyl-panel":          {"pterodactyl"},
-	"redis-insight":              {"redis"},
-	"sure":                       {"sure-finance"},
-	"trilium":                    {"trilium-notes"},
+	"affinepro":                     {"affine"},
+	"answer":                        {"apache-answer"},
+	"apprise-api":                   {"apprise"},
+	"calcom":                        {"cal-com"},
+	"classicpress-without-database": {"classicpress"},
+	"code-server":                   {"coder"},
+	"collabora-office":              {"collabora-online"},
+	"coralproject":                  {"voxmedia-coral"},
+	"docker-registry":               {"docker"},
+	"docling-serve":                 {"docling"},
+	"emqx-enterprise":               {"emqx"},
+	"evolutiongo":                   {"evolution-api"},
+	"flatnotes-totp":                {"flatnotes"},
+	"gitea-sqlite":                  {"gitea"},
+	"hermes":                        {"hermes-agent"},
+	"joplin-server":                 {"joplin"},
+	"jupyter-notebook-python":       {"jupyter"},
+	"n8n-queue":                     {"n8n"},
+	"n8n-runner-postgres-ollama":    {"n8n"},
+	"newt-pangolin":                 {"pangolin"},
+	"nexus-arm":                     {"nexus"},
+	"otterwiki":                     {"an-otter-wiki", "otter-wiki"},
+	"proxyscotch":                   {"hoppscotch"},
+	"pterodactyl-panel":             {"pterodactyl"},
+	"redis-insight":                 {"redis"},
+	"sure":                          {"sure-finance"},
+	"trilium":                       {"trilium-notes"},
 }
 
 // logoNames are the file names to look for in an icon collection, the
@@ -502,11 +554,13 @@ var logoPicked = map[string]string{
 	"typesense":    "svgl:typesense",
 }
 
-// logoRefused are files that pass every rule here and are still no logo
-// for a white card, by what services.SOURCES would call them. Somebody
-// looked at these too.
-var logoRefused = map[string]bool{
-	"coolify:appsmith.svg": true, // the name in white letters; all that shows is the orange stroke under its last one
+// logoForDark are files that are a logo for a dark page though not all of
+// them is white, by what services.SOURCES would call them: on a white card
+// they are nearly nothing. Somebody looked at these too.
+var logoForDark = map[string]bool{
+	"coolify:appsmith.svg":      true, // the name in white letters; all that shows is the orange stroke under its last one
+	"coolify:evolution-api.svg": true, // the name in pale grey and pale green
+	"dokploy:mediacms.svg":      true, // "Media" in white, "CMS" in green
 }
 
 // collections are the checkouts a logo is looked for in besides a
@@ -565,6 +619,11 @@ func logoPlaces(t *tmpl, others []*tmpl, c collections) []logoFile {
 		for _, n := range names {
 			out = append(out, logoFile{from: "selfhst:" + n + ".svg", file: filepath.Join(c.selfhst, "svg", n+".svg")})
 		}
+		// The collection's picture of a logo it has no drawing of, or
+		// none the dashboard can show.
+		for _, n := range names {
+			out = append(out, logoFile{from: "selfhst:" + n + ".webp", file: filepath.Join(c.selfhst, "webp", n+".webp")})
+		}
 		if own {
 			for _, f := range t.Logos {
 				out = append(out, logoFile{from: t.Source + ":" + filepath.Base(f), file: f})
@@ -585,10 +644,15 @@ func logoPlaces(t *tmpl, others []*tmpl, c collections) []logoFile {
 			}
 		}
 		for _, n := range names {
-			out = append(out, logoFile{from: "coolify:" + n + ".svg", file: filepath.Join(c.coolify, "public/svgs", n+".svg")})
+			for _, kind := range []string{".svg", ".png", ".webp", ".jpg", ".jpeg"} {
+				out = append(out, logoFile{from: "coolify:" + n + kind, file: filepath.Join(c.coolify, "public/svgs", n+kind)})
+			}
 		}
 		for _, n := range names {
 			out = append(out, logoFile{from: "dashboard:" + n + ".svg", file: filepath.Join(c.dashboard, "svg", n+".svg")})
+		}
+		for _, n := range names {
+			out = append(out, logoFile{from: "dashboard:" + n + ".webp", file: filepath.Join(c.dashboard, "webp", n+".webp")})
 		}
 		// Both collections have a second drawing of some logos, for a
 		// light page ("-dark" is the colour of the drawing): the one to
@@ -611,5 +675,5 @@ func logoPlaces(t *tmpl, others []*tmpl, c collections) []logoFile {
 			out = append(out, logoFile{from: "simple:" + name + ".svg", file: filepath.Join(c.simple, "icons", name+".svg"), fill: fill})
 		}
 	}
-	return slices.DeleteFunc(out, func(p logoFile) bool { return logoRefused[p.from] })
+	return out
 }

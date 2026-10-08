@@ -18,7 +18,7 @@ import (
 	"sync"
 )
 
-//go:embed app.css app.js htmx.min.js htmx-sse.js favicon.svg terminal.js logo-*.svg
+//go:embed app.css app.js htmx.min.js htmx-sse.js favicon.svg terminal.js logo-*.svg logo-*.webp
 var files embed.FS
 
 type asset struct {
@@ -86,6 +86,19 @@ func URL(name string) string {
 func Has(name string) bool {
 	_, ok := assets()[name]
 	return ok
+}
+
+// Logo returns the asset that holds the logo of this name, and whether
+// there is one. A logo is a drawing (logo-<name>.svg) or, where its owner
+// has no drawing the dashboard can show, a small picture of it
+// (logo-<name>.webp, made by tools/catalog). A name has one of the two.
+func Logo(name string) (string, bool) {
+	for _, kind := range [...]string{".svg", ".webp"} {
+		if file := "logo-" + name + kind; Has(file) {
+			return file, true
+		}
+	}
+	return "", false
 }
 
 // Handler serves GET /static/{name}.

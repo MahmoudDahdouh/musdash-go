@@ -10,18 +10,25 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "github.com/MahmoudDahdouh/musdash-go/internal/web/static"
 
-// LogoFile is the asset that holds the logo of this name.
+// LogoFile is the asset that holds the logo of this name: the drawing, or
+// the picture where there is no drawing (static.Logo). For a name that has
+// neither it is the drawing's name, which static.Has then says is not
+// there.
 func LogoFile(name string) string {
+	if file, ok := static.Logo(name); ok {
+		return file
+	}
 	return "logo-" + name + ".svg"
 }
 
 // Logo is the mark of a product in its owner's colours, where an Icon is
-// one colour, the text's. It is a file (static/logo-<name>.svg), not part
-// of the page: fetched once and cached for good. The name beside it says
-// what it is, so it has no text of its own.
+// one colour, the text's. It is a file (static/logo-<name>.svg, or .webp
+// for the few a catalogue has only a picture of), not part of the page:
+// fetched once and cached for good. The name beside it says what it is,
+// so it has no text of its own.
 //
-// A logo's colours are attributes in its file, never a style: the policy
-// that forbids inline style is sent with the image too.
+// A drawing's colours are attributes in its file, never a style: the
+// policy that forbids inline style is sent with the image too.
 func Logo(name string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -50,7 +57,7 @@ func Logo(name string) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(static.URL(LogoFile(name)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/logo.templ`, Line: 18, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/logo.templ`, Line: 25, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {

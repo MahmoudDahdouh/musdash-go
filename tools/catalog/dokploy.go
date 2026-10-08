@@ -297,7 +297,7 @@ func readDokploy(dir string) (*tmpl, error) {
 	if t.Website == "" {
 		t.Website = meta.Links.GitHub
 	}
-	if strings.HasSuffix(strings.ToLower(meta.Logo), ".svg") {
+	if meta.Logo != "" && !strings.Contains(meta.Logo, "..") {
 		t.Logos = append(t.Logos, filepath.Join(dir, meta.Logo))
 	}
 	body, err := os.ReadFile(filepath.Join(dir, "docker-compose.yml"))
