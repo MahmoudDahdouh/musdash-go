@@ -278,6 +278,81 @@ templ selectBox(p selectProps) {
 	</div>
 }
 
+// MultiOption is one choice in a MultiSelect.
+type MultiOption struct {
+	Value string
+	Label string
+	// Count is how many things the option stands for; 0 shows none.
+	Count   int
+	Checked bool
+}
+
+// MultiSelectProps configures a MultiSelect.
+type MultiSelectProps struct {
+	ID string
+	// Name is the field every chosen option is sent under.
+	Name string
+	// Label is on the button: what there is to choose from.
+	Label   string
+	Options []MultiOption
+	// Attrs go on the box around the button and the menu, which is what
+	// holds the choice: data-filter-pick, for one that narrows a list.
+	Attrs templ.Attributes
+}
+
+func (p MultiSelectProps) chosen() int {
+	n := 0
+	for _, o := range p.Options {
+		if o.Checked {
+			n++
+		}
+	}
+	return n
+}
+
+// MultiSelect is a choice of any number of options: a Select's button and
+// menu, where choosing an option leaves the menu open. Each option is a real
+// checkbox under its label, so the browser keeps the choice with the page
+// and a form sends every chosen value under Name; static/app.js keeps the
+// options' aria-selected and the count on the button in step with them. A
+// long list gets a filter field, as a Select's does.
+templ MultiSelect(p MultiSelectProps) {
+	<div class="select" data-select data-select-multi { p.Attrs... }>
+		<button
+			type="button"
+			id={ p.ID }
+			class="btn btn-secondary select-button"
+			aria-haspopup="listbox"
+			aria-expanded="false"
+			aria-controls={ p.ID + "-list" }
+			popovertarget={ p.ID + "-menu" }
+		>
+			<span class="truncate">{ p.Label }</span>
+			<span class="badge badge-brand" data-select-count hidden?={ p.chosen() == 0 }><span>{ strconv.Itoa(p.chosen()) }</span><span class="sr-only">{ " chosen" }</span></span>
+			@Icon("chevron-down")
+		</button>
+		<div class="menu" id={ p.ID + "-menu" } popover>
+			if len(p.Options) > filterAbove {
+				@menuFilter(p.ID+"-list", "Filter")
+			}
+			<div class="menu-options" id={ p.ID + "-list" } role="listbox" aria-multiselectable="true" aria-labelledby={ p.ID }>
+				for _, o := range p.Options {
+					<label class="menu-item check" role="option" aria-selected={ strconv.FormatBool(o.Checked) } tabindex="-1" data-search={ o.Label }>
+						<input type="checkbox" name={ p.Name } value={ o.Value } checked?={ o.Checked } tabindex="-1"/>
+						<span class="min-w-0 flex-1">{ o.Label }</span>
+						if o.Count > 0 {
+							<span class="menu-count">{ strconv.Itoa(o.Count) }</span>
+						}
+					</label>
+				}
+			</div>
+			if len(p.Options) > filterAbove {
+				@menuNoMatch()
+			}
+		</div>
+	</div>
+}
+
 // menuFilter is the field at the top of a menu that narrows its options. It
 // has no name, so it is not part of the form around it. Focus stays in it
 // while the arrow keys move through the options, which is why it, not the

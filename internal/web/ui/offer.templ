@@ -2,7 +2,6 @@ package ui
 
 import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/static"
-	"strconv"
 	"strings"
 )
 
@@ -25,8 +24,8 @@ type OfferProps struct {
 	// Search is what a filter field finds the card by besides its title,
 	// its text and its tags, which it reads from the card.
 	Search string
-	// Tags are the keys a row of Chips narrows by, and TagText is how the
-	// card names them.
+	// Tags are the keys a choice of categories narrows by (data-filter-pick),
+	// and TagText is how the card names them.
 	Tags    []string
 	TagText string
 	// Shared is set on a page that lists offers by the hundred and has
@@ -118,37 +117,4 @@ templ Offer(p OfferProps) {
 			</a>
 		</div>
 	</li>
-}
-
-// ChipProps configures a Chip.
-type ChipProps struct {
-	// Name is shared by the chips of one row, which makes them one choice.
-	Name  string
-	Value string
-	Label string
-	// Count is how many things the chip stands for; 0 shows none.
-	Count   int
-	Checked bool
-}
-
-// Chips is a row of choices that narrow a list: one is chosen at a time.
-// filters is the id of the element whose items it narrows, the one a
-// data-filter field names too. An item is kept when its data-tags holds the
-// chosen chip's value; the chip with no value keeps them all. They are
-// radio buttons, so the browser brings the choice back with the page.
-templ Chips(label, filters string) {
-	<fieldset class="chips" data-filter-pick={ filters }>
-		<legend class="sr-only">{ label }</legend>
-		{ children... }
-	</fieldset>
-}
-
-templ Chip(p ChipProps) {
-	<label class="chip">
-		<input type="radio" name={ p.Name } value={ p.Value } checked?={ p.Checked }/>
-		<span>{ p.Label }</span>
-		if p.Count > 0 {
-			<span class="chip-count">{ strconv.Itoa(p.Count) }</span>
-		}
-	</label>
 }

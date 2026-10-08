@@ -199,21 +199,21 @@ func categoryText(keys []string) string {
 // the services that are databases' tools.
 const engineCategory = "database"
 
-// categoryChips is the row that narrows the page to one category: those
+// categoryOptions are the categories the page can be narrowed to: those
 // that have something, in the catalogue's order, each with how many.
-func (v NewResource) categoryChips() []ui.ChipProps {
+func (v NewResource) categoryOptions() []ui.MultiOption {
 	_, count := catalog.CategoriesInUse()
-	chips := []ui.ChipProps{{Name: "category", Label: "All", Checked: true}}
+	var options []ui.MultiOption
 	for _, c := range catalog.Categories() {
 		n := count[c.Key]
 		if c.Key == engineCategory {
 			n += len(v.Engines)
 		}
 		if n > 0 {
-			chips = append(chips, ui.ChipProps{Name: "category", Value: c.Key, Label: c.Label, Count: n})
+			options = append(options, ui.MultiOption{Value: c.Key, Label: c.Label, Count: n})
 		}
 	}
-	return chips
+	return options
 }
 
 func servicesAbout(n int) string {
@@ -236,15 +236,14 @@ templ ResourceNew(s ui.Shell, v NewResource) {
 		@ui.PageHeader("Add resource", "It goes into "+v.Env.Name+" of "+v.Project.Name+". Choose what to run.")
 		@ui.IconDefs(ui.OfferIcons("git-branch", "github", "gitlab", "key", "box", "code", KindIcon(db.KindDatabase), KindIcon(db.KindService))...)
 		<div class="grid gap-8">
-			<div class="grid gap-3">
-				<div class="max-w-md">
+			<div class="flex flex-wrap items-center gap-2">
+				<div class="min-w-0 max-w-md grow basis-64">
 					<label class="sr-only" for="kind-filter">Find a kind of resource</label>
 					@ui.Input(ui.InputProps{ID: "kind-filter", Name: "q", Type: "search", Placeholder: "Find: postgres, wordpress, git…", Autofocus: true, Autocomplete: "off", Attrs: templ.Attributes{"data-filter": "kinds"}})
 				</div>
-				@ui.Chips("Category", "kinds") {
-					for _, c := range v.categoryChips() {
-						@ui.Chip(c)
-					}
+				@ui.MultiSelect(ui.MultiSelectProps{ID: "category", Name: "category", Label: "Category", Options: v.categoryOptions(), Attrs: templ.Attributes{"data-filter-pick": "kinds"}})
+				@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Icon: "x", Attrs: templ.Attributes{"data-filter-clear": "kinds", "hidden": true}}) {
+					Clear filters
 				}
 			</div>
 			<div class="grid gap-8" id="kinds">
@@ -274,7 +273,11 @@ templ ResourceNew(s ui.Shell, v NewResource) {
 					}
 				}
 			</div>
-			@ui.EmptyState(ui.EmptyProps{Icon: "search", Title: "Nothing matches", Text: "A service that is not listed can be run from its own Compose file.", Link: "Use your own Compose file", LinkHref: v.Path() + "/service/new?template=" + db.TemplateCustom, Attrs: templ.Attributes{"data-filter-empty": "kinds", "hidden": true}})
+			@ui.EmptyState(ui.EmptyProps{Icon: "search", Title: "Nothing matches", Text: "A service that is not listed can be run from its own Compose file.", Link: "Use your own Compose file", LinkHref: v.Path() + "/service/new?template=" + db.TemplateCustom, Attrs: templ.Attributes{"data-filter-empty": "kinds", "hidden": true}}) {
+				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Attrs: templ.Attributes{"data-filter-clear": "kinds"}}) {
+					Clear filters
+				}
+			}
 		</div>
 	}
 }

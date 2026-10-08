@@ -457,6 +457,11 @@
   .menu-item[aria-selected="true"] .menu-tick {
     visibility: visible;
   }
+  /* How many things an option of a MultiSelect stands for. */
+  .menu-count {
+    color: var(--color-ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
   .menu-item:hover,
   .menu-item:focus,
   .menu-item[data-active] {
@@ -567,7 +572,8 @@
       min-height: 2.75rem;
     }
     .menu-item .icon,
-    .menu-item .logo {
+    .menu-item .logo,
+    .menu-item.check input {
       margin-top: 0;
     }
   }
@@ -811,76 +817,6 @@
     font-size: var(--text-xs);
     line-height: var(--text-xs--line-height);
     color: var(--color-ink-faint);
-  }
-
-  /* Chips: a row of choices that narrow a list. Each is a radio button
-     under its label, so the keyboard and a screen reader have the real
-     control and the label draws it. */
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    min-width: 0;
-  }
-  /* On a narrow screen two dozen chips would be ten rows above the list
-     they narrow: there they are one row that scrolls. The padding is room
-     for a chip's focus ring, which the scrolling box would cut. */
-  @media (max-width: 40rem) {
-    .chips {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      margin: -4px;
-      padding: 4px;
-      scrollbar-width: thin;
-    }
-  }
-  .chip {
-    flex: none;
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: var(--size-control-sm);
-    padding: 0 10px;
-    border: 1px solid var(--color-line-strong);
-    border-radius: var(--radius-full);
-    font-size: var(--text-xs);
-    font-weight: 500;
-    line-height: 1;
-    white-space: nowrap;
-    color: var(--color-ink-soft);
-    cursor: pointer;
-    user-select: none;
-    transition:
-      background-color var(--duration-fast),
-      border-color var(--duration-fast),
-      color var(--duration-fast);
-  }
-  .chip input {
-    position: absolute;
-    inset: 0;
-    margin: 0;
-    opacity: 0;
-    cursor: pointer;
-  }
-  .chip:hover {
-    background: var(--color-veil);
-  }
-  .chip:has(:checked) {
-    background: var(--color-info-soft);
-    border-color: var(--color-info-line);
-    color: var(--color-brand-700);
-  }
-  .chip:has(:focus-visible) {
-    outline: 2px solid var(--color-brand-600);
-    outline-offset: 2px;
-  }
-  .chip-count {
-    color: var(--color-ink-faint);
-    font-variant-numeric: tabular-nums;
-  }
-  .chip:has(:checked) .chip-count {
-    color: inherit;
   }
 
   /* State rail: a coloured left edge that says what a resource is doing.

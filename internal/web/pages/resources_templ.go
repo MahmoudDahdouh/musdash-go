@@ -486,21 +486,21 @@ func categoryText(keys []string) string {
 // the services that are databases' tools.
 const engineCategory = "database"
 
-// categoryChips is the row that narrows the page to one category: those
+// categoryOptions are the categories the page can be narrowed to: those
 // that have something, in the catalogue's order, each with how many.
-func (v NewResource) categoryChips() []ui.ChipProps {
+func (v NewResource) categoryOptions() []ui.MultiOption {
 	_, count := catalog.CategoriesInUse()
-	chips := []ui.ChipProps{{Name: "category", Label: "All", Checked: true}}
+	var options []ui.MultiOption
 	for _, c := range catalog.Categories() {
 		n := count[c.Key]
 		if c.Key == engineCategory {
 			n += len(v.Engines)
 		}
 		if n > 0 {
-			chips = append(chips, ui.ChipProps{Name: "category", Value: c.Key, Label: c.Label, Count: n})
+			options = append(options, ui.MultiOption{Value: c.Key, Label: c.Label, Count: n})
 		}
 	}
-	return chips
+	return options
 }
 
 func servicesAbout(n int) string {
@@ -612,7 +612,7 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"grid gap-8\"><div class=\"grid gap-3\"><div class=\"max-w-md\"><label class=\"sr-only\" for=\"kind-filter\">Find a kind of resource</label>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"grid gap-8\"><div class=\"flex flex-wrap items-center gap-2\"><div class=\"min-w-0 max-w-md grow basis-64\"><label class=\"sr-only\" for=\"kind-filter\">Find a kind of resource</label>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -621,6 +621,10 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.MultiSelect(ui.MultiSelectProps{ID: "category", Name: "category", Label: "Category", Options: v.categoryOptions(), Attrs: templ.Attributes{"data-filter-pick": "kinds"}}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -636,19 +640,17 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				for _, c := range v.categoryChips() {
-					templ_7745c5c3_Err = ui.Chip(c).Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "Clear filters")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Chips("Category", "kinds").Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.Ghost, Icon: "x", Attrs: templ.Attributes{"data-filter-clear": "kinds", "hidden": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div><div class=\"grid gap-8\" id=\"kinds\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div><div class=\"grid gap-8\" id=\"kinds\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -800,15 +802,51 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "search", Title: "Nothing matches", Text: "A service that is not listed can be run from its own Compose file.", Link: "Use your own Compose file", LinkHref: v.Path() + "/service/new?template=" + db.TemplateCustom, Attrs: templ.Attributes{"data-filter-empty": "kinds", "hidden": true}}).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Var25 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Var26 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+					if !templ_7745c5c3_IsBuffer {
+						defer func() {
+							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+							if templ_7745c5c3_Err == nil {
+								templ_7745c5c3_Err = templ_7745c5c3_BufErr
+							}
+						}()
+					}
+					ctx = templ.InitializeContext(ctx)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "Clear filters")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					return nil
+				})
+				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.Primary, Attrs: templ.Attributes{"data-filter-clear": "kinds"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var26), templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = ui.EmptyState(ui.EmptyProps{Icon: "search", Title: "Nothing matches", Text: "A service that is not listed can be run from its own Compose file.", Link: "Use your own Compose file", LinkHref: v.Path() + "/service/new?template=" + db.TemplateCustom, Attrs: templ.Attributes{"data-filter-empty": "kinds", "hidden": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var25), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

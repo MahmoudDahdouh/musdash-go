@@ -128,12 +128,12 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 		t.Error("the catalogue does not offer a person's own Compose file")
 	}
 
-	// The page is narrowed by category: a chip for every category that has
-	// something and for no other, "All" chosen, and on every template's
-	// card the categories its chip looks for.
-	chips := between(t, "the page", page, `<fieldset class="chips" data-filter-pick="kinds">`, "</fieldset>")
-	if !strings.Contains(chips, `type="radio" name="category" value="" checked`) {
-		t.Errorf("no chip for everything, or it is not the chosen one: %s", chips)
+	// The page is narrowed by category: in the menu an option for every
+	// category that has something and for no other, none chosen, and on
+	// every template's card the categories an option looks for.
+	menu := between(t, "the page", page, `<div class="select" data-select data-select-multi data-filter-pick="kinds">`, `<div class="grid gap-8" id="kinds">`)
+	if strings.Contains(menu, " checked") || !strings.Contains(menu, `aria-multiselectable="true"`) {
+		t.Errorf("a category is chosen before anybody chose, or the list takes one only: %s", menu)
 	}
 	inUse, count := catalog.CategoriesInUse()
 	used := map[string]bool{"database": true} // the engines are databases
@@ -141,15 +141,20 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 		used[c.Key] = true
 	}
 	for _, c := range catalog.Categories() {
-		if has := strings.Contains(chips, `value="`+c.Key+`"`); has != used[c.Key] {
-			t.Errorf("category %s: chip %v, in use %v", c.Key, has, used[c.Key])
+		if has := strings.Contains(menu, `name="category" value="`+c.Key+`"`); has != used[c.Key] {
+			t.Errorf("category %s: option %v, in use %v", c.Key, has, used[c.Key])
 		}
 	}
-	if n := strings.Count(chips, `type="radio"`); n != len(used)+1 {
-		t.Errorf("%d chips for %d categories", n, len(used))
+	if n := strings.Count(menu, `type="checkbox"`); n != len(used) {
+		t.Errorf("%d options for %d categories", n, len(used))
 	}
-	if want := `<span>CMS</span> <span class="chip-count">` + strconv.Itoa(count["cms"]) + `</span>`; !strings.Contains(chips, want) {
-		t.Errorf("the CMS chip does not say how many: want %s in %s", want, chips)
+	if want := `<span class="min-w-0 flex-1">CMS</span> <span class="menu-count">` + strconv.Itoa(count["cms"]) + `</span>`; !strings.Contains(menu, want) {
+		t.Errorf("the CMS option does not say how many: want %s in %s", want, menu)
+	}
+	// What is narrowed can be widened again: a button by the field, there
+	// once something narrows, and one where nothing is left.
+	if !strings.Contains(menu, `data-filter-clear="kinds" hidden`) || strings.Count(page, `data-filter-clear="kinds"`) != 2 {
+		t.Errorf("no way to clear the filters by the field and in the empty state")
 	}
 	for _, tpl := range catalog.Services() {
 		at := strings.Index(page, `/service/new?template=`+tpl.Key+`"`)

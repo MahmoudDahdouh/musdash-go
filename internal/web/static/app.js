@@ -97,32 +97,56 @@
 
   // data-filter="<id>" on a field narrows what is inside that element to the
   // items whose data-search holds the text, or whose own text does (what is
-  // inside its data-search-text, where it has one). data-filter-pick="<id>" on a set
-  // of radio buttons narrows the same items to those whose data-tags holds
-  // the chosen value; the two narrow together. A data-filter-group with
-  // nothing left in it goes too, and data-filter-empty="<id>" shows when
-  // nothing is.
+  // inside its data-search-text, where it has one). data-filter-pick="<id>"
+  // on a box of checkboxes (a MultiSelect) narrows the same items to those
+  // whose data-tags holds any of the checked values; the two narrow
+  // together. A data-filter-group with nothing left in it goes too, and one
+  // with a data-filter-count says there how many it has left.
+  // data-filter-empty="<id>" shows when nothing is left at all, and
+  // data-filter-clear="<id>" is a button that undoes both, there only while
+  // there is something to undo.
+  const picksOf = (id) => [...document.querySelectorAll('[data-filter-pick="' + id + '"] :checked')];
   const filterList = (id) => {
     const box = document.getElementById(id);
     if (!box) return;
     const text = (document.querySelector('[data-filter="' + id + '"]')?.value || "").trim().toLowerCase();
-    const tag = document.querySelector('[data-filter-pick="' + id + '"] :checked')?.value || "";
+    const tags = picksOf(id).map((pick) => pick.value);
     let shown = 0;
     box.querySelectorAll("[data-search]").forEach((item) => {
       // Read once: the list can be several hundred cards long.
       item.findBy ??= (item.dataset.search + " " + (item.querySelector("[data-search-text]")?.textContent || "")).toLowerCase();
-      item.hidden = !item.findBy.includes(text) || (tag !== "" && !(item.dataset.tags || "").split(" ").includes(tag));
+      item.tags ??= (item.dataset.tags || "").split(" ");
+      item.hidden = !item.findBy.includes(text) || (tags.length > 0 && !tags.some((tag) => item.tags.includes(tag)));
       if (!item.hidden) shown++;
     });
-    box.querySelectorAll("[data-filter-group]").forEach((g) => (g.hidden = !g.querySelector("[data-search]:not([hidden])")));
+    box.querySelectorAll("[data-filter-group]").forEach((group) => {
+      const left = group.querySelectorAll("[data-search]:not([hidden])").length;
+      group.hidden = left === 0;
+      const count = group.querySelector("[data-filter-count]");
+      if (count) count.textContent = left;
+    });
     const none = document.querySelector('[data-filter-empty="' + id + '"]');
     if (none) none.hidden = shown > 0;
+    document.querySelectorAll('[data-filter-clear="' + id + '"]').forEach((clear) => (clear.hidden = text === "" && tags.length === 0));
   };
   on("input", "[data-filter]", (el) => filterList(el.dataset.filter));
   on("change", "[data-filter-pick]", (el) => filterList(el.dataset.filterPick));
+  on("click", "[data-filter-clear]", (el) => {
+    const id = el.dataset.filterClear;
+    const field = document.querySelector('[data-filter="' + id + '"]');
+    if (field) field.value = "";
+    picksOf(id).forEach((pick) => (pick.checked = false));
+    document.querySelectorAll('[data-filter-pick="' + id + '"][data-select-multi]').forEach(syncMulti);
+    filterList(id);
+    // The button is gone with what it cleared; the field is where to go on.
+    field?.focus();
+  });
   // A page the browser brings back (Back, Refresh) has its fields as they
   // were left, and a list that shows everything again.
-  window.addEventListener("pageshow", () => document.querySelectorAll("[data-filter-pick]").forEach((el) => filterList(el.dataset.filterPick)));
+  window.addEventListener("pageshow", () => {
+    document.querySelectorAll("[data-select-multi]").forEach(syncMulti);
+    document.querySelectorAll("[data-filter-pick]").forEach((el) => filterList(el.dataset.filterPick));
+  });
 
   // Sidebar on small screens: a drawer over the page, which is out of reach
   // behind it as it is behind a dialog. The stylesheet draws the backdrop,
@@ -313,8 +337,15 @@
   });
   // The list is fixed to the window, so it would be left behind when the page
   // under it moves. Scrolling the list itself is not that.
+  // One scroll is not the person's: choosing in a MultiSelect that narrows
+  // the page can leave the page shorter than where it was scrolled to, and
+  // the browser scrolls it there. The list they are still choosing in is put
+  // by its button again; settling is that list, for the frames it takes.
+  let settling = null;
   const shutUnlessInside = (e) => {
-    if (openList && !(e.target instanceof Node && openList.contains(e.target))) shut(openList);
+    if (!openList || (e.target instanceof Node && openList.contains(e.target))) return;
+    if (e.type === "scroll" && settling === openList) return place(openList, openList.closest("[data-select]").querySelector("[popovertarget]"));
+    shut(openList);
   };
   document.addEventListener("scroll", shutUnlessInside, true);
   window.addEventListener("resize", shutUnlessInside);
@@ -363,9 +394,40 @@
     const list = el.closest("[popover]");
     if (list.querySelector("[data-select-filter]")) setActive(list, el, false);
   });
+  // A MultiSelect (data-select-multi) holds any number of its options, each
+  // a checkbox under its label: the browser ticks it, and the list stays
+  // open for the next. What is left is to say the same to a screen reader
+  // and to count them on the button.
+  const syncMulti = (box) => {
+    let chosen = 0;
+    optionsOf(box).forEach((o) => {
+      const checked = o.querySelector("input").checked;
+      o.setAttribute("aria-selected", String(checked));
+      if (checked) chosen++;
+    });
+    const count = box.querySelector("[data-select-count]");
+    count.hidden = chosen === 0;
+    count.firstElementChild.textContent = chosen;
+  };
+  on("change", "[data-select-multi]", (box) => {
+    syncMulti(box);
+    const list = box.querySelector("[popover]");
+    settling = list;
+    // The scroll comes with the next frame's layout and is told the frame
+    // after.
+    requestAnimationFrame(() => requestAnimationFrame(() => settling === list && (settling = null)));
+  });
+  // A press on an option would take the focus from where the arrow keys go
+  // on from: the filter field, or the option that has it.
+  on("mousedown", "[data-select-multi] [role=option]", (el, e) => e.preventDefault());
   on("click", "[data-select] [role=option]", (el) => {
     const box = el.closest("[data-select]");
     const list = el.closest("[popover]");
+    if (box.dataset.selectMulti !== undefined) {
+      // The list stays open. The click has put the focus on the checkbox.
+      (list.querySelector("[data-select-filter]") || el).focus();
+      return;
+    }
     shut(list);
     box.querySelector("[popovertarget]").focus();
     // A Picker's option has filled its field already (data-fill), a
@@ -411,8 +473,9 @@
     let next;
     // Space chooses a focused link, as Enter does: on its own it would
     // scroll the page, which closes the list. An option that is a button
-    // is pressed by Space already.
-    if (e.key === " " && !filtered && current?.matches("a[role=option]")) {
+    // is pressed by Space already, and one that is a label (a MultiSelect's)
+    // by neither key.
+    if (!filtered && ((e.key === " " && current?.matches("a[role=option]")) || ((e.key === " " || e.key === "Enter") && current?.matches("label[role=option]")))) {
       e.preventDefault();
       current.click();
       return;

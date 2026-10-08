@@ -150,6 +150,9 @@ templ Gallery(s ui.Shell) {
 					@ui.Field(ui.FieldProps{Label: "Region", For: "g-region", Hint: "A Combobox: the field in its menu narrows the options."}) {
 						@ui.Combobox("g-region", galleryRegions, "fra", templ.Attributes{"aria-describedby": "g-region-hint"})
 					}
+					@ui.Field(ui.FieldProps{Label: "Category", For: "g-category", Hint: "A MultiSelect: any number of its options, and the menu stays open."}) {
+						@ui.MultiSelect(ui.MultiSelectProps{ID: "g-category", Name: "g-category", Label: "Category", Options: []ui.MultiOption{{Value: "ai", Label: "AI", Count: 59}, {Value: "analytics", Label: "Analytics", Count: 25, Checked: true}, {Value: "cms", Label: "CMS", Count: 41, Checked: true}, {Value: "storage", Label: "Storage", Count: 47}}})
+					}
 					@ui.Field(ui.FieldProps{Label: "Environment variables", For: "g-env", Hint: "One KEY=value per line."}) {
 						@ui.Textarea(ui.InputProps{ID: "g-env", Mono: true, Rows: 3, Described: true, Value: "NODE_ENV=production\nPORT=3000"})
 					}
