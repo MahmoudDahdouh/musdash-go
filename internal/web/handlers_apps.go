@@ -972,19 +972,33 @@ func (s *Server) proxyBehind(r *http.Request, serverID string) string {
 // is one of the server's. app is one a loader returned for the team.
 func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) (db.Domain, error) {
 	raw := strings.TrimSpace(r.PostFormValue("host"))
-	tls := r.PostFormValue("tls") == "1"
+	// The form always says which; without the field it is HTTPS, which is
+	// the one that sends nothing in the clear.
+	scheme := r.PostFormValue("scheme")
+	if scheme == "" {
+		scheme = "https"
+	}
+	tls := scheme == "https"
 	www := r.PostFormValue("redirect_www") == "1"
 	strip := r.PostFormValue("strip_prefix") == "1"
 	onOff := map[bool]string{true: "1", false: "0"}
 	f.Set("host", raw)
 	f.Set("path", strings.TrimSpace(r.PostFormValue("path")))
-	f.Set("tls", onOff[tls])
+	f.Set("scheme", scheme)
 	f.Set("redirect_www", onOff[www])
 	f.Set("strip_prefix", onOff[strip])
 	// The password is not put back in the form: it is typed again.
 	f.Set("auth_user", strings.TrimSpace(r.PostFormValue("auth_user")))
 
+	if scheme != "https" && scheme != "http" {
+		f.Fail("scheme", "Choose https or http.")
+	}
 	host := s.checkHost(r.Context(), f, "host", raw)
+	// Said, not changed without a word: the scheme is in view, and what is
+	// shown is what is stored.
+	if host != "" && tls && isGeneratedDomain(host) {
+		f.Fail("host", "A generated address is served over plain HTTP. Choose http://, or enter a domain of your own.")
+	}
 	path := domainPath(f, "path", r.PostFormValue("path"))
 	// The port of the container the domain leads to. The app's own is
 	// stored as none, so the domain goes with the app when its port is
@@ -1008,9 +1022,6 @@ func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) (db.Domai
 	if !f.OK() {
 		return db.Domain{}, nil
 	}
-	if isGeneratedDomain(host) {
-		tls = false
-	}
 	added, err := s.DB.AddDomain(r.Context(), sessionFrom(r).TeamID, app.ServerID, db.Domain{
 		ResourceKind: db.KindApp, ResourceID: app.ID, Host: host, Path: path, StripPrefix: strip && path != "",
 		TLS: tls, RedirectWWW: www, AuthUser: authUser, AuthHash: authHash, Port: port,
@@ -1030,7 +1041,13 @@ func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) (db.Domai
 
 // renderAppDomains draws an app's Domains tab; f is the Add domain form.
 func (s *Server) renderAppDomains(w http.ResponseWriter, r *http.Request, status int, v pages.AppView, f ui.Form) {
-	s.render(w, r, status, pages.AppDomains(s.appShell(w, r, v), v, f))
+	// What an address made for the app's server ends with. Without the
+	// server the page is drawn all the same, less the button that makes one.
+	suffix := ""
+	if server, err := s.DB.ServerByID(r.Context(), v.App.ServerID); err == nil {
+		suffix = deploy.GeneratedSuffix(server)
+	}
+	s.render(w, r, status, pages.AppDomains(s.appShell(w, r, v), v, f, suffix))
 }
 
 func (s *Server) appDomains(w http.ResponseWriter, r *http.Request) {
@@ -1060,10 +1077,11 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 	// domain at all, and nothing else would say why.
 	tone, note := ui.ToneOK, "Domain added."
 	// A container publishes the ports it was started with. One that is
-	// running does not have a port that no domain named until now.
-	if added.Port != 0 && v.App.Container != "" {
+	// running does not have a port that no domain named until now, and
+	// neither does one a deployment under way has already started.
+	if added.Port != 0 && (v.App.Container != "" || v.App.Status == db.AppDeploying) {
 		if ports, err := s.DB.AppPorts(r.Context(), v.App.ID); err == nil && ports[added.Port] == 0 {
-			tone, note = ui.ToneInfo, "Domain added. Redeploy the app to serve it: the container that is running does not publish port "+strconv.Itoa(added.Port)+"."
+			tone, note = ui.ToneInfo, "Domain added. Redeploy the app to serve it: its container does not publish port "+strconv.Itoa(added.Port)+" yet."
 		}
 	}
 	if added.Path != "" || added.AuthUser != "" {

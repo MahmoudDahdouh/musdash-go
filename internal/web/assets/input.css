@@ -344,6 +344,26 @@
     line-height: 1.5;
     resize: vertical;
   }
+  /* An address in its parts: scheme, domain, port. On one line where
+     there is room, the domain taking what the other two leave; one under
+     the other on a narrow screen. */
+  .address-row {
+    display: grid;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (min-width: 40rem) {
+    .address-row {
+      grid-template-columns: 6.5rem minmax(0, 1fr) 6rem;
+      gap: 12px;
+    }
+  }
+  /* As wide as its column whichever scheme it names, so the domain beside
+     it does not move when the other is chosen. */
+  .address-row .select-button {
+    width: 100%;
+    justify-content: space-between;
+  }
   /* Select ------------------------------------------------------------
    * Not the browser's own, which looks different on every system: a button
    * that names the chosen option, and a menu of them all in a popover. The

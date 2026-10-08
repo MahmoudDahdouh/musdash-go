@@ -245,6 +245,17 @@
   };
   const shut = (list) => list?.isConnected && list.matches(":popover-open") && list.hidePopover();
   const optionsOf = (list) => [...list.querySelectorAll("[role=option]")];
+  // choose makes an option the chosen one of its Select: the hidden input
+  // has its value and the button its label.
+  const choose = (box, option) => {
+    const input = box.querySelector(":scope > input[type=hidden]");
+    if (!input) return;
+    optionsOf(box.querySelector("[popover]")).forEach((o) => o.setAttribute("aria-selected", String(o === option)));
+    box.querySelector("[data-select-label]").textContent = option.textContent.trim();
+    if (input.value === option.dataset.value) return;
+    input.value = option.dataset.value;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  };
   const place = (list, button) => {
     const r = button.getBoundingClientRect();
     const gap = 4;
@@ -434,13 +445,26 @@
     // switcher's is a link the browser now follows: no value here to keep.
     // Only the box's own input says so: a form inside a menu has hidden
     // fields too.
-    const input = box.querySelector(":scope > input[type=hidden]");
+    choose(box, el);
+  });
+  // data-generate="<input id>" on a button puts a made-up name in front of
+  // its data-suffix and the whole into that input: an address that needs
+  // no DNS. The name has the shape of every id musdash makes, a letter and
+  // then letters and digits. Such an address is served over plain HTTP, so
+  // the Select whose button data-scheme names is set to http.
+  on("click", "[data-generate]", (el) => {
+    const input = document.getElementById(el.dataset.generate);
     if (!input) return;
-    optionsOf(list).forEach((o) => o.setAttribute("aria-selected", String(o === el)));
-    box.querySelector("[data-select-label]").textContent = el.textContent.trim();
-    if (input.value === el.dataset.value) return;
-    input.value = el.dataset.value;
-    input.dispatchEvent(new Event("change", { bubbles: true }));
+    const letters = "abcdefghijklmnopqrstuvwxyz234567";
+    const random = crypto.getRandomValues(new Uint8Array(8));
+    let name = letters[random[0] % 26];
+    for (let i = 1; i < random.length; i++) name += letters[random[i] % letters.length];
+    input.value = name + el.dataset.suffix;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const scheme = document.getElementById(el.dataset.scheme)?.closest("[data-select]");
+    const http = scheme?.querySelector('[role=option][data-value="http"]');
+    if (http) choose(scheme, http);
+    input.focus();
   });
   // Enter and Space press the button as they press any, and the browser
   // opens the list. A click that no pointer made says so (detail 0).

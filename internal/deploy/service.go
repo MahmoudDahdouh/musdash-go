@@ -666,13 +666,18 @@ func (d *Deployer) checkoutService(ctx context.Context, r runner.Runner, s db.Se
 // GeneratedDomain builds an address that resolves to the server without any
 // DNS setup: sslip.io answers <anything>.<ip>.sslip.io with <ip>.
 func GeneratedDomain(server db.Server) string {
+	return strings.ToLower(secret.RandomID()[:8]) + GeneratedSuffix(server)
+}
+
+// GeneratedSuffix is what every generated address of a server ends with,
+// from the dot on: a name in front of it makes one.
+func GeneratedSuffix(server db.Server) string {
 	ip := server.IP
 	if net.ParseIP(ip) == nil {
 		ip = "127.0.0.1"
 	}
 	// IPv6 addresses use dashes in sslip.io names.
-	ip = strings.ReplaceAll(ip, ":", "-")
-	return strings.ToLower(secret.RandomID()[:8]) + "." + ip + ".sslip.io"
+	return "." + strings.ReplaceAll(ip, ":", "-") + ".sslip.io"
 }
 
 // teeWriter writes to each of its writers.

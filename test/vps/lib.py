@@ -255,6 +255,9 @@ def _compat_fields(action, over):
     if action == "/account/tokens" and "token_ability" in over:
         deploy = over.pop("token_ability") == "deploy"
         over.update(perm_read=True, perm_write=deploy, perm_deploy=deploy)
+    # An app's Add domain form had an HTTPS box ("tls"); it has a scheme now.
+    if action and re.match(r"^/(apps/[a-z2-7]+|projects/[a-z2-7]+/env/[a-z2-7]+/app/[a-z2-7]+)/domains$", action) and "tls" in over:
+        over["scheme"] = "https" if over.pop("tls") else "http"
     return over
 
 

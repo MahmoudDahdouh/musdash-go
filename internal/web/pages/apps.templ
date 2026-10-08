@@ -827,9 +827,15 @@ templ domainOptions(d db.Domain) {
 	</span>
 }
 
+// schemeOptions are the two ways a domain is served. HTTPS is first: it is
+// what a domain of one's own gets.
+var schemeOptions = []ui.Option{{Value: "https", Label: "https://"}, {Value: "http", Label: "http://"}}
+
 // AppDomains is an app's Domains tab: the addresses it answers at, and the
-// dialog one is added with. f is that dialog's form.
-templ AppDomains(s ui.Shell, v AppView, f ui.Form) {
+// dialog one is added with. f is that dialog's form. suffix is what a
+// generated address of the app's server ends with, or "" when there is no
+// saying.
+templ AppDomains(s ui.Shell, v AppView, f ui.Form, suffix string) {
 	@appFrame(s, v, "domains") {
 		<div class="grid max-w-3xl gap-6">
 			<section class="card">
@@ -874,13 +880,27 @@ templ AppDomains(s ui.Shell, v AppView, f ui.Form) {
 				}
 			</section>
 			@ui.FormDialog(ui.DialogProps{ID: "add-domain", Title: "Add domain", Description: "Point the domain's DNS at the app's server first, so its certificate can be issued.", Action: v.Path() + "/domains", CSRF: s.CSRF, Submit: "Add domain", Wide: true, Open: !f.OK()}) {
-					<div class="grid items-start gap-4 sm:grid-cols-2">
-						@ui.TextField(f, "Domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com"})
-						@ui.TextField(f, "Only under this path", "Optional. With /api, this app answers app.example.com/api and what is below it; another app can take the rest of the domain.", ui.InputProps{ID: "path", Mono: true, Placeholder: "/api"})
+					<div class="address-row">
+						@ui.Field(ui.FieldProps{Label: "Scheme", For: "scheme", Error: f.E("scheme")}) {
+							@ui.Select("scheme", schemeOptions, f.V("scheme"), nil)
+						}
+						@ui.TextField(f, "Domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com", Autocomplete: "off"})
+						@ui.TextField(f, "Port", "", ui.InputProps{ID: "port", Mono: true, Value: strconv.Itoa(v.App.Port), Autocomplete: "off", Attrs: templ.Attributes{"inputmode": "numeric"}})
 					</div>
-					@ui.Checkbox("tls", f.V("tls") != "0", nil) {
-						Serve over HTTPS with an automatic certificate
-					}
+					<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+						if suffix != "" {
+							@ui.Button(ui.ButtonProps{Small: true, Icon: "refresh", Attrs: templ.Attributes{"data-generate": "host", "data-suffix": suffix, "data-scheme": "scheme"}}) {
+								Generate an address
+							}
+						}
+						<p class="field-hint">
+							if suffix != "" {
+								A generated address needs no DNS and is served over plain HTTP.
+							}
+							The port is the one the app listens on.
+						</p>
+					</div>
+					@ui.TextField(f, "Path", "Optional. With /api, this app answers app.example.com/api and what is below it; another app can take the rest of the domain.", ui.InputProps{ID: "path", Mono: true, Placeholder: "/api", Autocomplete: "off"})
 					@ui.Checkbox("redirect_www", f.V("redirect_www") == "1", nil) {
 						Also redirect the www form of the name to it (or the bare name, if this one starts with www)
 					}

@@ -34,6 +34,32 @@ func TestAppDomainsTab(t *testing.T) {
 	if strings.Contains(page, "data-autoopen") {
 		t.Fatal("the Add domain dialog is open on a page nobody sent a form to")
 	}
+	// The dialog: the scheme as a menu with HTTPS chosen, the domain, the
+	// app's own port, the path, and a button that makes an address for the
+	// app's server.
+	dialog := between(t, tab, page, `id="add-domain"`, `</dialog>`)
+	for _, want := range []string{
+		`name="scheme" value="https"`, `data-value="https"`, `data-value="http"`,
+		`id="host" name="host"`, `id="port" name="port" type="text" value="80"`, `inputmode="numeric"`,
+		`id="path" name="path"`, `name="redirect_www"`, `name="strip_prefix"`, `name="auth_user"`, `name="auth_password" type="password"`,
+		`data-generate="host"`, `data-suffix=".127.0.0.1.sslip.io"`, `data-scheme="scheme"`,
+	} {
+		if !strings.Contains(dialog, want) {
+			t.Errorf("the Add domain dialog is missing %s", want)
+		}
+	}
+	if strings.Contains(dialog, `name="tls"`) {
+		t.Error("the dialog still has the HTTPS box beside the scheme")
+	}
+	// In the order asked for: scheme, domain, port, then the path.
+	last := -1
+	for _, id := range []string{`id="scheme"`, `id="host"`, `id="port"`, `id="path"`, `id="redirect_www"`, `id="strip_prefix"`, `id="auth_user"`} {
+		at := strings.Index(dialog, id)
+		if at <= last {
+			t.Errorf("%s is missing or out of place in the dialog", id)
+		}
+		last = at
+	}
 
 	// A refused form comes back on the tab, with the dialog open.
 	for _, c := range []struct {
@@ -54,7 +80,7 @@ func TestAppDomainsTab(t *testing.T) {
 	}
 
 	// Adding and removing both come back to the tab.
-	res, _ = a.post(tab, tab, url.Values{"host": {"new.example.com"}, "path": {"/v1"}, "tls": {"1"}})
+	res, _ = a.post(tab, tab, url.Values{"host": {"new.example.com"}, "path": {"/v1"}, "scheme": {"https"}})
 	wantRedirect(t, res, tab)
 	doms, _ := a.db.ListDomains(ctx, db.KindApp, web)
 	if len(doms) != 2 || doms[1].Host != "new.example.com" || doms[1].Path != "/v1" || !doms[1].TLS {

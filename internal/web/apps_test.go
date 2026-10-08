@@ -322,11 +322,24 @@ func TestAppDomains(t *testing.T) {
 	appID := a.newApp(projectID, env, "web", true, nil)
 	page := a.appPath(appID) + "/domains"
 
-	res, _ := a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"Shop.Example.com"}, "tls": {"1"}, "redirect_www": {"1"}})
+	res, _ := a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"Shop.Example.com"}, "scheme": {"https"}, "redirect_www": {"1"}})
 	wantRedirect(t, res, page)
-	// A generated name never gets HTTPS, whatever the box says.
-	res, _ = a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"abc.203.0.113.7.sslip.io"}, "tls": {"1"}})
+	// A generated name never gets HTTPS, and the form says so: the scheme
+	// that was chosen is not changed behind the person's back.
+	res, body := a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"abc.203.0.113.7.sslip.io"}, "scheme": {"https"}})
+	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "served over plain HTTP") {
+		t.Fatalf("a generated address over HTTPS: status %d", res.StatusCode)
+	}
+	// What was chosen is what the form comes back with.
+	if !strings.Contains(body, `name="scheme" value="https"`) {
+		t.Error("the refused form lost its scheme")
+	}
+	res, _ = a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"abc.203.0.113.7.sslip.io"}, "scheme": {"http"}})
 	wantRedirect(t, res, page)
+	// A scheme that is neither is refused, and a form without one is HTTPS.
+	if res, _ := a.post(page, page, url.Values{"host": {"ftp.example.com"}, "scheme": {"ftp"}}); res.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("scheme ftp: status %d", res.StatusCode)
+	}
 
 	doms, _ := a.db.ListDomains(context.Background(), db.KindApp, appID)
 	if len(doms) != 2 || doms[0].Host != "shop.example.com" || !doms[0].TLS || !doms[0].RedirectWWW || doms[1].TLS {
@@ -348,7 +361,7 @@ func TestAppDomains(t *testing.T) {
 		t.Fatalf("the proxy was reloaded %d times", reloads)
 	}
 
-	res, body := a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"shop.example.com"}})
+	res, body = a.post(page, a.appPath(appID)+"/domains", url.Values{"host": {"shop.example.com"}})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "already routed") {
 		t.Error("a duplicate domain was accepted")
 	}
@@ -683,9 +696,9 @@ func TestAppDomainPort(t *testing.T) {
 	}
 
 	for _, bad := range []string{"0", "65536", "http", "-1", "80a"} {
-		res, _ := a.post(page, page, url.Values{"host": {"bad.example.com"}, "port": {bad}})
-		if res.StatusCode != http.StatusUnprocessableEntity {
-			t.Errorf("port %q: status %d", bad, res.StatusCode)
+		res, body := a.post(page, page, url.Values{"host": {"bad.example.com"}, "port": {bad}})
+		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "port number between 1 and 65535") {
+			t.Errorf("port %q: status %d, want 422 with the reason under the field", bad, res.StatusCode)
 		}
 	}
 }
@@ -753,10 +766,10 @@ func TestAppDomainPathsAndPasswords(t *testing.T) {
 	webPage, apiPage := a.appPath(web)+"/domains", a.appPath(api)+"/domains"
 	const password = "correct horse battery"
 
-	res, _ := a.post(webPage, a.appPath(web)+"/domains", url.Values{"host": {"shop.example.com"}, "tls": {"1"}})
+	res, _ := a.post(webPage, a.appPath(web)+"/domains", url.Values{"host": {"shop.example.com"}, "scheme": {"https"}})
 	wantRedirect(t, res, webPage)
 	// Typed loosely: no leading slash, one at the end.
-	res, body := a.post(apiPage, a.appPath(api)+"/domains", url.Values{"host": {"shop.example.com"}, "path": {"api/"}, "strip_prefix": {"1"}, "tls": {"1"},
+	res, body := a.post(apiPage, a.appPath(api)+"/domains", url.Values{"host": {"shop.example.com"}, "path": {"api/"}, "strip_prefix": {"1"}, "scheme": {"https"},
 		"auth_user": {"ada"}, "auth_password": {password}})
 	wantRedirect(t, res, apiPage)
 
