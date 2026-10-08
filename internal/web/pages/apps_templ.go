@@ -442,8 +442,8 @@ func accessOptions(c GitChoices) []ui.Option {
 var buildPackOptions = []ui.Option{
 	{Value: "dockerfile", Label: "Dockerfile"},
 	{Value: "static", Label: "Static site"},
-	{Value: "nixpacks", Label: "Nixpacks (no Dockerfile needed)"},
-	{Value: "railpack", Label: "Railpack (no Dockerfile needed)"},
+	{Value: "nixpacks", Label: "Nixpacks"},
+	{Value: "railpack", Label: "Railpack"},
 }
 
 // currentAccess is the way into the repository a Git form shows as chosen:
