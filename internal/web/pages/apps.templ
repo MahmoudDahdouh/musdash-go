@@ -830,7 +830,7 @@ templ domainOptions(d db.Domain) {
 
 // schemeOptions are the two ways a domain is served. HTTPS is first: it is
 // what a domain of one's own gets.
-var schemeOptions = []ui.Option{{Value: "https", Label: "https://"}, {Value: "http", Label: "http://"}}
+var schemeOptions = []ui.Option{{Value: "https", Label: "https"}, {Value: "http", Label: "http"}}
 
 // DomainTarget is what the Domains tab knows of the app's server: where a
 // domain has to lead. All of it is empty when the server could not be read.
@@ -945,8 +945,12 @@ templ AppDomains(s ui.Shell, v AppView, f ui.Form, at DomainTarget) {
 						@ui.Field(ui.FieldProps{Label: "Scheme", For: "scheme", Error: f.E("scheme")}) {
 							@ui.Select("scheme", schemeOptions, f.V("scheme"), nil)
 						}
-						@ui.TextField(f, "Domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com", Autocomplete: "off"})
-						@ui.TextField(f, "Port", "", ui.InputProps{ID: "port", Mono: true, Value: strconv.Itoa(v.App.Port), Autocomplete: "off", Attrs: templ.Attributes{"inputmode": "numeric"}})
+						<div class="address-domain">
+							@ui.TextField(f, "Domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com", Autocomplete: "off"})
+						</div>
+						<div class="address-port">
+							@ui.TextField(f, "Port", "", ui.InputProps{ID: "port", Mono: true, Value: strconv.Itoa(v.App.Port), Autocomplete: "off", Attrs: templ.Attributes{"inputmode": "numeric", "maxlength": "5"}})
+						</div>
 					</div>
 					<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
 						if at.Suffix != "" {

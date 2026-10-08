@@ -695,9 +695,9 @@ func TestAppDomainPort(t *testing.T) {
 		t.Error("a port the container does not publish is in the routes")
 	}
 
-	for _, bad := range []string{"0", "65536", "http", "-1", "80a"} {
+	for _, bad := range []string{"0", "65536", "http", "-1", "80a", "123456"} {
 		res, body := a.post(page, page, url.Values{"host": {"bad.example.com"}, "port": {bad}})
-		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "port number between 1 and 65535") {
+		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "Enter 1 to 65535.") {
 			t.Errorf("port %q: status %d, want 422 with the reason under the field", bad, res.StatusCode)
 		}
 	}

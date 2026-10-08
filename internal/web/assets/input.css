@@ -344,25 +344,39 @@
     line-height: 1.5;
     resize: vertical;
   }
-  /* An address in its parts: scheme, domain, port. On one line where
-     there is room, the domain taking what the other two leave; one under
-     the other on a narrow screen. */
+  /* An address in its parts, on one line at every width: scheme, domain,
+     port. The scheme and the port are as wide as what they hold, and the
+     domain has the rest. */
   .address-row {
-    display: grid;
-    gap: 16px;
+    display: flex;
     align-items: start;
+    gap: 12px;
   }
-  @media (min-width: 40rem) {
-    .address-row {
-      grid-template-columns: 6.5rem minmax(0, 1fr) 6rem;
-      gap: 12px;
+  .address-row > * {
+    flex: none;
+  }
+  .address-row > .address-domain {
+    flex: 1;
+    min-width: 0;
+  }
+  /* A port has up to five digits. Where the browser can size a field by
+     its text it does, and never under four digits; elsewhere the field
+     holds five. 26px is the field's padding and border. */
+  .address-port .input {
+    width: calc(5ch + 26px);
+    min-width: calc(4ch + 26px);
+  }
+  @supports (field-sizing: content) {
+    .address-port .input {
+      width: auto;
+      field-sizing: content;
     }
   }
-  /* As wide as its column whichever scheme it names, so the domain beside
-     it does not move when the other is chosen. */
-  .address-row .select-button {
-    width: 100%;
-    justify-content: space-between;
+  /* An error is a sentence under a field a few characters wide: it wraps
+     in that width and does not push the domain aside. */
+  .address-row .field-error {
+    width: 0;
+    min-width: 100%;
   }
   /* Select ------------------------------------------------------------
    * Not the browser's own, which looks different on every system: a button

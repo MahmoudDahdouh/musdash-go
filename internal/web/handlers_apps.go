@@ -995,7 +995,7 @@ func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) (db.Domai
 	// Said, not changed without a word: the scheme is in view, and what is
 	// shown is what is stored.
 	if host != "" && tls && isGeneratedDomain(host) {
-		f.Fail("host", "A generated address is served over plain HTTP. Choose http://, or enter a domain of your own.")
+		f.Fail("host", "A generated address is served over plain HTTP. Choose http, or enter a domain of your own.")
 	}
 	path := domainPath(f, "path", r.PostFormValue("path"))
 	// The port of the container the domain leads to. The app's own is
@@ -1006,6 +1006,10 @@ func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) (db.Domai
 		f.Set("port", typed)
 		if port = parsePort(f, "port", typed); port == app.Port {
 			port = 0
+		}
+		// The field is a few characters wide, and so is what is under it.
+		if f.E("port") != "" {
+			f.Fail("port", "Enter 1 to 65535.")
 		}
 	}
 	authUser, authHash := domainAuth(f, r.PostFormValue("auth_user"), r.PostFormValue("auth_password"))

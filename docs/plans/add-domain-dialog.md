@@ -77,3 +77,21 @@ User name                      Password
 **Tests (piece 3):** the dialog has the scheme with https chosen, the domain, the app's port, the path, the two boxes and the password, in that order, the button with the server's suffix, and no HTTPS box; a generated address with https is refused with the reason and comes back with the scheme that was chosen, with http it is stored; a scheme that is neither is refused; a port that is not one is refused with the reason under its field.
 
 **Review of the code (piece 3).** Looked at in a browser at 1024 and at 375 wide. The scheme's button was as wide as its text, so the domain field moved by a few pixels when the other scheme was chosen: the column has one width now and the button fills it. The line under the fields ran to two lines and said the port twice; it is one sentence a fact. Generate gave a new name at each press and the menu showed http ticked; the menu opens above the dialog. A domain made with it, port 9000 and a password, is a row with "HTTP", "Password: ada" and "Port 9000". At 375 the three fields stack and nothing scrolls sideways. The ui-ux-pro-max checks that apply held: every field has a visible label, an error is under its own field, the button has a text label beside its icon, nothing depends on hover.
+
+## 4. The address line, after it was seen
+
+**Asked** on 2026-10-08, with the dialog in front of the person: scheme, domain and port on one line as a flex row, the domain taking the rest; no "://" in the scheme's menu; the scheme and the port as wide as what they hold; the port's field at least four characters wide.
+
+| # | Decision | Why |
+|---|---|---|
+| 1 | `.address-row` is a flex row at every width, not a grid that stacks under 40rem. The domain is `flex: 1` with `min-width: 0`; the other two do not grow or shrink | Asked for. At 375 wide the domain still has room for about fifteen characters and scrolls its text like any field |
+| 2 | The menu's options read `https` and `http` | Asked for. The values the form sends were those already |
+| 3 | The scheme's button is as wide as its label. The domain's field moves by one letter's width when the other scheme is chosen | "Fit content" was asked for; the fixed column of piece 3 was there to stop that shift, and is the lesser thing |
+| 4 | The port's field is sized by its text where the browser can (`field-sizing: content`), with four digits as the least; elsewhere it is five digits wide, the most a port has. It takes five characters and no more | A width that fits 80, 3000 and 65535 alike without script |
+| 5 | An error under the scheme or the port wraps in the field's own width (`width: 0; min-width: 100%`), and the port's error in this dialog is "Enter 1 to 65535." | The sentence would otherwise be the widest thing in the row and push the domain aside. Under a field named Port, the short one says it |
+
+**Review of the plan.** Nothing changed.
+
+**Tests:** the dialog writes no "://"; a port that is not one is refused with the short reason, six digits among them.
+
+**Review of the code.** Measured in a browser: at 1024 the scheme is 81px, the port 57px with four digits or fewer and 65px with five, the domain the remaining 444px, all three on one line; at 375 they are still one line and nothing scrolls sideways.

@@ -48,6 +48,10 @@ func TestAppDomainsTab(t *testing.T) {
 			t.Errorf("the Add domain dialog is missing %s", want)
 		}
 	}
+	// The menu names the scheme and nothing more.
+	if strings.Contains(dialog, "://") {
+		t.Error("the scheme's menu still writes ://")
+	}
 	if strings.Contains(dialog, `name="tls"`) {
 		t.Error("the dialog still has the HTTPS box beside the scheme")
 	}
