@@ -630,6 +630,57 @@ func TestLongFlashIsTruncated(t *testing.T) {
 	}
 }
 
+// A proxy that was running before an upgrade does not read the routes of a
+// domain with a path or a password, and answers that nothing is deployed
+// there. The dashboard is the only place that can say why.
+func TestGuardedDomainOnAnEarlierProxySaysSo(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	projectID, env := a.project("Shop")
+	web := a.newApp(projectID, env, "web", true, nil)
+	page := a.appPath(web) + "/domains"
+	const warning = "earlier version of musdash"
+	add := func(form url.Values) string {
+		t.Helper()
+		res, _ := a.post(page, page, form)
+		wantRedirect(t, res, page)
+		_, body := a.get(page)
+		return body
+	}
+	guarded := func(host string) url.Values {
+		return url.Values{"host": {host}, "auth_user": {"ada"}, "auth_password": {"correct horse battery"}}
+	}
+
+	// A pid and nothing else is a proxy from before it said what it reads.
+	a.fake.PutFile(a.cfg.ProxyPIDPath(), "4242\n")
+	if body := add(url.Values{"host": {"open.example.com"}}); strings.Contains(body, warning) {
+		t.Error("a domain every proxy serves came with the warning")
+	}
+	if body := add(guarded("one.example.com")); !strings.Contains(body, warning) || !strings.Contains(body, "systemctl restart musdash-proxy") {
+		t.Error("a password on an earlier proxy: the page does not say that it will not be served, or what to do")
+	}
+	if _, body := a.get("/servers"); !strings.Contains(body, "Running, an earlier version") {
+		t.Error("the Servers page does not say that the proxy is an earlier one")
+	}
+	// What a proxy that was killed left behind is not the running one's.
+	a.fake.PutFile(a.cfg.ProxyFormatPath(), "999 2\n")
+	if body := add(url.Values{"host": {"two.example.com"}, "path": {"/api"}}); !strings.Contains(body, warning) {
+		t.Error("another process's file was taken for the running proxy's")
+	}
+	a.fake.PutFile(a.cfg.ProxyFormatPath(), "4242 2\n")
+	if body := add(guarded("three.example.com")); strings.Contains(body, warning) {
+		t.Error("a proxy of this version came with the warning")
+	}
+	if _, body := a.get("/servers"); strings.Contains(body, "an earlier version") {
+		t.Error("the Servers page calls a proxy of this version an earlier one")
+	}
+	// With no proxy running there is nothing to restart.
+	a.fake.RemoveAll(context.Background(), a.cfg.ProxyPIDPath())
+	if body := add(guarded("four.example.com")); strings.Contains(body, warning) {
+		t.Error("no proxy at all came with the warning")
+	}
+}
+
 // Two apps share a domain by path, one of them behind a password. The
 // routes file is what the proxy reads, so the test hands it to the proxy.
 func TestAppDomainPathsAndPasswords(t *testing.T) {

@@ -398,6 +398,7 @@ func runProxy(args []string) error {
 		HTTPSAddr:  *httpsAddr,
 		RoutesPath: cfg.RoutesPath(),
 		PIDPath:    cfg.ProxyPIDPath(),
+		FormatPath: cfg.ProxyFormatPath(),
 		CertDir:    cfg.CertDir(),
 		Log:        newLogger(cfg.Dev),
 	})

@@ -60,6 +60,13 @@ type File struct {
 	Guarded []Route `json:"routes_v2,omitempty"`
 }
 
+// RoutesFormat is how much of a routes file this proxy reads: 1 is Routes
+// alone, 2 is Guarded as well. A running proxy writes the number next to
+// its pid, because the control plane writes for whatever proxy is running,
+// and one from before a format answers that nothing is deployed on a host
+// that needs it. The next key of the kind of Guarded is the next number.
+const RoutesFormat = 2
+
 // NeedsV2 reports whether a route uses what an earlier proxy does not know.
 func (rt Route) NeedsV2() bool { return rt.Path != "" || rt.AuthUser != "" || rt.AuthHash != "" }
 

@@ -3,7 +3,6 @@ package web
 import (
 	"context"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -15,7 +14,6 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/proxy"
-	"github.com/MahmoudDahdouh/musdash-go/internal/runner"
 	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
 	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
@@ -49,24 +47,9 @@ func (s *Server) serverInfo(ctx context.Context, server db.Server) pages.ServerI
 		info.DockerVersion = ""
 		info.DockerError = "Docker did not answer. Is the daemon running, and may the musdash user use it?"
 	}
-	info.ProxyRunning = s.proxyRunning(ctx, dk.R)
+	running, format := s.Deploy.ProxyState(ctx, dk.R)
+	info.ProxyRunning, info.ProxyBehind = running, running && format < proxy.RoutesFormat
 	return info
-}
-
-// proxyRunning reports whether the proxy's pid file names a live process.
-func (s *Server) proxyRunning(ctx context.Context, r runner.Runner) bool {
-	f, err := r.ReadFile(ctx, deploy.PathsOn(s.Cfg, r).ProxyPIDPath())
-	if err != nil {
-		return false
-	}
-	raw, _ := io.ReadAll(io.LimitReader(f, 32))
-	f.Close()
-	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
-	if err != nil || pid < 2 {
-		return false
-	}
-	// Signal 0 checks that the process exists without touching it.
-	return r.Run(ctx, runner.Cmd{Name: "kill", Args: []string{"-0", strconv.Itoa(pid)}}) == nil
 }
 
 func (s *Server) renderServers(w http.ResponseWriter, r *http.Request, status int, f ui.Form) {

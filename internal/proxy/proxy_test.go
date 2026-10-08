@@ -4,16 +4,20 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 var quietLog = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -311,5 +315,45 @@ func TestWebSocketUpgradePasses(t *testing.T) {
 	fmt.Fprint(conn, "ping\n")
 	if got, _ := rd.ReadString('\n'); got != "echo:ping\n" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// The running proxy says what it reads, next to its pid: the control plane
+// writes for whatever proxy is running and has no other way to know that
+// one is from before a format.
+func TestRunSaysWhichRoutesItReads(t *testing.T) {
+	dir := t.TempDir()
+	o := Options{
+		HTTPAddr: "127.0.0.1:0", RoutesPath: filepath.Join(dir, "routes.json"),
+		PIDPath: filepath.Join(dir, "proxy.pid"), FormatPath: filepath.Join(dir, "proxy.format"),
+		Log: quietLog,
+	}
+	ctx, stop := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, o) }()
+
+	want := strconv.Itoa(os.Getpid()) + " " + strconv.Itoa(RoutesFormat) + "\n"
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if raw, err := os.ReadFile(o.FormatPath); err == nil {
+			if string(raw) != want {
+				t.Fatalf("proxy.format holds %q, want %q", raw, want)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the proxy did not write what it reads")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	stop()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	// Left behind, it would be read as the next proxy's.
+	for _, path := range []string{o.PIDPath, o.FormatPath} {
+		if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("%s is still there after the proxy ended", filepath.Base(path))
+		}
 	}
 }

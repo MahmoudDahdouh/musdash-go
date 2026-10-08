@@ -150,6 +150,45 @@ func (d *Deployer) routesLock(serverID string) *sync.Mutex {
 	return mu
 }
 
+// ProxyState says whether a proxy is running on the server r reaches, and
+// which routes it reads (proxy.RoutesFormat; 1 for a proxy from before it
+// said). A proxy from before a format answers "nothing is deployed" for a
+// domain that needs it (one with a path or a password) until it is
+// restarted, and only the dashboard can tell a person so.
+func (d *Deployer) ProxyState(ctx context.Context, r runner.Runner) (running bool, format int) {
+	number := func(path string) []string {
+		f, err := r.ReadFile(ctx, path)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+		raw, _ := io.ReadAll(io.LimitReader(f, 64))
+		return strings.Fields(string(raw))
+	}
+	at := d.at(r)
+	pidFile := number(at.ProxyPIDPath())
+	if len(pidFile) != 1 {
+		return false, 0
+	}
+	pid, err := strconv.Atoi(pidFile[0])
+	if err != nil || pid < 2 {
+		return false, 0
+	}
+	// Signal 0 checks that the process exists without touching it.
+	if r.Run(ctx, runnerCmd("kill", "-0", strconv.Itoa(pid))) != nil {
+		return false, 0
+	}
+	// The file counts only as that process's own: one left behind by a
+	// proxy that was killed says nothing about the one running now.
+	format = 1
+	if said := number(at.ProxyFormatPath()); len(said) == 2 && said[0] == pidFile[0] {
+		if n, err := strconv.Atoi(said[1]); err == nil && n >= 1 && n < 1000 {
+			format = n
+		}
+	}
+	return true, format
+}
+
 // signalProxy asks the proxy to reload now. The proxy also re-reads its
 // routes file every few seconds on its own, so the signal only makes a
 // change immediate; when it cannot be delivered this waits out one poll

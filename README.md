@@ -126,7 +126,7 @@ A domain can be limited to a path: with `/api`, the app answers `app.example.com
 
 A domain can also ask for a user name and password before anything reaches the app. The password is stored as a hash. Over plain HTTP it travels unencrypted, so use it with HTTPS. When one app is routed both openly and, under a path, behind a password, anything an app might read as that path asks for the password too: `/Admin` as well as `/admin`.
 
-Both need a proxy of this version. A proxy that was running before the upgrade answers "nothing is deployed" for such a domain until it is restarted (`systemctl restart musdash-proxy`; the install script does it) or, on another server, installed again from the Servers page.
+Both need a proxy of this version. A proxy that was running before the upgrade answers "nothing is deployed" for such a domain until it is restarted (`systemctl restart musdash-proxy`; the install script does it) or, on another server, installed again from the Servers page. The dashboard says so when such a domain is added while an earlier proxy is running, and on the Servers page.
 
 ### Deploying from Git
 

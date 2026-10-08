@@ -12,6 +12,7 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
 	"github.com/MahmoudDahdouh/musdash-go/internal/proxy"
+	"github.com/MahmoudDahdouh/musdash-go/internal/servers"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 
@@ -943,10 +944,33 @@ func (s *Server) syncRoutes(r *http.Request, serverID string) {
 	}
 }
 
-// addAppDomain reads the Add domain form and gives the app the domain. What
-// is wrong with the form is recorded in f; an error is one of the server's.
-// app is one a loader returned for the team.
-func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) error {
+// proxyBehind says what to do about a proxy that is running on a server
+// from before this version's routes, or "" when it is not. It asks the
+// server, so it is asked only when the answer changes what a person is told.
+func (s *Server) proxyBehind(r *http.Request, serverID string) string {
+	ctx, cancel := detached(r, 8*time.Second)
+	defer cancel()
+	server, err := s.DB.ServerByID(ctx, serverID)
+	if err != nil {
+		return ""
+	}
+	rn, err := s.Pool.Runner(ctx, server)
+	if err != nil {
+		return ""
+	}
+	if running, format := s.Deploy.ProxyState(ctx, rn); !running || format >= proxy.RoutesFormat {
+		return ""
+	}
+	if servers.IsLocal(server) {
+		return "Restart it on the server: systemctl restart musdash-proxy"
+	}
+	return "Install the proxy again from the Servers page."
+}
+
+// addAppDomain reads the Add domain form and gives the app the domain,
+// which it returns. What is wrong with the form is recorded in f; an error
+// is one of the server's. app is one a loader returned for the team.
+func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) (db.Domain, error) {
 	raw := strings.TrimSpace(r.PostFormValue("host"))
 	tls := r.PostFormValue("tls") == "1"
 	www := r.PostFormValue("redirect_www") == "1"
@@ -972,12 +996,12 @@ func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) error {
 		f.Fail("host", "An app can have up to 20 domains.")
 	}
 	if !f.OK() {
-		return nil
+		return db.Domain{}, nil
 	}
 	if isGeneratedDomain(host) {
 		tls = false
 	}
-	_, err := s.DB.AddDomain(r.Context(), sessionFrom(r).TeamID, app.ServerID, db.Domain{
+	added, err := s.DB.AddDomain(r.Context(), sessionFrom(r).TeamID, app.ServerID, db.Domain{
 		ResourceKind: db.KindApp, ResourceID: app.ID, Host: host, Path: path, StripPrefix: strip && path != "",
 		TLS: tls, RedirectWWW: www, AuthUser: authUser, AuthHash: authHash,
 	})
@@ -989,9 +1013,9 @@ func (s *Server) addAppDomain(r *http.Request, app db.App, f *ui.Form) error {
 	case errors.Is(err, db.ErrHostElsewhere):
 		f.Fail("host", "This domain is routed on another server. A domain's paths are all served by the server its DNS points at.")
 	case err != nil:
-		return err
+		return added, err
 	}
-	return nil
+	return added, nil
 }
 
 // renderAppDomains draws an app's Domains tab; f is the Add domain form.
@@ -1011,7 +1035,8 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var f ui.Form
-	if err := s.addAppDomain(r, v.App, &f); err != nil {
+	added, err := s.addAppDomain(r, v.App, &f)
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -1020,7 +1045,16 @@ func (s *Server) appDomainAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.syncRoutes(r, v.App.ServerID)
-	setFlash(w, r, ui.ToneOK, "Domain added.")
+	// A path or a password is written where only a proxy of this version
+	// reads it. One that was running before the upgrade does not know the
+	// domain at all, and nothing else would say why.
+	tone, note := ui.ToneOK, "Domain added."
+	if added.Path != "" || added.AuthUser != "" {
+		if advice := s.proxyBehind(r, v.App.ServerID); advice != "" {
+			tone, note = ui.ToneWarn, "Domain added, but the proxy running on the app's server is from an earlier version of musdash: it answers \"nothing is deployed\" for a domain with a path or a password. "+advice
+		}
+	}
+	setFlash(w, r, tone, note)
 	redirect(w, r, v.Path()+"/domains")
 }
 

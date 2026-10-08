@@ -14,6 +14,9 @@ type ServerInfo struct {
 	DockerVersion string // "" when Docker did not answer
 	DockerError   string
 	ProxyRunning  bool
+	// ProxyBehind: the running proxy is from an earlier version and does
+	// not read the routes of a domain with a path or a password.
+	ProxyBehind bool
 	Apps          int // everything that runs there
 	// For a server reached over SSH.
 	PublicKey string          // the key to install on the server
@@ -123,7 +126,10 @@ templ localServerCard(s ui.Shell, info ServerInfo, f ui.Form) {
 				</dd>
 				<dt>Proxy</dt>
 				<dd>
-					if info.ProxyRunning {
+					if info.ProxyBehind {
+						@ui.Pill(ui.ToneWarn, "Running, an earlier version")
+						<span class="muted ml-2 text-sm">It answers "nothing is deployed" for a domain with a path or a password until it is restarted: <span class="code">systemctl restart musdash-proxy</span></span>
+					} else if info.ProxyRunning {
 						@ui.Pill(ui.ToneOK, "Running")
 					} else {
 						@ui.Pill(ui.ToneWarn, "Not running")

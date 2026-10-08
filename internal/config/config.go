@@ -40,16 +40,17 @@ func EnvOr(name, def string) string {
 	return def
 }
 
-func (c Config) DBPath() string        { return filepath.Join(c.DataDir, "musdash.db") }
-func (c Config) MasterKeyPath() string { return filepath.Join(c.DataDir, "master.key") }
-func (c Config) LogDir() string        { return filepath.Join(c.DataDir, "logs") }
-func (c Config) ProxyDir() string      { return filepath.Join(c.DataDir, "proxy") }
-func (c Config) RoutesPath() string    { return filepath.Join(c.ProxyDir(), "routes.json") }
-func (c Config) ProxyPIDPath() string  { return filepath.Join(c.ProxyDir(), "proxy.pid") }
-func (c Config) CertDir() string       { return filepath.Join(c.ProxyDir(), "certs") }
-func (c Config) WorkDir() string       { return filepath.Join(c.DataDir, "work") }
-func (c Config) BackupDir() string     { return filepath.Join(c.DataDir, "backups") }
-func (c Config) AppsDir() string       { return filepath.Join(c.DataDir, "apps") }
+func (c Config) DBPath() string          { return filepath.Join(c.DataDir, "musdash.db") }
+func (c Config) MasterKeyPath() string   { return filepath.Join(c.DataDir, "master.key") }
+func (c Config) LogDir() string          { return filepath.Join(c.DataDir, "logs") }
+func (c Config) ProxyDir() string        { return filepath.Join(c.DataDir, "proxy") }
+func (c Config) RoutesPath() string      { return filepath.Join(c.ProxyDir(), "routes.json") }
+func (c Config) ProxyPIDPath() string    { return filepath.Join(c.ProxyDir(), "proxy.pid") }
+func (c Config) ProxyFormatPath() string { return filepath.Join(c.ProxyDir(), "proxy.format") }
+func (c Config) CertDir() string         { return filepath.Join(c.ProxyDir(), "certs") }
+func (c Config) WorkDir() string         { return filepath.Join(c.DataDir, "work") }
+func (c Config) BackupDir() string       { return filepath.Join(c.DataDir, "backups") }
+func (c Config) AppsDir() string         { return filepath.Join(c.DataDir, "apps") }
 
 // AppDir holds one resource's env file and file mounts on its server.
 func (c Config) AppDir(id string) string { return filepath.Join(c.AppsDir(), id) }

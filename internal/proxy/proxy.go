@@ -35,6 +35,7 @@ type Options struct {
 	HTTPSAddr  string // TLS listener, ":443" in production; "" turns HTTPS off
 	RoutesPath string // routes.json
 	PIDPath    string // where the control plane finds the process to signal
+	FormatPath string // where it reads which routes this process understands
 	CertDir    string // certificate cache
 	Log        *slog.Logger
 }
@@ -367,6 +368,18 @@ func Run(ctx context.Context, o Options) error {
 			return err
 		}
 		defer os.Remove(o.PIDPath)
+	}
+	if o.FormatPath != "" {
+		// The pid is part of it: left behind by a proxy that was killed,
+		// the file must not speak for whichever one is started next.
+		tmp := o.FormatPath + ".tmp"
+		if err := os.WriteFile(tmp, []byte(strconv.Itoa(os.Getpid())+" "+strconv.Itoa(RoutesFormat)+"\n"), 0o644); err != nil {
+			return err
+		}
+		if err := os.Rename(tmp, o.FormatPath); err != nil {
+			return err
+		}
+		defer os.Remove(o.FormatPath)
 	}
 
 	hup := make(chan os.Signal, 1)
