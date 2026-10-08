@@ -3337,17 +3337,17 @@ func AppDomains(s ui.Shell, v AppView, f ui.Form, at DomainTarget) templ.Compone
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "</div></div><div class=\"flex flex-wrap items-center gap-x-3 gap-y-2\"><p class=\"field-hint min-w-0 flex-1 basis-56\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "</div></div><div class=\"flex flex-wrap items-start gap-x-3 gap-y-2\"><p class=\"field-hint min-w-0 flex-1 basis-56\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if at.Suffix != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, "A generated domain needs no DNS and is served over plain HTTP. ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, "<span class=\"block\">A generated domain needs no DNS and is served over plain HTTP.</span> ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "The port is the one the app listens on.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "<span class=\"block\">The port is the one the app listens on.</span></p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

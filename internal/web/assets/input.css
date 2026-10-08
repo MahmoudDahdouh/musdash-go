@@ -359,18 +359,10 @@
     flex: 1;
     min-width: 0;
   }
-  /* A port has up to five digits. Where the browser can size a field by
-     its text it does, and never under four digits; elsewhere the field
-     holds five. 26px is the field's padding and border. */
+  /* A port has up to five digits, and the field is that wide whatever it
+     holds. 26px is the field's padding and border. */
   .address-port .input {
     width: calc(5ch + 26px);
-    min-width: calc(4ch + 26px);
-  }
-  @supports (field-sizing: content) {
-    .address-port .input {
-      width: auto;
-      field-sizing: content;
-    }
   }
   /* An error is a sentence under a field a few characters wide: it wraps
      in that width and does not push the domain aside. */

@@ -110,3 +110,17 @@ User name                      Password
 **Tests:** the dialog has "Generate domain" after the sentence about a generated domain.
 
 **Review of the code.** In a browser at 1024 the button's right edge is the row's (815px both), and a press fills the domain and sets the scheme to http as before; at 375 the sentence takes the line and the button is under it at the end.
+
+## 6. Three more things about the line under the fields
+
+**Asked** on 2026-10-08: the port's field five characters wide; a new line between "HTTP." and "The port"; the sentence and the button aligned at the start (`align-items: flex-start`).
+
+| # | Decision | Why |
+|---|---|---|
+| 1 | The port's field is five digits wide whatever it holds; sizing by its text (4.4) goes | Asked for. Five is the most a port has, so nothing is ever cut and the line does not change width as one types |
+| 2 | The two sentences are a line each | Asked for. They are about two different fields |
+| 3 | The row is `items-start`: the button's top is level with the first sentence | Asked for |
+
+**Review of the plan.** Nothing changed.
+
+**Review of the code.** Measured in a browser at 1024: the port's field is 65px with four digits and with five, and five fit without scrolling; the two sentences are a line each; the row's `align-items` is `flex-start`, and the button's top is the first sentence's.
