@@ -81,7 +81,7 @@
   --size-rail: 3px;
   --size-logo: 3rem; /* 48px: a logo on the card of something to add */
   --size-mark: 4rem; /* 64px: the square it stands on */
-  --size-offer: 28.125rem; /* 450px: the least height of that card */
+  --size-offer: 11.25rem; /* 180px: the least height of that card */
 }
 
 @layer base {

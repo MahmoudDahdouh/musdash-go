@@ -75,7 +75,7 @@ count, none checked) and wants the Clear button; gallery gets a MultiSelect.
 
 ## Step 2: the cards
 
-- `--size-offer: 28.125rem` (450px) in `@theme`; `.offer { min-height }`.
+- `--size-offer: 11.25rem` (180px) in `@theme`; `.offer { min-height }`.
   The foot is already pushed to the bottom (`margin-block: auto`).
 - `.badge-soft`: an outlined badge in the info tone's soft blue (border
   `info-line`, text `info`), no fill. `ui.Badge(text, ui.ToneSoft)`.
@@ -107,25 +107,25 @@ heading, and the count in the Services heading.
 
 ## Review of the plan
 
-- *Any or all?* Any. A template has one to three categories; "all" of two
+- _Any or all?_ Any. A template has one to three categories; "all" of two
   chosen would be nearly always empty.
-- *A label with `role="option"` around a checkbox.* An option's children
+- _A label with `role="option"` around a checkbox._ An option's children
   are presentational, so a screen reader hears one option, selected or not;
   the checkbox is `tabindex="-1"` and never in the tab order. Accepted.
-- *The list closes when the page scrolls*, and narrowing the list can make
+- _The list closes when the page scrolls_, and narrowing the list can make
   the page shorter than where it was scrolled to, which is a scroll. To
   look at in the browser; if it happens, a list that is multi is placed
   again by its button instead of shut for the frames after a change.
   **Fixed in the plan**: added to step 1.
-- *450px for cards whose content is 143 to 246px* leaves most of a card
+- _450px for cards whose content is 143 to 246px_ leaves most of a card
   empty, and 638 cards make a page of about 100,000px. It is what was
   asked, so it is done as one token; said in the report, with a picture.
-- *Badges inside `data-search-text`*: the field still finds a card by a
+- _Badges inside `data-search-text`_: the field still finds a card by a
   category's name, as it does now.
-- *`TestSignedInPagesHaveNoInlineScriptOrStyle`*: the menu's ids
+- _`TestSignedInPagesHaveNoInlineScriptOrStyle`_: the menu's ids
   (`category`, `category-menu`, `category-list`) are new on the page; no
   `style` attribute anywhere (the list is placed through the CSSOM).
-- *CLAUDE.md* names `ui.Chips` twice and lists the `data-*` attributes:
+- _CLAUDE.md_ names `ui.Chips` twice and lists the `data-*` attributes:
   updated with step 1.
 
 Approved with the one fix.
@@ -139,10 +139,10 @@ Approved with the one fix.
   the button says 2; Clear filters empties both and goes; Enter in the
   menu's filter field ticks the marked option, Escape gives the focus back
   to the button.
-- *The focus.* A click on a label puts the focus on its checkbox (Chrome),
+- _The focus._ A click on a label puts the focus on its checkbox (Chrome),
   whatever `mousedown` did, and the arrow keys then started from nowhere.
   The click handler puts it back in the filter field, or on the option.
-- *The scroll.* Confirmed: scrolled 100px down, the seven services of
+- _The scroll._ Confirmed: scrolled 100px down, the seven services of
   Support leave a page shorter than that, the browser scrolls to 61 and the
   list shut. Now it is put by its button again (4px under it), and the next
   scroll, the person's, shuts it as before.
@@ -179,3 +179,12 @@ Approved with the one fix.
   to the empty state.
 - At 375px the field is the page's width with Category under it, nothing
   scrolls sideways, and a card is a screen high: one at a time.
+
+## Afterwards: 180px
+
+Asked for the same day, once the page had been seen: the least height is
+180px, not 450. `--size-offer` is `11.25rem`. A card's own content is 143
+to 246px, so the shortest cards grow a little and the rest are as high as
+what is in them; a row is still as high as its tallest card. What the
+reviews above say about 450px (the empty space, the page of 100,000px, a
+card a screen high on a phone) is no longer so.
