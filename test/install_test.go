@@ -111,9 +111,9 @@ func TestInstallVersion(t *testing.T) {
 func TestInstallReleaseURL(t *testing.T) {
 	for _, sh := range shells(t) {
 		for _, c := range []struct{ set, want string }{
-			{"VERSION=; BASE=", "https://github.com/MahmoudDahdouh/musdash-go/releases/latest/download/checksums.txt"},
-			{"VERSION=v1.2.3; BASE=", "https://github.com/MahmoudDahdouh/musdash-go/releases/download/v1.2.3/checksums.txt"},
-			{"VERSION=v1.2.3; BASE=file:///rel", "file:///rel/checksums.txt"},
+			{"WANTED=; BASE=", "https://github.com/MahmoudDahdouh/musdash-go/releases/latest/download/checksums.txt"},
+			{"WANTED=v1.2.3; BASE=", "https://github.com/MahmoudDahdouh/musdash-go/releases/download/v1.2.3/checksums.txt"},
+			{"WANTED=v1.2.3; BASE=file:///rel", "file:///rel/checksums.txt"},
 		} {
 			if out, _ := sourced(t, sh, c.set+"; release_url checksums.txt"); strings.TrimSpace(out) != c.want {
 				t.Errorf("%s: %s gives %q, want %q", sh, c.set, out, c.want)
@@ -392,10 +392,17 @@ case "$1" in
   is-active)
     shift
     for a in "$@"; do
-      case "$a" in -*) ;; *) [ -f "/tmp/active.$a" ] || exit 3 ;; esac
+      case "$a" in
+        -*) ;;
+        musdash-proxy.service) [ -f "/tmp/active.$a" ] && [ ! -f /tmp/proxy-cannot-listen ] || exit 3 ;;
+        *) [ -f "/tmp/active.$a" ] || exit 3 ;;
+      esac
     done
     ;;
-  restart)
+  restart | start)
+    # A test can make one restart fail, as a connection that dropped would.
+    if [ "$1" = restart ] && [ -f /tmp/restart-fails ]; then exit 1; fi
+    if [ "$1" = start ] && [ -f "/tmp/active.$2" ]; then exit 0; fi
     touch "/tmp/active.$2"
     if [ "$2" = musdash-server.service ]; then
       if [ -f /tmp/server.pid ]; then kill "$(cat /tmp/server.pid)" 2>/dev/null; sleep 1; fi
@@ -493,7 +500,7 @@ func (e *installEnv) run(script string, args ...string) string {
 		"-e", "MUSDASH_ADDRESS=203.0.113.10",
 	}
 	cmd = append(cmd, args...)
-	cmd = append(cmd, installImage, "sh", "-c", "export PATH=/t/stubs:$PATH\n"+script)
+	cmd = append(cmd, installImage, "sh", "-c", "export PATH=/t/stubs:$PATH\nmkdir -p /run/systemd/system 2>/dev/null\n"+script)
 	out, err := exec.Command("docker", cmd...).CombinedOutput()
 	if err != nil {
 		e.t.Fatalf("docker run: %v\n%s", err, out)
@@ -519,6 +526,7 @@ echo "data: $(stat -c '%a %U' /var/lib/musdash 2>&1)"
 echo "log: $(stat -c '%a' /var/log/musdash-install.log 2>&1)"
 echo "health: $(curl -fsS http://127.0.0.1:8000/healthz 2>&1)"
 echo "restarts: $(grep -c '^restart' /tmp/systemctl.log 2>/dev/null)"
+echo "pending: $(ls /run/musdash-install.restart 2>/dev/null)"
 echo "--systemctl"; cat /tmp/systemctl.log 2>/dev/null
 echo "--server unit"; cat /etc/systemd/system/musdash-server.service 2>/dev/null
 echo "--proxy unit"; cat /etc/systemd/system/musdash-proxy.service 2>/dev/null
@@ -568,7 +576,7 @@ sh /install.sh >/dev/null; echo "first=$? restarts=$(grep -c '^restart' /tmp/sys
 sh /install.sh; echo "rc=$?"` + facts)
 	has(t, out, "first=0 restarts=2", "rc=0", "restarts: 2\n",
 		"[5/7] done: nothing changed", "[6/7] not needed: already running",
-		"musdash v0.0.1 was installed already. Nothing was restarted.", "health: ok")
+		"musdash v0.0.1 was installed already. Nothing that was running was restarted.", "health: ok")
 }
 
 func TestInstallUpgrade(t *testing.T) {
@@ -726,6 +734,63 @@ func TestInstallFailsUnderATerminal(t *testing.T) {
 	}
 }
 
+// An upgrade that was cut off after the binary was replaced and before the
+// services were restarted: the next run finds the new binary in place, and
+// must still restart, or the old version would run on and be called new.
+func TestInstallFinishesAnInterruptedUpgrade(t *testing.T) {
+	e := newInstallEnv(t, "v0.0.1", "v0.0.2")
+	out := e.run(`groupadd docker
+MUSDASH_RELEASE_URL=file:///t/v0.0.1 sh /install.sh >/dev/null; echo "first=$?"
+touch /tmp/restart-fails
+MUSDASH_RELEASE_URL=file:///t/v0.0.2 sh /install.sh; echo "cut=$? restarts=$(grep -c '^restart' /tmp/systemctl.log) pending=$(ls /run/musdash-install.restart)"
+rm /tmp/restart-fails
+MUSDASH_RELEASE_URL=file:///t/v0.0.2 sh /install.sh; echo "rc=$?"` + facts)
+	has(t, out, "first=0", "[6/7] failed", "The proxy did not start.",
+		"cut=1 restarts=3 pending=/run/musdash-install.restart",
+		"rc=0", "restarts: 5\n", "pending: \n", "binary: musdash v0.0.2", "health: ok")
+	if strings.Contains(out, "Nothing that was running was restarted") {
+		t.Errorf("the run after a cut-off upgrade restarted nothing:\n%s", out)
+	}
+}
+
+// Nothing new and one service down: it is started, and the other, which
+// serves the apps, is left running.
+func TestInstallStartsWhatIsDown(t *testing.T) {
+	e := newInstallEnv(t, "v0.0.1")
+	out := e.run(`groupadd docker
+export MUSDASH_RELEASE_URL=file:///t/v0.0.1
+sh /install.sh >/dev/null; echo "first=$?"
+rm /tmp/active.musdash-server.service
+sh /install.sh; echo "rc=$?"` + facts)
+	has(t, out, "first=0", "rc=0", "restarts: 2\n", "[6/7] done: started what was not running",
+		"start musdash-proxy.service", "start musdash-server.service", "health: ok")
+}
+
+// A proxy that cannot have its ports exits and is started again every
+// second, while the dashboard answers. That is not an install that worked.
+func TestInstallSaysWhenTheProxyDoesNotStayUp(t *testing.T) {
+	e := newInstallEnv(t, "v0.0.1")
+	out := e.run(`groupadd docker
+touch /tmp/proxy-cannot-listen
+MUSDASH_RELEASE_URL=file:///t/v0.0.1 sh /install.sh; echo "rc=$?"` + facts)
+	has(t, out, "rc=1", "[7/7] failed", "the proxy that serves your apps does not", "port 80 or 443", "health: ok")
+	if strings.Contains(out, "is running.") || strings.Contains(out, "Dashboard:") {
+		t.Errorf("the install was called done with no proxy:\n%s", out)
+	}
+}
+
+// systemd installed is not systemd running (a container, WSL without it).
+// That is said in the first step, before Docker is installed for nothing.
+func TestInstallNeedsSystemdToBeRunning(t *testing.T) {
+	e := newInstallEnv(t, "v0.0.1")
+	out := e.run(`rmdir /run/systemd/system
+MUSDASH_RELEASE_URL=file:///t/v0.0.1 sh /install.sh; echo "rc=$?"` + facts)
+	has(t, out, "rc=1", "[1/7] failed", "systemd is installed here but is not what runs this machine")
+	if strings.Contains(out, "[2/7]") {
+		t.Errorf("the install went on without systemd:\n%s", out)
+	}
+}
+
 // A window too short for the list gets the plain lines.
 func TestInstallInASmallWindow(t *testing.T) {
 	e := newInstallEnv(t, "v0.0.1")
@@ -734,6 +799,43 @@ func TestInstallInASmallWindow(t *testing.T) {
 	has(t, out, "rc=0", "[1/7] Checking this server", "Dashboard: http://203.0.113.10:8000")
 	if strings.Contains(out, "\x1b") {
 		t.Errorf("an escape sequence in a window too small to draw in:\n%q", out)
+	}
+	// The widest row is 70 columns: one column less, and it would wrap and
+	// every redraw scroll the list by a line.
+	narrow := e.run("groupadd docker\n"+strings.Replace(underTerminal, "cols 100", "cols 69", 1),
+		"-e", "MUSDASH_RELEASE_URL=file:///t/v0.0.1", "-e", "TERM=xterm-256color")
+	has(t, narrow, "rc=0", "[1/7] Checking this server")
+	if strings.Contains(narrow, "\x1b") {
+		t.Errorf("the list was drawn in a window of 69 columns:\n%q", narrow)
+	}
+}
+
+// What is printed plainly is cleaned as what is drawn is: a system's name
+// or an address given in the environment must not move a cursor, and
+// dash's echo would make a real escape of a written-out one.
+func TestInstallPlainOutputIsCleaned(t *testing.T) {
+	for _, sh := range shells(t) {
+		if out, _ := sourced(t, sh, `FANCY=; plain "$T"`, "T=[1/7] done: Evil\x1b[2JOS \\033[2J"); strings.Contains(out, "\x1b") || !strings.Contains(out, "Evil[2JOS") {
+			t.Errorf("%s: plain printed %q", sh, out)
+		}
+		out, _ := sourced(t, sh, "public_address", `MUSDASH_ADDRESS=1.2.3.4\033[2J; id`)
+		if out != "1.2.3.4033[2Jid" && out != "1.2.3.40332Jid" {
+			t.Errorf("%s: an address from the environment came out as %q", sh, out)
+		}
+	}
+}
+
+// The frames of the ASCII spinner look like file name patterns ("[oo]").
+func TestInstallSpinnerIsNotAPattern(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "o"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, sh := range shells(t) {
+		out, _ := sourced(t, sh, `cd "$D"; `+threeRows+"UTF8=; glyphs; colors; frame 2 1", "D="+dir)
+		if !strings.Contains(out, "[oo]  Downloading musdash") {
+			t.Errorf("%s: with a file called o beside it, the spinner became a file name:\n%s", sh, out)
+		}
 	}
 }
 

@@ -27,7 +27,7 @@ The installer shows each step as it runs:
 4. **Creating the musdash user**: a system user that runs both services and is a member of the `docker` group.
 5. **Installing the services**: the binary at `/usr/local/bin/musdash` and two systemd services, `musdash-server` and `musdash-proxy`.
 6. **Starting musdash.**
-7. **Waiting for the dashboard**, so that the address it ends with works when you open it.
+7. **Waiting for the dashboard**, so that the address it ends with works when you open it. It also watches the proxy for three seconds: when another web server already has port 80 or 443, the proxy cannot start, and the installer says so instead of calling the install done.
 
 To read the script before it runs as root, download it first:
 
@@ -41,7 +41,7 @@ sudo sh install.sh
 
 When a step fails, the installer names it and prints the end of that step's output. The whole output is in `/var/log/musdash-install.log`.
 
-In a terminal the steps are drawn as a list that fills in. Where the output is not a terminal (a file, a pipe, cloud-init), or the window is smaller than 20 rows by 66 columns, each step is a plain line. Three settings change what the installer does:
+In a terminal the steps are drawn as a list that fills in. Where the output is not a terminal (a file, a pipe, cloud-init), or the window is smaller than 20 rows by 70 columns, each step is a plain line. Three settings change what the installer does:
 
 | Variable | What it does |
 |---|---|
@@ -69,7 +69,7 @@ Ports 80 and 443 must be reachable from the internet for certificates to be issu
 
 Run the install command again. It installs the latest release and says which version replaced which.
 
-Apps keep running, and keep serving while the control plane restarts. The proxy is the same binary and is restarted too, so new connections to apps are refused for about a second, and for up to fifteen when a long request (a download, a log stream) is under way, which the proxy lets finish first. Upgrade when that is acceptable. Running the command when there is nothing newer restarts nothing.
+Apps keep running, and keep serving while the control plane restarts. The proxy is the same binary and is restarted too, so new connections to apps are refused for about a second, and for up to fifteen when a long request (a download, a log stream) is under way, which the proxy lets finish first. Upgrade when that is acceptable. Running the command when there is nothing newer restarts nothing that is running; a service that is down is started. An upgrade that was cut off before the restart (a dropped connection) is finished by running the command again.
 
 To install one release and not the latest, take that release's installer:
 

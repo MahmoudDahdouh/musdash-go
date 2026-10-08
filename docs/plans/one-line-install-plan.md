@@ -35,6 +35,27 @@
 | P8 | No pre-release tags. If the workflow fails on `v0.1.0`, nothing is published; the fix is tagged `v0.1.1` | The command asks for the latest release, so the number does not matter, and no tag has to be moved |
 | P9 | git is not installed inside the container tests (a stand-in `git` is on the path) | Installing it there needs the network and a package index. The real thing is checked on a server |
 
+## What the review of the built script changed
+
+An independent review of `install.sh` before the first release found twelve defects, all fixed and each with a test where a container can show it:
+
+| # | What was wrong | Now |
+|---|---|---|
+| R1 | An upgrade cut off after the binary was replaced and before the restart was called finished by the next run, with the old version still running | `/run/musdash-install.restart` is left until both services were restarted |
+| R2 | A proxy that cannot have port 80 or 443 exits and is restarted every second, while every row turned green | The last step watches the proxy for three seconds and reads its restart count |
+| R3 | In bash, Ctrl-C during a step wrote "show the cursor" into the log | It is written to the screen through its own descriptor |
+| R4 | Killed outright, the script left the drawing loop running for ever | The loop looks whether the script is still there; `QUIT` is trapped |
+| R5 | Plain lines and the last screen printed a system's name, a version and `MUSDASH_ADDRESS` uncleaned, and dash's `echo` made real escapes of written-out ones | `printf '%s'` and `clean` |
+| R6 | One failed command in `cleanup` abandoned the rest of it | `set +e` there |
+| R7 | `/etc/os-release` was sourced, as root | Read with `sed` |
+| R8 | systemd installed but not running was found out only after Docker was installed | The first step asks for `/run/systemd/system` |
+| R9 | The ASCII spinner's frames were file name patterns | `set -f` |
+| R10 | The list was drawn from 66 columns, and its widest row is 70 | 70 |
+| R11 | A long address made a box wider than the window | Then the address is one line and no box |
+| R12 | Nothing new and one service down restarted both | `systemctl start` |
+
+Also from it: the release is `WANTED`, not `VERSION` (Docker's script reads that name); `useradd` asks for the group; units are written by rename; downloads that stall end; the log is removed before it is made.
+
 ## Review focus
 
 What the spec implies and a person will meet, most likely first. Each has its test in the task named.

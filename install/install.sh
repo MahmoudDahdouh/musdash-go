@@ -21,7 +21,10 @@
 #   MUSDASH_RELEASE_URL=...   take the release's files from this address
 #   MUSDASH_ADDRESS=...       the address to show for the dashboard
 #   NO_COLOR=1                no colour
-set -eu
+#
+# -f: nothing here is a file name pattern, and the ASCII spinner's frames
+# ("[oo]") would be read as one.
+set -euf
 
 REPO=MahmoudDahdouh/musdash-go
 # The release this copy installs. It is empty in the repository, where the
@@ -33,18 +36,24 @@ LOG=/var/log/musdash-install.log
 UNITS=/etc/systemd/system
 BIN=/usr/local/bin/musdash
 NEWBIN=/usr/local/bin/musdash.new
+# Left behind by a run that replaced the binary or a unit and did not get
+# to restart the services, so that the next run does. It is in /run: after
+# a reboot both services run what is installed anyway.
+PENDING=/run/musdash-install.restart
 PORT=8000
 STEPS=7
 # The lines of the checklist: three above the rows and two under them.
 FRAME_LINES=12
 
-VERSION=${MUSDASH_VERSION:-$RELEASE}
+# Not "VERSION": that is a name Docker's install script reads from its
+# environment, for the version of Docker to install.
+WANTED=${MUSDASH_VERSION:-$RELEASE}
 BASE=${MUSDASH_RELEASE_URL:-}
 E=$(printf '\033')
 
-FANCY=""; COLOR=""; UTF8=1; CLR=""
+FANCY=""; COLOR=""; UTF8=1; CLR=""; COLS=0; SCREEN=""
 TMP=""; PAINTER=""; LOCAL_BIN=""; MADE_NEW=""
-ARCH=""; OLD=""; NEW=""; CHANGED=""; NOTE_GIT=""
+ARCH=""; OLD=""; NEW=""; CHANGED=""; NOTE_GIT=""; RESTARTED=""
 DETAIL=""; SKIP=""; LOGSTART=0
 C_0=""; C_W=""; C_G=""; C_R=""; C_B=""; C_D=""; C_U=""; RAMP=""
 
@@ -66,9 +75,9 @@ valid_version() {
 
 release_url() {
   if [ -n "$BASE" ]; then
-    echo "$BASE/$1"
-  elif [ -n "$VERSION" ]; then
-    echo "https://github.com/$REPO/releases/download/$VERSION/$1"
+    printf '%s\n' "$BASE/$1"
+  elif [ -n "$WANTED" ]; then
+    echo "https://github.com/$REPO/releases/download/$WANTED/$1"
   else
     echo "https://github.com/$REPO/releases/latest/download/$1"
   fi
@@ -263,7 +272,8 @@ look() {
     lk_rows=${lk% *}
     lk_cols=${lk#* }
     case "$lk_rows$lk_cols" in '' | *[!0-9]*) lk_rows=0 lk_cols=0 ;; esac
-    if [ "$lk_rows" -ge 20 ] && [ "$lk_cols" -ge 66 ]; then FANCY=1; fi
+    COLS=$lk_cols
+    if [ "$lk_rows" -ge 20 ] && [ "$lk_cols" -ge 70 ]; then FANCY=1; fi
   fi
   if [ -n "$FANCY" ]; then CLR="$E[2K"; fi
   if [ -n "$FANCY" ] && [ -z "${NO_COLOR:-}" ]; then COLOR=1; fi
@@ -392,12 +402,17 @@ painter() {
   pt_tick=0
   frame 0 1
   : >"$TMP/painting"
+  pt_orphan=""
   while [ -z "$pt_stop" ]; do
     sleep 0.1 2>/dev/null || sleep 1
     pt_tick=$((pt_tick + 1))
     frame "$pt_tick" 0
+    # The script itself may be gone without having stopped this loop (it
+    # was killed outright): then nobody will, and nobody shows the cursor.
+    if ! kill -0 "$$" 2>/dev/null; then pt_stop=1 pt_orphan=1; fi
   done
   frame "$pt_tick" 0
+  if [ -n "$pt_orphan" ]; then printf '%s' "$E[?25h"; fi
 }
 
 start_painter() {
@@ -420,8 +435,10 @@ stop_painter() {
   PAINTER=""
 }
 
+# A plain line may hold a detail, which is what a server said of itself,
+# and dash's echo would turn a written-out "\033" into the real thing.
 plain() {
-  if [ -z "$FANCY" ]; then echo "$1"; fi
+  if [ -z "$FANCY" ]; then printf '%s\n' "$(clean "$1" 120)"; fi
 }
 
 banner_lines() {
@@ -511,7 +528,7 @@ show_box() {
 
 fetch() {
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --retry 2 --connect-timeout 15 -o "$2" "$1"
+    curl -fsSL --retry 2 --connect-timeout 15 --speed-limit 1024 --speed-time 30 -o "$2" "$1"
   else
     wget -q -O "$2" "$1"
   fi
@@ -534,6 +551,14 @@ step_check() {
     echo "musdash needs systemd, and this server has no systemctl."
     return 1
   }
+  # Installed is not running: WSL without systemd, a container, a chroot.
+  # Said here, before Docker is installed for nothing.
+  [ -d /run/systemd/system ] || {
+    echo "systemd is installed here but is not what runs this machine"
+    echo "(a container, WSL without systemd, a chroot). musdash runs as two"
+    echo "systemd services and needs it."
+    return 1
+  }
   ARCH=$(arch_of "$(uname -m)") || {
     echo "There is no musdash for this processor ($(uname -m))."
     echo "It is built for amd64 (x86_64) and arm64 (aarch64)."
@@ -543,10 +568,13 @@ step_check() {
     echo "curl or wget is needed, and this server has neither."
     return 1
   }
-  ck_os=$( (. /etc/os-release && echo "${NAME:-Linux} ${VERSION_ID:-}") 2>/dev/null) || ck_os=Linux
+  # Read as text. The file is made to be sourced, but sourcing it would run
+  # whatever a line of it holds, as root.
+  ck_os=$(sed -n 's/^NAME=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d "\"'")
+  ck_os="${ck_os:-Linux} $(sed -n 's/^VERSION_ID=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d "\"'")"
   OLD=""
   if [ -x "$BIN" ]; then
-    OLD=$("$BIN" version 2>/dev/null | awk '{ print $2 }')
+    OLD=$(clean "$("$BIN" version 2>/dev/null | awk '{ print $2 }')" 40)
   fi
   # The architecture first: a long name of a system is cut at its end.
   DETAIL="$ARCH, ${ck_os:-Linux}"
@@ -554,8 +582,8 @@ step_check() {
 
 install_git() {
   if command -v apt-get >/dev/null 2>&1; then
-    DEBIAN_FRONTEND=noninteractive apt-get install -y git ||
-      { apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y git; }
+    DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -y git ||
+      { apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -y git; }
   elif command -v dnf >/dev/null 2>&1; then
     dnf install -y git
   elif command -v yum >/dev/null 2>&1; then
@@ -651,7 +679,7 @@ step_download() {
     }
     install -m 0755 "$TMP/$dl_file" "$NEWBIN" || return 1
   fi
-  NEW=$("$NEWBIN" version 2>/dev/null | awk '{ print $2 }')
+  NEW=$(clean "$("$NEWBIN" version 2>/dev/null | awk '{ print $2 }')" 40)
   [ -n "$NEW" ] || {
     echo "The binary does not run on this server. Is it for another processor?"
     return 1
@@ -664,7 +692,13 @@ step_user() {
   if id musdash >/dev/null 2>&1; then
     DETAIL="already there"
   else
-    useradd --system --home-dir "$DATA" --shell /usr/sbin/nologin musdash || return 1
+    # The group is asked for: not every system gives a new user one of its
+    # own, and the data directory and both units name it.
+    if getent group musdash >/dev/null 2>&1; then
+      useradd --system --gid musdash --home-dir "$DATA" --shell /usr/sbin/nologin musdash || return 1
+    else
+      useradd --system --user-group --home-dir "$DATA" --shell /usr/sbin/nologin musdash || return 1
+    fi
   fi
   usermod -aG docker musdash || return 1
   install -d -m 0700 -o musdash -g musdash "$DATA" || return 1
@@ -680,10 +714,17 @@ step_services() {
   cmp -s "$NEWBIN" "$BIN" || CHANGED=1
   cmp -s "$TMP/musdash-server.service" "$UNITS/musdash-server.service" || CHANGED=1
   cmp -s "$TMP/musdash-proxy.service" "$UNITS/musdash-proxy.service" || CHANGED=1
+  # An earlier run got as far as here and no further (the connection
+  # dropped, Ctrl-C): what is on the disk is new and what runs is old.
+  if [ -f "$PENDING" ]; then CHANGED=1; fi
   if [ -n "$CHANGED" ]; then
+    : >"$PENDING" || return 1
     mv -f "$NEWBIN" "$BIN" || return 1
-    install -m 0644 "$TMP/musdash-server.service" "$UNITS/musdash-server.service" || return 1
-    install -m 0644 "$TMP/musdash-proxy.service" "$UNITS/musdash-proxy.service" || return 1
+    # A unit by rename, as the binary: a full disk must not leave half of one.
+    install -m 0644 "$TMP/musdash-server.service" "$UNITS/musdash-server.service.new" || return 1
+    mv -f "$UNITS/musdash-server.service.new" "$UNITS/musdash-server.service" || return 1
+    install -m 0644 "$TMP/musdash-proxy.service" "$UNITS/musdash-proxy.service.new" || return 1
+    mv -f "$UNITS/musdash-proxy.service.new" "$UNITS/musdash-proxy.service" || return 1
     systemctl daemon-reload || return 1
   else
     rm -f "$NEWBIN"
@@ -697,11 +738,18 @@ step_services() {
 }
 
 step_start() {
-  if [ -z "$CHANGED" ] &&
-    systemctl is-active --quiet musdash-proxy.service &&
-    systemctl is-active --quiet musdash-server.service; then
-    SKIP=1
-    DETAIL="already running"
+  if [ -z "$CHANGED" ]; then
+    if systemctl is-active --quiet musdash-proxy.service &&
+      systemctl is-active --quiet musdash-server.service; then
+      SKIP=1
+      DETAIL="already running"
+      return 0
+    fi
+    # One of the two is down and nothing is new: it is started, and the one
+    # that runs is left alone, which "start" does and "restart" does not.
+    systemctl start musdash-proxy.service || return 1
+    systemctl start musdash-server.service || return 1
+    DETAIL="started what was not running"
     return 0
   fi
   # The proxy first: on an upgrade it is back in about a second, and apps
@@ -716,12 +764,44 @@ step_start() {
     journalctl -u musdash-server -n 15 --no-pager 2>/dev/null || true
     return 1
   }
+  RESTARTED=1
+  rm -f "$PENDING"
+}
+
+# Both services are of the simple kind: "systemctl restart" comes back as
+# soon as the process exists, whether or not it stays. A proxy that cannot
+# have port 80 (another web server has it) exits at once and is started
+# again every second, and the dashboard would answer all the same. So the
+# proxy is looked at for three seconds before the install is called done.
+proxy_stays() {
+  ps_n=0
+  while [ "$ps_n" -lt 3 ]; do
+    sleep 1
+    systemctl is-active --quiet musdash-proxy.service || return 1
+    ps_n=$((ps_n + 1))
+  done
+  # A manual restart sets this count to nought, so after one of ours
+  # anything else is a proxy that came up and went down again.
+  if [ -n "$RESTARTED" ]; then
+    ps_r=$(systemctl show -p NRestarts --value musdash-proxy.service 2>/dev/null) || ps_r=""
+    case "$ps_r" in '' | *[!0-9]*) ps_r=0 ;; esac
+    [ "$ps_r" -eq 0 ] || return 1
+  fi
+  return 0
 }
 
 step_wait() {
   wt_n=0
   while [ "$wt_n" -lt 30 ]; do
     if probe "http://127.0.0.1:$PORT/healthz"; then
+      proxy_stays || {
+        echo "The dashboard answers, but the proxy that serves your apps does not"
+        echo "stay up. Most often something else has port 80 or 443: another web"
+        echo "server (nginx, Apache, Caddy) or another platform's proxy. Stop it,"
+        echo "then run this again. The proxy's last lines:"
+        journalctl -u musdash-proxy -n 15 --no-pager 2>/dev/null || true
+        return 1
+      }
       DETAIL="answering on port $PORT"
       return 0
     fi
@@ -790,7 +870,8 @@ ask_address() {
 # if it is an address.
 public_address() {
   if [ -n "${MUSDASH_ADDRESS:-}" ]; then
-    clean "$MUSDASH_ADDRESS" 60 | tr -d ' '
+    # An address or a name, and nothing a terminal or a shell reads more into.
+    printf '%s' "$MUSDASH_ADDRESS" | LC_ALL=C tr -cd 'A-Za-z0-9.:_-' | cut -c 1-60
     return 0
   fi
   pa=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n 1) || pa=""
@@ -812,20 +893,24 @@ finish() {
     echo
     banner
     echo
-    show_box "$fn_url"
+    # A box wider than the window would wrap, and its redraws pile up.
+    if [ $((${#fn_url} + 30)) -le "$COLS" ]; then
+      show_box "$fn_url"
+    else
+      printf '  %s%s%s  Dashboard    %s%s%s\n' "$C_B" "$G_PTR$G_PTR$G_PTR" "$C_0" "$C_U" "$fn_url" "$C_0"
+    fi
     echo
   else
-    echo "musdash $NEW is running."
-    echo "Dashboard: $fn_url"
+    printf '%s\n' "musdash $NEW is running." "Dashboard: $fn_url"
   fi
   if [ -z "$OLD" ]; then
     echo "  Open it and create the owner account."
   elif [ "$OLD" != "$NEW" ]; then
-    echo "  Upgraded from $OLD to $NEW. Your account and your apps are as they were."
+    printf '%s\n' "  Upgraded from $OLD to $NEW. Your account and your apps are as they were."
   elif [ -z "$CHANGED" ]; then
-    echo "  musdash $NEW was installed already. Nothing was restarted."
+    printf '%s\n' "  musdash $NEW was installed already. Nothing that was running was restarted."
   else
-    echo "  musdash $NEW was installed again."
+    printf '%s\n' "  musdash $NEW was installed again."
   fi
   cat <<EOF
 
@@ -861,8 +946,12 @@ EOF
 
 cleanup() {
   cu_rc=$?
+  # Whatever fails here (the window was closed, say), the rest still runs.
+  set +e
   stop_painter
-  if [ -n "$FANCY" ]; then printf '%s' "$E[?25h"; fi
+  # To the screen itself: a signal can arrive while a step runs, and in
+  # bash the step's output is then still going to the log.
+  if [ -n "$FANCY" ] && [ -n "$SCREEN" ]; then printf '%s' "$E[?25h" >&3; fi
   if [ -n "$MADE_NEW" ]; then rm -f "$NEWBIN" 2>/dev/null || true; fi
   if [ -n "$TMP" ]; then rm -rf "$TMP"; fi
   exit "$cu_rc"
@@ -870,6 +959,9 @@ cleanup() {
 
 main() {
   LOCAL_BIN=${1:-}
+  # useradd and its kind live here, and "su" without "-" leaves it out.
+  PATH=$PATH:/usr/local/sbin:/usr/sbin:/sbin
+  export PATH
   if [ "$(id -u)" -ne 0 ]; then
     echo "install: this needs root. Run it with sudo:" >&2
     echo "  curl -fsSL https://github.com/$REPO/releases/latest/download/install.sh | sudo sh" >&2
@@ -879,8 +971,8 @@ main() {
     echo "install: $LOCAL_BIN is not a file. Usage: install.sh [a musdash binary for this machine]" >&2
     exit 1
   fi
-  if [ -n "$VERSION" ] && ! valid_version "$VERSION"; then
-    echo "install: a version looks like v1.2.3, not \"$(clean "$VERSION" 40)\"" >&2
+  if [ -n "$WANTED" ] && ! valid_version "$WANTED"; then
+    echo "install: a version looks like v1.2.3, not \"$(clean "$WANTED" 40)\"" >&2
     exit 1
   fi
   TMP=$(mktemp -d) || {
@@ -889,16 +981,22 @@ main() {
   }
   trap cleanup EXIT
   trap 'exit 130' INT
+  trap 'exit 131' QUIT
   trap 'exit 143' TERM HUP
   # The log may hold what a package manager printed. Only its own mode is
   # narrowed: a umask for the whole script would also be Docker's and
   # apt's, and what they install must stay readable.
+  # Removed first: where others may write to the log's directory, a link
+  # left under this name would be followed.
+  rm -f "$LOG"
   (umask 077 && : >"$LOG") 2>/dev/null || {
     echo "install: $LOG cannot be written" >&2
     exit 1
   }
   chmod 600 "$LOG"
   look
+  exec 3>&1
+  SCREEN=1
   mn_i=1
   while [ "$mn_i" -le "$STEPS" ]; do
     set_state "$mn_i" wait
