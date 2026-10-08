@@ -35,13 +35,28 @@ where its logo is from) were put here by tools/catalog:
 - "coolify:<file>" is from Coolify's public/svgs
   (https://github.com/coollabsio/coolify, Apache License 2.0).
 - "dokploy:<file>" is from the blueprint of that service in Dokploy's
-  templates (https://github.com/Dokploy/templates, MIT License).
+  templates (https://github.com/Dokploy/templates, MIT License);
+  "dokploy:<folder>/<file>" is from another blueprint's folder there, of
+  the same service under another name.
+- "dashboard:<file>" is from Dashboard Icons
+  (https://github.com/homarr-labs/dashboard-icons, Apache License 2.0).
+- "svgl:<file>" is from svgl (https://github.com/pheralb/svgl, MIT
+  License).
+- "simple:<file>" is the outline from Simple Icons
+  (https://simpleicons.org, CC0 1.0), in the one colour that collection
+  gives for the brand.
+
+A file whose name ends in "-dark" is that collection's drawing of the logo
+for a light page.
 
 Changed here, in each of them: a style attribute and a <style> element of
-classes are written as presentation attributes, as above, and comments,
-titles, descriptions and an editor's own metadata are removed. A logo that
-could not be written this way, or is larger than 6 KB, was not taken: that
-service is shown with an icon.
+classes are written as presentation attributes, as above, a rule that
+holds only on a dark page is left out, and comments, titles, descriptions
+and an editor's own metadata are removed. Where a drawing was larger than
+6 KB, the coordinates of its paths are written with fewer decimals (to a
+ten-thousandth of the drawing's size) if that brings it under. A logo that
+could not be written this way, is still larger than 6 KB, or is drawn in
+white for a dark page, was not taken: that service is shown with an icon.
 
 Each logo is a trademark of its owner and is used only to name that
 owner's service.

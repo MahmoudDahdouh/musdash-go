@@ -491,3 +491,111 @@ answer on its first start here: its migration runs before PostgreSQL
 accepts connections, since the blueprint waits for the container and not
 for the database. That is its makers' file and the kind of thing "not
 checked" above is about; a second deployment finds the database up.
+
+## Third pass: the logos that were missing
+
+Asked for on 2026-10-08: of the 623 cards on the Add resource page, 194
+services had no logo. Look again for every one of them.
+
+### What was found before anything was changed
+
+- Every engine and every card of the page's own has its logo. The 194 are
+  all imported templates.
+- The converter looked in two places: the selfh.st collection under the
+  template's key and name, and the one file the template's own source
+  names. 62 of the 194 had such a file and it was refused (larger than
+  6 KB, a `<text>`, a link, a style that is no attribute); 132 had none.
+- 8 of the logos that *were* there are an empty square on the page: drawn
+  in white for Coolify's and Dokploy's dark pages (ClassicPress three
+  times, code-server, Convex, Huly, Libredesk, Quant-UX). Found by drawing
+  every logo on a canvas in a browser and counting what differs from the
+  card.
+
+### Decisions
+
+| | Decision | Why |
+|---|---|---|
+| More places | The same service in the other catalogue; Coolify's whole `public/svgs` by name; Dashboard Icons (homarr-labs, Apache-2.0) by name | A template made from Dokploy's blueprint has Coolify's logo when Coolify's template was the one refused. Dashboard Icons is the second collection about self-hosted software, so a name there is the same product |
+| Other names | `logoAlias` in `tools/catalog/logos.go`, by hand: a product's second template (`gitea-sqlite`), a collection's full name for it (`cal-com`, `apache-answer`), a part its owner publishes (`redis-insight`, `proxyscotch`) | Stripping suffixes by rule would give Discord's logo to Discord Tickets. A line is a claim somebody checked |
+| Collections of every kind of brand | svgl (MIT) and Simple Icons (CC0) only for what `logoPicked` names | There "Hermes" is a fashion house and "Codex" is OpenAI's |
+| Simple Icons | Its outline in the one colour it gives the brand, and not when that colour is pale | The collection draws a mark in no colour. Ghost's logo was made the same way, by hand |
+| The 6 KB limit | Stays | It is what keeps several hundred images under a megabyte of the binary, and a test holds every logo to it |
+| A drawing over 6 KB | Tried again with the coordinates of its paths rounded to a ten-thousandth of the drawing's size, after every file that fits as it is | Most collections are already written short, so this is worth two logos today. It costs nothing a person can see at 48px |
+| A white logo | Refused: no shape in it has a fill or a stroke darker than the card. Then the collection's `-dark` drawing, where it has one | An empty square is worse than the icon |
+| A file that passes and is still no logo | `logoRefused`, by hand | Appsmith's is its name in white letters and one orange stroke |
+| A style for a dark page | `@media (prefers-color-scheme: dark)` is left out before the rest is read | The dashboard has no dark page; Buzz's logo is fine without it |
+| Raster logos, logos from each project's own repository | Not in this pass | The first is a change to what a logo is (`logo-*.svg`, the tests, the policy); the second is 90 licences to read |
+
+### Review of this plan
+
+- *Would a wider search change a logo that is there?* It must not: new
+  places come after the old ones, and a rounded file after every file that
+  needs no rounding. Checked on the run: the only logos that changed are
+  the white ones.
+- *The sources have moved since the last import* (26 more templates
+  convert today). A logo is no reason to import untested templates, so the
+  converter ran into a copy and only logos of templates the catalogue
+  already has were brought over, with their lines of `services.SOURCES`.
+  The next full run gives the same logos.
+- *Is the white rule safe?* It errs to "seen": a gradient or a colour's
+  name counts as seen, and one dark shape is enough. What it refused on
+  the run is exactly the 8 the canvas found, and two selfh.st files in
+  pale lime that have a `-dark` drawing.
+
+### What was built
+
+**The numbers.** 46 services have a logo that had none; 4 have another
+(code-server, Convex, Peppermint, Web-Check: the old one was white or
+pale); 6 lost a white one and are shown with the icon (ClassicPress three
+times, Huly, Libredesk, Quant-UX). 154 of 623 are without a logo, where it
+was 194 and 8 empty squares. The logos are 712 KB together, where they
+were 634.
+
+**In the converter** (`tools/catalog/logos.go`): `logoPlaces` (the order),
+`logoAlias`, `logoPicked`, `logoRefused`, `unseen` (XML a browser reads,
+and something on it that shows), `shrink` and `places`. `-dashboard`,
+`-svgl` and `-simple` are new flags, and all three are required: a run
+without one would quietly take logos away. `CATALOG_NOTES=1` now also says
+why each file it found for a service without a logo was refused.
+
+**Found on the way.** A style whose value holds an entity
+(`font-family:&quot;Open Sans&quot;`) was split at the entity's semicolon
+and written as broken XML: such a style is refused now, the converter
+reads its own output as XML, and `TestEveryLogoCanBeShown` does the same
+for every logo there is. No logo in the catalogue was affected. Chrome
+reads `fill="ffffff"` as white although no standard says so; the white
+rule reads it the same way.
+
+**Every new logo was looked at**, at 32px on the card's grey and larger,
+on a sheet in a browser. That is what took Appsmith out, and three names
+out of `logoAlias` (yt-dlp-webui, Kokoro Web, Obsidian LiveSync: another
+maker's product than the logo's owner).
+
+### Review of the code
+
+- `shrink` rounds only `d` and `points`. A number that loses its fraction
+  can run into its neighbour (`1.5.0004`, `10.0001.5`): the space is put
+  back on the side that needs it, and rounding never carries into the
+  digits before the point, which in an arc can be two flags and a number
+  written together. Each case is in `TestSmallerLogo`.
+- `places` allows for a transform that enlarges, by the largest factor in
+  the file. Two nested ones would multiply; none of today's files has
+  that, and the step is a hundredth of a device pixel at the size a logo
+  is shown.
+- `logoPlaces` is tested for its order and its labels, not against the
+  checkouts: `TestLogoPlaces`.
+
+### Still without a logo, and what would change that
+
+| | Services |
+|---|---|
+| No SVG in the two catalogues or in any collection that was searched (they have a PNG, JPG or WebP) | 94: Ampache, Botpress, Bytebase, Casdoor, Dashy, Flagsmith, Gotenberg, Label Studio, Organizr, Snipe-IT, Whoogle, … |
+| An SVG over 6 KB | 27: 13 of them under 10 KB (Gotify, DokuWiki, MediaWiki, Otter Wiki, OpenSpeedTest, …), 26 under 20 KB |
+| An SVG over 64 KB (a picture inside it, as a rule) | 7 |
+| Text, a link to another part, a script, an animation, `currentColor` | 19 |
+| Only a white drawing | 7 |
+
+Raising the limit to 10 KB is 13 logos and about 100 KB of binary; to
+20 KB, 26 logos and 300 KB. The 94 need either small raster logos (a 96px
+WebP is 2 to 4 KB) or a logo taken from each project's own repository.
+Both are decisions about what the catalogue ships, not about searching.

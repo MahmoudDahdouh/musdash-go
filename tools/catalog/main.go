@@ -2,7 +2,8 @@
 // people know: Coolify's templates and Dokploy's blueprints.
 //
 //	go run . -coolify ~/src/coolify -dokploy ~/src/dokploy-templates \
-//	    -icons ~/src/selfhst-icons -repo ../..
+//	    -icons ~/src/selfhst-icons -dashboard ~/src/dashboard-icons \
+//	    -svgl ~/src/svgl -simple ~/src/simple-icons -repo ../..
 //
 // It writes internal/catalog/services/<key>.yaml for every template it can
 // turn into one musdash's rules accept, internal/web/static/logo-<key>.svg
@@ -14,7 +15,8 @@
 // without.
 //
 // With CATALOG_NOTES=1 it says which service it made wait for which job
-// (see oneShots), the one change it makes that is worth reading through.
+// (see oneShots), the one change it makes that is worth reading through,
+// and of every logo it found and could not take, why.
 //
 // A template that converts is not yet one that passes: the test
 // TestCatalogueLoadsInTheSandbox (internal/compose) loads every template the
@@ -51,10 +53,13 @@ func main() {
 	coolify := flag.String("coolify", "", "a checkout of github.com/coollabsio/coolify")
 	dokployDir := flag.String("dokploy", "", "a checkout of github.com/Dokploy/templates")
 	icons := flag.String("icons", "", "a checkout of github.com/selfhst/icons")
+	dashboard := flag.String("dashboard", "", "a checkout of github.com/homarr-labs/dashboard-icons")
+	svgl := flag.String("svgl", "", "a checkout of github.com/pheralb/svgl")
+	simple := flag.String("simple", "", "a checkout of github.com/simple-icons/simple-icons")
 	repo := flag.String("repo", "../..", "the musdash checkout to write into")
 	rejectedFile := flag.String("rejected", "rejected.txt", "the list of templates the sandbox test refused")
 	flag.Parse()
-	if *coolify == "" || *dokployDir == "" || *icons == "" {
+	if *coolify == "" || *dokployDir == "" || *icons == "" || *dashboard == "" || *svgl == "" || *simple == "" {
 		flag.Usage()
 		os.Exit(2)
 	}
@@ -221,26 +226,47 @@ func main() {
 	logos := 0
 	for _, t := range taken {
 		logo := "-"
-		var tried []string
-		for _, n := range logoNames(t) {
-			tried = append(tried, filepath.Join(*icons, "svg", n+".svg"))
-		}
-		tried = append(tried, t.Logos...)
 		if _, err := os.Stat(filepath.Join(static, "logo-"+t.Key+".svg")); err == nil {
-			logo, tried = "musdash", nil
+			logo = "musdash"
 			logos++
-		}
-		for i, file := range tried {
-			if svg := cleanLogo(file); svg != "" {
-				if err := os.WriteFile(filepath.Join(static, "logo-"+t.Key+".svg"), []byte(svg), 0o644); err != nil {
-					fatal(err)
+		} else {
+			// The same service in the other catalogue, and what it is
+			// called elsewhere: their logos are this one's too.
+			var others []*tmpl
+			for _, k := range append([]string{t.Key}, logoAlias[t.Key]...) {
+				for _, c := range byKey[same(k)] {
+					if c.t != t {
+						others = append(others, c.t)
+					}
 				}
-				logo = "selfhst:" + filepath.Base(file)
-				if i >= len(tried)-len(t.Logos) {
-					logo = t.Source + ":" + filepath.Base(file)
+			}
+			tried := logoPlaces(t, others, collections{selfhst: *icons, coolify: *coolify, dashboard: *dashboard, svgl: *svgl, simple: *simple})
+			// A file that can be taken as it is comes before a better
+			// placed one that has to be made smaller first.
+			for _, read := range []func(string) string{cleanLogo, smallerLogo} {
+				for _, p := range tried {
+					if svg := read(p.file); svg != "" {
+						if p.fill != "" {
+							svg = strings.Replace(svg, "<svg ", `<svg fill="`+p.fill+`" `, 1)
+						}
+						if err := os.WriteFile(filepath.Join(static, "logo-"+t.Key+".svg"), []byte(svg), 0o644); err != nil {
+							fatal(err)
+						}
+						logo = p.from
+						break
+					}
 				}
-				logos++
-				break
+				if logo != "-" {
+					logos++
+					break
+				}
+			}
+			if logo == "-" && os.Getenv("CATALOG_NOTES") != "" {
+				for _, p := range tried {
+					if why := whyNot(p.file); why != "not there" {
+						fmt.Printf("no logo: %s: %s: %s\n", t.Key, p.from, why)
+					}
+				}
 			}
 		}
 		if err := os.WriteFile(filepath.Join(services, t.Key+".yaml"), t.render(), 0o644); err != nil {

@@ -708,3 +708,156 @@ func TestCleanLogo(t *testing.T) {
 		}
 	}
 }
+
+// What a logo says for a dark page is left out, and the rest of its style
+// is still written as attributes.
+func TestCleanLogoWithADarkModeRule(t *testing.T) {
+	got := cleanLogo(write(t, t.TempDir(), "a.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <style>.m { fill: #231e1e; } @media (prefers-color-scheme: dark) { .m { fill: #d7d72e; } }</style>
+  <rect class="m" width="10" height="10"/>
+</svg>`))
+	wantAll(t, got, `<rect width="10" height="10" fill="#231e1e"/>`)
+	wantNone(t, got, "style", "d7d72e")
+}
+
+// A logo that would be an empty square on the page is not taken: one drawn
+// in white for a dark page, and one a browser cannot read.
+func TestCleanLogoRefusesWhatWouldNotBeSeen(t *testing.T) {
+	dir := t.TempDir()
+	svg := func(inside string) string {
+		return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"` + inside + `</svg>`
+	}
+	for name, body := range map[string]string{
+		"white":      svg(`><path fill="#fff" d="M0 0h10v10z"/><path fill="white" d="M0 0h1v1z"/>`),
+		"inherited":  svg(` fill="none"><g fill="#FFFFFF"><path d="M0 0h10v10z"/></g>`),
+		"nearly":     svg(`><path fill="rgb(250, 250, 250)" stroke="none" d="M0 0h10v10z"/>`),
+		"no hash":    svg(` fill="ffffff"><path d="M0 0h10v10z"/>`),
+		"only kept":  svg(`><defs><path id="a" d="M0 0h10v10z"/></defs><path fill="#fff" d="M0 0h1v1z"/>`),
+		"no prefix":  svg(`><path its:own="cc" fill="#000" d="M0 0h10v10z"/>`),
+		"not closed": svg(`><g><path d="M0 0h10v10z"/>`),
+		"entity":     svg(`><path style="font-family:&quot;Open Sans&quot;;fill:#000" d="M0 0h10v10z"/>`),
+	} {
+		if got := cleanLogo(write(t, dir, name+".svg", body)); got != "" {
+			t.Errorf("%s was taken: %s", name, got)
+		}
+	}
+	for name, body := range map[string]string{
+		"black by default": svg(`><path d="M0 0h10v10z"/><path fill="#fff" d="M2 2h1v1z"/>`),
+		"a white hole":     svg(`><defs><mask id="m"><rect width="10" height="10" fill="white"/></mask></defs><rect width="10" height="10" fill="#231e1e" mask="url(#m)"/>`),
+		"a stroke":         svg(` fill="none"><path stroke="#0969da" d="M0 0h10v10z"/>`),
+		"a gradient":       svg(`><path fill="url(#g)" d="M0 0h10v10z"/>`),
+		"a short colour":   svg(`><path fill="#08c" d="M0 0h10v10z"/>`),
+	} {
+		if got := cleanLogo(write(t, dir, name+".svg", body)); got == "" {
+			t.Errorf("%s was refused", name)
+		}
+	}
+}
+
+// A drawing too large as it stands is written with fewer decimals, and
+// only where a number is a coordinate.
+func TestSmallerLogo(t *testing.T) {
+	for in, want := range map[string]string{
+		"M1.23456 2.5.123456":      "M1.23 2.5.12",
+		"M1.5.0004 2":              "M1.5 0 2",
+		"M10.0001.5":               "M10 .5",
+		"M-3.999999-.0004":         "M-3.99-0",
+		"M0 0a1 1 0 011.99999.25":  "M0 0a1 1 0 011.99.25",
+		"M0 0a1 1 0 011.00001.756": "M0 0a1 1 0 011 .76",
+		"M1.126 1.5e-7":            "M1.13 1.5e-7",
+		"M4 5.5z":                  "M4 5.5z",
+	} {
+		if got := shrink(`<path d="`+in+`"/>`, 2); got != `<path d="`+want+`"/>` {
+			t.Errorf("%s: %s, want %s", in, got, want)
+		}
+	}
+	if got := shrink(`<g transform="scale(0.123456)"><stop offset="0.123456"/><polygon points="0.123456,1"/></g>`, 2); got != `<g transform="scale(0.123456)"><stop offset="0.123456"/><polygon points="0.12,1"/></g>` {
+		t.Errorf("more than coordinates were changed: %s", got)
+	}
+	for svg, want := range map[string]int{
+		`<svg viewBox="0 0 24 24">`:                                        3,
+		`<svg viewBox="0 0 512 512">`:                                      2,
+		`<svg width="2000" height="900">`:                                  1,
+		`<svg viewBox="0 0 512 512"><g transform="matrix(10 0 0 10 3 4)">`: 3,
+		`<svg viewBox="0 0 512 512"><g transform="scale(.5)">`:             2,
+		`<svg>`: 6,
+	} {
+		if got := places(svg); got != want {
+			t.Errorf("%s: %d places, want %d", svg, got, want)
+		}
+	}
+
+	dir := t.TempDir()
+	long := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="` + strings.Repeat("M1.123456 2.123456h1.123456v1.123456z", 220) + `"/></svg>`
+	file := write(t, dir, "long.svg", long)
+	if got := cleanLogo(file); got != "" {
+		t.Fatalf("a drawing of %d bytes was taken as it is", len(long))
+	}
+	got := smallerLogo(file)
+	wantAll(t, got, `M1.12 2.12h1.12v1.12z`)
+	if len(got) > maxLogo {
+		t.Errorf("%d bytes", len(got))
+	}
+	huge := strings.Replace(long, `"/></svg>`, strings.Repeat("M1.5 2.5h1v1z", 600)+`"/></svg>`, 1)
+	if got := smallerLogo(write(t, dir, "huge.svg", huge)); got != "" {
+		t.Errorf("a drawing that is too large with any decimals was taken: %d bytes", len(got))
+	}
+}
+
+// Where a logo is looked for, and in which order.
+func TestLogoPlaces(t *testing.T) {
+	c := collections{selfhst: "/i", coolify: "/c", dashboard: "/d", svgl: "/s", simple: "/none"}
+	own := &tmpl{Key: "gitea-sqlite", Name: "Gitea (SQLite)", Source: "dokploy", Logos: []string{"/k/blueprints/gitea-sqlite/logo.svg"}}
+	twin := &tmpl{Key: "gitea_sqlite", Source: "coolify", Logos: []string{"/c/public/svgs/gitea-lite.svg"}}
+	parent := &tmpl{Key: "gitea", Source: "dokploy", Logos: []string{"/k/blueprints/gitea/logo.svg"}}
+	var from []string
+	for _, p := range logoPlaces(own, []*tmpl{twin, parent}, c) {
+		from = append(from, p.from)
+	}
+	got := strings.Join(from, " ")
+	order := []string{
+		"selfhst:gitea-sqlite.svg", "dokploy:logo.svg", "coolify:gitea-lite.svg", "coolify:gitea-sqlite.svg",
+		"dashboard:gitea-sqlite.svg", "selfhst:gitea-sqlite-dark.svg", "dashboard:gitea-sqlite-dark.svg",
+		"selfhst:gitea.svg", "dokploy:gitea/logo.svg", "coolify:gitea.svg", "dashboard:gitea.svg", "selfhst:gitea-dark.svg",
+	}
+	at := 0
+	for _, want := range order {
+		i := strings.Index(got[at:], want)
+		if i < 0 {
+			t.Fatalf("%s is not after what should come before it in:\n%s", want, strings.ReplaceAll(got, " ", "\n"))
+		}
+		at += i + len(want)
+	}
+	if strings.Count(got, "dokploy:logo.svg") != 1 || strings.Contains(got, "svgl:") || strings.Contains(got, "simple:") {
+		t.Errorf("places: %s", got)
+	}
+
+	// A collection of every kind of brand is asked only for what was
+	// picked from it, and Simple Icons only where its colour would show.
+	dir := t.TempDir()
+	write(t, dir, "data/simple-icons.json", `[{"title":"Pterodactyl","hex":"10539F"},{"title":"Wiki.js","hex":"1976D2"},{"title":"Pale & Co","hex":"FFFFAA"},{"title":"Other","hex":"000000","slug":"another"}]`)
+	c.simple = dir
+	last := func(key string) logoFile {
+		places := logoPlaces(&tmpl{Key: key, Name: key, Source: "coolify"}, nil, c)
+		return places[len(places)-1]
+	}
+	if p := last("pterodactyl"); p.from != "simple:pterodactyl.svg" || p.fill != "#10539F" || p.file != filepath.Join(dir, "icons/pterodactyl.svg") {
+		t.Errorf("pterodactyl: %+v", p)
+	}
+	if p := last("typesense"); p.from != "svgl:typesense.svg" || p.fill != "" || p.file != "/s/static/library/typesense.svg" {
+		t.Errorf("typesense: %+v", p)
+	}
+	if p := last("something"); strings.HasPrefix(p.from, "simple:") || strings.HasPrefix(p.from, "svgl:") {
+		t.Errorf("something: %+v", p)
+	}
+	for _, p := range logoPlaces(&tmpl{Key: "appsmith", Name: "Appsmith", Source: "coolify", Logos: []string{"/c/public/svgs/appsmith.svg"}}, nil, c) {
+		if p.file == "/c/public/svgs/appsmith.svg" {
+			t.Errorf("a file that was looked at and refused is tried: %+v", p)
+		}
+	}
+	for name, want := range map[string]string{"wikidotjs": "#1976D2", "paleandco": "", "another": "#000000", "other": "", "nobody": ""} {
+		if got := simpleColour(dir, name); got != want {
+			t.Errorf("%s: %q, want %q", name, got, want)
+		}
+	}
+}
