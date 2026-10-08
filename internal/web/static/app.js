@@ -95,58 +95,9 @@
     el?.form.requestSubmit(el);
   });
 
-  // data-filter="<id>" on a field narrows what is inside that element to the
-  // items whose data-search holds the text, or whose own text does (what is
-  // inside its data-search-text, where it has one). data-filter-pick="<id>"
-  // on a box of checkboxes (a MultiSelect) narrows the same items to those
-  // whose data-tags holds any of the checked values; the two narrow
-  // together. A data-filter-group with nothing left in it goes too, and one
-  // with a data-filter-count says there how many it has left.
-  // data-filter-empty="<id>" shows when nothing is left at all, and
-  // data-filter-clear="<id>" is a button that undoes both, there only while
-  // there is something to undo.
-  const picksOf = (id) => [...document.querySelectorAll('[data-filter-pick="' + id + '"] :checked')];
-  const filterList = (id) => {
-    const box = document.getElementById(id);
-    if (!box) return;
-    const text = (document.querySelector('[data-filter="' + id + '"]')?.value || "").trim().toLowerCase();
-    const tags = picksOf(id).map((pick) => pick.value);
-    let shown = 0;
-    box.querySelectorAll("[data-search]").forEach((item) => {
-      // Read once: the list can be several hundred cards long.
-      item.findBy ??= (item.dataset.search + " " + (item.querySelector("[data-search-text]")?.textContent || "")).toLowerCase();
-      item.tags ??= (item.dataset.tags || "").split(" ");
-      item.hidden = !item.findBy.includes(text) || (tags.length > 0 && !tags.some((tag) => item.tags.includes(tag)));
-      if (!item.hidden) shown++;
-    });
-    box.querySelectorAll("[data-filter-group]").forEach((group) => {
-      const left = group.querySelectorAll("[data-search]:not([hidden])").length;
-      group.hidden = left === 0;
-      const count = group.querySelector("[data-filter-count]");
-      if (count) count.textContent = left;
-    });
-    const none = document.querySelector('[data-filter-empty="' + id + '"]');
-    if (none) none.hidden = shown > 0;
-    document.querySelectorAll('[data-filter-clear="' + id + '"]').forEach((clear) => (clear.hidden = text === "" && tags.length === 0));
-  };
-  on("input", "[data-filter]", (el) => filterList(el.dataset.filter));
-  on("change", "[data-filter-pick]", (el) => filterList(el.dataset.filterPick));
-  on("click", "[data-filter-clear]", (el) => {
-    const id = el.dataset.filterClear;
-    const field = document.querySelector('[data-filter="' + id + '"]');
-    if (field) field.value = "";
-    picksOf(id).forEach((pick) => (pick.checked = false));
-    document.querySelectorAll('[data-filter-pick="' + id + '"][data-select-multi]').forEach(syncMulti);
-    filterList(id);
-    // The button is gone with what it cleared; the field is where to go on.
-    field?.focus();
-  });
-  // A page the browser brings back (Back, Refresh) has its fields as they
-  // were left, and a list that shows everything again.
-  window.addEventListener("pageshow", () => {
-    document.querySelectorAll("[data-select-multi]").forEach(syncMulti);
-    document.querySelectorAll("[data-filter-pick]").forEach((el) => filterList(el.dataset.filterPick));
-  });
+  // A page the browser brings back (Back, Refresh) has its checkboxes as
+  // they were left: the count on a MultiSelect's button follows them.
+  window.addEventListener("pageshow", () => document.querySelectorAll("[data-select-multi]").forEach(syncMulti));
 
   // Sidebar on small screens: a drawer over the page, which is out of reach
   // behind it as it is behind a dialog. The stylesheet draws the backdrop,

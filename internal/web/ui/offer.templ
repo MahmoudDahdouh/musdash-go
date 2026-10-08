@@ -1,9 +1,6 @@
 package ui
 
-import (
-	"github.com/MahmoudDahdouh/musdash-go/internal/web/static"
-	"strings"
-)
+import "github.com/MahmoudDahdouh/musdash-go/internal/web/static"
 
 // OfferProps configures an Offer.
 type OfferProps struct {
@@ -21,12 +18,7 @@ type OfferProps struct {
 	Website string
 	// Action is what the button at the end says. Empty is "Deploy".
 	Action string
-	// Search is what a filter field finds the card by besides its title,
-	// its text and its tags, which it reads from the card.
-	Search string
-	// Tags are the keys a choice of categories narrows by (data-filter-pick),
-	// and TagLabels is how the card names them: a soft badge each.
-	Tags      []string
+	// TagLabels is how the card names its categories: a soft badge each.
 	TagLabels []string
 	// Shared is set on a page that lists offers by the hundred and has
 	// drawn their icons once with IconDefs (OfferIcons, and this card's
@@ -75,14 +67,8 @@ templ Offers(label string) {
 // anywhere on the card is a press on it; the links that lead outside stand
 // above it.
 templ Offer(p OfferProps) {
-	<li
-		class="tile offer"
-		data-search={ p.Search }
-		if len(p.Tags) > 0 {
-			data-tags={ strings.Join(p.Tags, " ") }
-		}
-	>
-		<div class="offer-head" data-search-text>
+	<li class="tile offer">
+		<div class="offer-head">
 			<span class="offer-mark">
 				if p.hasLogo() {
 					<img src={ static.URL(LogoFile(p.Logo)) } alt="" width="48" height="48" loading="lazy" decoding="async"/>

@@ -43,11 +43,16 @@ func TestOffer(t *testing.T) {
 	}
 
 	// On a page that draws the icons once, a card refers to them.
-	shared := renderOffer(t, OfferProps{Href: "/add", Icon: "layers", Title: "Umami", Docs: "https://docs.example/", Shared: true, Search: "service umami", Tags: []string{"analytics", "security"}, TagLabels: []string{"Analytics", "Security"}})
-	for _, want := range []string{`<use href="#icon-layers">`, `<use href="#icon-book">`, `<use href="#icon-arrow-right">`, `data-search="service umami"`, `data-tags="analytics security"`, `<p class="offer-tags"><span>Analytics</span>`, `<span>Security</span></p>`, `data-search-text`} {
+	shared := renderOffer(t, OfferProps{Href: "/add", Icon: "layers", Title: "Umami", Docs: "https://docs.example/", Shared: true, TagLabels: []string{"Analytics", "Security"}})
+	for _, want := range []string{`<use href="#icon-layers">`, `<use href="#icon-book">`, `<use href="#icon-arrow-right">`, `<p class="offer-tags"><span>Analytics</span>`, `<span>Security</span></p>`} {
 		if !strings.Contains(shared, want) {
 			t.Errorf("no %s in %s", want, shared)
 		}
+	}
+	// A card carries nothing to be found by: the server finds, and sends
+	// the cards that were.
+	if strings.Contains(shared, "data-") {
+		t.Errorf("a card carries data of its own: %s", shared)
 	}
 	// The categories are bare spans, which the stylesheet draws as badges:
 	// a class on each would be on a thousand of them on the page that

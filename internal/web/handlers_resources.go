@@ -3,9 +3,9 @@ package web
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
-	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
@@ -147,24 +147,56 @@ func (s *Server) envResources(r *http.Request, env db.Environment) (pages.Resour
 }
 
 // resourceNew is the one page a resource of any kind is added from: every
-// way to make an app, every database engine and every service template.
+// way to make an app, every database engine and the service templates, 48
+// at a time. What narrows it, and how far the list has been scrolled, is in
+// the address (q, category, page), and the one address has three answers:
+// the page, the list for the page's form, and the next 48 services for the
+// list's last row.
 func (s *Server) resourceNew(w http.ResponseWriter, r *http.Request) {
 	p, env, ok := s.loadProjectEnv(w, r)
 	if !ok {
 		return
+	}
+	q := r.URL.Query()
+	page, _ := strconv.Atoi(q.Get("page"))
+	htmx := r.Header.Get("HX-Request") == "true"
+	form := htmx && r.Header.Get("HX-Target") == "kinds"
+	v := pages.NewResource{Project: p, Env: env}
+	// Only the list's last row asks for a page after the first alone. Its
+	// answer draws no app card, so the team's sources are not asked for.
+	if htmx && !form && page > 1 {
+		v.Find(q.Get("q"), q["category"], page, false)
+		// The address bar follows the list, so that Back from a card's form
+		// and Refresh draw the list as far as it went.
+		if v.Drawn() > 0 {
+			w.Header().Set("HX-Replace-Url", v.Address())
+		}
+		s.render(w, r, http.StatusOK, pages.ResourceMore(v))
+		return
+	}
+	if form {
+		page = 1 // what the form finds is another list, from its start
 	}
 	choices, err := s.gitChoices(r)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	v := pages.NewResource{Project: p, Env: env, Engines: catalog.Databases(), Templates: catalog.Services()}
 	for _, g := range choices.Sources {
 		v.HasApp = v.HasApp || g.Kind == db.GitSourceGitHubApp
 		v.HasGitLab = v.HasGitLab || g.Kind == db.GitSourceGitLab
 	}
 	for _, a := range choices.Access {
 		v.HasKey = v.HasKey || strings.HasPrefix(a.Value, "key:")
+	}
+	v.Find(q.Get("q"), q["category"], page, true)
+	if form {
+		// The address bar says what the list shows, so that Refresh and a
+		// link sent to somebody show it too. Replaced, not added: Back
+		// leaves the page and does not go through every letter typed.
+		w.Header().Set("HX-Replace-Url", v.Address())
+		s.render(w, r, http.StatusOK, pages.ResourceFound(v))
+		return
 	}
 	shell := s.shell(w, r, "Add resource", "projects", envCrumbs(p, env, ui.Crumb{Label: "Add resource"})...)
 	s.render(w, r, http.StatusOK, pages.ResourceNew(shell, v))

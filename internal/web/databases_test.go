@@ -69,7 +69,7 @@ func TestCreateDatabase(t *testing.T) {
 	// Each is a card with its logo, its documentation and website at the
 	// start of the foot and Deploy, the one link to its form, at the end.
 	for _, tpl := range catalog.Databases() {
-		at := strings.Index(engines, `data-search="database `+tpl.Engine+`"`)
+		at := strings.Index(engines, `/database/new?engine=`+tpl.Engine+`"`)
 		if at < 0 {
 			t.Errorf("%s: no card", tpl.Label)
 			continue
@@ -92,8 +92,17 @@ func TestCreateDatabase(t *testing.T) {
 	}
 	// A service's logo is its drawing or, where there is none, its
 	// picture; a service with neither has the icon and no image.
+	// The page holds 48 services at a time, so each is asked for by name.
+	_, services := a.get("/projects/" + projectID + "/env/" + env.ID + "/new?q=gitea")
+	for _, name := range []string{"dashy", "celld"} {
+		_, found := a.get("/projects/" + projectID + "/env/" + env.ID + "/new?q=" + name)
+		services += found
+	}
+	if !strings.Contains(services, "template=celld") {
+		t.Error("the service with no logo was not found")
+	}
 	for file, has := range map[string]bool{"logo-gitea.svg": true, "logo-dashy.webp": true, "logo-dashy.svg": false, "logo-celld": false} {
-		if strings.Contains(engines, `<img src="/static/`+file) != has {
+		if strings.Contains(services, `<img src="/static/`+file) != has {
 			t.Errorf("%s in the page: want %v", file, has)
 		}
 	}

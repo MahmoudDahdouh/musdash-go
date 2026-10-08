@@ -119,9 +119,11 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 	wantRedirect(t, res, "/projects/"+projectID+"/env/"+env.ID+"/new")
 	res, page := a.get("/projects/" + projectID + "/env/" + env.ID + "/new")
 	wantStatus(t, res, http.StatusOK)
-	for _, tpl := range catalog.Services() {
-		if !strings.Contains(page, "template="+tpl.Key) || !strings.Contains(html.UnescapeString(page), tpl.Name) {
-			t.Errorf("the catalogue is missing %s", tpl.Name)
+	// It draws the first of the catalogue's pages; the rest is asked for as
+	// the list is scrolled (TestAddResourceIsFoundAndPaged).
+	for _, tpl := range catalog.Services()[:48] {
+		if !strings.Contains(page, "template="+tpl.Key+`"`) || !strings.Contains(html.UnescapeString(page), tpl.Name) {
+			t.Errorf("the catalogue's first page is missing %s", tpl.Name)
 		}
 	}
 	if !strings.Contains(page, "template=custom") {
@@ -129,9 +131,8 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 	}
 
 	// The page is narrowed by category: in the menu an option for every
-	// category that has something and for no other, none chosen, and on
-	// every template's card the categories an option looks for.
-	menu := between(t, "the page", page, `<div class="select" data-select data-select-multi data-filter-pick="kinds">`, `<div class="grid gap-8" id="kinds">`)
+	// category that has something and for no other, and none chosen.
+	menu := between(t, "the page", page, `<div class="select" data-select data-select-multi>`, `id="kinds"`)
 	if strings.Contains(menu, " checked") || !strings.Contains(menu, `aria-multiselectable="true"`) {
 		t.Errorf("a category is chosen before anybody chose, or the list takes one only: %s", menu)
 	}
@@ -151,35 +152,26 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 	if want := `<span class="min-w-0 flex-1">CMS</span> <span class="menu-count">` + strconv.Itoa(count["cms"]) + `</span>`; !strings.Contains(menu, want) {
 		t.Errorf("the CMS option does not say how many: want %s in %s", want, menu)
 	}
-	// What is narrowed can be widened again: a button by the field, there
-	// once something narrows, and one where nothing is left.
-	if !strings.Contains(menu, `data-filter-clear="kinds" hidden`) || strings.Count(page, `data-filter-clear="kinds"`) != 2 {
-		t.Errorf("no way to clear the filters by the field and in the empty state")
+	// Nothing narrows yet, so there is nothing to clear.
+	if strings.Contains(page, "Clear filters") || !strings.Contains(menu, `<span id="kinds-clear"></span>`) {
+		t.Errorf("Clear filters is offered with nothing to clear, or has no place by the field")
 	}
 	// A person's own Compose file is under Apps, with what else is their
 	// own. Services are the ready-made ones, and their heading says how
-	// many: the one count on the page.
+	// many there are in all: the one count on the page.
 	apps := between(t, "the page", page, `aria-label="Kinds of app"`, `aria-label="Database engines"`)
-	services := between(t, "the page", page, `aria-label="Kinds of service"`, `data-filter-empty="kinds"`)
+	services := page[strings.Index(page, `aria-label="Kinds of service"`):]
 	for _, own := range []string{db.TemplateCustom, db.TemplateGit} {
 		if link := `/service/new?template=` + own + `"`; !strings.Contains(apps, link) || strings.Contains(services, link) {
 			t.Errorf("a person's own Compose file (%s) is not under Apps, or is under Services too", own)
 		}
 	}
 	heading := between(t, "the page", page, `<h2 class="section-title">Services`, `</h2>`)
-	if want := `(<span data-filter-count>` + strconv.Itoa(len(catalog.Services())) + `</span>)`; !strings.Contains(heading, want) || strings.Count(page, "data-filter-count") != 1 {
+	if want := `(` + strconv.Itoa(len(catalog.Services())) + `)`; !strings.Contains(heading, want) || strings.Count(page, `<span class="font-normal text-ink-mute">(`) != 1 {
 		t.Errorf("the Services heading does not say how many there are, or another heading counts too: %s", heading)
 	}
-	if n := strings.Count(services, `class="tile offer"`); n != len(catalog.Services()) {
-		t.Errorf("%d cards under Services for %d templates", n, len(catalog.Services()))
-	}
-	for _, tpl := range catalog.Services() {
-		at := strings.Index(page, `/service/new?template=`+tpl.Key+`"`)
-		start := strings.LastIndex(page[:at], "<li")
-		head := page[start : start+strings.Index(page[start:], ">")]
-		if want := `data-tags="` + strings.Join(tpl.Categories, " ") + `"`; !strings.Contains(head, want) {
-			t.Errorf("%s: its card has no %s: %s", tpl.Key, want, head)
-		}
+	if n := strings.Count(services, `class="tile offer"`); n != 48 {
+		t.Errorf("%d cards under Services on a page of 48", n)
 	}
 	// The cards refer to icons the page draws once: every reference has
 	// its drawing, and each drawing is there once.
@@ -189,13 +181,13 @@ func TestServiceCatalogueAndTemplateForm(t *testing.T) {
 		}
 	}
 	if n := strings.Count(page, `<path d="M18.5 12L4.99997 12"`); n != 1 {
-		t.Errorf("the arrow of Deploy is drawn %d times on a page of %d templates", n, len(catalog.Services()))
+		t.Errorf("the arrow of Deploy is drawn %d times on a page of cards", n)
 	}
-	if len(page) > 800<<10 {
-		t.Errorf("the page is %d KB: a card's markup has grown", len(page)>>10)
+	if len(page) > 200<<10 {
+		t.Errorf("the page is %d KB: a card's markup has grown, or the page holds more than its first 48", len(page)>>10)
 	}
-	if !strings.Contains(page, `data-tags="database"`) || !strings.Contains(page, `<p class="offer-tags"><span>CMS</span></p>`) {
-		t.Error("the engines are not found under Databases, or a card does not name its categories")
+	if !strings.Contains(page, `<p class="offer-tags"><span>`) {
+		t.Error("a card does not name its categories")
 	}
 
 	// A template that needs a value from the person asks for it, and one

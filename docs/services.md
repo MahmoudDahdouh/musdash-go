@@ -8,7 +8,7 @@ One-click services from the catalogue, a Docker Compose file of your own, and st
 
 A service is a stack of containers described by a Docker Compose file. **Add resource** offers a catalogue of more than 600 services, "Your own Compose file" and a Compose file in a Git repository.
 
-The catalogue is sorted into categories (AI, Analytics, Databases, Monitoring, Storage and so on); a service can be in up to three. The chips above the list narrow it to one category, and the field beside them finds a service by name or by what it does. Both work together.
+The catalogue is sorted into categories (AI, Analytics, Databases, Monitoring, Storage and so on); a service can be in up to three. The **Category** menu above the list narrows it to the categories you tick, and the field beside it finds a service by name or by what it does; several words narrow further (`wordpress mysql`). Both work together, and both are in the page's address, so a narrowed list can be refreshed, bookmarked or sent to somebody. The list shows 48 services at a time and brings the next 48 as you scroll; the heading says how many there are in all, and Back from a service's form returns to where you were in the list.
 
 Six of the templates were written for musdash (n8n, WordPress, Ghost, Uptime Kuma, MinIO, Cloudflare Tunnel) and are started for real by its tests. The rest are the templates of [Coolify](https://coolify.io/services) and [Dokploy](https://github.com/Dokploy/templates), turned into musdash's form by `tools/catalog` (the licences and what was changed are in `internal/catalog/services.LICENSE`). What to know about those:
 

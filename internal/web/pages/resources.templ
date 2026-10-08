@@ -3,7 +3,6 @@ package pages
 import (
 	"strconv"
 
-	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
@@ -124,107 +123,16 @@ templ ResourceOptions(env db.Environment, res Resources, at string) {
 	@ui.MenuAction(EnvPath(env.ProjectID, env.ID)+"/new", "plus", "Add resource")
 }
 
-// NewResource is what the Add resource page offers.
-type NewResource struct {
-	Project   db.Project
-	Env       db.Environment
-	Engines   []catalog.DBTemplate
-	Templates []catalog.ServiceTemplate
-	// HasApp, HasGitLab and HasKey say whether the team has a GitHub App,
-	// a GitLab source and a deploy key: the ways into a private repository.
-	HasApp    bool
-	HasGitLab bool
-	HasKey    bool
-}
-
-func (v NewResource) Path() string { return EnvPath(v.Project.ID, v.Env.ID) }
-
-// privateRepo is where a private-repository tile leads: to the Git form
-// with that access chosen or, while the team has none of the kind, to where
-// one is added.
-func (v NewResource) privateRepo(access string, has bool) string {
-	if has {
-		return v.Path() + "/app/new?source=git&access=" + access
-	}
-	if access == "key" {
-		return KeysPath
-	}
-	return "/sources"
-}
-
-func gitHubAppText(has bool) string {
-	if has {
-		return "Choose a repository through your GitHub App. A push deploys it, with nothing to set up in the repository."
-	}
-	return "Connect a GitHub App under Sources first. It reads private repositories and deploys on every push."
-}
-
-func gitLabText(has bool) string {
-	if has {
-		return "Choose a repository your GitLab token can read, on gitlab.com or your own instance."
-	}
-	return "Connect GitLab under Sources first, with an access token. It reads private repositories on gitlab.com or your own instance."
-}
-
-func deployKeyText(has bool) string {
-	if has {
-		return "Any Git host over SSH: GitLab, Bitbucket, Gitea or GitHub. The repository gets a read-only deploy key."
-	}
-	return "Add an SSH key under Keys & tokens first. It reads a private repository on any Git host over SSH."
-}
-
-// setUp is what the button of a private-repository card says: nothing of
-// its own (so Deploy) when the team has that access, and otherwise what
-// the page it leads to is for.
-func setUp(has bool, otherwise string) string {
-	if has {
-		return ""
-	}
-	return otherwise
-}
-
-// categoryLabels is how a card names a template's categories.
-func categoryLabels(keys []string) []string {
-	labels := make([]string, 0, len(keys))
-	for _, k := range keys {
-		if l := catalog.CategoryLabel(k); l != "" {
-			labels = append(labels, l)
-		}
-	}
-	return labels
-}
-
-// engineCategory is the category the database engines are found under, with
-// the services that are databases' tools.
-const engineCategory = "database"
-
-// categoryOptions are the categories the page can be narrowed to: those
-// that have something, in the catalogue's order, each with how many.
-func (v NewResource) categoryOptions() []ui.MultiOption {
-	_, count := catalog.CategoriesInUse()
-	var options []ui.MultiOption
-	for _, c := range catalog.Categories() {
-		n := count[c.Key]
-		if c.Key == engineCategory {
-			n += len(v.Engines)
-		}
-		if n > 0 {
-			options = append(options, ui.MultiOption{Value: c.Key, Label: c.Label, Count: n})
-		}
-	}
-	return options
-}
-
 // kindGroup is one kind of thing the page lists, under its heading. A count
-// is said after the title; static/app.js keeps it at what a filter has left
-// of the group (data-filter-count). 0 says none.
+// is said after the title: how many there are of the kind, on this page of
+// the list and the ones after it. 0 says none.
 templ kindGroup(title string, count int, about string) {
-	<section class="grid gap-3" data-filter-group>
+	<section class="grid gap-3">
 		<div>
 			<h2 class="section-title">
 				{ title }
 				if count > 0 {
-					<span class="font-normal text-ink-mute">(<span data-filter-count>{ strconv.Itoa(count) }</span>)</span>
+					<span class="font-normal text-ink-mute">({ strconv.Itoa(count) })</span>
 				}
 			</h2>
 			<p class="muted text-sm">{ about }</p>
@@ -233,54 +141,117 @@ templ kindGroup(title string, count int, about string) {
 	</section>
 }
 
-// ResourceNew is the one page a resource of any kind is added from.
+// ResourceNew is the one page a resource of any kind is added from. The
+// row above the list is a form that asks this same address for the list
+// again (ResourceFound) as its field is typed in and a category is ticked.
+// The field's own typing is waited out, and the Category menu's filter
+// field, which has no name, asks nothing: hence the "from" of each trigger.
 templ ResourceNew(s ui.Shell, v NewResource) {
 	@ui.Layout(s) {
 		@ui.PageHeader("Add resource", "It goes into "+v.Env.Name+" of "+v.Project.Name+". Choose what to run.")
 		@ui.IconDefs(ui.OfferIcons("git-branch", "github", "gitlab", "key", "box", "code", KindIcon(db.KindDatabase), KindIcon(db.KindService))...)
 		<div class="grid gap-8">
-			<div class="flex flex-wrap items-center gap-2">
+			<form
+				class="flex flex-wrap items-center gap-2"
+				role="search"
+				method="get"
+				action={ templ.SafeURL(v.Path() + "/new") }
+				hx-get={ v.Path() + "/new" }
+				hx-trigger="input delay:300ms from:#kind-filter, search from:#kind-filter, change from:#category-list, submit"
+				hx-target="#kinds"
+				hx-swap="innerHTML"
+				hx-sync="this:replace"
+				hx-indicator="#kinds"
+			>
 				<div class="min-w-0 max-w-md grow basis-64">
 					<label class="sr-only" for="kind-filter">Find a kind of resource</label>
-					@ui.Input(ui.InputProps{ID: "kind-filter", Name: "q", Type: "search", Placeholder: "Find: postgres, wordpress, git…", Autofocus: true, Autocomplete: "off", Attrs: templ.Attributes{"data-filter": "kinds"}})
+					@ui.Input(ui.InputProps{ID: "kind-filter", Name: "q", Type: "search", Value: v.Query, Placeholder: "Find: postgres, wordpress, git…", Autofocus: true, Autocomplete: "off"})
 				</div>
-				@ui.MultiSelect(ui.MultiSelectProps{ID: "category", Name: "category", Label: "Category", Options: v.categoryOptions(), Attrs: templ.Attributes{"data-filter-pick": "kinds"}})
-				@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Icon: "x", Attrs: templ.Attributes{"data-filter-clear": "kinds", "hidden": true}}) {
-					Clear filters
-				}
+				@ui.MultiSelect(ui.MultiSelectProps{ID: "category", Name: "category", Label: "Category", Options: v.categoryOptions()})
+				@clearFilters(v, false)
+			</form>
+			<div class="found grid gap-8" id="kinds">
+				@resourceKinds(v)
 			</div>
-			<div class="grid gap-8" id="kinds">
-				@kindGroup("Apps", 0, "Your own code, image or Compose file. musdash builds it, runs it and gives it a domain.") {
-					@ui.Offers("Kinds of app") {
-						@ui.Offer(ui.OfferProps{Href: v.Path() + "/app/new?source=git", Logo: "git", Icon: "git-branch", Title: "Public repository", Text: "Build from a public Git repository on any host.", Search: "public repository git github gitlab bitbucket gitea dockerfile nixpacks railpack static", Shared: true})
-						@ui.Offer(ui.OfferProps{Href: v.privateRepo("app", v.HasApp), Logo: "github", Icon: "github", Title: "Private repository, with a GitHub App", Text: gitHubAppText(v.HasApp), Action: setUp(v.HasApp, "Connect"), Search: "private repository github app git", Shared: true})
-						@ui.Offer(ui.OfferProps{Href: v.privateRepo("gitlab", v.HasGitLab), Logo: "gitlab", Icon: "gitlab", Title: "Private repository, with GitLab", Text: gitLabText(v.HasGitLab), Action: setUp(v.HasGitLab, "Connect"), Search: "private repository gitlab token git", Shared: true})
-						@ui.Offer(ui.OfferProps{Href: v.privateRepo("key", v.HasKey), Icon: "key", Title: "Private repository, with a deploy key", Text: deployKeyText(v.HasKey), Action: setUp(v.HasKey, "Add key"), Search: "private repository deploy key ssh git gitlab bitbucket gitea", Shared: true})
-						@ui.Offer(ui.OfferProps{Href: v.Path() + "/app/new", Logo: "docker", Icon: "box", Title: "Docker image", Text: "Run an image from a registry, such as nginx:alpine or ghcr.io/you/app:1.4.", Search: "docker image registry container", Shared: true})
-						@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + db.TemplateCustom, Logo: "docker", Icon: "code", Title: "Your own Compose file", Text: "Paste a docker-compose.yml. Templates written for Coolify work as they are.", Search: "service compose docker-compose yaml custom own coolify", Shared: true})
-						@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + db.TemplateGit, Logo: "git", Icon: "git-branch", Title: "Compose file in a Git repository", Text: "Read from the repository at every deployment. It may build the repository's own Dockerfiles.", Search: "service compose git repository", Shared: true})
-					}
-				}
-				@kindGroup("Databases", 0, "One container with a volume, a user and a generated password. Backups can be scheduled.") {
-					@ui.Offers("Database engines") {
-						for _, t := range v.Engines {
-							@ui.Offer(ui.OfferProps{Href: v.Path() + "/database/new?engine=" + t.Engine, Logo: t.Engine, Icon: KindIcon(db.KindDatabase), Title: t.Label, Text: t.About, Docs: t.Docs, Website: t.Website, Search: "database " + t.Engine, Tags: []string{engineCategory}, Shared: true})
-						}
-					}
-				}
-				@kindGroup("Services", len(v.Templates), "One or more containers described by a Docker Compose file, ready to deploy. Each is its makers' Compose file, held to the same rules as your own.") {
-					@ui.Offers("Kinds of service") {
-						for _, t := range v.Templates {
-							@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + t.Key, Logo: t.Key, Icon: KindIcon(db.KindService), Title: t.Name, Text: t.About, Docs: t.Docs, Website: t.Website, Search: "service " + t.Key, Tags: t.Categories, TagLabels: categoryLabels(t.Categories), Shared: true})
-						}
-					}
-				}
-			</div>
-			@ui.EmptyState(ui.EmptyProps{Icon: "search", Title: "Nothing matches", Text: "A service that is not listed can be run from its own Compose file.", Link: "Use your own Compose file", LinkHref: v.Path() + "/service/new?template=" + db.TemplateCustom, Attrs: templ.Attributes{"data-filter-empty": "kinds", "hidden": true}}) {
-				@ui.Button(ui.ButtonProps{Variant: ui.Primary, Attrs: templ.Attributes{"data-filter-clear": "kinds"}}) {
-					Clear filters
+		</div>
+	}
+}
+
+// ResourceFound is the answer to the form: what goes into the list, and the
+// Clear filters button for its place beside the field, which is outside
+// the list.
+templ ResourceFound(v NewResource) {
+	@resourceKinds(v)
+	@clearFilters(v, true)
+}
+
+// clearFilters is the way back to everything, there only while something
+// narrows. It is a link to the bare address: a page drawn from that has the
+// field empty and nothing ticked.
+templ clearFilters(v NewResource, outOfBand bool) {
+	<span
+		id="kinds-clear"
+		if outOfBand {
+			hx-swap-oob="true"
+		}
+	>
+		if v.Narrowed() {
+			@ui.LinkButton(v.Path()+"/new", ui.ButtonProps{Variant: ui.Ghost, Icon: "x"}) {
+				Clear filters
+			}
+		}
+	</span>
+}
+
+// resourceKinds is the list: a group for each kind that has something.
+templ resourceKinds(v NewResource) {
+	if len(v.apps) > 0 {
+		@kindGroup("Apps", 0, "Your own code, image or Compose file. musdash builds it, runs it and gives it a domain.") {
+			@ui.Offers("Kinds of app") {
+				for _, a := range v.apps {
+					@ui.Offer(a)
 				}
 			}
-		</div>
+		}
+	}
+	if len(v.engines) > 0 {
+		@kindGroup("Databases", 0, "One container with a volume, a user and a generated password. Backups can be scheduled.") {
+			@ui.Offers("Database engines") {
+				for _, t := range v.engines {
+					@ui.Offer(ui.OfferProps{Href: v.Path() + "/database/new?engine=" + t.Engine, Logo: t.Engine, Icon: KindIcon(db.KindDatabase), Title: t.Label, Text: t.About, Docs: t.Docs, Website: t.Website, Shared: true})
+				}
+			}
+		}
+	}
+	if v.found > 0 {
+		@kindGroup("Services", v.found, "One or more containers described by a Docker Compose file, ready to deploy. Each is its makers' Compose file, held to the same rules as your own.") {
+			@ui.Offers("Kinds of service") {
+				@ResourceMore(v)
+			}
+		}
+	}
+	if v.Nothing() {
+		@ui.EmptyState(ui.EmptyProps{Icon: "search", Title: "Nothing matches", Text: "A service that is not listed can be run from its own Compose file.", Link: "Use your own Compose file", LinkHref: v.Path() + "/service/new?template=" + db.TemplateCustom}) {
+			@ui.LinkButton(v.Path()+"/new", ui.ButtonProps{Variant: ui.Primary}) {
+				Clear filters
+			}
+		}
+	}
+}
+
+// ResourceMore is one page of the services and, while there are more, the
+// list's last row, which asks for the next page when it comes near the
+// window and is replaced by the answer: this again. Its button is for a
+// request that failed, and asks once more.
+templ ResourceMore(v NewResource) {
+	for _, t := range v.services {
+		@ui.Offer(ui.OfferProps{Href: v.Path() + "/service/new?template=" + t.Key, Logo: t.Key, Icon: KindIcon(db.KindService), Title: t.Name, Text: t.About, Docs: t.Docs, Website: t.Website, TagLabels: categoryLabels(t.Categories), Shared: true})
+	}
+	if v.More() {
+		<li class="offers-more" hx-get={ v.address(v.Page + 1) } hx-trigger="intersect once, click" hx-swap="outerHTML">
+			@ui.Button(ui.ButtonProps{}) {
+				Show more
+			}
+		</li>
 	}
 }

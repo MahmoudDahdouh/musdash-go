@@ -1207,7 +1207,7 @@ type MultiSelectProps struct {
 	Label   string
 	Options []MultiOption
 	// Attrs go on the box around the button and the menu, which is what
-	// holds the choice: data-filter-pick, for one that narrows a list.
+	// holds the choice.
 	Attrs templ.Attributes
 }
 

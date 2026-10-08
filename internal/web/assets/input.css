@@ -784,6 +784,29 @@
     gap: 16px;
     min-height: var(--size-offer);
   }
+  /* The last row of a list that has more: it asks for the next page when
+     it comes into the window (ui: hx-trigger="intersect") and the answer
+     takes its place. Its box reaches 40rem up over the cards before it,
+     so the asking starts that far before the end is on the screen; the
+     box takes no pointer, and what is in it, the button, takes it again. */
+  .offers-more {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    margin-block-start: -40rem;
+    padding-block-start: 40rem;
+    pointer-events: none;
+  }
+  .offers-more > * {
+    pointer-events: auto;
+  }
+  /* A list that is being asked for again, while the answer is on its way. */
+  .found {
+    transition: opacity var(--duration-base);
+  }
+  .found.htmx-request {
+    opacity: 0.6;
+  }
   .offer-head {
     display: flex;
     align-items: flex-start;
