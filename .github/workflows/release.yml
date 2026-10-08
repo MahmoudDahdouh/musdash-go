@@ -1,6 +1,8 @@
 # A release: both Linux binaries, their checksums, and the installer with
-# the version in it. A pushed tag (v1.2.3) publishes one; started by hand,
-# everything is built and tested and nothing is published.
+# the version in it. A pushed tag (v1.2.3) publishes one. Started by hand,
+# or by a push to main that changes the installer or how a release is made,
+# everything is built and tested and nothing is published: a change to
+# either is tried here before a tag depends on it.
 #
 #   curl -fsSL https://github.com/MahmoudDahdouh/musdash-go/releases/latest/download/install.sh | sudo sh
 #
@@ -11,6 +13,9 @@ name: release
 on:
   push:
     tags: ['v*']
+    branches: [main]
+    # Asked of a push to main only; a tag always runs.
+    paths: ['.github/workflows/release.yml', 'install/**', 'test/install_test.go', 'Makefile']
   workflow_dispatch:
 
 permissions:
@@ -39,10 +44,20 @@ jobs:
           }
 
       - name: Vet and test
-        run: go vet ./... && go test -short ./...
+        run: |
+          go vet ./... 2>&1 | tee test.log
+          go test -short ./... 2>&1 | tee -a test.log
 
       - name: The installer installs, in a container
-        run: MUSDASH_DOCKER_TEST=1 go test ./test -run TestInstall -count=1
+        run: MUSDASH_DOCKER_TEST=1 go test ./test -run TestInstall -count=1 2>&1 | tee -a test.log
+
+      # A step's log is shown only to somebody signed in. What failed is
+      # said on the run's own page as well, where anybody can read it.
+      - name: What failed
+        if: failure()
+        run: |
+          grep -E -B 2 -A 30 '^\s*(--- FAIL|panic:|# |vet:)' test.log | grep -v '^ok ' | head -c 3500 |
+            awk 'BEGIN { printf "::error title=What failed::" } { gsub(/%/, "%25"); printf "%s%%0A", $0 } END { print "" }'
 
       - name: Build the release
         run: make release VERSION="$VERSION"
