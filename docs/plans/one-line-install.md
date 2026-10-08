@@ -1,6 +1,6 @@
 # One-line install: a command that ends with musdash running
 
-Asked for on 2026-10-08: "one link to install, like Coolify and Dokploy", with every step showing a loading animation and its state, a huge "Musdash" when the installation succeeds, and the dashboard's address in a rectangle with a pointer. This is the design; the tasks are in `one-line-install-plan.md`.
+Asked for on 2026-10-08: "one link to install, like Coolify and Dokploy", with every step showing a loading animation and its state, a huge "Musdash" when the installation succeeds, and the dashboard's address in a rectangle with a pointer. This is the design; the tasks are in `one-line-install-plan.md`, whose decisions P1 to P9 extend this one (the health route the last step asks, `MUSDASH_ADDRESS`, where a binary is tried, how the steps and the drawing share state).
 
 ```sh
 curl -fsSL https://github.com/MahmoudDahdouh/musdash-go/releases/latest/download/install.sh | sudo sh

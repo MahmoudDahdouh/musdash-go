@@ -3,8 +3,9 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 GOBUILD := CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)"
 TAILWIND := bin/tailwindcss
 TAILWIND_VERSION := v4.3.3
+DIST ?= dist
 
-.PHONY: build build-linux generate templ css test rss rss-linux catalog-test dev tools clean
+.PHONY: build build-linux release generate templ css test rss rss-linux catalog-test dev tools clean
 
 ## build: compile for this machine into bin/musdash
 build:
@@ -12,8 +13,21 @@ build:
 
 ## build-linux: compile release binaries for Linux servers into dist/
 build-linux:
-	GOOS=linux GOARCH=amd64 $(GOBUILD) -o dist/musdash-linux-amd64 ./cmd/musdash
-	GOOS=linux GOARCH=arm64 $(GOBUILD) -o dist/musdash-linux-arm64 ./cmd/musdash
+	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(DIST)/musdash-linux-amd64 ./cmd/musdash
+	GOOS=linux GOARCH=arm64 $(GOBUILD) -o $(DIST)/musdash-linux-arm64 ./cmd/musdash
+
+## release: the four files of a release in dist/ (make release VERSION=v1.2.3):
+## both binaries, their checksums, and the installer with the version in it.
+## The workflow in .github/workflows/release.yml runs this for a pushed tag.
+release:
+	@expr "x$(VERSION)" : 'xv[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$$' >/dev/null || \
+		{ echo "release: VERSION must look like v1.2.3, not \"$(VERSION)\"" >&2; exit 1; }
+	$(MAKE) build-linux VERSION=$(VERSION) DIST=$(DIST)
+	sed 's/^RELEASE=""$$/RELEASE="$(VERSION)"/' install/install.sh > $(DIST)/install.sh
+	@grep -q '^RELEASE="$(VERSION)"$$' $(DIST)/install.sh || \
+		{ echo "release: install.sh has no RELEASE line to write the version into" >&2; exit 1; }
+	cd $(DIST) && (sha256sum musdash-linux-amd64 musdash-linux-arm64 2>/dev/null || \
+		shasum -a 256 musdash-linux-amd64 musdash-linux-arm64) > checksums.txt
 
 ## generate: rebuild the templ components and the stylesheet (both committed)
 generate: templ css

@@ -1,0 +1,60 @@
+# A release: both Linux binaries, their checksums, and the installer with
+# the version in it. A pushed tag (v1.2.3) publishes one; started by hand,
+# everything is built and tested and nothing is published.
+#
+#   curl -fsSL https://github.com/MahmoudDahdouh/musdash-go/releases/latest/download/install.sh | sudo sh
+#
+# is what the published files are for, so a release whose installer cannot
+# install its own binary is not published: the installer's tests run first.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # Started by hand there is no tag, and nothing is published.
+      VERSION: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.0.0' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      # The installer takes "v" and three numbers and nothing else, so a
+      # tag of another shape would publish a release it refuses.
+      - name: The tag is a version
+        run: |
+          expr "x$VERSION" : 'xv[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$' >/dev/null || {
+            echo "::error::a release's tag looks like v1.2.3, not $VERSION"
+            exit 1
+          }
+
+      - name: Vet and test
+        run: go vet ./... && go test -short ./...
+
+      - name: The installer installs, in a container
+        run: MUSDASH_DOCKER_TEST=1 go test ./test -run TestInstall -count=1
+
+      - name: Build the release
+        run: make release VERSION="$VERSION"
+
+      - name: What was built
+        run: ls -l dist && cat dist/checksums.txt && grep -n '^RELEASE=' dist/install.sh
+
+      - name: Publish
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$VERSION" \
+            dist/musdash-linux-amd64 dist/musdash-linux-arm64 dist/checksums.txt dist/install.sh \
+            --verify-tag --generate-notes --title "musdash $VERSION"
