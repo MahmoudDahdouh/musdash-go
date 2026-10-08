@@ -359,6 +359,15 @@
     flex: 1;
     min-width: 0;
   }
+  /* The scheme's button is as wide as "https" needs, whichever of the two
+     it names, so the domain beside it does not move when the other is
+     chosen. The longer label is written here unseen and holds the width. */
+  .address-row .select-button [data-select-label]::after {
+    content: "https";
+    display: block;
+    height: 0;
+    visibility: hidden;
+  }
   /* A port has up to five digits, and the field is that wide whatever it
      holds. 26px is the field's padding and border. */
   .address-port .input {

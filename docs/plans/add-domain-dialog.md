@@ -124,3 +124,15 @@ User name                      Password
 **Review of the plan.** Nothing changed.
 
 **Review of the code.** Measured in a browser at 1024: the port's field is 65px with four digits and with five, and five fit without scrolling; the two sentences are a line each; the row's `align-items` is `flex-start`, and the button's top is the first sentence's.
+
+## 7. The scheme's button keeps one width
+
+**Asked** on 2026-10-08: the scheme's selector is as wide as "https", and only that.
+
+| # | Decision | Why |
+|---|---|---|
+| 1 | The button's label reserves the width of "https" (the longer of the two, written unseen after the label in the stylesheet), so the button is that wide with either scheme | Asked for. It is the content's own width in the page's font, not a number of pixels, and it takes back what 4.3 gave up: the domain no longer moves when the other scheme is chosen |
+
+**Review of the plan.** Nothing changed.
+
+**Review of the code.** Measured in a browser at 1024: the button is 80.6px wide and 32px high with "https" and with "http", and the domain field's left edge is at the same place with either.
