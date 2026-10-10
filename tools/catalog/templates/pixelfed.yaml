@@ -1,0 +1,266 @@
+# name: Pixelfed
+# about: A photo sharing platform that federates over ActivityPub, with its queue worker, scheduler, MySQL and Redis.
+# docs: https://github.com/pixelfed/pixelfed/blob/dev/DOCKER_COMPOSE_SETUP.md
+# website: https://pixelfed.org/
+# categories: media, communication
+services:
+  pixelfed:
+    image: ghcr.io/pixelfed/pixelfed:stable
+    environment:
+      - SERVICE_FQDN_PIXELFED_8080
+      - APP_NAME=${APP_NAME:-Pixelfed}
+      - APP_ENV=production
+      - APP_KEY=base64:${SERVICE_BASE64_APPKEY}
+      - APP_DEBUG=false
+      - APP_LOCALE=en-US
+      - APP_URL=${SERVICE_URL_PIXELFED}
+      - APP_DOMAIN=${SERVICE_FQDN_PIXELFED}
+      - ADMIN_DOMAIN=${SERVICE_FQDN_PIXELFED}
+      - SESSION_DOMAIN=null
+      - TRUST_PROXIES=*
+      - OPEN_REGISTRATION=${OPEN_REGISTRATION:-false}
+      - ENFORCE_EMAIL_VERIFICATION=${ENFORCE_EMAIL_VERIFICATION:-true}
+      - PF_MAX_USERS=${PF_MAX_USERS:-1000}
+      - OAUTH_ENABLED=true
+      - OAUTH_PAT_ENABLED=false
+      - ENABLE_CONFIG_CACHE=true
+      - INSTANCE_DISCOVER_PUBLIC=true
+      - IMAGE_DRIVER=vips
+      - PF_OPTIMIZE_IMAGES=true
+      - DB_CONNECTION=mysql
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=pixelfed
+      - DB_USERNAME=${SERVICE_USER_PIXELFED}
+      - DB_PASSWORD=${SERVICE_PASSWORD_PIXELFED}
+      - REDIS_CLIENT=phpredis
+      - REDIS_SCHEME=tcp
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=null
+      - REDIS_PORT=6379
+      - SESSION_DRIVER=database
+      - CACHE_STORE=redis
+      - QUEUE_DRIVER=redis
+      - BROADCAST_DRIVER=log
+      - LOG_CHANNEL=stack
+      - HORIZON_PREFIX=horizon-
+      - ACTIVITY_PUB=true
+      - AP_REMOTE_FOLLOW=true
+      - AP_INBOX=true
+      - AP_OUTBOX=true
+      - AP_SHAREDINBOX=true
+      - EXP_EMC=true
+      - MAIL_DRIVER=smtp
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-null}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-null}
+      - MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-tls}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-pixelfed@example.com}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME:-Pixelfed}
+      - PF_ENABLE_CLOUD=false
+      - FILESYSTEM_CLOUD=s3
+      - SSL_MODE=off
+      - LOG_OUTPUT_LEVEL=error
+      - "CADDY_SERVER_EXTRA_DIRECTIVES=@service_worker path /sw.js\nheader @service_worker Cache-Control \"no-cache\""
+      - PHP_POST_MAX_SIZE=500M
+      - PHP_UPLOAD_MAX_FILE_SIZE=500M
+      - PHP_OPCACHE_ENABLE=1
+      - AUTORUN_ENABLED=true
+      - AUTORUN_LARAVEL_MIGRATION=true
+      - AUTORUN_LARAVEL_MIGRATION_ISOLATION=true
+      - AUTORUN_LARAVEL_STORAGE_LINK=true
+      - AUTORUN_LARAVEL_EVENT_CACHE=true
+      - AUTORUN_LARAVEL_ROUTE_CACHE=true
+      - AUTORUN_LARAVEL_VIEW_CACHE=true
+      - AUTORUN_LARAVEL_CONFIG_CACHE=true
+    volumes:
+      - pixelfed-storage:/var/www/html/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --silent --show-error --fail -o /dev/null http://127.0.0.1:8080/healthcheck || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 90
+  horizon:
+    image: ghcr.io/pixelfed/pixelfed:stable
+    command: ["php", "artisan", "horizon"]
+    environment:
+      - APP_NAME=${APP_NAME:-Pixelfed}
+      - APP_ENV=production
+      - APP_KEY=base64:${SERVICE_BASE64_APPKEY}
+      - APP_DEBUG=false
+      - APP_LOCALE=en-US
+      - APP_URL=${SERVICE_URL_PIXELFED}
+      - APP_DOMAIN=${SERVICE_FQDN_PIXELFED}
+      - ADMIN_DOMAIN=${SERVICE_FQDN_PIXELFED}
+      - SESSION_DOMAIN=null
+      - TRUST_PROXIES=*
+      - OPEN_REGISTRATION=${OPEN_REGISTRATION:-false}
+      - ENFORCE_EMAIL_VERIFICATION=${ENFORCE_EMAIL_VERIFICATION:-true}
+      - PF_MAX_USERS=${PF_MAX_USERS:-1000}
+      - OAUTH_ENABLED=true
+      - OAUTH_PAT_ENABLED=false
+      - ENABLE_CONFIG_CACHE=true
+      - INSTANCE_DISCOVER_PUBLIC=true
+      - IMAGE_DRIVER=vips
+      - PF_OPTIMIZE_IMAGES=true
+      - DB_CONNECTION=mysql
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=pixelfed
+      - DB_USERNAME=${SERVICE_USER_PIXELFED}
+      - DB_PASSWORD=${SERVICE_PASSWORD_PIXELFED}
+      - REDIS_CLIENT=phpredis
+      - REDIS_SCHEME=tcp
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=null
+      - REDIS_PORT=6379
+      - SESSION_DRIVER=database
+      - CACHE_STORE=redis
+      - QUEUE_DRIVER=redis
+      - BROADCAST_DRIVER=log
+      - LOG_CHANNEL=stack
+      - HORIZON_PREFIX=horizon-
+      - ACTIVITY_PUB=true
+      - AP_REMOTE_FOLLOW=true
+      - AP_INBOX=true
+      - AP_OUTBOX=true
+      - AP_SHAREDINBOX=true
+      - EXP_EMC=true
+      - MAIL_DRIVER=smtp
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-null}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-null}
+      - MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-tls}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-pixelfed@example.com}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME:-Pixelfed}
+      - PF_ENABLE_CLOUD=false
+      - FILESYSTEM_CLOUD=s3
+      - PHP_POST_MAX_SIZE=500M
+      - PHP_UPLOAD_MAX_FILE_SIZE=500M
+      - PHP_OPCACHE_ENABLE=1
+      - AUTORUN_ENABLED=false
+      - AUTORUN_LARAVEL_MIGRATION=false
+      - AUTORUN_LARAVEL_MIGRATION_ISOLATION=false
+      - AUTORUN_LARAVEL_STORAGE_LINK=true
+      - AUTORUN_LARAVEL_EVENT_CACHE=false
+      - AUTORUN_LARAVEL_ROUTE_CACHE=false
+      - AUTORUN_LARAVEL_VIEW_CACHE=false
+      - AUTORUN_LARAVEL_CONFIG_CACHE=true
+    volumes:
+      - pixelfed-storage:/var/www/html/storage
+    depends_on:
+      pixelfed:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "artisan", "horizon:status"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  scheduler:
+    image: ghcr.io/pixelfed/pixelfed:stable
+    command: ["php", "artisan", "schedule:work"]
+    environment:
+      - APP_NAME=${APP_NAME:-Pixelfed}
+      - APP_ENV=production
+      - APP_KEY=base64:${SERVICE_BASE64_APPKEY}
+      - APP_DEBUG=false
+      - APP_LOCALE=en-US
+      - APP_URL=${SERVICE_URL_PIXELFED}
+      - APP_DOMAIN=${SERVICE_FQDN_PIXELFED}
+      - ADMIN_DOMAIN=${SERVICE_FQDN_PIXELFED}
+      - SESSION_DOMAIN=null
+      - TRUST_PROXIES=*
+      - OPEN_REGISTRATION=${OPEN_REGISTRATION:-false}
+      - ENFORCE_EMAIL_VERIFICATION=${ENFORCE_EMAIL_VERIFICATION:-true}
+      - PF_MAX_USERS=${PF_MAX_USERS:-1000}
+      - OAUTH_ENABLED=true
+      - OAUTH_PAT_ENABLED=false
+      - ENABLE_CONFIG_CACHE=true
+      - INSTANCE_DISCOVER_PUBLIC=true
+      - IMAGE_DRIVER=vips
+      - PF_OPTIMIZE_IMAGES=true
+      - DB_CONNECTION=mysql
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=pixelfed
+      - DB_USERNAME=${SERVICE_USER_PIXELFED}
+      - DB_PASSWORD=${SERVICE_PASSWORD_PIXELFED}
+      - REDIS_CLIENT=phpredis
+      - REDIS_SCHEME=tcp
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=null
+      - REDIS_PORT=6379
+      - SESSION_DRIVER=database
+      - CACHE_STORE=redis
+      - QUEUE_DRIVER=redis
+      - BROADCAST_DRIVER=log
+      - LOG_CHANNEL=stack
+      - HORIZON_PREFIX=horizon-
+      - ACTIVITY_PUB=true
+      - AP_REMOTE_FOLLOW=true
+      - AP_INBOX=true
+      - AP_OUTBOX=true
+      - AP_SHAREDINBOX=true
+      - EXP_EMC=true
+      - MAIL_DRIVER=smtp
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-null}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-null}
+      - MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-tls}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-pixelfed@example.com}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME:-Pixelfed}
+      - PF_ENABLE_CLOUD=false
+      - FILESYSTEM_CLOUD=s3
+      - PHP_POST_MAX_SIZE=500M
+      - PHP_UPLOAD_MAX_FILE_SIZE=500M
+      - PHP_OPCACHE_ENABLE=1
+      - AUTORUN_ENABLED=false
+      - AUTORUN_LARAVEL_MIGRATION=false
+      - AUTORUN_LARAVEL_MIGRATION_ISOLATION=false
+      - AUTORUN_LARAVEL_STORAGE_LINK=true
+      - AUTORUN_LARAVEL_EVENT_CACHE=false
+      - AUTORUN_LARAVEL_ROUTE_CACHE=false
+      - AUTORUN_LARAVEL_VIEW_CACHE=false
+      - AUTORUN_LARAVEL_CONFIG_CACHE=true
+    volumes:
+      - pixelfed-storage:/var/www/html/storage
+    depends_on:
+      pixelfed:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "healthcheck-schedule"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  db:
+    image: mysql:8.4
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=pixelfed
+      - MYSQL_USER=${SERVICE_USER_PIXELFED}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_PIXELFED}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 40

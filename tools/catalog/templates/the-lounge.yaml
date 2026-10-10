@@ -1,0 +1,17 @@
+# name: The Lounge
+# about: An IRC client in the browser that stays connected, so the conversation is there when you come back.
+# docs: https://thelounge.chat/docs/install-and-upgrade#docker
+# website: https://thelounge.chat/
+# categories: communication
+services:
+  thelounge:
+    image: ghcr.io/thelounge/thelounge:latest
+    environment:
+      - SERVICE_FQDN_THELOUNGE_9000
+    volumes:
+      - thelounge:/var/opt/thelounge
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:9000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

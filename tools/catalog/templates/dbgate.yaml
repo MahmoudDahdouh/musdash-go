@@ -1,0 +1,14 @@
+# name: DbGate
+# about: A database manager in the browser for MySQL, PostgreSQL, SQL Server, MongoDB, Redis, SQLite and others.
+# docs: https://docs.dbgate.io/env-variables
+# website: https://www.dbgate.io/
+# categories: database, devtools
+services:
+  dbgate:
+    image: dbgate/dbgate:latest
+    environment:
+      - SERVICE_FQDN_DBGATE_3000
+      - LOGIN=${SERVICE_USER_DBGATE}
+      - PASSWORD=${SERVICE_PASSWORD_DBGATE}
+    volumes:
+      - dbgate-data:/root/.dbgate

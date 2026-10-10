@@ -1,0 +1,17 @@
+# name: Traggo
+# about: A time tracker that labels time entries with tags instead of projects, with calendar and dashboard views.
+# docs: https://traggo.net/install/
+# website: https://traggo.net/
+# categories: productivity
+# source: musdash
+services:
+  traggo:
+    image: traggo/server:latest
+    environment:
+      - SERVICE_FQDN_TRAGGO_3030
+      - TRAGGO_DEFAULT_USER_NAME=${SERVICE_USER_ADMIN}
+      - TRAGGO_DEFAULT_USER_PASS=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - traggo-data:/opt/traggo/data
+volumes:
+  traggo-data:

@@ -1,0 +1,16 @@
+# name: Datasette
+# about: A web interface and JSON API for exploring and publishing the data in SQLite database files.
+# docs: https://docs.datasette.io/en/stable/installation.html#using-docker
+# website: https://datasette.io
+# categories: analytics, database, devtools
+# source: musdash
+services:
+  datasette:
+    image: datasetteproject/datasette:latest
+    command: datasette -p 8001 -h 0.0.0.0 /mnt
+    environment:
+      - SERVICE_FQDN_DATASETTE_8001
+    volumes:
+      - datasette-data:/mnt
+volumes:
+  datasette-data:

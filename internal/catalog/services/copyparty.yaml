@@ -1,0 +1,44 @@
+# name: copyparty
+# about: A file server with resumable uploads, search, media playback and WebDAV, used from a browser.
+# docs: https://github.com/9001/copyparty/blob/hovudstraum/scripts/docker/README.md
+# website: https://github.com/9001/copyparty
+# categories: storage, media
+# source: musdash
+services:
+  copyparty:
+    image: ghcr.io/9001/copyparty-ac:latest
+    user: "1000:1000"
+    environment:
+      - SERVICE_FQDN_COPYPARTY_3923
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - copyparty-config:/cfg
+      - copyparty-files:/w
+    configs:
+      - source: copyparty-config
+        target: /cfg/copyparty.conf
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q 127.0.0.1:3923/?reset=/._"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  copyparty-config:
+  copyparty-files:
+configs:
+  copyparty-config:
+    content: |
+      [global]
+        e2dsa
+        e2ts
+        xff-src: lan
+        hist: /cfg/hists/
+
+      [accounts]
+        ${SERVICE_USER_ADMIN}: ${SERVICE_PASSWORD_ADMIN}
+
+      [/]
+        /w
+        accs:
+          rwmda: ${SERVICE_USER_ADMIN}

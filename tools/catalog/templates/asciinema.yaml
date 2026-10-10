@@ -1,0 +1,51 @@
+# name: asciinema
+# about: A server that hosts terminal session recordings and live streams made with the asciinema recorder.
+# docs: https://docs.asciinema.org/manual/server/self-hosting/quick-start/
+# website: https://asciinema.org/
+# categories: devtools, media
+services:
+  asciinema:
+    image: ghcr.io/asciinema/asciinema-server:20260626
+    command:
+      - sh
+      - -c
+      - |
+        [ -n "$$SMTP_HOST" ] || unset SMTP_HOST
+        [ -n "$$SMTP_USERNAME" ] || unset SMTP_USERNAME
+        [ -n "$$SMTP_PASSWORD" ] || unset SMTP_PASSWORD
+        exec /opt/app/bin/server
+    environment:
+      - SERVICE_FQDN_ASCIINEMA_4000
+      - SECRET_KEY_BASE=${SERVICE_PASSWORD_64_ASCIINEMA}
+      - URL_HOST=${SERVICE_FQDN_ASCIINEMA}
+      - URL_SCHEME=https
+      - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgres/asciinema
+      - ADMIN_PANEL_ON_MAIN_ENDPOINT=1
+      - SIGN_UP_DISABLED=${SIGN_UP_DISABLED:-false}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+    volumes:
+      - asciinema_data:/var/lib/asciinema
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:4000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=asciinema
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

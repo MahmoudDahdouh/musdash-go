@@ -1073,3 +1073,50 @@ func TestLinksFromTheList(t *testing.T) {
 		t.Error("a list that is not there was read as an empty one")
 	}
 }
+
+// A template written for musdash is read with what its header says and
+// then held to what the two catalogues' templates are: its volumes are
+// declared, its image gets a tag, and what a stack may not do is refused
+// with the reason. Its header is whole or the file is not read.
+func TestATemplateWrittenForMusdash(t *testing.T) {
+	dir := t.TempDir()
+	const header = "# name: The App\n# about: Does a thing\n# docs: https://example.com/docs/docker\n# website: https://example.com/\n# categories: storage, media\n"
+	const body = "services:\n  app:\n    image: example/app\n    container_name: app\n    environment:\n      - SERVICE_FQDN_APP_8080\n      - SECRET=${SERVICE_PASSWORD_APP}\n      - TZ=${TZ}\n    volumes:\n      - data:/data\n"
+	tpl, err := readWritten(write(t, dir, "the-app.yaml", header+body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []func() error{tpl.convert, func() error { return tpl.describe(nameBook{"theapp": "Another Name"}) }, tpl.reach} {
+		if err := step(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := string(tpl.render())
+	wantAll(t, got,
+		"# name: The App\n# about: Does a thing.\n# docs: https://example.com/docs/docker\n# website: https://example.com/\n# categories: storage, media\n# source: musdash\n",
+		"image: example/app:latest", "- SERVICE_FQDN_APP_8080", "${SERVICE_PASSWORD_APP}", "${TZ:-}", "\nvolumes:\n  data:")
+	if strings.Contains(got, "container_name") || tpl.Connect {
+		t.Errorf("what only another platform reads is kept, or the template joins its environment:\n%s", got)
+	}
+
+	socket, err := readWritten(write(t, dir, "socket.yaml", header+"services:\n  app:\n    image: example/app\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := socket.convert(); err == nil || !strings.Contains(err.Error(), "Docker socket") {
+		t.Errorf("a template that mounts the Docker socket: %v", err)
+	}
+
+	for name, text := range map[string]string{
+		"no website":          strings.Replace(header, "# website: https://example.com/\n", "", 1) + body,
+		"an unknown category": strings.Replace(header, "storage, media", "storage, files", 1) + body,
+		"a category twice":    strings.Replace(header, "storage, media", "media, media", 1) + body,
+		"four categories":     strings.Replace(header, "storage, media", "storage, media, ai, home", 1) + body,
+		"another line":        header + "# port: 8080\n" + body,
+		"no Compose file":     header,
+	} {
+		if _, err := readWritten(write(t, dir, "bad.yaml", text)); err == nil {
+			t.Errorf("%s: the template was read", name)
+		}
+	}
+}

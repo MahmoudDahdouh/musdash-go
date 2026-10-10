@@ -1,0 +1,39 @@
+# name: Atuin
+# about: A sync server for Atuin, which keeps encrypted shell history and shares it between machines.
+# docs: https://docs.atuin.sh/cli/self-hosting/docker/
+# website: https://atuin.sh
+# categories: devtools
+services:
+  atuin:
+    image: ghcr.io/atuinsh/atuin:18.23.0
+    command: start
+    environment:
+      - SERVICE_FQDN_ATUIN_8888
+      - ATUIN_HOST=0.0.0.0
+      - ATUIN_PORT=8888
+      - ATUIN_OPEN_REGISTRATION=${ATUIN_OPEN_REGISTRATION:-true}
+      - ATUIN_DB_URI=postgres://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@db/atuin
+      - RUST_LOG=${RUST_LOG:-info}
+    volumes:
+      - atuin-config:/config
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:8888/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=atuin
+    volumes:
+      - atuin-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

@@ -503,6 +503,7 @@ var logoAlias = map[string][]string{
 	"answer":                        {"apache-answer"},
 	"apprise-api":                   {"apprise"},
 	"calcom":                        {"cal-com"},
+	"calibre-web-automated":         {"calibre-web"},
 	"classicpress-without-database": {"classicpress"},
 	"code-server":                   {"coder"},
 	"collabora-office":              {"collabora-online"},

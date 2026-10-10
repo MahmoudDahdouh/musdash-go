@@ -1,0 +1,74 @@
+# name: Huginn
+# about: Agents that watch websites, feeds and services and act on what they find, with a MySQL database.
+# docs: https://github.com/huginn/huginn/blob/master/doc/docker/install.md
+# website: https://github.com/huginn/huginn
+# categories: automation
+services:
+  web:
+    image: ghcr.io/huginn/huginn-single-process:latest
+    environment:
+      - SERVICE_FQDN_WEB_3000
+      - DOMAIN=${SERVICE_FQDN_WEB}
+      - APP_SECRET_TOKEN=${SERVICE_HEX_64_SECRET}
+      - DATABASE_ADAPTER=mysql2
+      - DATABASE_HOST=mysql
+      - DATABASE_PORT=3306
+      - DATABASE_NAME=huginn
+      - DATABASE_USERNAME=${SERVICE_USER_MYSQL}
+      - DATABASE_PASSWORD=${SERVICE_PASSWORD_MYSQL}
+      - DATABASE_ENCODING=utf8mb4
+      - SEED_USERNAME=${SERVICE_USER_ADMIN}
+      - SEED_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - INVITATION_CODE=${SERVICE_PASSWORD_INVITATION}
+      - TIMEZONE=${TIMEZONE:-UTC}
+      - SMTP_DOMAIN=${SMTP_DOMAIN:-}
+      - SMTP_SERVER=${SMTP_SERVER:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER_NAME=${SMTP_USER_NAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+  threaded:
+    image: ghcr.io/huginn/huginn-single-process:latest
+    command: /scripts/init bin/threaded.rb
+    environment:
+      - DOMAIN=${SERVICE_FQDN_WEB}
+      - APP_SECRET_TOKEN=${SERVICE_HEX_64_SECRET}
+      - DATABASE_ADAPTER=mysql2
+      - DATABASE_HOST=mysql
+      - DATABASE_PORT=3306
+      - DATABASE_NAME=huginn
+      - DATABASE_USERNAME=${SERVICE_USER_MYSQL}
+      - DATABASE_PASSWORD=${SERVICE_PASSWORD_MYSQL}
+      - DATABASE_ENCODING=utf8mb4
+      - TIMEZONE=${TIMEZONE:-UTC}
+      - SMTP_DOMAIN=${SMTP_DOMAIN:-}
+      - SMTP_SERVER=${SMTP_SERVER:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER_NAME=${SMTP_USER_NAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-}
+    depends_on:
+      web:
+        condition: service_healthy
+  mysql:
+    image: mysql:8.4
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=huginn
+      - MYSQL_USER=${SERVICE_USER_MYSQL}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_MYSQL}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 40

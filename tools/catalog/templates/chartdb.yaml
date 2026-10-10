@@ -1,0 +1,19 @@
+# name: ChartDB
+# about: A database diagram editor in the browser that draws a schema from one query and exports SQL, with optional AI help.
+# docs: https://github.com/chartdb/chartdb#run-the-docker-container
+# website: https://chartdb.io/
+# categories: devtools, database
+services:
+  chartdb:
+    image: ghcr.io/chartdb/chartdb:latest
+    environment:
+      - SERVICE_FQDN_CHARTDB_80
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_ENDPOINT=${OPENAI_API_ENDPOINT:-}
+      - LLM_MODEL_NAME=${LLM_MODEL_NAME:-}
+      - DISABLE_ANALYTICS=${DISABLE_ANALYTICS:-true}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

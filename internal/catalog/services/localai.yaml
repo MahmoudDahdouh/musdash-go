@@ -1,0 +1,31 @@
+# name: LocalAI
+# about: An OpenAI-compatible API and web interface that runs language, image and speech models on your own server.
+# docs: https://localai.io/installation/containers/
+# website: https://localai.io
+# categories: ai
+# source: musdash
+services:
+  api:
+    image: quay.io/go-skynet/local-ai:latest
+    environment:
+      - SERVICE_FQDN_API_8080
+      - MODELS_PATH=/models
+      - LOCALAI_VRAM_WARM_LIMIT=0
+      - LOCALAI_API_KEY=${SERVICE_PASSWORD_APIKEY}
+    volumes:
+      - models:/models
+      - images:/tmp/generated/images/
+      - data:/data
+      - backends:/backends
+      - configuration:/configuration
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/readyz"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+volumes:
+  backends:
+  configuration:
+  data:
+  images:
+  models:

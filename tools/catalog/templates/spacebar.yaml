@@ -1,0 +1,56 @@
+# name: Spacebar
+# about: A chat server that speaks Discord's API, for the clients and bots written for it, with its own PostgreSQL.
+# docs: https://docs.spacebar.chat/setup/server/installation/docker/
+# website: https://spacebar.chat/
+# categories: communication
+services:
+  spacebar:
+    image: ghcr.io/spacebarchat/server:latest
+    environment:
+      - SERVICE_FQDN_SPACEBAR_3001
+      - DATABASE=postgres://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgres/spacebar
+      - CONFIG_PATH=/etc/spacebar/config.json
+      - CONFIG_READONLY=true
+    configs:
+      - source: spacebar-config
+        target: /etc/spacebar/config.json
+    volumes:
+      - spacebar-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=spacebar
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+configs:
+  spacebar-config:
+    content: |
+      {
+        "general": {
+          "serverName": "${SERVICE_FQDN_SPACEBAR}"
+        },
+        "api": {
+          "endpointPublic": "${SERVICE_URL_SPACEBAR}"
+        },
+        "cdn": {
+          "endpointPublic": "${SERVICE_URL_SPACEBAR}",
+          "endpointPrivate": "http://127.0.0.1:3001"
+        },
+        "gateway": {
+          "endpointPublic": "wss://${SERVICE_FQDN_SPACEBAR}"
+        },
+        "security": {
+          "requestSignature": "${SERVICE_BASE64_REQUEST}",
+          "cdnSignatureKey": "${SERVICE_BASE64_CDN}"
+        }
+      }

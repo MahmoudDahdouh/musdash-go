@@ -1,0 +1,19 @@
+# name: Wastebin
+# about: A small pastebin with syntax highlighting, optional encryption and expiring pastes, kept in a SQLite file.
+# docs: https://github.com/matze/wastebin#installation
+# website: https://github.com/matze/wastebin
+# categories: devtools, productivity
+services:
+  wastebin:
+    image: quxfoo/wastebin:latest
+    user: "0:0"
+    environment:
+      - SERVICE_FQDN_WASTEBIN_8088
+      - WASTEBIN_DATABASE_PATH=/data/state.db
+      - TMPDIR=/data
+      - WASTEBIN_BASE_URL=${SERVICE_URL_WASTEBIN}
+      - WASTEBIN_PASSWORD_SALT=${SERVICE_PASSWORD_WASTEBIN}
+      - WASTEBIN_SIGNING_KEY=${SERVICE_PASSWORD_64_WASTEBIN}
+      - WASTEBIN_TITLE=${WASTEBIN_TITLE:-wastebin}
+    volumes:
+      - wastebin-data:/data

@@ -1,5 +1,6 @@
 // Command catalog fills musdash's service catalogue from the two catalogues
-// people know: Coolify's templates and Dokploy's blueprints.
+// people know, Coolify's templates and Dokploy's blueprints, and from the
+// templates in templates/, written for musdash for what neither has.
 //
 //	go run . -coolify ~/src/coolify -dokploy ~/src/dokploy-templates \
 //	    -icons ~/src/selfhst-icons -dashboard ~/src/dashboard-icons \
@@ -12,8 +13,8 @@
 // turn into one musdash's rules accept, internal/web/static/logo-<key>.svg
 // (or .webp, see pictures.go) where there is a logo, and the lists of what it
 // did (internal/catalog/services.SOURCES, docs/catalogue-left-out.md).
-// Templates written for musdash (no "source" line in their header) are
-// never touched, and nothing of this program is part of musdash: it is a
+// The templates in internal/catalog/services with no "source" line in their
+// header are never touched, and nothing of this program is part of musdash: it is a
 // module of its own because it needs a YAML parser, which musdash does
 // without.
 //
@@ -25,6 +26,11 @@
 // of a card where the sources' are missing or not the best page (Coolify's
 // templates name no website). ended.txt has the projects that are over
 // (archived, given up, gone): neither catalogue's template of one is taken.
+//
+// A template of templates/ is held to what the other two are, and one that
+// cannot be converted stops the run with the reason: there is no list of
+// those left out, since it is this repository's to put right. A service a
+// catalogue has taken up since is said too, and its file here removed.
 //
 // A template that converts is not yet one that passes: the test
 // TestCatalogueLoadsInTheSandbox (internal/compose) loads every template the
@@ -70,7 +76,25 @@ func main() {
 	rejectedFile := flag.String("rejected", "rejected.txt", "the list of templates the sandbox test refused")
 	endedFile := flag.String("ended", "ended.txt", "the list of projects that are over")
 	linksFile := flag.String("links", "links.txt", "the list of the cards' links")
+	writtenDir := flag.String("written", "templates", "the templates written for musdash")
+	check := flag.String("check", "", "a template of templates/ to convert alone and print, to see what it becomes before a run")
 	flag.Parse()
+	if *check != "" {
+		t, err := readWritten(*check)
+		if t == nil {
+			fatal(err)
+		}
+		for _, step := range []func() error{t.convert, func() error { return t.describe(nameBook{}) }, t.reach} {
+			if err == nil {
+				err = step()
+			}
+		}
+		if err != nil {
+			fatal(fmt.Errorf("%s: %w", *check, err))
+		}
+		os.Stdout.Write(t.render())
+		return
+	}
 	if *coolify == "" || *dokployDir == "" || *icons == "" || *dashboard == "" || *svgl == "" || *simple == "" {
 		flag.Usage()
 		os.Exit(2)
@@ -175,11 +199,28 @@ func main() {
 		dokployNames[norm(t.Key)] = t.Name
 		add(t, err)
 	}
+	writtenFiles, _ := filepath.Glob(filepath.Join(*writtenDir, "*.yaml"))
+	sort.Strings(writtenFiles)
+	for _, file := range writtenFiles {
+		t, err := readWritten(file)
+		if t == nil {
+			fatal(err)
+		}
+		add(t, err)
+	}
 	names := readNames(*icons, dokployNames)
 
-	var out []leftOut
+	// broken is what is wrong with a template of templates/.
+	var out, broken []leftOut
 	var taken, winners []*tmpl
 	byName := map[string]string{}
+	leave := func(t *tmpl, reason string) {
+		if t.Source == "musdash" {
+			broken = append(broken, leftOut{t.Source, t.Key, reason})
+			return
+		}
+		out = append(out, leftOut{t.Source, t.Key, reason})
+	}
 	sort.Strings(order)
 	for _, k := range order {
 		if own[k] {
@@ -187,13 +228,13 @@ func main() {
 		}
 		if engines[k] {
 			for _, c := range byKey[k] {
-				out = append(out, leftOut{c.t.Source, c.t.Key, "musdash runs it as a database, with backups and a port of its own: see Databases"})
+				leave(c.t, "musdash runs it as a database, with backups and a port of its own: see Databases")
 			}
 			continue
 		}
 		if reason, over := ended[k]; over {
 			for _, c := range byKey[k] {
-				out = append(out, leftOut{c.t.Source, c.t.Key, reason})
+				leave(c.t, reason)
 			}
 			delete(ended, k)
 			continue
@@ -229,11 +270,21 @@ func main() {
 			winner = t
 			break
 		}
+		for _, c := range byKey[k] {
+			if c.t.Source == "musdash" && winner != nil && winner != c.t {
+				leave(c.t, "the catalogue has it from "+winner.Source+" as "+winner.Key)
+			}
+		}
 		if winner == nil {
-			out = append(out, reasons...)
+			for _, r := range reasons {
+				leave(&tmpl{Source: r.source, Key: r.key}, r.reason)
+			}
 			continue
 		}
 		if own[same(winner.Name)] {
+			if winner.Source == "musdash" {
+				leave(winner, "musdash has a template of that name already")
+			}
 			continue
 		}
 		winners = append(winners, winner)
@@ -243,13 +294,19 @@ func main() {
 	sort.SliceStable(winners, func(i, j int) bool { return winners[i].Source < winners[j].Source })
 	for _, winner := range winners {
 		if other, dup := byName[strings.ToLower(winner.Name)]; dup {
-			out = append(out, leftOut{winner.Source, winner.Key, "the catalogue has it as " + other})
+			leave(winner, "the catalogue has it as "+other)
 			continue
 		}
 		byName[strings.ToLower(winner.Name)] = winner.Key
 		taken = append(taken, winner)
 	}
 	sort.Slice(taken, func(i, j int) bool { return taken[i].Key < taken[j].Key })
+	if len(broken) > 0 {
+		for _, b := range broken {
+			fmt.Fprintf(os.Stderr, "%s: %s\n", filepath.Join(*writtenDir, b.key+".yaml"), firstLine(b.reason))
+		}
+		os.Exit(1)
+	}
 
 	// Everything is converted: only now is the earlier run's output
 	// removed, so that a run that fails leaves the catalogue as it was.
@@ -396,8 +453,8 @@ func main() {
 	for _, o := range out {
 		leftKeys[same(o.key)] = true
 	}
-	fmt.Printf("%d templates written (%d from Coolify, %d from Dokploy), %d with a logo; %d services left out\n",
-		len(taken), bySource["coolify"], bySource["dokploy"], logos, len(leftKeys))
+	fmt.Printf("%d templates written (%d from Coolify, %d from Dokploy, %d of musdash's own), %d with a logo; %d services left out\n",
+		len(taken), bySource["coolify"], bySource["dokploy"], bySource["musdash"], logos, len(leftKeys))
 	uncategorised := 0
 	for _, t := range taken {
 		if len(t.Categories) == 0 {

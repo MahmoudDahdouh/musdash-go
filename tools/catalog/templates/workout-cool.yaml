@@ -1,0 +1,47 @@
+# name: Workout.cool
+# about: A fitness app for building workout routines from an exercise library and tracking training sessions.
+# docs: https://github.com/Snouzy/workout-cool/blob/main/docs/SELF-HOSTING.md
+# website: https://workout.cool
+# categories: home
+services:
+  workout-cool:
+    image: ghcr.io/snouzy/workout-cool:latest
+    environment:
+      - SERVICE_FQDN_WORKOUT_COOL_3000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://workoutcool:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/workout-cool
+      - BETTER_AUTH_URL=${SERVICE_URL_WORKOUT_COOL}
+      - BETTER_AUTH_SECRET=${SERVICE_BASE64_AUTH}
+      - NEXT_PUBLIC_APP_URL=${SERVICE_URL_WORKOUT_COOL}
+      - SEED_SAMPLE_DATA=${SEED_SAMPLE_DATA:-true}
+      - DEFAULT_BILLING_MODE=DISABLED
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-not-set}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-not-set}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=workoutcool
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=workout-cool
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

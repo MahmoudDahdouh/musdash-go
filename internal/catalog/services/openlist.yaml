@@ -1,0 +1,24 @@
+# name: OpenList
+# about: A file list and WebDAV server that shows local disks and many cloud storages in one place, a community fork of AList.
+# docs: https://doc.oplist.org/guide/installation/docker
+# website: https://oplist.org/
+# categories: storage
+# source: musdash
+services:
+  openlist:
+    image: ghcr.io/openlistteam/openlist-git:latest
+    user: "0:0"
+    environment:
+      - SERVICE_FQDN_OPENLIST_5244
+      - UMASK=022
+      - TZ=${TZ:-UTC}
+      - OPENLIST_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - openlist-data:/opt/openlist/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:5244/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  openlist-data:

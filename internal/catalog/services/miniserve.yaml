@@ -1,0 +1,16 @@
+# name: miniserve
+# about: A small file server that lists a folder in the browser, with uploads and a sign-in.
+# docs: https://github.com/svenstaro/miniserve#how-to-install
+# website: https://github.com/svenstaro/miniserve
+# categories: storage
+# source: musdash
+services:
+  miniserve:
+    image: svenstaro/miniserve:latest
+    command: /data --auth ${SERVICE_USER_MINISERVE}:${SERVICE_PASSWORD_MINISERVE} --upload-files --mkdir
+    environment:
+      - SERVICE_FQDN_MINISERVE_8080
+    volumes:
+      - miniserve-data:/data
+volumes:
+  miniserve-data:

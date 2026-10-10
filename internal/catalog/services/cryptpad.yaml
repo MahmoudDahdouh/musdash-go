@@ -1,0 +1,54 @@
+# name: CryptPad
+# about: An end-to-end encrypted office suite for documents, sheets, kanban boards and forms edited together.
+# docs: https://docs.cryptpad.org/en/admin_guide/installation.html
+# website: https://cryptpad.org
+# categories: productivity, docs
+# source: musdash
+services:
+  cryptpad:
+    image: cryptpad/cryptpad:latest
+    hostname: cryptpad
+    environment:
+      - SERVICE_FQDN_CRYPTPAD_3000
+      - CPAD_MAIN_DOMAIN=${SERVICE_URL_CRYPTPAD}
+      - CPAD_SANDBOX_DOMAIN=${SERVICE_URL_SANDBOX}
+      - CPAD_CONF=/cryptpad/config/config.js
+    volumes:
+      - blob:/cryptpad/blob
+      - block:/cryptpad/block
+      - customize:/cryptpad/customize
+      - data:/cryptpad/data
+      - datastore:/cryptpad/datastore
+      - onlyoffice-dist:/cryptpad/www/common/onlyoffice/dist
+      - onlyoffice-conf:/cryptpad/onlyoffice-conf
+    ulimits:
+      nofile:
+        soft: 1000000
+        hard: 1000000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+  sandbox:
+    image: caddy:2-alpine
+    command: caddy reverse-proxy --from :80 --to cryptpad:3000
+    environment:
+      - SERVICE_FQDN_SANDBOX_80
+    depends_on:
+      cryptpad:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  blob:
+  block:
+  customize:
+  data:
+  datastore:
+  onlyoffice-conf:
+  onlyoffice-dist:

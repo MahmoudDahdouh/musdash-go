@@ -1,0 +1,23 @@
+# name: step-ca
+# about: A private certificate authority that issues TLS and SSH certificates, with an ACME server built in.
+# docs: https://smallstep.com/docs/tutorials/docker-tls-certificate-authority/
+# website: https://smallstep.com/certificates/
+# categories: security, networking
+services:
+  step-ca:
+    image: smallstep/step-ca:latest
+    environment:
+      - DOCKER_STEPCA_INIT_NAME=${DOCKER_STEPCA_INIT_NAME:-Smallstep}
+      - DOCKER_STEPCA_INIT_DNS_NAMES=${DOCKER_STEPCA_INIT_DNS_NAMES:?},localhost
+      - DOCKER_STEPCA_INIT_PASSWORD=${SERVICE_PASSWORD_STEPCA}
+      - DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT=true
+      - DOCKER_STEPCA_INIT_ACME=${DOCKER_STEPCA_INIT_ACME:-true}
+    ports:
+      - "9000:9000"
+    volumes:
+      - step:/home/step
+    healthcheck:
+      test: ["CMD-SHELL", "step ca health --ca-url https://localhost:9000 --root /home/step/certs/root_ca.crt 2>/dev/null | grep -q '^ok'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

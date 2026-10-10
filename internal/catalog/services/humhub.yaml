@@ -1,0 +1,46 @@
+# name: HumHub
+# about: A social network for teams and communities, with spaces, profiles and modules such as a wiki and a calendar.
+# docs: https://github.com/humhub/docker#quick-start
+# website: https://www.humhub.com/
+# categories: communication, productivity
+# source: musdash
+services:
+  humhub:
+    image: humhub/humhub:stable
+    environment:
+      - SERVICE_FQDN_HUMHUB_80
+      - SERVER_NAME=:80
+      - HUMHUB_CONFIG__COMPONENTS__DB__DSN=mysql:host=db;dbname=humhub
+      - HUMHUB_CONFIG__COMPONENTS__DB__USERNAME=${SERVICE_USER_HUMHUB}
+      - HUMHUB_CONFIG__COMPONENTS__DB__PASSWORD=${SERVICE_PASSWORD_HUMHUB}
+      - 'HUMHUB_WEB_CONFIG__COMPONENTS__REQUEST__TRUSTED_HOSTS=["10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"]'
+    volumes:
+      - humhub-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+  db:
+    image: mariadb:11
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      - MARIADB_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MARIADB_DATABASE=humhub
+      - MARIADB_USER=${SERVICE_USER_HUMHUB}
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_HUMHUB}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+volumes:
+  humhub-data:
+  mysql-data:

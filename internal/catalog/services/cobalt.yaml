@@ -1,0 +1,23 @@
+# name: Cobalt
+# about: The processing API of a media downloader that fetches video and audio from public links.
+# docs: https://github.com/imputnet/cobalt/blob/main/docs/run-an-instance.md
+# website: https://cobalt.tools
+# categories: media
+# source: musdash
+services:
+  cobalt:
+    image: ghcr.io/imputnet/cobalt:11
+    init: true
+    read_only: true
+    environment:
+      - SERVICE_FQDN_COBALT_9000
+      - API_URL=${SERVICE_URL_COBALT}/
+      - CORS_WILDCARD=${CORS_WILDCARD:-1}
+      - CORS_URL=${CORS_URL:-}
+      - TURNSTILE_SITEKEY=${TURNSTILE_SITEKEY:-}
+      - TURNSTILE_SECRET=${TURNSTILE_SECRET:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:9000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

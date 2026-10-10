@@ -1,0 +1,244 @@
+# name: Standard Notes
+# about: The sync server of the end-to-end encrypted notes app, for the web, desktop and mobile clients.
+# docs: https://standardnotes.com/help/self-hosting/docker
+# website: https://standardnotes.com/
+# categories: docs, productivity
+# source: musdash
+services:
+  server:
+    image: standardnotes/server:latest
+    environment:
+      - SERVICE_FQDN_SERVER_3000
+      - SERVICE_FQDN_FILES_3104
+      - PUBLIC_FILES_SERVER_URL=${SERVICE_URL_FILES}
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USERNAME=${SERVICE_USER_MYSQL}
+      - DB_PASSWORD=${SERVICE_PASSWORD_MYSQL}
+      - DB_DATABASE=standard_notes_db
+      - DB_TYPE=mysql
+      - REDIS_PORT=6379
+      - REDIS_HOST=cache
+      - CACHE_TYPE=redis
+      - AUTH_JWT_SECRET=${SERVICE_HEX_64_JWT}
+      - AUTH_SERVER_ENCRYPTION_SERVER_KEY=${SERVICE_HEX_64_ENCRYPTION}
+      - AUTH_SERVER_ADMIN_KEY=${SERVICE_HEX_64_ADMIN}
+      - VALET_TOKEN_SECRET=${SERVICE_HEX_64_VALET}
+      - AUTH_SERVER_DISABLE_USER_REGISTRATION=${AUTH_SERVER_DISABLE_USER_REGISTRATION:-false}
+    volumes:
+      - server-logs:/var/lib/server/logs
+      - server-uploads:/opt/server/packages/files/dist/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:3000/healthcheck || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+  localstack:
+    image: localstack/localstack:3.0
+    environment:
+      - SERVICES=sns,sqs
+      - HOSTNAME_EXTERNAL=localstack
+      - LS_LOG=warn
+    configs:
+      - source: localstack-bootstrap
+        target: /etc/localstack/init/ready.d/localstack_bootstrap.sh
+        mode: 0755
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:4566/_localstack/init/ready | grep -q '\"completed\": true' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  db:
+    image: mysql:8.4
+    environment:
+      - MYSQL_DATABASE=standard_notes_db
+      - MYSQL_USER=${SERVICE_USER_MYSQL}
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_MYSQL}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+  cache:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  mysql-data:
+  redis-data:
+  server-logs:
+  server-uploads:
+configs:
+  localstack-bootstrap:
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      echo "configuring sns/sqs"
+      echo "==================="
+      LOCALSTACK_HOST=localhost
+      AWS_REGION=us-east-1
+      LOCALSTACK_DUMMY_ID=000000000000
+      get_all_queues() {
+        awslocal --endpoint-url=http://$${LOCALSTACK_HOST}:4566 sqs list-queues
+      }
+      create_queue() {
+        local QUEUE_NAME_TO_CREATE=$$1
+        awslocal --endpoint-url=http://$${LOCALSTACK_HOST}:4566 sqs create-queue --queue-name $${QUEUE_NAME_TO_CREATE}
+      }
+      get_all_topics() {
+        awslocal --endpoint-url=http://$${LOCALSTACK_HOST}:4566 sns list-topics
+      }
+      create_topic() {
+        local TOPIC_NAME_TO_CREATE=$$1
+        awslocal --endpoint-url=http://$${LOCALSTACK_HOST}:4566 sns create-topic --name $${TOPIC_NAME_TO_CREATE}
+      }
+      link_queue_and_topic() {
+        local TOPIC_ARN_TO_LINK=$$1
+        local QUEUE_ARN_TO_LINK=$$2
+        awslocal --endpoint-url=http://$${LOCALSTACK_HOST}:4566 sns subscribe --topic-arn $${TOPIC_ARN_TO_LINK} --protocol sqs --notification-endpoint $${QUEUE_ARN_TO_LINK}
+      }
+      get_queue_arn_from_name() {
+        local QUEUE_NAME=$$1
+        echo "arn:aws:sns:$${AWS_REGION}:$${LOCALSTACK_DUMMY_ID}:$$QUEUE_NAME"
+      }
+      get_topic_arn_from_name() {
+        local TOPIC_NAME=$$1
+        echo "arn:aws:sns:$${AWS_REGION}:$${LOCALSTACK_DUMMY_ID}:$$TOPIC_NAME"
+      }
+      PAYMENTS_TOPIC_NAME="payments-local-topic"
+      echo "creating topic $$PAYMENTS_TOPIC_NAME"
+      TOPIC_CREATED_RESULT=$$(create_topic $${PAYMENTS_TOPIC_NAME})
+      echo "created topic: $$TOPIC_CREATED_RESULT"
+      PAYMENTS_TOPIC_ARN=$$(get_topic_arn_from_name $$PAYMENTS_TOPIC_NAME)
+      SYNCING_SERVER_TOPIC_NAME="syncing-server-local-topic"
+      echo "creating topic $$SYNCING_SERVER_TOPIC_NAME"
+      TOPIC_CREATED_RESULT=$$(create_topic $${SYNCING_SERVER_TOPIC_NAME})
+      echo "created topic: $$TOPIC_CREATED_RESULT"
+      SYNCING_SERVER_TOPIC_ARN=$$(get_topic_arn_from_name $$SYNCING_SERVER_TOPIC_NAME)
+      AUTH_TOPIC_NAME="auth-local-topic"
+      echo "creating topic $$AUTH_TOPIC_NAME"
+      TOPIC_CREATED_RESULT=$$(create_topic $${AUTH_TOPIC_NAME})
+      echo "created topic: $$TOPIC_CREATED_RESULT"
+      AUTH_TOPIC_ARN=$$(get_topic_arn_from_name $$AUTH_TOPIC_NAME)
+      FILES_TOPIC_NAME="files-local-topic"
+      echo "creating topic $$FILES_TOPIC_NAME"
+      TOPIC_CREATED_RESULT=$$(create_topic $${FILES_TOPIC_NAME})
+      echo "created topic: $$TOPIC_CREATED_RESULT"
+      FILES_TOPIC_ARN=$$(get_topic_arn_from_name $$FILES_TOPIC_NAME)
+      ANALYTICS_TOPIC_NAME="analytics-local-topic"
+      echo "creating topic $$ANALYTICS_TOPIC_NAME"
+      TOPIC_CREATED_RESULT=$$(create_topic $${ANALYTICS_TOPIC_NAME})
+      echo "created topic: $$TOPIC_CREATED_RESULT"
+      ANALYTICS_TOPIC_ARN=$$(get_topic_arn_from_name $$ANALYTICS_TOPIC_NAME)
+      REVISIONS_TOPIC_NAME="revisions-server-local-topic"
+      echo "creating topic $$REVISIONS_TOPIC_NAME"
+      TOPIC_CREATED_RESULT=$$(create_topic $${REVISIONS_TOPIC_NAME})
+      echo "created topic: $$TOPIC_CREATED_RESULT"
+      REVISIONS_TOPIC_ARN=$$(get_topic_arn_from_name $$REVISIONS_TOPIC_NAME)
+      SCHEDULER_TOPIC_NAME="scheduler-local-topic"
+      echo "creating topic $$SCHEDULER_TOPIC_NAME"
+      TOPIC_CREATED_RESULT=$$(create_topic $${SCHEDULER_TOPIC_NAME})
+      echo "created topic: $$TOPIC_CREATED_RESULT"
+      SCHEDULER_TOPIC_ARN=$$(get_topic_arn_from_name $$SCHEDULER_TOPIC_NAME)
+      QUEUE_NAME="analytics-local-queue"
+      echo "creating queue $$QUEUE_NAME"
+      QUEUE_URL=$$(create_queue $${QUEUE_NAME})
+      echo "created queue: $$QUEUE_URL"
+      ANALYTICS_QUEUE_ARN=$$(get_queue_arn_from_name $$QUEUE_NAME)
+      echo "linking topic $$PAYMENTS_TOPIC_ARN to queue $$ANALYTICS_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$PAYMENTS_TOPIC_ARN $$ANALYTICS_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      QUEUE_NAME="auth-local-queue"
+      echo "creating queue $$QUEUE_NAME"
+      QUEUE_URL=$$(create_queue $${QUEUE_NAME})
+      echo "created queue: $$QUEUE_URL"
+      AUTH_QUEUE_ARN=$$(get_queue_arn_from_name $$QUEUE_NAME)
+      echo "linking topic $$PAYMENTS_TOPIC_ARN to queue $$AUTH_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$PAYMENTS_TOPIC_ARN $$AUTH_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      echo "linking topic $$AUTH_TOPIC_ARN to queue $$AUTH_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$AUTH_TOPIC_ARN $$AUTH_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      echo "linking topic $$FILES_TOPIC_ARN to queue $$AUTH_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$FILES_TOPIC_ARN $$AUTH_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      echo "linking topic $$REVISIONS_TOPIC_ARN to queue $$AUTH_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$REVISIONS_TOPIC_ARN $$AUTH_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      QUEUE_NAME="files-local-queue"
+      echo "creating queue $$QUEUE_NAME"
+      QUEUE_URL=$$(create_queue $${QUEUE_NAME})
+      echo "created queue: $$QUEUE_URL"
+      FILES_QUEUE_ARN=$$(get_queue_arn_from_name $$QUEUE_NAME)
+      echo "linking topic $$AUTH_TOPIC_ARN to queue $$FILES_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$AUTH_TOPIC_ARN $$FILES_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      echo "linking topic $$SYNCING_SERVER_TOPIC_ARN to queue $$FILES_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$SYNCING_SERVER_TOPIC_ARN $$FILES_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      QUEUE_NAME="syncing-server-local-queue"
+      echo "creating queue $$QUEUE_NAME"
+      QUEUE_URL=$$(create_queue $${QUEUE_NAME})
+      echo "created queue: $$QUEUE_URL"
+      SYNCING_SERVER_QUEUE_ARN=$$(get_queue_arn_from_name $$QUEUE_NAME)
+      echo "linking topic $$SYNCING_SERVER_TOPIC_ARN to queue $$SYNCING_SERVER_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$SYNCING_SERVER_TOPIC_ARN $$SYNCING_SERVER_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      echo "linking topic $$FILES_TOPIC_ARN to queue $$SYNCING_SERVER_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$FILES_TOPIC_ARN $$SYNCING_SERVER_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      echo "linking topic $$SYNCING_SERVER_TOPIC_ARN to queue $$AUTH_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$SYNCING_SERVER_TOPIC_ARN $$AUTH_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      echo "linking topic $$AUTH_TOPIC_ARN to queue $$SYNCING_SERVER_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$AUTH_TOPIC_ARN $$SYNCING_SERVER_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      QUEUE_NAME="revisions-server-local-queue"
+      echo "creating queue $$QUEUE_NAME"
+      QUEUE_URL=$$(create_queue $${QUEUE_NAME})
+      echo "created queue: $$QUEUE_URL"
+      REVISIONS_QUEUE_ARN=$$(get_queue_arn_from_name $$QUEUE_NAME)
+      echo "linking topic $$SYNCING_SERVER_TOPIC_ARN to queue $$REVISIONS_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$SYNCING_SERVER_TOPIC_ARN $$REVISIONS_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      echo "linking topic $$REVISIONS_TOPIC_ARN to queue $$REVISIONS_QUEUE_ARN"
+      LINKING_RESULT=$$(link_queue_and_topic $$REVISIONS_TOPIC_ARN $$REVISIONS_QUEUE_ARN)
+      echo "linking done:"
+      echo "$$LINKING_RESULT"
+      QUEUE_NAME="scheduler-local-queue"
+      echo "creating queue $$QUEUE_NAME"
+      QUEUE_URL=$$(create_queue $${QUEUE_NAME})
+      echo "created queue: $$QUEUE_URL"
+      SCHEDULER_QUEUE_ARN=$$(get_queue_arn_from_name $$QUEUE_NAME)
+      echo "all topics are:"
+      echo "$$(get_all_topics)"
+      echo "all queues are:"
+      echo "$$(get_all_queues)"

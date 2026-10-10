@@ -1,0 +1,18 @@
+# name: Hister
+# about: A search engine for the web pages you have visited, which indexes their full text from a browser extension.
+# docs: https://hister.org/docs/docker
+# website: https://hister.org/
+# categories: search, productivity
+# source: musdash
+services:
+  hister:
+    image: ghcr.io/asciimoo/hister:latest
+    environment:
+      - SERVICE_FQDN_HISTER_4433
+      - HISTER__SERVER__ADDRESS=0.0.0.0:4433
+      - HISTER__SERVER__BASE_URL=${SERVICE_URL_HISTER}
+      - HISTER__APP__ACCESS_TOKEN=${SERVICE_PASSWORD_HISTER}
+    volumes:
+      - hister-data:/hister/data
+volumes:
+  hister-data:

@@ -729,3 +729,62 @@ stops for a line of either list that names nothing.
   on another network. Six more refuse every script (Moodle, DokuWiki,
   Paperless-ngx, RSSHub, Kutt, Chaskiq) and were taken on the word of the
   project's own repository.
+
+## Fifth pass: the services neither catalogue has
+
+Asked for on 2026-10-09: the directory of self-hosted software at
+[selfh.st/apps](https://selfh.st/apps/) read through, and as many of its
+apps as can be one added to the catalogue, with icon, categories and both
+links.
+
+**What was found.** The directory lists 1,264 apps. 302 were in the
+catalogue already, 31 are in neither catalogue's template for a reason
+`docs/catalogue-left-out.md` gives, and 931 were new. None of the new
+ones' repositories is archived (the directory drops those itself); four
+had seen no commit for two years.
+
+**Decisions**
+| Question | Decision | Why |
+|---|---|---|
+| Whose template | Nobody has one, so it is written here: `tools/catalog/templates/<key>.yaml`, a Compose file under the five header lines of a catalogue file, in musdash's own words | The directory lists apps, not ways to run them |
+| How it gets into the catalogue | Through `tools/catalog`, as a third source beside Coolify's and Dokploy's: `# source: musdash` | One set of rules for every template the converter writes, its volumes declared, its logo found, and nothing to keep in step by hand |
+| A template the converter cannot take | The run stops with the reason | There is no upstream to wait for: the file is ours to put right |
+| What a template is written from | The project's own Compose file or `docker run` line, fetched from its repository | Not from memory: a port or a variable that is nearly right is a deployment that fails |
+| What proves one | It is started on a real Docker through the deployer (`MUSDASH_SERVICE_FILES` with `TestCatalogueWithDocker`): it comes up, answers on its address, survives a redeploy and goes away with its volumes. Only then is it added | The two catalogues' templates have their users behind them; these have nobody yet |
+| The key | The directory's own reference for the app | It is the name of its icon in the selfh.st collection, which the converter reads first |
+| The first account | Generated credentials wherever the app takes them from its environment or a config file | They are on the service's page, and nobody else has them |
+| An app that starts with a sign-in everybody knows, which nothing but its own page can change | No template | A service has a public address from the moment it is up |
+| An app with no sign-in | A template only where it holds nothing private and controls nothing (a converter, a paste tool, a page of links) | The same |
+| An app whose first visitor makes the administrator | A template, and the guide says to open a new service at once | WordPress, n8n, Uptime Kuma and Gitea in the catalogue are like that |
+| What is not a template | What is no server (a CLI, a desktop or phone app, a library, an add-on of another app); what has no published image; what needs the Docker socket, the server's network, devices, capabilities or a port under 1024; what needs several addresses by path on one host | The rules a stack is held to, and what a form can ask for |
+| The line about each app | Written anew, one sentence | The directory's lines are its own |
+| An image of several gigabytes | Left for later | It was not started, and what was not started is not added |
+
+**What was built**
+
+- `tools/catalog/written.go` reads a template of `templates/` (its header
+  whole, its categories from the fixed list, a logo file beside it if
+  there is one); `main.go` takes them as a third source, stops for one it
+  cannot convert or that a catalogue has since taken up, and has
+  `-check <file>` to convert one alone.
+- `TestCatalogueWithDocker` takes template files (`MUSDASH_SERVICE_FILES`)
+  and a shorter wait (`MUSDASH_SERVICE_START`), and says what the
+  containers said when a stack is up and does not answer.
+- `TestServiceCatalogue` knows the third source; `services.LICENSE` says
+  what it is.
+
+**How it was done.** For each new app the files that say how it runs
+(Compose files, README, `.env` example, Dockerfile, install pages) were
+fetched from its repository. Agents wrote the templates from those, a
+dozen apps each, against a brief with the rules above, or said why an app
+cannot be one. Each template was converted, loaded in the sandbox, its
+images looked up on their registries, and then started for real, the
+smallest images first: the line this was done on carries two megabytes a
+second, which is what set the pace. What failed went back with what its
+containers had said. Both links of every template were asked for.
+
+**What the trials found**, which reading would not have: a health check
+that uses a tool its image does not have; a volume the container's user
+cannot write; an app that answers 500 until a variable its own Compose
+file does not name is set; a `user:` the image does not know; a first
+start that takes longer than five minutes.

@@ -1,0 +1,64 @@
+# name: Gogs
+# about: A light Git service with repositories, issues, pull requests and wikis, with a PostgreSQL database.
+# docs: https://github.com/gogs/gogs/blob/main/docker/README.md
+# website: https://gogs.io
+# categories: git, devtools
+services:
+  gogs:
+    image: ghcr.io/gogs/gogs:0.14
+    environment:
+      - SERVICE_FQDN_GOGS_3000
+    ports:
+      - "2222:22"
+    volumes:
+      - gogs-data:/data
+    configs:
+      - source: gogs-config
+        target: /data/gogs/conf/app.ini
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:3000/healthcheck || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=gogs
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+configs:
+  gogs-config:
+    content: |
+      RUN_MODE = prod
+      RUN_USER = git
+
+      [server]
+      EXTERNAL_URL = ${SERVICE_URL_GOGS}/
+      DOMAIN = ${SERVICE_FQDN_GOGS}
+      HTTP_PORT = 3000
+      SSH_PORT = 2222
+
+      [repository]
+      ROOT = /home/git/gogs-repositories
+
+      [database]
+      TYPE = postgres
+      HOST = postgres:5432
+      NAME = gogs
+      USER = ${SERVICE_USER_POSTGRES}
+      PASSWORD = ${SERVICE_PASSWORD_POSTGRES}
+      SSL_MODE = disable
+
+      [security]
+      INSTALL_LOCK = true
+      SECRET_KEY = ${SERVICE_PASSWORD_SECRETKEY}

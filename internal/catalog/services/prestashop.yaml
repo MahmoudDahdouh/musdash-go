@@ -1,0 +1,50 @@
+# name: PrestaShop
+# about: An online shop with a product catalogue, orders, payments and a back office, installed with demo products.
+# docs: https://devdocs.prestashop-project.org/9/basics/installation/environments/docker/
+# website: https://www.prestashop-project.org/
+# categories: ecommerce
+# source: musdash
+services:
+  prestashop:
+    image: prestashop/prestashop:latest
+    environment:
+      - SERVICE_FQDN_PRESTASHOP_80
+      - DB_SERVER=mariadb
+      - DB_NAME=prestashop
+      - DB_USER=prestashop
+      - DB_PASSWD=${SERVICE_PASSWORD_MARIADB}
+      - PS_INSTALL_AUTO=1
+      - PS_DOMAIN=${SERVICE_FQDN_PRESTASHOP}
+      - PS_ENABLE_SSL=1
+      - PS_FOLDER_ADMIN=${PS_FOLDER_ADMIN:-backoffice}
+      - PS_LANGUAGE=${PS_LANGUAGE:-en}
+      - PS_COUNTRY=${PS_COUNTRY:-GB}
+      - ADMIN_MAIL=${ADMIN_EMAIL:?}
+      - ADMIN_PASSWD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - prestashop-data:/var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null -H 'X-Forwarded-Proto: https' http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+  mariadb:
+    image: mariadb:11
+    environment:
+      - MARIADB_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MARIADB_DATABASE=prestashop
+      - MARIADB_USER=prestashop
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_MARIADB}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  mariadb-data:
+  prestashop-data:

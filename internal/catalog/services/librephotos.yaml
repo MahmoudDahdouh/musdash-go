@@ -1,0 +1,56 @@
+# name: LibrePhotos
+# about: A photo library with face recognition, automatic albums, a timeline and a map, with a PostgreSQL database.
+# docs: https://docs.librephotos.com/docs/installation/unified-deployment
+# website: https://docs.librephotos.com/
+# categories: media
+# source: musdash
+services:
+  backend:
+    image: reallibrephotos/librephotos-unified:latest
+    environment:
+      - SERVICE_FQDN_BACKEND_8001
+      - SERVE_FRONTEND=true
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRETKEY}
+      - BACKEND_HOST=backend
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_USERNAME=${SERVICE_USER_ADMIN}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - DB_BACKEND=postgresql
+      - DB_NAME=librephotos
+      - DB_USER=librephotos
+      - DB_PASS=${SERVICE_PASSWORD_POSTGRES}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - CSRF_TRUSTED_ORIGINS=${SERVICE_URL_BACKEND}
+      - MAPBOX_API_KEY=${MAPBOX_API_KEY:-}
+      - WEB_CONCURRENCY=${WEB_CONCURRENCY:-1}
+      - BASE_LOGS=/logs
+      - ALLOW_UPLOAD=${ALLOW_UPLOAD:-true}
+      - DEBUG=0
+    volumes:
+      - photos:/data
+      - protected_media:/protected_media
+      - logs:/logs
+      - cache:/root/.cache
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=librephotos
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=librephotos
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  cache:
+  db:
+  logs:
+  photos:
+  protected_media:

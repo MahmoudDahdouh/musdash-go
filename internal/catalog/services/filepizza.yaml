@@ -1,0 +1,33 @@
+# name: FilePizza
+# about: Sends files straight from one browser to another over WebRTC, with nothing stored on the server.
+# docs: https://github.com/kern/filepizza#running-with-docker
+# website: https://file.pizza/
+# categories: storage
+# source: musdash
+services:
+  filepizza:
+    image: kern/filepizza:latest
+    environment:
+      - SERVICE_FQDN_FILEPIZZA_8080
+      - PORT=8080
+      - HOSTNAME=0.0.0.0
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  redis-data:

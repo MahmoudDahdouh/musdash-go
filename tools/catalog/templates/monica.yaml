@@ -1,0 +1,50 @@
+# name: Monica
+# about: A personal CRM for keeping track of the people in your life: contacts, conversations, reminders and notes.
+# docs: https://github.com/monicahq/monica/blob/4.x/docs/installation/providers/docker.md
+# website: https://www.monicahq.com/
+# categories: home, productivity
+services:
+  monica:
+    image: monica:latest
+    environment:
+      - SERVICE_FQDN_MONICA_80
+      - APP_ENV=production
+      - APP_URL=${SERVICE_URL_MONICA}
+      - APP_KEY=${SERVICE_PASSWORD_APPKEY}
+      - HASH_SALT=${SERVICE_PASSWORD_HASHSALT}
+      - APP_TRUSTED_PROXIES=*
+      - DB_HOST=mariadb
+      - DB_DATABASE=monica
+      - DB_USERNAME=${SERVICE_USER_MONICA}
+      - DB_PASSWORD=${SERVICE_PASSWORD_MONICA}
+      - MAIL_MAILER=${MAIL_MAILER:-smtp}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-tls}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-}
+    volumes:
+      - monica-data:/var/www/html/storage
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+  mariadb:
+    image: mariadb:11
+    environment:
+      - MARIADB_RANDOM_ROOT_PASSWORD=true
+      - MARIADB_DATABASE=monica
+      - MARIADB_USER=${SERVICE_USER_MONICA}
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_MONICA}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 40

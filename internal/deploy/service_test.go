@@ -903,7 +903,10 @@ var publishedRE = regexp.MustCompile(`(?m)^\s+- "(?:(\d+)|\$\{[A-Z][A-Z0-9_]*:-(
 // of images, so it has its own switch. Without more it installs the
 // templates written for musdash; MUSDASH_SERVICES="wordpress,umami" runs
 // just those, which is how one of the several hundred imported templates
-// is tried. Images that were not there before are removed again.
+// is tried. MUSDASH_SERVICE_FILES names files of templates that are not in
+// the catalogue yet (as tools/catalog -check writes one), tried the same
+// way before they are added. Images that were not there before are removed
+// again.
 func TestCatalogueWithDocker(t *testing.T) {
 	if os.Getenv("MUSDASH_DOCKER_TEST_SERVICES") != "1" {
 		t.Skip("set MUSDASH_DOCKER_TEST_SERVICES=1 to install the service catalogue on the local Docker daemon")
@@ -914,17 +917,38 @@ func TestCatalogueWithDocker(t *testing.T) {
 	dk := docker.Client{R: local}
 	e.d.Runners = fixedRunners{local}
 	only := os.Getenv("MUSDASH_SERVICES")
+	// A stack that never comes up is waited for ten minutes, which is long
+	// when many are tried: MUSDASH_SERVICE_START="5m" is how long one may
+	// take here.
+	if wait, err := time.ParseDuration(os.Getenv("MUSDASH_SERVICE_START")); err == nil && wait > 0 {
+		e.d.serviceStartTimeout = wait
+	}
 	imageRE := regexp.MustCompile(`(?m)^\s+image:\s*["']?([^\s"']+)`)
 
+	files := strings.Fields(os.Getenv("MUSDASH_SERVICE_FILES"))
+	var templates []catalog.ServiceTemplate
 	for _, tpl := range catalog.Services() {
-		if only != "" && !slices.Contains(strings.Split(only, ","), tpl.Key) || only == "" && tpl.Source != "" {
+		if only != "" && !slices.Contains(strings.Split(only, ","), tpl.Key) || only == "" && (tpl.Source != "" || len(files) > 0) {
 			continue
 		}
 		if tpl.Key == "cloudflared" {
 			continue // needs a real tunnel token from Cloudflare
 		}
+		tpl, _ = catalog.Service(tpl.Key)
+		templates = append(templates, tpl)
+	}
+	for _, file := range files {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tpl := catalog.ServiceTemplate{Key: strings.TrimSuffix(filepath.Base(file), ".yaml"), Compose: string(raw)}
+		tpl.Name = tpl.Key
+		tpl.ConnectEnv = regexp.MustCompile(`(?m)^# connect: true$`).Match(raw)
+		templates = append(templates, tpl)
+	}
+	for _, tpl := range templates {
 		t.Run(tpl.Key, func(t *testing.T) {
-			tpl, _ := catalog.Service(tpl.Key)
 			var fresh []string
 			for _, m := range imageRE.FindAllStringSubmatch(tpl.Compose, -1) {
 				if have, _ := dk.HasImage(ctx, m[1]); !have {
@@ -963,6 +987,12 @@ func TestCatalogueWithDocker(t *testing.T) {
 			if len(endpoints) == 0 && len(published) == 0 && !tpl.ConnectEnv {
 				t.Fatal("the template has no endpoint and no port")
 			}
+			// What the containers said explains a stack that is up and
+			// does not answer.
+			said := func() string {
+				out, _ := local.Output(ctx, runner.Cmd{Name: "docker", Args: []string{"compose", "--project-name", project, "logs", "--tail", "40", "--no-color"}})
+				return lastLines(string(out), 60)
+			}
 			answers := func() {
 				t.Helper()
 				for _, port := range published {
@@ -972,7 +1002,7 @@ func TestCatalogueWithDocker(t *testing.T) {
 						conn, err = net.DialTimeout("tcp", "127.0.0.1:"+port, 5*time.Second)
 					}
 					if err != nil {
-						t.Fatalf("the published port %s does not answer: %v", port, err)
+						t.Fatalf("the published port %s does not answer: %v\n%s", port, err, said())
 					}
 					conn.Close()
 					t.Logf("the published port %s answers", port)
@@ -993,11 +1023,11 @@ func TestCatalogueWithDocker(t *testing.T) {
 						res, err = client.Do(req)
 					}
 					if err != nil {
-						t.Fatalf("%s (%s:%d) does not answer on 127.0.0.1:%d: %v", ep.Name, ep.ComposeService, ep.Port, ep.HostPort, err)
+						t.Fatalf("%s (%s:%d) does not answer on 127.0.0.1:%d: %v\n%s", ep.Name, ep.ComposeService, ep.Port, ep.HostPort, err, said())
 					}
 					res.Body.Close()
 					if res.StatusCode >= 500 {
-						t.Fatalf("%s answers %d", ep.Name, res.StatusCode)
+						t.Fatalf("%s answers %d\n%s", ep.Name, res.StatusCode, said())
 					}
 					t.Logf("%s: %s:%d answers %d on 127.0.0.1:%d", ep.Name, ep.ComposeService, ep.Port, res.StatusCode, ep.HostPort)
 				}

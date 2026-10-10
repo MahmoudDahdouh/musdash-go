@@ -1,0 +1,52 @@
+# name: Photoview
+# about: A photo gallery for the pictures and videos in a folder, with albums, face recognition and sharing.
+# docs: https://photoview.github.io/en/docs/installation-docker/
+# website: https://photoview.github.io/
+# categories: media
+services:
+  photoview-prepare:
+    image: photoview/photoview:2
+    network_mode: none
+    user: root
+    entrypoint: []
+    command: /bin/bash -c "sleep 1 && chown -R photoview:photoview /home/photoview/media-cache"
+    restart: "no"
+    volumes:
+      - photoview-cache:/home/photoview/media-cache
+  photoview:
+    image: photoview/photoview:2
+    environment:
+      - SERVICE_FQDN_PHOTOVIEW_80
+      - PHOTOVIEW_DATABASE_DRIVER=mysql
+      - PHOTOVIEW_MYSQL_URL=${SERVICE_USER_PHOTOVIEW}:${SERVICE_PASSWORD_PHOTOVIEW}@tcp(mariadb)/photoview
+      - PHOTOVIEW_LISTEN_IP=0.0.0.0
+      - MAPBOX_TOKEN=${MAPBOX_TOKEN:-}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - photoview-cache:/home/photoview/media-cache
+      - photoview-photos:/photos
+    depends_on:
+      photoview-prepare:
+        condition: service_completed_successfully
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null -X POST -H 'Content-Type: application/json' --data-raw '{\"query\":\"query CheckInitialSetup { siteInfo { initialSetup }}\"}' http://127.0.0.1:80/api/graphql || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+  mariadb:
+    image: mariadb:11
+    environment:
+      - MARIADB_AUTO_UPGRADE=1
+      - MARIADB_DATABASE=photoview
+      - MARIADB_USER=${SERVICE_USER_PHOTOVIEW}
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_PHOTOVIEW}
+      - MARIADB_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 40

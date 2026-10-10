@@ -1,0 +1,11 @@
+# name: Logseq
+# about: The web app of an outliner for notes and knowledge graphs, which keeps the notes in the browser's own files.
+# docs: https://github.com/logseq/logseq/blob/master/docs/docker-web-app-guide.md
+# website: https://logseq.com
+# categories: docs, productivity
+# source: musdash
+services:
+  logseq:
+    image: ghcr.io/logseq/logseq-webapp:latest
+    environment:
+      - SERVICE_FQDN_LOGSEQ_80

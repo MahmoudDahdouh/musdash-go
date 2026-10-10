@@ -1,0 +1,32 @@
+# name: Warpgate
+# about: A bastion host for SSH, HTTPS and database connections with session recording, single sign-on and a web admin.
+# docs: https://warpgate.null.page/getting-started-on-docker/
+# website: https://warpgate.null.page
+# categories: security, networking
+# source: musdash
+services:
+  warpgate:
+    image: ghcr.io/warp-tech/warpgate:latest
+    volumes:
+      - data:/data
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "warpgate", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    ports:
+      - "2222:2222"
+      - "8888:8888"
+  setup:
+    image: ghcr.io/warp-tech/warpgate:latest
+    restart: "no"
+    entrypoint: ["sh", "-c", "test -f /data/warpgate.yaml || warpgate unattended-setup --data-path /data --http-port 8888 --ssh-port 2222 --record-sessions"]
+    environment:
+      - WARPGATE_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - data:/data
+volumes:
+  data:

@@ -1,0 +1,53 @@
+# name: Node-RED
+# about: A flow editor in the browser for wiring devices, APIs and online services together with little code.
+# docs: https://nodered.org/docs/getting-started/docker
+# website: https://nodered.org/
+# categories: automation, home
+# source: musdash
+services:
+  node-red:
+    image: nodered/node-red:latest
+    environment:
+      - SERVICE_FQDN_NODE_RED_1880
+      - NODE_RED_ADMIN_USER=${SERVICE_USER_ADMIN}
+      - NODE_RED_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - NODE_RED_CREDENTIAL_SECRET=${SERVICE_PASSWORD_64_CREDENTIALS}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - node-red-data:/data
+    configs:
+      - source: node-red-settings
+        target: /data/settings.js
+volumes:
+  node-red-data:
+configs:
+  node-red-settings:
+    content: |
+      // The editor can run code on the server, so it asks for a sign-in:
+      // the user and password are the service's variables.
+      const bcrypt = require("/usr/src/node-red/node_modules/bcryptjs");
+      module.exports = {
+        flowFile: "flows.json",
+        flowFilePretty: true,
+        credentialSecret: process.env.NODE_RED_CREDENTIAL_SECRET,
+        uiPort: process.env.PORT || 1880,
+        adminAuth: {
+          type: "credentials",
+          users: [{
+            username: process.env.NODE_RED_ADMIN_USER,
+            password: bcrypt.hashSync(process.env.NODE_RED_ADMIN_PASSWORD, 8),
+            permissions: "*",
+          }],
+        },
+        diagnostics: { enabled: true, ui: true },
+        runtimeState: { enabled: false, ui: false },
+        logging: { console: { level: "info", metrics: false, audit: false } },
+        exportGlobalContextKeys: false,
+        functionExternalModules: true,
+        functionTimeout: 0,
+        functionGlobalContext: {},
+        editorTheme: {
+          projects: { enabled: false },
+          codeEditor: { lib: "monaco" },
+        },
+      };

@@ -1,0 +1,13 @@
+# name: Dufs
+# about: A file server with uploads, search and WebDAV, in one small program.
+# docs: https://github.com/sigoden/dufs#with-docker
+# website: https://github.com/sigoden/dufs
+# categories: storage
+services:
+  dufs:
+    image: sigoden/dufs:latest
+    command: /data --allow-all --auth ${SERVICE_USER_DUFS}:${SERVICE_PASSWORD_DUFS}@/:rw
+    environment:
+      - SERVICE_FQDN_DUFS_5000
+    volumes:
+      - dufs-data:/data

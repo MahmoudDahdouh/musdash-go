@@ -1,0 +1,41 @@
+# name: Webhook
+# about: A small server that runs a command you configured when an HTTP request arrives at one of its hooks.
+# docs: https://github.com/adnanh/webhook/blob/master/docs/Hook-Definition.md
+# website: https://github.com/adnanh/webhook
+# categories: automation, devtools
+services:
+  webhook:
+    image: almir/webhook:2.8.3
+    command: ["-verbose", "-hooks=/etc/webhook/hooks.json", "-hotreload"]
+    environment:
+      - SERVICE_FQDN_WEBHOOK_9000
+    volumes:
+      - webhook-data:/etc/webhook
+    configs:
+      - source: webhook-hooks
+        target: /etc/webhook/hooks.json
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:9000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+configs:
+  webhook-hooks:
+    content: |
+      [
+        {
+          "id": "hello",
+          "execute-command": "/bin/echo",
+          "pass-arguments-to-command": [
+            { "source": "string", "name": "Hello from webhook" }
+          ],
+          "include-command-output-in-response": true,
+          "trigger-rule": {
+            "match": {
+              "type": "value",
+              "value": "${SERVICE_PASSWORD_WEBHOOK}",
+              "parameter": { "source": "header", "name": "X-Webhook-Token" }
+            }
+          }
+        }
+      ]

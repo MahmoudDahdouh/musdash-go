@@ -1,0 +1,21 @@
+# name: Tautulli
+# about: Watches a Plex Media Server and keeps its history: who played what, when and on which device.
+# docs: https://github.com/Tautulli/Tautulli/wiki/Installation#docker
+# website: https://tautulli.com/
+# categories: media, monitoring
+services:
+  tautulli:
+    image: ghcr.io/tautulli/tautulli:latest
+    environment:
+      - SERVICE_FQDN_TAUTULLI_8181
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - tautulli-config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "curl -ILfs http://127.0.0.1:8181/status > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

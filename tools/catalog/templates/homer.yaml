@@ -1,0 +1,18 @@
+# name: Homer
+# about: A static start page for your server's applications, set up in one YAML file.
+# docs: https://github.com/bastienwirtz/homer#using-docker
+# website: https://github.com/bastienwirtz/homer
+# categories: home, productivity
+services:
+  homer:
+    image: ghcr.io/bastienwirtz/homer:latest
+    environment:
+      - SERVICE_FQDN_HOMER_8080
+      - INIT_ASSETS=1
+    volumes:
+      - homer-assets:/www/assets
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose -Y off --tries=1 --spider http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12

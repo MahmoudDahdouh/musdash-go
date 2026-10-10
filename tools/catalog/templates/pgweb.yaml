@@ -1,0 +1,18 @@
+# name: pgweb
+# about: A web-based explorer for PostgreSQL databases, to browse tables, run queries and export the results.
+# docs: https://github.com/sosedoff/pgweb/wiki/Docker
+# website: https://sosedoff.github.io/pgweb/
+# categories: database, devtools
+services:
+  pgweb:
+    image: ghcr.io/sosedoff/pgweb:latest
+    environment:
+      - SERVICE_FQDN_PGWEB_8081
+      - PGWEB_SESSIONS=1
+      - PGWEB_AUTH_USER=${SERVICE_USER_PGWEB}
+      - PGWEB_AUTH_PASS=${SERVICE_PASSWORD_PGWEB}
+    healthcheck:
+      test: ["CMD", "nc", "-vz", "127.0.0.1", "8081"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

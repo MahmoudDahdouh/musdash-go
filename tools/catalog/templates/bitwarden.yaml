@@ -1,0 +1,54 @@
+# name: Bitwarden
+# about: A password manager with clients for every platform, here as the single-container Bitwarden lite with MariaDB.
+# docs: https://bitwarden.com/help/install-and-deploy-lite/
+# website: https://bitwarden.com/
+# categories: security, auth
+services:
+  bitwarden:
+    image: ghcr.io/bitwarden/lite:2026.9.2
+    environment:
+      - SERVICE_FQDN_BITWARDEN_8080
+      - BW_DOMAIN=${SERVICE_FQDN_BITWARDEN}
+      - BW_DB_PROVIDER=mysql
+      - BW_DB_SERVER=db
+      - BW_DB_DATABASE=bitwarden_vault
+      - BW_DB_USERNAME=bitwarden
+      - BW_DB_PASSWORD=${SERVICE_PASSWORD_BITWARDEN}
+      - BW_INSTALLATION_ID=${BW_INSTALLATION_ID:?}
+      - BW_INSTALLATION_KEY=${BW_INSTALLATION_KEY:?}
+      - globalSettings__mail__replyToEmail=${MAIL_REPLY_TO:-}
+      - globalSettings__mail__smtp__host=${SMTP_HOST:-}
+      - globalSettings__mail__smtp__port=${SMTP_PORT:-587}
+      - globalSettings__mail__smtp__ssl=${SMTP_SSL:-false}
+      - globalSettings__mail__smtp__username=${SMTP_USERNAME:-}
+      - globalSettings__mail__smtp__password=${SMTP_PASSWORD:-}
+      - globalSettings__disableUserRegistration=${DISABLE_USER_REGISTRATION:-false}
+      - adminSettings__admins=${ADMIN_EMAILS:-}
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=768m
+    volumes:
+      - bitwarden:/etc/bitwarden
+      - logs:/var/log/bitwarden
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:8080/api/alive || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+  db:
+    image: mariadb:11
+    environment:
+      - MARIADB_USER=bitwarden
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_BITWARDEN}
+      - MARIADB_DATABASE=bitwarden_vault
+      - MARIADB_RANDOM_ROOT_PASSWORD=true
+    volumes:
+      - data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 40

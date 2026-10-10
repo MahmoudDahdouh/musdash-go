@@ -6,13 +6,17 @@ One-click services from the catalogue, a Docker Compose file of your own with a 
 
 ## The catalogue
 
-A service is a stack of containers described by a Docker Compose file. **Add resource** offers a catalogue of nearly 600 services, "Your own Compose file" and a Compose file in a Git repository.
+A service is a stack of containers described by a Docker Compose file. **Add resource** offers a catalogue of more than 600 services, "Your own Compose file" and a Compose file in a Git repository.
 
 Every card has two links: **Website** is the project's own site, and **Docs** is the page to read before you run it, the project's self-hosting or Docker guide where it has one.
 
 The catalogue is sorted into categories (AI, Analytics, Databases, Monitoring, Storage and so on); a service can be in up to three. The **Category** menu above the list narrows it to the categories you tick, and the field beside it finds a service by name or by what it does; several words narrow further (`wordpress mysql`). Both work together, and both are in the page's address, so a narrowed list can be refreshed, bookmarked or sent to somebody. The list shows 48 services at a time and brings the next 48 as you scroll; the heading says how many there are in all, and Back from a service's form returns to where you were in the list.
 
-Six of the templates were written for musdash (n8n, WordPress, Ghost, Uptime Kuma, MinIO, Cloudflare Tunnel) and are started for real by its tests. The rest are the templates of [Coolify](https://coolify.io/services) and [Dokploy](https://github.com/Dokploy/templates), turned into musdash's form by `tools/catalog` (the licences and what was changed are in `internal/catalog/services.LICENSE`). What to know about those:
+Six of the templates were written for musdash (n8n, WordPress, Ghost, Uptime Kuma, MinIO, Cloudflare Tunnel) and are started for real by its tests. Most of the rest are the templates of [Coolify](https://coolify.io/services) and [Dokploy](https://github.com/Dokploy/templates), turned into musdash's form by `tools/catalog` (the licences and what was changed are in `internal/catalog/services.LICENSE`). The others were written for musdash too, for services neither of the two has: each from what the project's own makers say about running it with Docker, and each started on a real Docker once before it was added, where it had to come up, answer on its address, survive a redeploy and go away with its volumes. Which services to write one for was taken from the directory at [selfh.st/apps](https://selfh.st/apps/).
+
+Open a new service's address as soon as it is deployed. With many apps the first person to arrive makes the administrator's account (WordPress, Uptime Kuma, n8n and Gitea are like that), and a service has a public address from the moment it is up. Where an app can be given its first account from outside, the template does that with a generated name and password, which are under Variables. A service that would start with a sign-in everybody knows, or with none while it holds something private, is not in the catalogue.
+
+What to know about the templates made from Coolify's and Dokploy's:
 
 - Each is held to the same rules as a file of your own, and the tests load every one the way a deployment does. They are not each started: a template is its makers' Compose file, and one that does not come up says why on its Deployments page, where its Compose file can be changed.
 - What is reached through the proxy publishes no port. A template publishes the ports its makers did for what the proxy cannot carry (SSH for a Git server, MQTT, a game's own port), written in its Compose tab. One from 20000 to 29999, which is musdash's own range, is moved up by 10000 (Gitea's SSH is on 32222, Minecraft on 35565). A second copy of such a template on one server needs another port there before it starts.

@@ -1,0 +1,175 @@
+# name: solidtime
+# about: A time tracker for freelancers and agencies, with projects, clients, billable rates and reports.
+# docs: https://docs.solidtime.io/self-hosting/guides/docker
+# website: https://www.solidtime.io
+# categories: productivity, business
+services:
+  app:
+    image: solidtime/solidtime:latest
+    user: "1000:1000"
+    environment:
+      - SERVICE_FQDN_APP_8000
+      - CONTAINER_MODE=http
+      - AUTO_DB_MIGRATE=true
+      - APP_NAME=solidtime
+      - VITE_APP_NAME=solidtime
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=${SERVICE_URL_APP}
+      - APP_FORCE_HTTPS=true
+      - TRUSTED_PROXIES=0.0.0.0/0,2000:0:0:0:0:0:0:0/3
+      - APP_KEY=base64:${SERVICE_BASE64_APPKEY}
+      - APP_ENABLE_REGISTRATION=${APP_ENABLE_REGISTRATION:-on}
+      - SUPER_ADMINS=${SUPER_ADMINS:-}
+      - LOG_CHANNEL=stderr_daily
+      - LOG_LEVEL=warning
+      - DB_CONNECTION=pgsql
+      - DB_HOST=database
+      - DB_PORT=5432
+      - DB_DATABASE=solidtime
+      - DB_USERNAME=solidtime
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - MAIL_MAILER=${MAIL_MAILER:-log}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-tls}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-no-reply@example.com}
+      - MAIL_FROM_NAME=solidtime
+      - QUEUE_CONNECTION=database
+      - FILESYSTEM_DISK=local
+      - PUBLIC_FILESYSTEM_DISK=public
+      - GOTENBERG_URL=http://gotenberg:3000
+    volumes:
+      - app-storage:/var/www/html/storage
+    depends_on:
+      keys:
+        condition: service_completed_successfully
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:8000/health-check/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  keys:
+    image: solidtime/solidtime:latest
+    user: "1000:1000"
+    restart: "no"
+    command: ["sh", "-c", "test -f /var/www/html/storage/oauth-private.key || php /var/www/html/artisan passport:keys"]
+    environment:
+      - APP_ENV=production
+      - APP_KEY=base64:${SERVICE_BASE64_APPKEY}
+    volumes:
+      - app-storage:/var/www/html/storage
+  scheduler:
+    image: solidtime/solidtime:latest
+    user: "1000:1000"
+    environment:
+      - CONTAINER_MODE=scheduler
+      - APP_NAME=solidtime
+      - VITE_APP_NAME=solidtime
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=${SERVICE_URL_APP}
+      - APP_FORCE_HTTPS=true
+      - APP_KEY=base64:${SERVICE_BASE64_APPKEY}
+      - APP_ENABLE_REGISTRATION=${APP_ENABLE_REGISTRATION:-on}
+      - SUPER_ADMINS=${SUPER_ADMINS:-}
+      - LOG_CHANNEL=stderr_daily
+      - LOG_LEVEL=warning
+      - DB_CONNECTION=pgsql
+      - DB_HOST=database
+      - DB_PORT=5432
+      - DB_DATABASE=solidtime
+      - DB_USERNAME=solidtime
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - MAIL_MAILER=${MAIL_MAILER:-log}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-tls}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-no-reply@example.com}
+      - MAIL_FROM_NAME=solidtime
+      - QUEUE_CONNECTION=database
+      - FILESYSTEM_DISK=local
+      - PUBLIC_FILESYSTEM_DISK=public
+      - GOTENBERG_URL=http://gotenberg:3000
+    volumes:
+      - app-storage:/var/www/html/storage
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  queue:
+    image: solidtime/solidtime:latest
+    user: "1000:1000"
+    environment:
+      - CONTAINER_MODE=worker
+      - WORKER_COMMAND=php /var/www/html/artisan queue:work
+      - APP_NAME=solidtime
+      - VITE_APP_NAME=solidtime
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=${SERVICE_URL_APP}
+      - APP_FORCE_HTTPS=true
+      - APP_KEY=base64:${SERVICE_BASE64_APPKEY}
+      - APP_ENABLE_REGISTRATION=${APP_ENABLE_REGISTRATION:-on}
+      - SUPER_ADMINS=${SUPER_ADMINS:-}
+      - LOG_CHANNEL=stderr_daily
+      - LOG_LEVEL=warning
+      - DB_CONNECTION=pgsql
+      - DB_HOST=database
+      - DB_PORT=5432
+      - DB_DATABASE=solidtime
+      - DB_USERNAME=solidtime
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - MAIL_MAILER=${MAIL_MAILER:-log}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_ENCRYPTION=${MAIL_ENCRYPTION:-tls}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-no-reply@example.com}
+      - MAIL_FROM_NAME=solidtime
+      - QUEUE_CONNECTION=database
+      - FILESYSTEM_DISK=local
+      - PUBLIC_FILESYSTEM_DISK=public
+      - GOTENBERG_URL=http://gotenberg:3000
+    volumes:
+      - app-storage:/var/www/html/storage
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  database:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=solidtime
+      - POSTGRES_USER=solidtime
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - database-storage:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    healthcheck:
+      test: ["CMD", "curl", "--silent", "--fail", "http://127.0.0.1:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

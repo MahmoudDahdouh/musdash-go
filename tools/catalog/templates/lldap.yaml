@@ -1,0 +1,23 @@
+# name: LLDAP
+# about: A small LDAP server for signing in to other apps, with a web page to manage users and groups.
+# docs: https://github.com/lldap/lldap/blob/main/docs/install.md#with-docker
+# website: https://github.com/lldap/lldap
+# categories: auth
+services:
+  lldap:
+    image: ghcr.io/lldap/lldap:stable
+    environment:
+      - SERVICE_FQDN_LLDAP_17170
+      - TZ=${TZ:-UTC}
+      - LLDAP_JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - LLDAP_KEY_SEED=${SERVICE_PASSWORD_64_KEYSEED}
+      - LLDAP_LDAP_BASE_DN=${LLDAP_LDAP_BASE_DN:-dc=example,dc=com}
+      - LLDAP_LDAP_USER_PASS=${SERVICE_PASSWORD_ADMIN}
+      - LLDAP_HTTP_URL=${SERVICE_URL_LLDAP}
+    volumes:
+      - lldap-data:/data
+    healthcheck:
+      test: ["CMD", "/app/lldap", "healthcheck", "--config-file", "/data/lldap_config.toml"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

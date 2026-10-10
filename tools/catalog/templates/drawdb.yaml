@@ -1,0 +1,16 @@
+# name: drawDB
+# about: A database diagram editor in the browser that draws schemas and generates SQL from them.
+# docs: https://github.com/drawdb-io/drawdb#docker-build
+# website: https://drawdb.app
+# categories: devtools, database
+services:
+  drawdb:
+    image: ghcr.io/drawdb-io/drawdb:latest
+    environment:
+      - SERVICE_FQDN_DRAWDB_80
+      - VITE_BACKEND_URL=${VITE_BACKEND_URL:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

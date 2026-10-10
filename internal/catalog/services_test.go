@@ -193,8 +193,8 @@ func TestServiceCatalogue(t *testing.T) {
 			if tpl.Source != "" {
 				t.Errorf("%s is written for musdash and has no source", key)
 			}
-		case tpl.Source != "coolify" && tpl.Source != "dokploy":
-			t.Errorf("%s: source %q. A template is one of ownTemplates or says whose it was made from", key, tpl.Source)
+		case tpl.Source != "coolify" && tpl.Source != "dokploy" && tpl.Source != "musdash":
+			t.Errorf("%s: source %q. A template is one of ownTemplates or says where tools/catalog made it from", key, tpl.Source)
 		}
 		// The header is the comment the file starts with, and its only one
 		// that starts a line: a later "# name:" would be read as nothing,

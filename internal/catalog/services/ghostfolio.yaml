@@ -1,0 +1,58 @@
+# name: Ghostfolio
+# about: Wealth management software that tracks stocks, ETFs and cryptocurrencies across several accounts.
+# docs: https://github.com/ghostfolio/ghostfolio#self-hosting
+# website: https://ghostfol.io/
+# categories: finance
+# source: musdash
+services:
+  ghostfolio:
+    image: ghostfolio/ghostfolio:latest
+    environment:
+      - SERVICE_FQDN_GHOSTFOLIO_3333
+      - ROOT_URL=${SERVICE_URL_GHOSTFOLIO}
+      - TRUST_PROXY=1
+      - DATABASE_URL=postgresql://ghostfolio:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/ghostfolio?connect_timeout=300
+      - POSTGRES_DB=ghostfolio
+      - POSTGRES_USER=ghostfolio
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
+      - ACCESS_TOKEN_SALT=${SERVICE_PASSWORD_SALT}
+      - JWT_SECRET_KEY=${SERVICE_PASSWORD_64_JWT}
+      - API_KEY_COINGECKO_DEMO=${API_KEY_COINGECKO_DEMO:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:3333/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=ghostfolio
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=ghostfolio
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${SERVICE_PASSWORD_REDIS}
+    environment:
+      - REDISCLI_AUTH=${SERVICE_PASSWORD_REDIS}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  postgres-data:

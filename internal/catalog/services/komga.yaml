@@ -1,0 +1,24 @@
+# name: Komga
+# about: A media server for comics, manga, magazines and e-books, with a web reader and OPDS feeds.
+# docs: https://komga.org/docs/installation/docker
+# website: https://komga.org/
+# categories: media
+# source: musdash
+services:
+  komga:
+    image: ghcr.io/gotson/komga:latest
+    environment:
+      - SERVICE_FQDN_KOMGA_25600
+      - TZ=${TZ:-UTC}
+    volumes:
+      - komga-config:/config
+      - komga-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:25600/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+volumes:
+  komga-config:
+  komga-data:

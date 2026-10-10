@@ -1,0 +1,30 @@
+# name: Rclone
+# about: Copies, syncs and serves files between cloud storage providers, run from its web interface.
+# docs: https://rclone.org/gui/
+# website: https://rclone.org/
+# categories: storage
+# source: musdash
+services:
+  rclone:
+    image: ghcr.io/rclone/rclone:latest
+    command:
+      - gui
+      - --no-open-browser
+      - --addr=0.0.0.0:5522
+      - --api-addr=0.0.0.0:5533
+      - --user=${SERVICE_USER_RCLONE}
+      - --pass=${SERVICE_PASSWORD_RCLONE}
+    environment:
+      - SERVICE_FQDN_RCLONE_5522
+      - SERVICE_FQDN_API_5533
+    volumes:
+      - rclone-config:/config/rclone
+      - rclone-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:5522/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+volumes:
+  rclone-config:
+  rclone-data:

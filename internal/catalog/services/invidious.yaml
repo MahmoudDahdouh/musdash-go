@@ -1,0 +1,66 @@
+# name: Invidious
+# about: An alternative front end to YouTube without ads or tracking, with subscriptions and playlists kept on your own server.
+# docs: https://docs.invidious.io/installation/
+# website: https://invidious.io/
+# categories: media
+# source: musdash
+services:
+  invidious:
+    image: quay.io/invidious/invidious:latest
+    environment:
+      - SERVICE_FQDN_INVIDIOUS_3000
+    configs:
+      - source: invidious-config
+        target: /invidious/config/config.yml
+    depends_on:
+      invidious-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  companion:
+    image: quay.io/invidious/invidious-companion:latest
+    environment:
+      - SERVER_SECRET_KEY=${SERVICE_HEX_16_COMPANION}
+    cap_drop:
+      - ALL
+    read_only: true
+    volumes:
+      - companioncache:/var/tmp/youtubei.js:rw
+    security_opt:
+      - no-new-privileges:true
+  invidious-db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=invidious
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - postgresdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  companioncache:
+  postgresdata:
+configs:
+  invidious-config:
+    content: |
+      db:
+        dbname: invidious
+        user: ${SERVICE_USER_POSTGRES}
+        password: ${SERVICE_PASSWORD_POSTGRES}
+        host: invidious-db
+        port: 5432
+      check_tables: true
+      invidious_companion:
+        - private_url: "http://companion:8282/companion"
+      invidious_companion_key: "${SERVICE_HEX_16_COMPANION}"
+      domain: "${SERVICE_FQDN_INVIDIOUS}"
+      external_port: 443
+      https_only: true
+      hmac_key: "${SERVICE_PASSWORD_HMAC}"

@@ -1,9 +1,17 @@
 The service templates in services/ whose header has no "source" line were
 written for musdash.
 
-The others were made by tools/catalog from the templates of two other
-projects. services.SOURCES lists, for each, which. A template's header says
-it too: "# source: coolify" or "# source: dokploy".
+The others were made by tools/catalog. services.SOURCES lists, for each,
+from what, and a template's header says it too: "# source: coolify",
+"# source: dokploy" or "# source: musdash".
+
+"source: musdash" is a template written for musdash as well, for a service
+neither of the two projects below has a template of: from what the service's
+own makers say about running it with Docker, and tried on a real Docker
+before it was added. Its source is in tools/catalog/templates, and
+tools/catalog holds it to the rules the others are held to and finds its
+logo. Which services to write one for was taken from the directory of
+self-hosted software at https://selfh.st/apps/.
 
 "source: coolify" is a template of Coolify
 (https://github.com/coollabsio/coolify, templates/compose), which is

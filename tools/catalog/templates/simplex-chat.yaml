@@ -1,0 +1,29 @@
+# name: SimpleX Chat
+# about: An SMP relay server for the SimpleX messaging network, which passes messages on without knowing who its users are.
+# docs: https://simplex.chat/docs/server.html
+# website: https://simplex.chat/
+# categories: communication
+services:
+  smp-server:
+    image: simplexchat/smp-server:latest
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        ini=/etc/opt/simplex/smp-server.ini
+        if [ ! -f "$$ini" ]; then
+          base="$$(printf '%s' "$$ADDR" | awk -F. '{print $$(NF-1)"."$$NF}')"
+          smp-server init --yes --store-log --daily-stats --source-code --fqdn "$$ADDR" --own-domains="$$base" --password "$$PASS" > /dev/null 2>&1
+          sed -i -e 's|^[^#]*https = |#&|' -e 's|^[^#]*cert = |#&|' -e 's|^[^#]*key = |#&|' -e 's|^port = .*|port = 5223|' -e 's|^# http = 8000|http = 8000|' "$$ini"
+        fi
+        exec smp-server start +RTS -N -RTS
+    environment:
+      - SERVICE_FQDN_SMP_SERVER_8000
+      - ADDR=${SERVICE_FQDN_SMP_SERVER}
+      - PASS=${SERVICE_PASSWORD_SMP}
+    volumes:
+      - smp_configs:/etc/opt/simplex
+      - smp_state:/var/opt/simplex
+    ports:
+      - "5223:5223"

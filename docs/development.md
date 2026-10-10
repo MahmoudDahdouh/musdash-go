@@ -17,7 +17,7 @@ One static binary runs as two processes:
 | 1 | Deploy Docker images with domains, HTTPS, storage, live logs and rolling updates | Done |
 | 2 | Deploy from Git: Dockerfile and static builds, GitHub App, GitLab token, deploy keys, push webhooks, deploy token | Done |
 | 3 | Databases: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, KeyDB, Dragonfly, ClickHouse | Done |
-| 4 | Services: Docker Compose stacks from a catalogue of nearly 600 (the services Coolify and Dokploy offer, by category), your own file, or a Git repository | Done |
+| 4 | Services: Docker Compose stacks from a catalogue of more than 600 (the services Coolify and Dokploy offer and ones written for musdash, by category), your own file, or a Git repository | Done |
 | 5 | Operations: scheduled database backups with S3 copies, retention and restore; scheduled commands; notifications; Docker clean-up | Done |
 | 6 | More servers: deploy to machines reached over SSH, each with its own proxy; build on one server and run on another | Done |
 | 7 | Deploy polish: rollback, domains by path, a password in front of a domain, a preview for every pull request | Done |
@@ -112,20 +112,31 @@ Starts each of the eight engines in turn and waits for its health check. It down
 MUSDASH_DOCKER_TEST=1 go test ./internal/compose ./internal/deploy -run 'Sandbox|Catalogue|TestServiceWithDocker' -v
 ```
 
-Loads Compose files in the sandbox (including ones that try to read files of the server, and every catalogue template, which takes several minutes: there are nearly 600), then runs a two-container stack through deploy, redeploy, stop and delete.
+Loads Compose files in the sandbox (including ones that try to read files of the server, and every catalogue template, which takes several minutes: there are more than 600), then runs a two-container stack through deploy, redeploy, stop and delete.
 
 ```bash
 MUSDASH_DOCKER_TEST_SERVICES=1 go test ./internal/deploy -run TestCatalogueWithDocker -v -timeout 90m
 ```
 
-Installs the six templates written for musdash for real, fetches each web address, redeploys and deletes. `MUSDASH_SERVICES=wordpress,umami` installs just those, which is how one of the imported templates is tried.
+Installs the six templates written for musdash for real, fetches each web address, redeploys and deletes. `MUSDASH_SERVICES=wordpress,umami` installs just those, which is how one of the imported templates is tried. `MUSDASH_SERVICE_FILES=/tmp/app.yaml` installs a template that is not in the catalogue yet, from its file; `MUSDASH_SERVICE_START=5m` is how long a stack may take to come up, for trying many (it is ten minutes otherwise).
 
 ```bash
 cd tools/catalog && go run . -coolify ~/src/coolify -dokploy ~/src/dokploy-templates \
     -icons ~/src/selfhst-icons -dashboard ~/src/dashboard-icons -svgl ~/src/svgl -simple ~/src/simple-icons
 ```
 
-Makes the imported part of the catalogue again from checkouts of Coolify, Dokploy's templates and four icon collections (it also needs Chrome or Chromium, which draws the logos that are pictures). It is a Go module of its own (it needs a YAML parser, which musdash does without) and no part of the binary. Run the sandbox test afterwards; what it refuses goes into `tools/catalog/rejected.txt`.
+Makes the catalogue again, all but the six templates with no `source` line, from checkouts of Coolify, Dokploy's templates and four icon collections (it also needs Chrome or Chromium, which draws the logos that are pictures) and from `tools/catalog/templates`. It is a Go module of its own (it needs a YAML parser, which musdash does without) and no part of the binary. Run the sandbox test afterwards; what it refuses goes into `tools/catalog/rejected.txt`.
+
+`tools/catalog/templates` holds the templates written for musdash for a service neither catalogue has: a Compose file under the five header lines of a catalogue file (`name`, `about`, `docs`, `website`, `categories`), in musdash's own words (its magic variables, named volumes, no `ports` for what the proxy carries). The converter holds one to the rules it holds the others to, declares its volumes, finds its logo and writes it with `# source: musdash`; one it cannot convert stops the run with the reason. A logo no collection has goes beside the template under its name (`templates/app.svg`, or `.png`). To add a service:
+
+```bash
+cd tools/catalog
+go run . -check templates/app.yaml > /tmp/app.yaml      # what it becomes, or why it cannot be one
+cd ../.. && MUSDASH_DOCKER_TEST_SERVICES=1 MUSDASH_SERVICE_FILES=/tmp/app.yaml \
+    go test ./internal/deploy -run TestCatalogueWithDocker -v   # started for real
+```
+
+A template is added once that passes. It gives the app's first account a generated name and password where the app can take them, and an app that would start with a sign-in everybody knows, or with none while it holds something private, gets no template: every service has a public address.
 
 Two more lists beside it are written by hand, and the converter stops when a line of one names nothing:
 

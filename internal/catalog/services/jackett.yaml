@@ -1,0 +1,26 @@
+# name: Jackett
+# about: A proxy that lets Sonarr, Radarr and other apps search many torrent trackers through one Torznab API.
+# docs: https://docs.linuxserver.io/images/docker-jackett/
+# website: https://github.com/Jackett/Jackett
+# categories: media, search
+# source: musdash
+services:
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    environment:
+      - SERVICE_FQDN_JACKETT_9117
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+      - AUTO_UPDATE=true
+    volumes:
+      - jackett-config:/config
+      - jackett-downloads:/downloads
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:9117/UI/Dashboard || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  jackett-config:
+  jackett-downloads:
