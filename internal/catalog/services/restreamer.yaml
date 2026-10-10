@@ -1,0 +1,22 @@
+# name: Restreamer
+# about: A live streaming server that takes a video source and publishes it to a web player and to platforms such as YouTube and Twitch.
+# docs: https://docs.datarhei.com/restreamer/getting-started/quick-start
+# website: https://datarhei.com/
+# categories: media
+# source: musdash
+services:
+  restreamer:
+    image: datarhei/restreamer:latest
+    environment:
+      - SERVICE_FQDN_RESTREAMER_8080
+      - CORE_API_AUTH_USERNAME=${SERVICE_USER_ADMIN}
+      - CORE_API_AUTH_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - restreamer-config:/core/config
+      - restreamer-data:/core/data
+    ports:
+      - "1935:1935"
+      - "6000:6000/udp"
+volumes:
+  restreamer-config:
+  restreamer-data:

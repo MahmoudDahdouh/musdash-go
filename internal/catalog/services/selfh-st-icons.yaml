@@ -1,0 +1,18 @@
+# name: selfh.st/icons
+# about: Serves the selfh.st collection of app logos and icons over HTTP, and can recolour them to one colour.
+# docs: https://github.com/selfhst/icons/wiki
+# website: https://selfh.st/icons
+# categories: devtools, home
+# source: musdash
+services:
+  selfhst-icons:
+    image: ghcr.io/selfhst/icons:latest
+    environment:
+      - SERVICE_FQDN_SELFHST_ICONS_4050
+      - PRIMARY_COLOR=${PRIMARY_COLOR:-}
+    healthcheck:
+      test: ["CMD", "/server", "-healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 5s

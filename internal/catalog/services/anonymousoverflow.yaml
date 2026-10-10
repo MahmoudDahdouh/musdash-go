@@ -1,0 +1,21 @@
+# name: AnonymousOverflow
+# about: A lightweight front end that shows Stack Overflow questions without trackers, so the site never sees your address.
+# docs: https://github.com/httpjamesm/AnonymousOverflow/wiki/Deployment
+# website: https://aohub.httpjames.space
+# categories: devtools, search
+# source: musdash
+services:
+  anonymousoverflow:
+    image: ghcr.io/httpjamesm/anonymousoverflow:latest
+    environment:
+      - SERVICE_FQDN_ANONYMOUSOVERFLOW_8080
+      - APP_URL=${SERVICE_URL_ANONYMOUSOVERFLOW}
+      - JWT_SIGNING_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - SCRAPER=api
+      - API_KEY=${API_KEY:-}
+    healthcheck:
+      test: ["CMD", "/healthcheck", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 5s

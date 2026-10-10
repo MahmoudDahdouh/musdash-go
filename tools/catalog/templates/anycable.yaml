@@ -1,0 +1,20 @@
+# name: AnyCable
+# about: A real-time server for WebSockets and server-sent events, run here in standalone mode with signed streams.
+# docs: https://github.com/anycable/anycable/blob/HEAD/docs/getting_started.md
+# website: https://anycable.io/
+# categories: backend, devtools
+services:
+  anycable:
+    image: anycable/anycable-go:1.6
+    command: ["--norpc"]
+    environment:
+      - SERVICE_FQDN_ANYCABLE_8080
+      - ANYCABLE_HOST=0.0.0.0
+      - ANYCABLE_PORT=8080
+      - ANYCABLE_SECRET=${SERVICE_PASSWORD_64_ANYCABLE}
+      - ANYCABLE_BROADCAST_ADAPTER=http
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

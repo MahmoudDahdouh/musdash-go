@@ -1,0 +1,15 @@
+# name: rimgo
+# about: A lightweight frontend for viewing Imgur images and galleries without scripts, ads or tracking.
+# docs: https://rimgo.codeberg.page/docs/getting-started/install/
+# website: https://codeberg.org/rimgo/rimgo
+# categories: media, rss
+# source: musdash
+services:
+  rimgo:
+    image: codeberg.org/rimgo/rimgo:latest
+    environment:
+      - SERVICE_FQDN_RIMGO_3000
+      - PORT=3000
+      - ADDRESS=0.0.0.0
+      - SECURE=1
+      - FORCE_WEBP=${FORCE_WEBP:-0}

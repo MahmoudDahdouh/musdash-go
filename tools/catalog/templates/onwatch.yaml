@@ -1,0 +1,19 @@
+# name: onWatch
+# about: A small dashboard that polls AI coding plans and APIs for quota use and shows history, projections and alerts.
+# docs: https://github.com/onllm-dev/onWatch#docker-deployment
+# website: https://onwatch.onllm.dev/
+# categories: ai, monitoring
+services:
+  onwatch:
+    image: ghcr.io/onllm-dev/onwatch:latest
+    environment:
+      - SERVICE_FQDN_ONWATCH_9211
+      - ONWATCH_DB_PATH=/data/onwatch.db
+      - ONWATCH_ADMIN_USER=${SERVICE_USER_ADMIN}
+      - ONWATCH_ADMIN_PASS=${SERVICE_PASSWORD_ADMIN}
+      - SYNTHETIC_API_KEY=${SYNTHETIC_API_KEY:-}
+      - ZAI_API_KEY=${ZAI_API_KEY:-}
+      - ANTHROPIC_TOKEN=${ANTHROPIC_TOKEN:-}
+      - CODEX_TOKEN=${CODEX_TOKEN:-}
+    volumes:
+      - onwatch-data:/data

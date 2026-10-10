@@ -1,0 +1,42 @@
+# name: FileSync
+# about: Sends files straight between browsers over WebRTC, with a TURN relay for connections that cannot go direct.
+# docs: https://github.com/polius/filesync#self-hosting
+# website: https://github.com/polius/filesync
+# categories: storage
+# source: musdash
+services:
+  filesync:
+    image: poliuscorp/filesync:latest
+    environment:
+      - SERVICE_FQDN_FILESYNC_80
+      - SECRET_KEY=${SERVICE_PASSWORD_64_FILESYNC}
+    depends_on:
+      - coturn
+  coturn:
+    image: coturn/coturn:alpine
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        exec turnserver \
+          --fingerprint \
+          --use-auth-secret \
+          --no-multicast-peers \
+          --denied-peer-ip=10.0.0.0-10.255.255.255 \
+          --denied-peer-ip=172.16.0.0-172.31.255.255 \
+          --denied-peer-ip=192.168.0.0-192.168.255.255 \
+          --denied-peer-ip=100.64.0.0-100.127.255.255 \
+          --denied-peer-ip=169.254.0.0-169.254.255.255 \
+          --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff \
+          --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff \
+          --no-cli \
+          --realm=filesync.app \
+          --static-auth-secret="$${SECRET_KEY}" \
+          --listening-port=3478 \
+          --min-port=50000 \
+          --max-port=50100
+    environment:
+      - SECRET_KEY=${SERVICE_PASSWORD_64_FILESYNC}
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "50000-50100:50000-50100/udp"

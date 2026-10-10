@@ -1,0 +1,18 @@
+# name: Kite
+# about: A lightweight web dashboard for Kubernetes clusters, with resource views, logs, a terminal and role-based access.
+# docs: https://kitehq.dev/guide/installation
+# website: https://github.com/kite-org/kite
+# categories: devtools, monitoring
+services:
+  kite:
+    image: ghcr.io/kite-org/kite:latest
+    environment:
+      - SERVICE_FQDN_KITE_8080
+      - DB_DSN=/data/db.sqlite
+      - PLUGIN_DIR=/data/plugins
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - KITE_ENCRYPT_KEY=${SERVICE_PASSWORD_64_ENCRYPT}
+      - KITE_USERNAME=${SERVICE_USER_ADMIN}
+      - KITE_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - kite-data:/data

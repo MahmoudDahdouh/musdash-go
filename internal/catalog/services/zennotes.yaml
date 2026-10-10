@@ -1,0 +1,26 @@
+# name: ZenNotes
+# about: A keyboard-first Markdown notes app that runs in the browser against a vault of plain files kept on the server.
+# docs: https://github.com/ZenNotes/zennotes/blob/main/docs/how-to/self-host-with-docker.md
+# website: https://github.com/ZenNotes/zennotes
+# categories: docs, productivity
+# source: musdash
+services:
+  zennotes:
+    image: adibhanna/zennotes:latest
+    user: "0:0"
+    environment:
+      - SERVICE_FQDN_ZENNOTES_7878
+      - ZENNOTES_BIND=0.0.0.0:7878
+      - ZENNOTES_CONFIG_PATH=/data/server.json
+      - ZENNOTES_DEFAULT_VAULT_PATH=/workspace
+      - ZENNOTES_BROWSE_ROOTS=/workspace
+      - ZENNOTES_AUTH_TOKEN=${SERVICE_PASSWORD_64_ZENNOTES}
+      - ZENNOTES_ALLOWED_ORIGINS=${SERVICE_URL_ZENNOTES}
+      - ZENNOTES_BEHIND_TLS=1
+      - ZENNOTES_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    volumes:
+      - zennotes-vault:/workspace
+      - zennotes-data:/data
+volumes:
+  zennotes-data:
+  zennotes-vault:

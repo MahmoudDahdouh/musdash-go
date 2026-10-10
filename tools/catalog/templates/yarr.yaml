@@ -1,0 +1,14 @@
+# name: yarr
+# about: A small feed reader that keeps its subscriptions and articles in a single SQLite file and signs in with one account.
+# docs: https://nkanaev.github.io/yarr/en/installation/docker/
+# website: https://nkanaev.github.io/yarr/en/
+# categories: rss
+services:
+  yarr:
+    image: ghcr.io/nkanaev/yarr:latest
+    command: ["-addr", "0.0.0.0:7070", "-db", "/data/yarr.db"]
+    environment:
+      - SERVICE_FQDN_YARR_7070
+      - YARR_AUTH=${SERVICE_USER_YARR}:${SERVICE_PASSWORD_YARR}
+    volumes:
+      - yarr-data:/data

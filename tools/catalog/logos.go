@@ -508,6 +508,7 @@ var logoAlias = map[string][]string{
 	"code-server":                   {"coder"},
 	"collabora-office":              {"collabora-online"},
 	"coralproject":                  {"voxmedia-coral"},
+	"dock-dploy":                    {"hhf-technology"},
 	"docker-registry":               {"docker"},
 	"docling-serve":                 {"docling"},
 	"emqx-enterprise":               {"emqx"},
@@ -526,6 +527,8 @@ var logoAlias = map[string][]string{
 	"pterodactyl-panel":             {"pterodactyl"},
 	"redis-insight":                 {"redis"},
 	"sure":                          {"sure-finance"},
+	"jellyfin-rewind":               {"jellyfin"},
+	"selfh-st-icons":                {"selfh-st"},
 }
 
 // logoNames are the file names to look for in an icon collection, the

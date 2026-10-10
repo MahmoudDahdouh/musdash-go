@@ -1,0 +1,15 @@
+# name: Note Mark
+# about: A web app for writing and organising Markdown notes in books, with accounts and optional single sign-on.
+# docs: https://notemark.docs.enchantedcode.co.uk/docs/setup/install/
+# website: https://github.com/enchant97/note-mark
+# categories: docs, productivity
+services:
+  note-mark:
+    image: ghcr.io/enchant97/note-mark:1
+    environment:
+      - SERVICE_FQDN_NOTE_MARK_8080
+      - PUBLIC_URL=${SERVICE_URL_NOTE_MARK}
+      - AUTH_TOKEN__SECRET=${SERVICE_BASE64_64_NOTEMARK}
+      - ENABLE_INTERNAL_SIGNUP=${ENABLE_INTERNAL_SIGNUP:-true}
+    volumes:
+      - note-mark-data:/data

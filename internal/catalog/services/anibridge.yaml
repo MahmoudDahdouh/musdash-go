@@ -1,0 +1,26 @@
+# name: AniBridge
+# about: Keeps anime watch progress in sync between a Plex, Jellyfin or Emby library and AniList or MyAnimeList.
+# docs: https://anibridge.eliasbenb.dev/getting-started/docker/
+# website: https://anibridge.eliasbenb.dev/
+# categories: media, automation
+# source: musdash
+services:
+  anibridge:
+    image: ghcr.io/anibridge/anibridge:v2
+    environment:
+      - SERVICE_FQDN_ANIBRIDGE_4848
+      - PUID=1000
+      - PGID=1000
+      - UMASK=022
+      - TZ=${TZ:-UTC}
+      - AB_WEB__BASIC_AUTH__USERNAME=${SERVICE_USER_ADMIN}
+      - AB_WEB__BASIC_AUTH__PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - anibridge-config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:4848/livez"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  anibridge-config:

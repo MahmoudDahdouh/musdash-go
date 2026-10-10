@@ -1,0 +1,162 @@
+# name: NetBox
+# about: A source of truth for networks: IP addresses, racks, devices, cabling and circuits, with an API, PostgreSQL and Valkey.
+# docs: https://github.com/netbox-community/netbox-docker/wiki/Getting-Started
+# website: https://netboxlabs.com/products/netbox/
+# categories: networking
+# source: musdash
+services:
+  netbox:
+    image: ghcr.io/netbox-community/netbox:v4.7-5.1.1
+    user: "netbox:root"
+    environment:
+      - SERVICE_FQDN_NETBOX_8080
+      - CSRF_TRUSTED_ORIGINS=${SERVICE_URL_NETBOX}
+      - CORS_ORIGIN_ALLOW_ALL=True
+      - DB_HOST=postgres
+      - DB_NAME=netbox
+      - DB_USER=${SERVICE_USER_POSTGRES}
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - REDIS_HOST=redis
+      - REDIS_DATABASE=0
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
+      - REDIS_SSL=false
+      - REDIS_CACHE_HOST=redis-cache
+      - REDIS_CACHE_DATABASE=1
+      - REDIS_CACHE_PASSWORD=${SERVICE_PASSWORD_REDISCACHE}
+      - REDIS_CACHE_SSL=false
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRETKEY}
+      - API_TOKEN_PEPPER_1=${SERVICE_PASSWORD_64_PEPPER}
+      - SKIP_SUPERUSER=false
+      - SUPERUSER_NAME=${SERVICE_USER_ADMIN}
+      - SUPERUSER_EMAIL=${SUPERUSER_EMAIL:-admin@example.com}
+      - SUPERUSER_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - GRAPHQL_ENABLED=true
+      - WEBHOOKS_ENABLED=true
+      - METRICS_ENABLED=false
+      - MEDIA_ROOT=/opt/netbox/netbox/media
+      - RELEASE_CHECK_URL=https://api.github.com/repos/netbox-community/netbox/releases
+      - TIME_ZONE=${TZ:-UTC}
+      - EMAIL_SERVER=${EMAIL_SERVER:-localhost}
+      - EMAIL_PORT=${EMAIL_PORT:-25}
+      - EMAIL_USERNAME=${EMAIL_USERNAME:-}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-false}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+    volumes:
+      - netbox-media-files:/opt/netbox/netbox/media
+      - netbox-reports-files:/opt/netbox/netbox/reports
+      - netbox-scripts-files:/opt/netbox/netbox/scripts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/opt/netbox/health.sh"]
+      start_period: 300s
+      timeout: 5s
+      interval: 15s
+      retries: 20
+  netbox-worker:
+    image: ghcr.io/netbox-community/netbox:v4.7-5.1.1
+    user: "netbox:root"
+    command:
+      - /opt/netbox/venv/bin/python
+      - /opt/netbox/netbox/manage.py
+      - rqworker
+    environment:
+      - CSRF_TRUSTED_ORIGINS=${SERVICE_URL_NETBOX}
+      - CORS_ORIGIN_ALLOW_ALL=True
+      - DB_HOST=postgres
+      - DB_NAME=netbox
+      - DB_USER=${SERVICE_USER_POSTGRES}
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - REDIS_HOST=redis
+      - REDIS_DATABASE=0
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
+      - REDIS_SSL=false
+      - REDIS_CACHE_HOST=redis-cache
+      - REDIS_CACHE_DATABASE=1
+      - REDIS_CACHE_PASSWORD=${SERVICE_PASSWORD_REDISCACHE}
+      - REDIS_CACHE_SSL=false
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRETKEY}
+      - API_TOKEN_PEPPER_1=${SERVICE_PASSWORD_64_PEPPER}
+      - GRAPHQL_ENABLED=true
+      - WEBHOOKS_ENABLED=true
+      - METRICS_ENABLED=false
+      - MEDIA_ROOT=/opt/netbox/netbox/media
+      - RELEASE_CHECK_URL=https://api.github.com/repos/netbox-community/netbox/releases
+      - TIME_ZONE=${TZ:-UTC}
+      - EMAIL_SERVER=${EMAIL_SERVER:-localhost}
+      - EMAIL_PORT=${EMAIL_PORT:-25}
+      - EMAIL_USERNAME=${EMAIL_USERNAME:-}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-false}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+    volumes:
+      - netbox-media-files:/opt/netbox/netbox/media
+      - netbox-reports-files:/opt/netbox/netbox/reports
+      - netbox-scripts-files:/opt/netbox/netbox/scripts
+    depends_on:
+      netbox:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "ps -aux | grep -v grep | grep -q rqworker || exit 1"]
+      start_period: 20s
+      timeout: 3s
+      interval: 15s
+      retries: 10
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=netbox
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - netbox-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: valkey/valkey:8-alpine
+    command:
+      - sh
+      - -c
+      - valkey-server --appendonly yes --requirepass $$REDIS_PASSWORD
+    environment:
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
+    volumes:
+      - netbox-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "[ $$(valkey-cli --pass \"$${REDIS_PASSWORD}\" ping) = 'PONG' ]"]
+      start_period: 5s
+      timeout: 3s
+      interval: 5s
+      retries: 10
+  redis-cache:
+    image: valkey/valkey:8-alpine
+    command:
+      - sh
+      - -c
+      - valkey-server --requirepass $$REDIS_PASSWORD
+    environment:
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDISCACHE}
+    volumes:
+      - netbox-redis-cache-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "[ $$(valkey-cli --pass \"$${REDIS_PASSWORD}\" ping) = 'PONG' ]"]
+      start_period: 5s
+      timeout: 3s
+      interval: 5s
+      retries: 10
+volumes:
+  netbox-media-files:
+  netbox-postgres:
+  netbox-redis-cache-data:
+  netbox-redis-data:
+  netbox-reports-files:
+  netbox-scripts-files:

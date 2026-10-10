@@ -1,0 +1,24 @@
+# name: Jellyswarrm
+# about: A reverse proxy that joins several Jellyfin servers into one library behind a single address and sign-in.
+# docs: https://github.com/LLukas22/Jellyswarrm#deployment
+# website: https://github.com/LLukas22/Jellyswarrm
+# categories: media, networking
+# source: musdash
+services:
+  jellyswarrm:
+    image: ghcr.io/llukas22/jellyswarrm:latest
+    environment:
+      - SERVICE_FQDN_JELLYSWARRM_3000
+      - JELLYSWARRM_PUBLIC_ADDRESS=${SERVICE_FQDN_JELLYSWARRM}
+      - JELLYSWARRM_USERNAME=${SERVICE_USER_ADMIN}
+      - JELLYSWARRM_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - JELLYSWARRM_SESSION_KEY=${SERVICE_BASE64_64_SESSION}
+    volumes:
+      - jellyswarrm-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --max-time 3 http://127.0.0.1:3000/health > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  jellyswarrm-data:

@@ -1,0 +1,57 @@
+# name: GLAuth
+# about: A small LDAP server that keeps users and groups in a file, for logins to other apps.
+# docs: https://glauth.github.io/docs/
+# website: https://glauth.github.io/
+# categories: auth, security
+services:
+  glauth-init:
+    image: busybox:1.37
+    restart: "no"
+    environment:
+      - ADMIN_USER=${SERVICE_USER_ADMIN}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - BASE_DN=${GLAUTH_BASE_DN:-dc=glauth,dc=com}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        [ -f /config/config.cfg ] && exit 0
+        HASH=$$(printf '%s' "$$ADMIN_PASSWORD" | sha256sum | cut -d' ' -f1)
+        cat > /config/config.cfg <<CFG
+        [ldap]
+          enabled = true
+          listen = "0.0.0.0:3893"
+        [ldaps]
+          enabled = false
+        [backend]
+          datastore = "config"
+          baseDN = "$$BASE_DN"
+        [behaviors]
+          LimitFailedBinds = true
+          NumberOfFailedBinds = 3
+          PeriodOfFailedBinds = 10
+          BlockFailedBindsFor = 60
+        [api]
+          enabled = false
+        [[groups]]
+          name = "admins"
+          gidnumber = 5501
+        [[users]]
+          name = "$$ADMIN_USER"
+          uidnumber = 5001
+          primarygroup = 5501
+          passsha256 = "$$HASH"
+            [[users.capabilities]]
+            action = "search"
+            object = "*"
+        CFG
+    volumes:
+      - glauth-config:/config
+  glauth:
+    image: glauth/glauth:v2.5.4
+    ports:
+      - "3893:3893"
+    volumes:
+      - glauth-config:/app/config
+    depends_on:
+      glauth-init:
+        condition: service_completed_successfully

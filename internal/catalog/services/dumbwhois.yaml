@@ -1,0 +1,18 @@
+# name: DumbWhoIs
+# about: A small web page for WHOIS lookups of domains, IP addresses and ASNs, with light and dark modes.
+# docs: https://github.com/DumbWareio/DumbWhoIs#docker-setup
+# website: https://github.com/DumbWareio/DumbWhoIs
+# categories: networking, devtools
+# source: musdash
+services:
+  dumbwhois:
+    image: dumbwareio/dumbwhois:latest
+    environment:
+      - SERVICE_FQDN_DUMBWHOIS_3000
+      - SITE_TITLE=${SITE_TITLE:-DumbWhois}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 5s

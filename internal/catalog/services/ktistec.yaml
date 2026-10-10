@@ -1,0 +1,24 @@
+# name: Ktistec
+# about: A single-user ActivityPub server for the Fediverse, with a web interface for posting, following and reading a timeline.
+# docs: https://github.com/toddsundsted/ktistec#setup-configuration-and-usage
+# website: https://github.com/toddsundsted/ktistec
+# categories: communication, rss
+# source: musdash
+services:
+  ktistec:
+    image: ghcr.io/toddsundsted/ktistec:latest
+    environment:
+      - SERVICE_FQDN_KTISTEC_3000
+      - KTISTEC_DB=/db/ktistec.db
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ktistec-db:/db
+      - ktistec-uploads:/app/public/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  ktistec-db:
+  ktistec-uploads:

@@ -1,0 +1,14 @@
+# name: Gokapi
+# about: Shares files by link and deletes them after a set number of downloads or days, with an admin sign-in.
+# docs: https://gokapi.readthedocs.io/en/latest/setup.html
+# website: https://github.com/Forceu/Gokapi
+# categories: storage
+services:
+  gokapi:
+    image: f0rc3/gokapi:latest
+    environment:
+      - SERVICE_FQDN_GOKAPI_53842
+      - TZ=${TZ:-UTC}
+    volumes:
+      - gokapi-data:/app/data
+      - gokapi-config:/app/config

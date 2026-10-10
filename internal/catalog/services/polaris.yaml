@@ -1,0 +1,24 @@
+# name: Polaris
+# about: A music streaming server with a web player; it reads a folder of music and serves it to browsers and apps.
+# docs: https://github.com/agersant/polaris/blob/master/docs/SETUP.md
+# website: https://github.com/agersant/polaris
+# categories: media
+# source: musdash
+services:
+  polaris:
+    image: quay.io/connectical/polaris:latest
+    environment:
+      - SERVICE_FQDN_POLARIS_5050
+    volumes:
+      - polaris-music:/music
+      - polaris-cache:/var/cache/polaris
+      - polaris-data:/var/lib/polaris
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:5050/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  polaris-cache:
+  polaris-data:
+  polaris-music:

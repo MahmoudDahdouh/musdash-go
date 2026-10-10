@@ -1,0 +1,45 @@
+# name: Super Productivity
+# about: A to-do list and time tracker that runs in the browser, with a WebDAV server beside it for syncing between devices.
+# docs: https://github.com/super-productivity/super-productivity/wiki/2.13-Run-with-Docker
+# website: https://super-productivity.com/
+# categories: productivity
+# source: musdash
+services:
+  app:
+    image: johannesjo/super-productivity:latest
+    environment:
+      - SERVICE_FQDN_APP_80
+      - WEBDAV_BACKEND=http://webdav:2345
+      - WEBDAV_BASE_URL=${SERVICE_URL_APP}/webdav/
+      - WEBDAV_USERNAME=${SERVICE_USER_WEBDAV}
+      - WEBDAV_SYNC_FOLDER_PATH=/
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-15}
+      - IS_COMPRESSION_ENABLED=${IS_COMPRESSION_ENABLED:-true}
+      - IS_ENCRYPTION_ENABLED=${IS_ENCRYPTION_ENABLED:-false}
+    depends_on:
+      - webdav
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  webdav:
+    image: ghcr.io/hacdias/webdav:v5
+    configs:
+      - source: webdav-config
+        target: /etc/webdav/config.yaml
+    volumes:
+      - webdav_data:/data
+volumes:
+  webdav_data:
+configs:
+  webdav-config:
+    content: |
+      address: 0.0.0.0
+      port: 2345
+      prefix: /
+      permissions: CRUD
+      users:
+        - username: ${SERVICE_USER_WEBDAV}
+          password: ${SERVICE_PASSWORD_WEBDAV}
+          directory: /data

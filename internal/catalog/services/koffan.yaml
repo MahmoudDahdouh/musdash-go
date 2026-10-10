@@ -1,0 +1,26 @@
+# name: Koffan
+# about: A shopping list app for families and couples with shared lists, offline use and one password to sign in.
+# docs: https://github.com/PanSalut/Koffan#docker
+# website: https://github.com/PanSalut/Koffan
+# categories: home, productivity
+# source: musdash
+services:
+  koffan:
+    image: ghcr.io/pansalut/koffan:latest
+    environment:
+      - SERVICE_FQDN_KOFFAN_8080
+      - APP_ENV=production
+      - APP_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - PORT=8080
+      - DB_PATH=/data/shopping.db
+      - DEFAULT_LANG=${DEFAULT_LANG:-en}
+    volumes:
+      - koffan-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/login || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+volumes:
+  koffan-data:

@@ -1,0 +1,18 @@
+# name: NZBGet
+# about: A fast Usenet downloader written in C++, with a web interface, post-processing scripts and a low memory use.
+# docs: https://github.com/nzbgetcom/nzbget/blob/main/docker/README.md
+# website: https://nzbget.com/
+# categories: media
+services:
+  nzbget:
+    image: nzbgetcom/nzbget:latest
+    environment:
+      - SERVICE_FQDN_NZBGET_6789
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+      - NZBGET_USER=${SERVICE_USER_NZBGET}
+      - NZBGET_PASS=${SERVICE_PASSWORD_NZBGET}
+    volumes:
+      - nzbget-config:/config
+      - nzbget-downloads:/downloads

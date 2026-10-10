@@ -1,0 +1,22 @@
+# name: TasmoAdmin
+# about: A web interface for managing devices flashed with Tasmota firmware: status, configuration, firmware updates and bulk commands.
+# docs: https://github.com/TasmoAdmin/TasmoAdmin/wiki/Guide-for-TasmoAdmin-on-Docker
+# website: https://github.com/TasmoAdmin/TasmoAdmin
+# categories: home
+# source: musdash
+services:
+  tasmoadmin:
+    image: ghcr.io/tasmoadmin/tasmoadmin:latest
+    environment:
+      - SERVICE_FQDN_TASMOADMIN_80
+      - TASMO_DEVICE_PASSWORD_KEY=${SERVICE_BASE64_DEVICEKEY}
+    volumes:
+      - data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -o /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+volumes:
+  data:

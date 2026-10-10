@@ -1,0 +1,25 @@
+# name: LeafWiki
+# about: A fast wiki that keeps pages in a folder tree, written in Markdown and stored as files.
+# docs: https://github.com/perber/leafwiki#docker-compose
+# website: https://leafwiki.com/
+# categories: docs
+# source: musdash
+services:
+  leafwiki:
+    image: ghcr.io/perber/leafwiki:latest
+    environment:
+      - SERVICE_FQDN_LEAFWIKI_8080
+      - LEAFWIKI_JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - LEAFWIKI_ADMIN_USERNAME=${SERVICE_USER_ADMIN}
+      - LEAFWIKI_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - LEAFWIKI_ALLOW_INSECURE=${LEAFWIKI_ALLOW_INSECURE:-true}
+      - LEAFWIKI_PUBLIC_ACCESS=${LEAFWIKI_PUBLIC_ACCESS:-false}
+    volumes:
+      - leafwiki-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/config"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  leafwiki-data:

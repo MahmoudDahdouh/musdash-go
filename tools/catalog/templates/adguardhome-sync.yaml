@@ -1,0 +1,26 @@
+# name: AdGuardHome Sync
+# about: Copies the configuration of one AdGuard Home instance to one or more others on a schedule.
+# docs: https://github.com/bakito/adguardhome-sync#docker-compose
+# website: https://github.com/bakito/adguardhome-sync
+# categories: networking
+services:
+  adguardhome-sync:
+    image: ghcr.io/bakito/adguardhome-sync:latest
+    environment:
+      - SERVICE_FQDN_ADGUARDHOME_SYNC_8080
+      - ORIGIN_URL=${ORIGIN_URL:?}
+      - ORIGIN_USERNAME=${ORIGIN_USERNAME:?}
+      - ORIGIN_PASSWORD=${ORIGIN_PASSWORD:?}
+      - REPLICA1_URL=${REPLICA1_URL:?}
+      - REPLICA1_USERNAME=${REPLICA1_USERNAME:?}
+      - REPLICA1_PASSWORD=${REPLICA1_PASSWORD:?}
+      - CRON=${SYNC_CRON:-*/30 * * * *}
+      - RUN_ON_START=true
+      - API_PORT=8080
+      - API_USERNAME=${SERVICE_USER_ADMIN}
+      - API_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    healthcheck:
+      test: ["CMD", "/opt/go/adguardhome-sync", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 5

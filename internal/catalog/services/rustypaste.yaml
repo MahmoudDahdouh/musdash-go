@@ -1,0 +1,69 @@
+# name: Rustypaste
+# about: A small file upload and pastebin service driven by curl, with random file names, expiry times and token-protected uploads.
+# docs: https://github.com/orhun/rustypaste#docker
+# website: https://github.com/orhun/rustypaste
+# categories: devtools, storage
+# source: musdash
+services:
+  rustypaste:
+    image: orhunp/rustypaste:latest
+    user: "0:0"
+    environment:
+      - SERVICE_FQDN_RUSTYPASTE_8000
+      - AUTH_TOKEN=${SERVICE_PASSWORD_TOKEN}
+      - DELETE_TOKEN=${SERVICE_PASSWORD_TOKEN}
+      - RUST_LOG=info
+    volumes:
+      - rustypaste-upload:/app/upload
+    configs:
+      - source: rustypaste-config
+        target: /app/config.toml
+volumes:
+  rustypaste-upload:
+configs:
+  rustypaste-config:
+    content: |
+      [config]
+      refresh_rate = "1s"
+
+      [server]
+      address = "0.0.0.0:8000"
+      url = "${SERVICE_URL_RUSTYPASTE}"
+      max_content_length = "10MB"
+      upload_path = "./upload"
+      timeout = "30s"
+      expose_version = false
+      expose_list = false
+      handle_spaces = "replace"
+
+      [landing_page]
+      text = """
+      Submit files via HTTP POST here:
+          curl -F 'file=@example.txt' -H 'Authorization: <token>' <server>
+      This will return the URL of the uploaded file.
+
+      By default, pastes expire after one hour.
+      """
+      content_type = "text/plain; charset=utf-8"
+
+      [paste]
+      random_url = { type = "petname", words = 2, separator = "-" }
+      default_extension = "txt"
+      mime_override = [
+        { mime = "image/jpeg", regex = "^.*\\.jpg$$" },
+        { mime = "image/png", regex = "^.*\\.png$$" },
+        { mime = "image/svg+xml", regex = "^.*\\.svg$$" },
+        { mime = "video/webm", regex = "^.*\\.webm$$" },
+        { mime = "video/x-matroska", regex = "^.*\\.mkv$$" },
+        { mime = "application/octet-stream", regex = "^.*\\.bin$$" },
+        { mime = "text/plain", regex = "^.*\\.(log|txt|diff|sh|rs|toml)$$" },
+      ]
+      mime_blacklist = [
+        "application/x-dosexec",
+        "application/java-archive",
+        "application/java-vm",
+        "audio/",
+      ]
+      duplicate_files = true
+      default_expiry = "1h"
+      delete_expired_files = { enabled = true, interval = "1h" }

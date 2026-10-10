@@ -1,0 +1,38 @@
+# name: Radicale
+# about: A small CalDAV and CardDAV server for syncing calendars, tasks and contacts, with a simple web interface.
+# docs: https://radicale.org/v3.html
+# website: https://radicale.org/
+# categories: productivity, home
+services:
+  radicale:
+    image: ghcr.io/kozea/radicale:stable
+    environment:
+      - SERVICE_FQDN_RADICALE_5232
+    configs:
+      - source: radicale-config
+        target: /etc/radicale/config
+      - source: radicale-users
+        target: /etc/radicale/users
+    volumes:
+      - radicale-data:/var/lib/radicale
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:5232/.web/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+configs:
+  radicale-config:
+    content: |
+      [server]
+      hosts = 0.0.0.0:5232
+
+      [auth]
+      type = htpasswd
+      htpasswd_filename = /etc/radicale/users
+      htpasswd_encryption = plain
+
+      [storage]
+      filesystem_folder = /var/lib/radicale/collections
+  radicale-users:
+    content: |
+      ${SERVICE_USER_ADMIN}:${SERVICE_PASSWORD_ADMIN}

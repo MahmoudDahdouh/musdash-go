@@ -1,0 +1,30 @@
+# name: KrakenD
+# about: A stateless API gateway that sits in front of backend services and merges, filters and routes their responses.
+# docs: https://www.krakend.io/docs/overview/installing/
+# website: https://www.krakend.io/
+# categories: backend, devtools
+# source: musdash
+services:
+  krakend:
+    image: krakend:3.0
+    environment:
+      - SERVICE_FQDN_KRAKEND_8080
+    configs:
+      - source: krakend-config
+        target: /etc/krakend/krakend.json
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/__health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+configs:
+  krakend-config:
+    content: |
+      {
+        "$$schema": "https://www.krakend.io/schema/v3.0/krakend.json",
+        "version": 4,
+        "name": "KrakenD",
+        "port": 8080,
+        "timeout": "3s",
+        "endpoints": []
+      }

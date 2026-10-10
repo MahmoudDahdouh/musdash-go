@@ -1,0 +1,31 @@
+# name: Pønskelisten
+# about: A web app for sharing wishlists with family and friends, where others can mark gifts as bought.
+# docs: https://github.com/aunefyren/poenskelisten#-docker-setup
+# website: https://github.com/aunefyren/poenskelisten
+# categories: home, productivity
+# source: musdash
+services:
+  poenskelisten:
+    image: ghcr.io/aunefyren/poenskelisten:latest
+    environment:
+      - SERVICE_FQDN_POENSKELISTEN_8080
+      - externalurl=${SERVICE_URL_POENSKELISTEN}
+      - dbtype=sqlite
+      - timezone=${TZ:-UTC}
+      - generateinvite=true
+      - smtphost=${SMTP_HOST:-}
+      - smtpport=${SMTP_PORT:-}
+      - smtpusername=${SMTP_USERNAME:-}
+      - smtppassword=${SMTP_PASSWORD:-}
+      - smtpfrom=${SMTP_FROM:-}
+    volumes:
+      - poenskelisten-files:/app/files
+      - poenskelisten-images:/app/images
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  poenskelisten-files:
+  poenskelisten-images:

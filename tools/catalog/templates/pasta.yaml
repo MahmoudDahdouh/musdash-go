@@ -1,0 +1,10 @@
+# name: PASTA
+# about: A browser tool that shows the audio and subtitle tracks of a Plex library and sets them for a whole show at once.
+# docs: https://github.com/cglatot/pasta#docker
+# website: https://www.pastatool.com
+# categories: media
+services:
+  pasta:
+    image: cglatot/pasta:latest
+    environment:
+      - SERVICE_FQDN_PASTA_80

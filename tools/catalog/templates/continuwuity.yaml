@@ -1,0 +1,24 @@
+# name: Continuwuity
+# about: A Matrix homeserver written in Rust, a community continuation of conduwuit that runs on a single container.
+# docs: https://continuwuity.org/deploying/docker
+# website: https://continuwuity.org/
+# categories: communication
+services:
+  homeserver:
+    image: ghcr.io/continuwuity/continuwuity:latest
+    command: /sbin/conduwuit
+    environment:
+      - SERVICE_FQDN_HOMESERVER_8008
+      - CONTINUWUITY_SERVER_NAME=${SERVICE_FQDN_HOMESERVER}
+      - CONTINUWUITY_DATABASE_PATH=/var/lib/continuwuity
+      - CONTINUWUITY_ADDRESS=0.0.0.0
+      - CONTINUWUITY_PORT=8008
+      - CONTINUWUITY_ALLOW_REGISTRATION=true
+      - CONTINUWUITY_REGISTRATION_TOKEN=${SERVICE_PASSWORD_REGISTRATION}
+      - |
+        CONTINUWUITY_WELL_KNOWN={
+        client=${SERVICE_URL_HOMESERVER},
+        server=${SERVICE_FQDN_HOMESERVER}:443
+        }
+    volumes:
+      - continuwuity-db:/var/lib/continuwuity

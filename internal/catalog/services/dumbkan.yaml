@@ -1,0 +1,17 @@
+# name: DumbKan
+# about: A small Kanban board with several boards, drag and drop, and a PIN to open it, stored in a JSON file.
+# docs: https://github.com/DumbWareio/DumbKan#getting-started
+# website: https://dumbware.io/DumbKan
+# categories: productivity
+# source: musdash
+services:
+  dumbkan:
+    image: dumbwareio/dumbkan:latest
+    environment:
+      - SERVICE_FQDN_DUMBKAN_3000
+      - PORT=3000
+      - DUMBKAN_PIN=${DUMBKAN_PIN:?}
+    volumes:
+      - dumbkan-data:/app/data
+volumes:
+  dumbkan-data:

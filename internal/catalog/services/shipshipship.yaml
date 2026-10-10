@@ -1,0 +1,25 @@
+# name: ShipShipShip
+# about: A changelog and roadmap site where visitors react to updates, with an admin panel and newsletters.
+# docs: https://github.com/GauthierNelkinsky/ShipShipShip#docker-recommended
+# website: https://shipshipship.io
+# categories: productivity, devtools
+# source: musdash
+services:
+  shipshipship:
+    image: nelkinsky/shipshipship:latest
+    environment:
+      - SERVICE_FQDN_SHIPSHIPSHIP_8080
+      - ADMIN_USERNAME=${SERVICE_USER_ADMIN}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - BASE_URL=${SERVICE_URL_SHIPSHIPSHIP}
+      - GIN_MODE=release
+    volumes:
+      - shipshipship-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/api/events || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  shipshipship-data:

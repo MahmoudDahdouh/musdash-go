@@ -1,0 +1,22 @@
+# name: MicroBin
+# about: A small pastebin and file-sharing service with expiring links, QR codes and URL shortening.
+# docs: https://microbin.eu/docs/installation-and-configuration/docker/
+# website: https://microbin.eu/
+# categories: storage, productivity
+# source: musdash
+services:
+  microbin:
+    image: danielszabo99/microbin:latest
+    environment:
+      - SERVICE_FQDN_MICROBIN_8080
+      - MICROBIN_PUBLIC_PATH=${SERVICE_URL_MICROBIN}
+      - MICROBIN_ADMIN_USERNAME=${SERVICE_USER_ADMIN}
+      - MICROBIN_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - MICROBIN_EDITABLE=${MICROBIN_EDITABLE:-true}
+      - MICROBIN_QR=${MICROBIN_QR:-true}
+      - MICROBIN_DISABLE_TELEMETRY=${MICROBIN_DISABLE_TELEMETRY:-true}
+      - MICROBIN_DISABLE_UPDATE_CHECKING=${MICROBIN_DISABLE_UPDATE_CHECKING:-true}
+    volumes:
+      - microbin-data:/app/microbin_data
+volumes:
+  microbin-data:

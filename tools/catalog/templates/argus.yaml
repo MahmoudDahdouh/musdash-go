@@ -1,0 +1,34 @@
+# name: Argus
+# about: Watches GitHub and other sources for new software releases and sends notifications or runs webhooks when one appears.
+# docs: https://release-argus.io/docs/getting-started/
+# website: https://release-argus.io/
+# categories: monitoring, devtools
+services:
+  argus:
+    image: ghcr.io/release-argus/argus:latest
+    environment:
+      - SERVICE_FQDN_ARGUS_8080
+      - ARGUS_WEB_BASIC_AUTH_USERNAME=${SERVICE_USER_ADMIN}
+      - ARGUS_WEB_BASIC_AUTH_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - ARGUS_DATA_READONLY=true
+    configs:
+      - source: argus-config
+        target: /app/config.yml
+    volumes:
+      - argus-data:/app/data
+    healthcheck:
+      test: ["CMD", "/healthcheck", "http://127.0.0.1:8080/api/v1/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+configs:
+  argus-config:
+    content: |
+      service:
+        release-argus/Argus:
+          latest_version:
+            type: github
+            url: release-argus/Argus
+          dashboard:
+            icon_link_to: https://release-argus.io
+            web_url: https://github.com/release-argus/Argus/blob/master/CHANGELOG.md

@@ -1,0 +1,34 @@
+# name: Meerkat CRM
+# about: A personal CRM for keeping track of contacts, birthdays and reminders, with CardDAV sync for phones.
+# docs: https://fbuchner.github.io/meerkat-crm/getting-started.html
+# website: https://fbuchner.github.io/meerkat-crm/
+# categories: productivity, home
+# source: musdash
+services:
+  meerkat:
+    image: ghcr.io/fbuchner/meerkat-crm:latest
+    environment:
+      - SERVICE_FQDN_MEERKAT_8080
+      - JWT_SECRET_KEY=${SERVICE_PASSWORD_64_JWT}
+      - FRONTEND_URL=${SERVICE_URL_MEERKAT}
+      - COOKIE_SECURE=true
+      - CARDDAV_ENABLED=true
+      - DISABLE_REGISTRATION=${DISABLE_REGISTRATION:-false}
+      - REMINDER_TIMEZONE=${TZ:-UTC}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
+    volumes:
+      - meerkat-data:/app/data
+      - meerkat-photos:/app/static/photos
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+volumes:
+  meerkat-data:
+  meerkat-photos:

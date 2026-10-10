@@ -1,0 +1,23 @@
+# name: Donetick
+# about: A shared task and chore manager with recurring schedules and groups for families and housemates.
+# docs: https://github.com/donetick/donetick#using-docker-compose
+# website: https://donetick.com/
+# categories: productivity, home
+services:
+  donetick:
+    image: donetick/donetick:latest
+    environment:
+      - SERVICE_FQDN_DONETICK_2021
+      - DT_ENV=selfhosted
+      - DT_JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - DT_SQLITE_PATH=/donetick-data/donetick.db
+      - TZ=${TZ:-UTC}
+    volumes:
+      - donetick-data:/donetick-data
+      - donetick-config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:2021/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s

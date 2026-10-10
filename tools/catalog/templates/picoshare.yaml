@@ -1,0 +1,20 @@
+# name: PicoShare
+# about: A small web app for sharing files of any size and type through direct download links, with guest upload links.
+# docs: https://github.com/mtlynch/picoshare#using-docker-compose
+# website: https://github.com/mtlynch/picoshare
+# categories: storage
+services:
+  picoshare:
+    image: mtlynch/picoshare:latest
+    command: ["-db", "/data/store.db"]
+    environment:
+      - SERVICE_FQDN_PICOSHARE_4001
+      - PORT=4001
+      - PS_SHARED_SECRET=${SERVICE_PASSWORD_PICOSHARE}
+    volumes:
+      - picoshare-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:4001/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

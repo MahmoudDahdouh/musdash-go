@@ -1,0 +1,24 @@
+# name: Ocular
+# about: A simple budgeting app for tracking income and expenses, with accounts for each user.
+# docs: https://simonwep.github.io/ocular/pages/deploy.html
+# website: https://simonwep.github.io/ocular
+# categories: finance
+# source: musdash
+services:
+  ocular:
+    image: ghcr.io/simonwep/ocular:v2
+    environment:
+      - SERVICE_FQDN_OCULAR_80
+      - GENESIS_JWT_SECRET=${SERVICE_BASE64_JWT}
+      - GENESIS_JWT_TOKEN_EXPIRATION=${JWT_TOKEN_EXPIRATION:-60}
+      - GENESIS_CREATE_USERS=${SERVICE_USER_ADMIN}!:${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - ocular-data:/data/genesis
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+volumes:
+  ocular-data:

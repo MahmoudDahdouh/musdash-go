@@ -1,0 +1,21 @@
+# name: OAuth2 Proxy
+# about: A reverse proxy that puts a sign-in with GitHub, Google or any OpenID Connect provider in front of another app.
+# docs: https://oauth2-proxy.github.io/oauth2-proxy/installation
+# website: https://oauth2-proxy.github.io/oauth2-proxy/
+# categories: auth, security, networking
+# source: musdash
+services:
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
+    environment:
+      - SERVICE_FQDN_OAUTH2_PROXY_4180
+      - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180
+      - OAUTH2_PROXY_REVERSE_PROXY=true
+      - OAUTH2_PROXY_REDIRECT_URL=${SERVICE_URL_OAUTH2_PROXY}/oauth2/callback
+      - OAUTH2_PROXY_COOKIE_SECRET=${SERVICE_PASSWORD_COOKIE}
+      - OAUTH2_PROXY_PROVIDER=${OAUTH2_PROXY_PROVIDER:-github}
+      - OAUTH2_PROXY_CLIENT_ID=${OAUTH2_PROXY_CLIENT_ID:?}
+      - OAUTH2_PROXY_CLIENT_SECRET=${OAUTH2_PROXY_CLIENT_SECRET:?}
+      - OAUTH2_PROXY_OIDC_ISSUER_URL=${OAUTH2_PROXY_OIDC_ISSUER_URL:-}
+      - OAUTH2_PROXY_EMAIL_DOMAINS=${OAUTH2_PROXY_EMAIL_DOMAINS:?}
+      - OAUTH2_PROXY_UPSTREAMS=${OAUTH2_PROXY_UPSTREAMS:-static://202}

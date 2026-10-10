@@ -1,0 +1,43 @@
+# name: Perfice
+# about: A local-first self-tracking app for habits, mood, sleep and food that finds correlations; data stays in the browser.
+# docs: https://perfice.adoe.dev/docs/selfhost
+# website: https://perfice.adoe.dev
+# categories: home, productivity
+services:
+  perfice:
+    image: ghcr.io/p0lloc/perfice_client:latest
+    environment:
+      - SERVICE_FQDN_PERFICE_80
+    configs:
+      - source: perfice-nginx
+        target: /etc/nginx/conf.d/default.conf
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/new/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+configs:
+  perfice-nginx:
+    content: |
+      server {
+          listen 80;
+          server_name _;
+
+          location = / {
+              return 302 /new/;
+          }
+
+          location /new/ {
+              root /usr/share/nginx/html;
+              try_files $$uri @new;
+          }
+
+          location /new {
+              return 301 /new/;
+          }
+
+          location @new {
+              root /usr/share/nginx/html;
+              rewrite ^(.+)$$ /new/index.html;
+          }
+      }

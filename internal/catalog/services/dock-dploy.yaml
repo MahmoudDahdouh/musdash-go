@@ -1,0 +1,16 @@
+# name: Dock-Dploy
+# about: Builds Docker Compose files in the browser and converts them to docker run commands, systemd units and other formats.
+# docs: https://github.com/hhftechnology/Dock-Dploy#quick-start
+# website: https://github.com/hhftechnology/Dock-Dploy
+# categories: devtools
+# source: musdash
+services:
+  dock-dploy:
+    image: hhftechnology/dock-dploy:latest
+    environment:
+      - SERVICE_FQDN_DOCK_DPLOY_3000
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

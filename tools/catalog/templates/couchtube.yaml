@@ -1,0 +1,21 @@
+# name: CouchTube
+# about: A web page that plays chosen YouTube videos as always-on TV channels, with a schedule everyone watching shares.
+# docs: https://github.com/ozencb/couchtube#using-docker
+# website: https://couchtube.fly.dev/
+# categories: media
+services:
+  couchtube:
+    image: ghcr.io/ozencb/couchtube:latest
+    environment:
+      - SERVICE_FQDN_COUCHTUBE_8363
+      - PORT=8363
+      - DATABASE_FILE_PATH=/app/data/couchtube.db
+      - DEFAULT_CHANNELS_PATH=/app/data/videos.json
+      - EDITOR_MODE=${EDITOR_MODE:-off}
+    volumes:
+      - couchtube-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8363"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

@@ -1,0 +1,20 @@
+# name: AirPipe
+# about: A relay for sending files between devices with a shared passphrase, direct when possible and end-to-end encrypted.
+# docs: https://github.com/Sanyam-G/Airpipe#self-host
+# website: https://airpipe.sanyamgarg.com
+# categories: storage, networking
+# source: musdash
+services:
+  relay:
+    image: ghcr.io/sanyam-g/airpipe-relay:latest
+    environment:
+      - SERVICE_FQDN_RELAY_8080
+      - AIRPIPE_MAX_UPLOAD_MB=${AIRPIPE_MAX_UPLOAD_MB:-500}
+      - AIRPIPE_FILE_EXPIRY=${AIRPIPE_FILE_EXPIRY:-10m}
+      - AIRPIPE_RATE_LIMIT_PER_MIN=${AIRPIPE_RATE_LIMIT_PER_MIN:-60}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 5s

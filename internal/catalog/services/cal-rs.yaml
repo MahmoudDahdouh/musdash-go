@@ -1,0 +1,16 @@
+# name: calrs
+# about: A scheduling app written in Rust that reads your CalDAV calendar and lets people book meetings through a shared link.
+# docs: https://cal.rs/docs/
+# website: https://cal.rs/
+# categories: productivity
+# source: musdash
+services:
+  calrs:
+    image: ghcr.io/olivierlambert/calrs:latest
+    environment:
+      - SERVICE_FQDN_CALRS_3000
+      - CALRS_BASE_URL=${SERVICE_URL_CALRS}
+    volumes:
+      - calrs-data:/var/lib/calrs
+volumes:
+  calrs-data:

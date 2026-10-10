@@ -1,0 +1,30 @@
+# name: PortChecker
+# about: A web page and API that report whether a TCP port is open on a hostname or IP address.
+# docs: https://github.com/dsgnr/portchecker.io#docker-1
+# website: https://portchecker.io/
+# categories: networking, security
+services:
+  portchecker-web:
+    image: ghcr.io/dsgnr/portcheckerio-web:latest
+    environment:
+      - SERVICE_FQDN_PORTCHECKER_WEB_80
+      - DEFAULT_HOST=${DEFAULT_HOST:-}
+      - DEFAULT_PORT=${DEFAULT_PORT:-443}
+      - API_URL=http://portchecker-api:8000
+    depends_on:
+      portchecker-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+  portchecker-api:
+    image: ghcr.io/dsgnr/portcheckerio-api:latest
+    environment:
+      - ALLOW_PRIVATE=false
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8000/healthz"]
+      interval: 10s
+      timeout: 10s
+      retries: 30

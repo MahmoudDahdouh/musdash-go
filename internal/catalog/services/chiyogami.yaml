@@ -1,0 +1,17 @@
+# name: Chiyogami
+# about: A pastebin with optional encryption, expiry times and user accounts, in a single small Go program.
+# docs: https://github.com/rhee876527/chiyogami/blob/HEAD/deployment/deployment.md
+# website: https://chiyogami.myaddr.dev
+# categories: devtools
+# source: musdash
+services:
+  chiyogami:
+    image: ghcr.io/rhee876527/chiyogami:latest
+    environment:
+      - SERVICE_FQDN_CHIYOGAMI_8000
+      - SECRET_KEY=${SERVICE_BASE64_SECRETKEY}
+      - PASTE_DEFAULT_EXPIRATION=${PASTE_DEFAULT_EXPIRATION:-24h}
+    volumes:
+      - pastes:/pastes
+volumes:
+  pastes:

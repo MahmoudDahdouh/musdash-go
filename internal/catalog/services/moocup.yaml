@@ -1,0 +1,16 @@
+# name: Moocup
+# about: A browser-based editor for turning screenshots into polished images with frames, backgrounds and shadows.
+# docs: https://github.com/jellydeck/moocup#docker-image
+# website: https://github.com/jellydeck/moocup
+# categories: devtools
+# source: musdash
+services:
+  moocup:
+    image: jellydeck/moocup:latest
+    environment:
+      - SERVICE_FQDN_MOOCUP_80
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

@@ -1,0 +1,27 @@
+# name: Ovumcy
+# about: A privacy-first menstrual cycle tracker with a SQLite database, optional OIDC sign-in and calendar feeds.
+# docs: https://github.com/ovumcy/ovumcy-web/blob/main/docs/self-hosted.md
+# website: https://ovumcy.com
+# categories: home
+services:
+  ovumcy:
+    image: ghcr.io/ovumcy/ovumcy-web:v1.9.2
+    environment:
+      - SERVICE_FQDN_OVUMCY_8080
+      - PORT=8080
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRET}
+      - TZ=${TZ:-UTC}
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-en}
+      - REGISTRATION_MODE=${REGISTRATION_MODE:-open}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+      - DB_PATH=/app/data/ovumcy.db
+      - CALENDAR_FEED_FENCE_PATH=/app/fence/calendar-feed.fence
+    volumes:
+      - ovumcy-data:/app/data
+      - ovumcy-fence:/app/fence
+    healthcheck:
+      test: ["CMD", "/app/ovumcy", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s

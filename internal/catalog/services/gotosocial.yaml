@@ -1,0 +1,30 @@
+# name: GoToSocial
+# about: A small ActivityPub server for the fediverse that works with Mastodon apps and clients.
+# docs: https://docs.gotosocial.org/en/latest/getting_started/installation/container/
+# website: https://gotosocial.org/
+# categories: communication
+# source: musdash
+services:
+  gotosocial:
+    image: docker.io/superseriousbusiness/gotosocial:0.22.2
+    environment:
+      - SERVICE_FQDN_GOTOSOCIAL_8080
+      - GTS_HOST=${SERVICE_FQDN_GOTOSOCIAL}
+      - GTS_DB_TYPE=sqlite
+      - GTS_DB_ADDRESS=/gotosocial/storage/sqlite.db
+      - GTS_LETSENCRYPT_ENABLED=false
+      - GTS_WAZERO_COMPILATION_CACHE=/gotosocial/.cache
+      - GTS_TRUSTED_PROXIES=127.0.0.1/32,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
+      - TZ=${TZ:-UTC}
+    volumes:
+      - gotosocial-storage:/gotosocial/storage
+      - gotosocial-cache:/gotosocial/.cache
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/readyz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+volumes:
+  gotosocial-cache:
+  gotosocial-storage:

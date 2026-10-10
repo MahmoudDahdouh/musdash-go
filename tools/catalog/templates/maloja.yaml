@@ -1,0 +1,14 @@
+# name: Maloja
+# about: A music scrobble database that keeps a personal listening history and builds statistics from it.
+# docs: https://github.com/krateng/maloja#how-to-install
+# website: https://maloja.krateng.ch
+# categories: media
+services:
+  maloja:
+    image: krateng/maloja:latest
+    environment:
+      - SERVICE_FQDN_MALOJA_42010
+      - MALOJA_DATA_DIRECTORY=/mljdata
+      - MALOJA_FORCE_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - maloja-data:/mljdata

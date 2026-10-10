@@ -1,0 +1,27 @@
+# name: Mailrise
+# about: An SMTP gateway that turns emails sent to it into Apprise notifications for chat, push and other services.
+# docs: https://github.com/YoRyan/mailrise#installation
+# website: https://github.com/YoRyan/mailrise
+# categories: automation, communication
+# source: musdash
+services:
+  mailrise:
+    image: yoryan/mailrise:latest
+    environment:
+      - MAILRISE_NOTIFY_URL=${MAILRISE_NOTIFY_URL:?}
+    configs:
+      - source: mailrise-config
+        target: /etc/mailrise.conf
+    ports:
+      - "8025:8025"
+configs:
+  mailrise-config:
+    content: |
+      configs:
+        "*@*":
+          urls:
+            - !env_var MAILRISE_NOTIFY_URL
+      smtp:
+        auth:
+          basic:
+            ${SERVICE_USER_MAILRISE}: ${SERVICE_PASSWORD_MAILRISE}

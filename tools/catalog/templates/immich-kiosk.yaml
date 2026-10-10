@@ -1,0 +1,24 @@
+# name: Immich Kiosk
+# about: Shows a slideshow of photos from an Immich server in a browser, for wall displays and spare screens, behind a password.
+# docs: https://docs.immichkiosk.app/installation/
+# website: https://immichkiosk.app/
+# categories: media, home
+services:
+  immich-kiosk:
+    image: ghcr.io/damongolding/immich-kiosk:latest
+    tty: true
+    environment:
+      - SERVICE_FQDN_IMMICH_KIOSK_3000
+      - LANG=${LANG:-en_GB}
+      - TZ=${TZ:-UTC}
+      - KIOSK_IMMICH_URL=${KIOSK_IMMICH_URL:?}
+      - KIOSK_IMMICH_API_KEY=${KIOSK_IMMICH_API_KEY:?}
+      - KIOSK_IMMICH_EXTERNAL_URL=${KIOSK_IMMICH_EXTERNAL_URL:-}
+      - KIOSK_PASSWORD=${SERVICE_PASSWORD_KIOSK}
+      - KIOSK_BEHIND_PROXY=true
+    healthcheck:
+      test: ["CMD", "/kiosk", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

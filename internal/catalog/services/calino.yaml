@@ -1,0 +1,16 @@
+# name: Calino
+# about: A calendar that runs in the browser and connects to CalDAV servers; it keeps its data in the visitor's browser and has no server-side storage.
+# docs: https://github.com/Ivan-Malinovski/Calino/blob/main/docs/DOCKER.md
+# website: https://calino.io/
+# categories: productivity
+# source: musdash
+services:
+  calino:
+    image: ghcr.io/ivan-malinovski/calino:latest
+    environment:
+      - SERVICE_FQDN_CALINO_8080
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

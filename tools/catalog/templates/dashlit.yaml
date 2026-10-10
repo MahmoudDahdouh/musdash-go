@@ -1,0 +1,20 @@
+# name: DashLit
+# about: A small start page for a server, with link dashboards that can be public or private, local sign-in and OIDC.
+# docs: https://codewec.github.io/dashlit/guide/installation
+# website: https://codewec.github.io/dashlit/
+# categories: home, productivity
+services:
+  dashlit:
+    image: ghcr.io/codewec/dashlit:latest
+    environment:
+      - SERVICE_FQDN_DASHLIT_8080
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - INITIAL_ADMIN_USERNAME=${SERVICE_USER_ADMIN}
+      - INITIAL_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - DISABLE_PASSWORD_REGISTRATION=${DASHLIT_DISABLE_PASSWORD_REGISTRATION:-false}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+      - OIDC_REDIRECT_URL=${SERVICE_URL_DASHLIT}/api/auth/oidc/callback
+    volumes:
+      - dashlit-data:/data

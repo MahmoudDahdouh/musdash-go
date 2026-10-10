@@ -1,0 +1,25 @@
+# name: OTS
+# about: A one-time secret sharing service that encrypts secrets in the browser and deletes each one after it is read once.
+# docs: https://github.com/Luzifer/ots/wiki
+# website: https://ots.fyi/
+# categories: security, productivity
+services:
+  ots:
+    image: ghcr.io/luzifer/ots:v1.23.0
+    environment:
+      - SERVICE_FQDN_OTS_3000
+      - REDIS_URL=redis://valkey:6379/0
+      - SECRET_EXPIRY=${SECRET_EXPIRY:-604800}
+      - STORAGE_TYPE=redis
+    depends_on:
+      valkey:
+        condition: service_healthy
+  valkey:
+    image: valkey/valkey:8-alpine
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

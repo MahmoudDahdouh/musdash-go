@@ -26,9 +26,9 @@ which draws them in one colour. Changed here: the colours are those of
 each owner's own icon (KeyDB's favicon; the two ends of the gradient in
 Dragonfly's logo), and the editor's metadata is removed.
 
-The logos of the services the catalogue was filled with from Coolify's and
-Dokploy's (the keys listed in ../../catalog/services.SOURCES, each with
-where its logo is from) were put here by tools/catalog:
+The logos of the services tools/catalog writes (the keys listed in
+../../catalog/services.SOURCES, each with where its logo is from) were put
+here by it:
 
 - "selfhst:<file>" is from the selfh.st icon collection named above
   (CC BY 4.0).
@@ -45,6 +45,9 @@ where its logo is from) were put here by tools/catalog:
 - "simple:<file>" is the outline from Simple Icons
   (https://simpleicons.org, CC0 1.0), in the one colour that collection
   gives for the brand.
+- "musdash:<file>" is the service's own logo from its own repository,
+  for a service none of these has; the file is kept beside the template
+  in tools/catalog/templates.
 
 A file whose name ends in "-dark" is that collection's drawing of the logo
 for a light page.

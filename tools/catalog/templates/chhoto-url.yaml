@@ -1,0 +1,25 @@
+# name: Chhoto URL
+# about: A small URL shortener written in Rust that keeps its links in a single SQLite file.
+# docs: https://github.com/SinTan1729/chhoto-url/blob/main/docs/INSTALLATION.md
+# website: https://chhoto.link/
+# categories: productivity, devtools
+services:
+  chhoto-url:
+    image: ghcr.io/sintan1729/chhoto-url:alpine
+    environment:
+      - SERVICE_FQDN_CHHOTO_URL_4567
+      - CHHOTO_DB_URL=/data/urls.sqlite
+      - CHHOTO_SQLITE_USE_WAL_MODE=True
+      - CHHOTO_SITE_URL=${SERVICE_URL_CHHOTO_URL}
+      - CHHOTO_PASSWORD=${SERVICE_PASSWORD_CHHOTO}
+      - CHHOTO_API_KEY=${SERVICE_PASSWORD_64_CHHOTOAPI}
+      - CHHOTO_REDIRECT_METHOD=${CHHOTO_REDIRECT_METHOD:-TEMPORARY}
+      - CHHOTO_SLUG_STYLE=${CHHOTO_SLUG_STYLE:-Pair}
+    volumes:
+      - data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:1729/healthz || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 10s

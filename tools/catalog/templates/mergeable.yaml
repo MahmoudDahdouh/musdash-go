@@ -1,0 +1,17 @@
+# name: Mergeable
+# about: An inbox for GitHub pull requests that sorts them into sections by search query and keeps its data in the browser.
+# docs: https://www.usemergeable.dev/self-host/docker/
+# website: https://www.usemergeable.dev/
+# categories: devtools, git
+services:
+  mergeable:
+    image: ghcr.io/pvcnt/mergeable:latest
+    environment:
+      - SERVICE_FQDN_MERGEABLE_80
+      - MERGEABLE_GITHUB_URLS=${MERGEABLE_GITHUB_URLS:-}
+      - MERGEABLE_NO_TELEMETRY=${MERGEABLE_NO_TELEMETRY:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

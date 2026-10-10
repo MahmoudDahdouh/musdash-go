@@ -1,0 +1,18 @@
+# name: evcc
+# about: A charge controller and home energy manager that charges an electric car from solar surplus.
+# docs: https://docs.evcc.io/en/docs/installation/docker
+# website: https://evcc.io/
+# categories: home, automation
+services:
+  evcc:
+    image: evcc/evcc:latest
+    environment:
+      - SERVICE_FQDN_EVCC_7070
+      - TZ=${TZ:-UTC}
+    volumes:
+      - evcc-data:/root/.evcc
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:7070 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

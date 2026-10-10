@@ -1,0 +1,25 @@
+# name: Mafl
+# about: A home page of links to your services, set up from a single YAML file, with status checks and icons.
+# docs: https://mafl.hywax.space/guide/getting-started.html
+# website: https://mafl.hywax.space/
+# categories: home, productivity
+# source: musdash
+services:
+  mafl:
+    image: ghcr.io/hywax/mafl:latest
+    environment:
+      - SERVICE_FQDN_MAFL_3000
+    configs:
+      - source: mafl-config
+        target: /app/data/config.yml
+configs:
+  mafl-config:
+    content: |
+      title: My Home Page
+      services:
+        - title: Mafl documentation
+          description: How to add your own services to this page
+          link: https://mafl.hywax.space/reference/configuration.html
+          icon:
+            name: mdi:book-open-variant
+            wrap: true

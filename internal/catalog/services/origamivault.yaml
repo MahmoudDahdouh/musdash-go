@@ -1,0 +1,16 @@
+# name: OrigamiVault
+# about: A small offline web page that encrypts or splits secrets in the browser and prints them as QR codes for paper backups.
+# docs: https://github.com/origamivault/origamivault#-self-hosting
+# website: https://origamivault.github.io/origamivault/
+# categories: security
+# source: musdash
+services:
+  origamivault:
+    image: ghcr.io/origamivault/origamivault:latest
+    environment:
+      - SERVICE_FQDN_ORIGAMIVAULT_8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

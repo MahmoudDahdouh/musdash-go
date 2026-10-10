@@ -1,0 +1,20 @@
+# name: Inbucket
+# about: An email testing service that accepts mail for any address and shows it on a web page and over a REST API.
+# docs: https://www.inbucket.org/packages/docker.html
+# website: https://inbucket.org/
+# categories: email, devtools
+# source: musdash
+services:
+  inbucket:
+    image: inbucket/inbucket:latest
+    environment:
+      - SERVICE_FQDN_INBUCKET_9000
+      - INBUCKET_WEB_COOKIEAUTHKEY=${SERVICE_BASE64_COOKIEKEY}
+    volumes:
+      - inbucket-config:/config
+      - inbucket-storage:/storage
+    ports:
+      - "2500:2500"
+volumes:
+  inbucket-config:
+  inbucket-storage:

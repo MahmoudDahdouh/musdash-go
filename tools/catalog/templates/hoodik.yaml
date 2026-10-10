@@ -1,0 +1,16 @@
+# name: Hoodik
+# about: A cloud storage app that encrypts files in the browser, so the server only ever holds ciphertext.
+# docs: https://github.com/hudikhq/hoodik#getting-started
+# website: https://hoodik.io
+# categories: storage
+services:
+  hoodik:
+    image: hudik/hoodik:latest
+    environment:
+      - SERVICE_FQDN_HOODIK_5443
+      - DATA_DIR=/data
+      - APP_URL=${SERVICE_URL_HOODIK}
+      - SSL_DISABLED=true
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+    volumes:
+      - hoodik-data:/data

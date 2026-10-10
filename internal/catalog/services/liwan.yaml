@@ -1,0 +1,17 @@
+# name: Liwan
+# about: A small self-hosted web analytics tool that counts visits without cookies, with its database built in.
+# docs: https://liwan.dev/install/docker-compose/
+# website: https://liwan.dev
+# categories: analytics
+# source: musdash
+services:
+  liwan:
+    image: ghcr.io/explodingcamera/liwan:1.7
+    environment:
+      - SERVICE_FQDN_LIWAN_9042
+      - LIWAN_BASE_URL=${SERVICE_URL_LIWAN}
+      - LIWAN_TRUSTED_PROXIES=*
+    volumes:
+      - liwan-data:/data
+volumes:
+  liwan-data:

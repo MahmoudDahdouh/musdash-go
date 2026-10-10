@@ -1,0 +1,17 @@
+# name: Ergo
+# about: An IRC server with built-in accounts, history and services, written in Go and run as one program.
+# docs: https://github.com/ergochat/ergo/blob/stable/docs/MANUAL.md
+# website: https://ergo.chat/
+# categories: communication
+# source: musdash
+services:
+  ergo:
+    image: ghcr.io/ergochat/ergo:stable
+    init: true
+    volumes:
+      - ergo-data:/ircd
+    ports:
+      - "6667:6667"
+      - "6697:6697"
+volumes:
+  ergo-data:

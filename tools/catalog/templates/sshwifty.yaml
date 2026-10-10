@@ -1,0 +1,16 @@
+# name: Sshwifty
+# about: A web-based SSH and Telnet client that opens terminal sessions to other machines from the browser.
+# docs: https://github.com/nirui/sshwifty#docker-image-recommended
+# website: https://github.com/nirui/sshwifty
+# categories: devtools, networking
+services:
+  sshwifty:
+    image: niruix/sshwifty:latest
+    environment:
+      - SERVICE_FQDN_SSHWIFTY_8182
+      - SSHWIFTY_SHAREDKEY=${SERVICE_PASSWORD_SSHWIFTY}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8182/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

@@ -1,0 +1,22 @@
+# name: Convos
+# about: A web-based IRC client for several people, where the server keeps users connected to their chat networks.
+# docs: https://convos.chat/doc/start#docker
+# website: https://convos.chat/
+# categories: communication
+# source: musdash
+services:
+  convos:
+    image: ghcr.io/convos-chat/convos:stable
+    environment:
+      - SERVICE_FQDN_CONVOS_3000
+      - CONVOS_REVERSE_PROXY=1
+    volumes:
+      - convos-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+volumes:
+  convos-data:

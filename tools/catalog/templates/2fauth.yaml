@@ -1,0 +1,26 @@
+# name: 2FAuth
+# about: A web app to manage two-factor authentication accounts and generate one-time codes, with its own sign-in and SQLite storage.
+# docs: https://docs.2fauth.app/getting-started/installation/docker/docker-compose/
+# website: https://docs.2fauth.app/
+# categories: security, auth
+services:
+  2fauth:
+    image: 2fauth/2fauth:latest
+    environment:
+      - SERVICE_FQDN_2FAUTH_8000
+      - APP_URL=${SERVICE_URL_2FAUTH}
+      - APP_KEY=base64:${SERVICE_BASE64_2FAUTHKEY}
+      - APP_ENV=production
+      - APP_TIMEZONE=${TZ:-UTC}
+      - SITE_OWNER=${SITE_OWNER:-mail@example.com}
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/srv/database/database.sqlite
+      - TRUSTED_PROXIES=*
+    volumes:
+      - 2fauth-data:/2fauth
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

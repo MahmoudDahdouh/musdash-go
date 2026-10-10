@@ -1,0 +1,19 @@
+# name: Notifiarr
+# about: The client for notifiarr.com that connects Sonarr, Radarr, Plex and other media apps to Discord notifications and requests.
+# docs: https://notifiarr.wiki/pages/client/install/
+# website: https://notifiarr.wiki
+# categories: media, monitoring
+# source: musdash
+services:
+  notifiarr:
+    image: ghcr.io/notifiarr/notifiarr:latest
+    hostname: notifiarr
+    environment:
+      - SERVICE_FQDN_NOTIFIARR_5454
+      - DN_API_KEY=${NOTIFIARR_API_KEY:-}
+      - DN_UI_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - notifiarr-config:/config
+volumes:
+  notifiarr-config:

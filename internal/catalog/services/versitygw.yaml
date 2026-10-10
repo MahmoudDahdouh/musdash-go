@@ -1,0 +1,28 @@
+# name: VersityGW
+# about: An S3-compatible gateway that stores buckets and objects as plain files and folders on a volume.
+# docs: https://github.com/versity/versitygw/wiki/Docker
+# website: https://www.versity.com/products/versitygw/
+# categories: storage, backend
+# source: musdash
+services:
+  versitygw:
+    image: ghcr.io/versity/versitygw:latest
+    environment:
+      - SERVICE_FQDN_VERSITYGW_7070
+      - ROOT_ACCESS_KEY=${SERVICE_USER_S3ROOT}
+      - ROOT_SECRET_KEY=${SERVICE_PASSWORD_S3ROOT}
+      - VGW_BACKEND=posix
+      - VGW_BACKEND_ARG=/data/s3
+      - VGW_IAM_DIR=/data/iam
+      - VGW_HEALTH=/health
+    volumes:
+      - versitygw-data:/data/s3
+      - versitygw-iam:/data/iam
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:7070/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  versitygw-data:
+  versitygw-iam:

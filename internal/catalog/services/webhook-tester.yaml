@@ -1,0 +1,13 @@
+# name: WebHook Tester
+# about: A tool that gives you a temporary URL, records the webhooks sent to it and shows them live in the browser.
+# docs: https://github.com/tarampampam/webhook-tester#-installation
+# website: https://github.com/tarampampam/webhook-tester
+# categories: devtools
+# source: musdash
+services:
+  webhook-tester:
+    image: ghcr.io/tarampampam/webhook-tester:2
+    environment:
+      - SERVICE_FQDN_WEBHOOK_TESTER_8080
+      - AUTO_CREATE_SESSIONS=${AUTO_CREATE_SESSIONS:-false}
+      - MAX_REQUESTS=${MAX_REQUESTS:-128}

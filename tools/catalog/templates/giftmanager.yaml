@@ -1,0 +1,21 @@
+# name: GiftManager
+# about: Lets families and friends keep gift ideas, mark what was bought and run a Secret Santa, with surprises kept hidden.
+# docs: https://gift.icbest.ca/getting-started/installation
+# website: https://gift.icbest.ca/
+# categories: home, productivity
+services:
+  giftmanager:
+    image: icbest/giftmanager:latest
+    environment:
+      - SERVICE_FQDN_GIFTMANAGER_5000
+      - SECRET_KEY=${SERVICE_HEX_64_SECRET}
+      - MAILJET_API_KEY=${MAILJET_API_KEY:-}
+      - MAILJET_API_SECRET=${MAILJET_API_SECRET:-}
+    volumes:
+      - giftmanager-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:5000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

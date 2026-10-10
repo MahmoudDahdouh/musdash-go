@@ -1,0 +1,25 @@
+# name: FlashPaper
+# about: A one-time secret sharing page that encrypts a message and destroys it after it has been viewed once.
+# docs: https://github.com/AndrewPaglusch/FlashPaper#docker-recommended
+# website: https://github.com/AndrewPaglusch/FlashPaper
+# categories: security
+# source: musdash
+services:
+  flashpaper:
+    image: ghcr.io/andrewpaglusch/flashpaper:v2
+    environment:
+      - SERVICE_FQDN_FLASHPAPER_80
+      - BASE_URL=${SERVICE_URL_FLASHPAPER}
+      - RETURN_FULL_URL=true
+      - MAX_SECRET_LENGTH=${MAX_SECRET_LENGTH:-3000}
+      - PRUNE_ENABLED=true
+    volumes:
+      - flashpaper-data:/var/www/html/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+volumes:
+  flashpaper-data:

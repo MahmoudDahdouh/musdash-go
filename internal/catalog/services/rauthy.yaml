@@ -1,0 +1,51 @@
+# name: Rauthy
+# about: A single sign-on identity provider speaking OpenID Connect and OAuth 2, with passkeys and an admin UI, in one Rust binary.
+# docs: https://sebadob.github.io/rauthy/getting_started/docker.html
+# website: https://sebadob.github.io/rauthy/
+# categories: auth, security
+# source: musdash
+services:
+  rauthy:
+    image: ghcr.io/sebadob/rauthy:0.37.1
+    environment:
+      - SERVICE_FQDN_RAUTHY_8080
+    configs:
+      - source: rauthy-config
+        target: /app/config.toml
+    volumes:
+      - rauthy-data:/app/data
+volumes:
+  rauthy-data:
+configs:
+  rauthy-config:
+    content: |
+      [bootstrap]
+      admin_email = '${ADMIN_EMAIL:-admin@example.com}'
+      password_plain = '${SERVICE_PASSWORD_ADMIN}'
+
+      [cluster]
+      node_id = 1
+      nodes = ["1 localhost:8100 localhost:8200"]
+      secret_raft = '${SERVICE_PASSWORD_RAUTHYRAFT}'
+      secret_api = '${SERVICE_PASSWORD_RAUTHYAPI}'
+
+      [email]
+      rauthy_admin_email = '${ADMIN_EMAIL:-admin@example.com}'
+
+      [encryption]
+      keys = ['rauthykey/${SERVICE_BASE64_RAUTHYKEY}']
+      key_active = 'rauthykey'
+
+      [events]
+      email = '${ADMIN_EMAIL:-admin@example.com}'
+
+      [server]
+      scheme = 'http'
+      port_http = 8080
+      pub_url = '${SERVICE_FQDN_RAUTHY}'
+      proxy_mode = true
+      trusted_proxies = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']
+
+      [webauthn]
+      rp_id = '${SERVICE_FQDN_RAUTHY}'
+      rp_origin = '${SERVICE_URL_RAUTHY}:443'

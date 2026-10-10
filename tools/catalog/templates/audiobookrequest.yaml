@@ -1,0 +1,13 @@
+# name: AudioBookRequest
+# about: A request manager for audiobooks where users ask for titles and admins review the wishlist, with optional automatic downloads.
+# docs: https://github.com/markbeep/AudioBookRequest#getting-started
+# website: https://github.com/markbeep/AudioBookRequest/wiki/
+# categories: media
+services:
+  audiobookrequest:
+    image: markbeep/audiobookrequest:1
+    environment:
+      - SERVICE_FQDN_AUDIOBOOKREQUEST_8000
+      - ABR_APP__FORWARDED_ALLOW_IPS=*
+    volumes:
+      - audiobookrequest-config:/config

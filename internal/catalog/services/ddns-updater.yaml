@@ -1,0 +1,20 @@
+# name: DDNS Updater
+# about: Keeps DNS records at dozens of providers pointed at this server's public IP address, with a small status page.
+# docs: https://github.com/qdm12/ddns-updater#setup
+# website: https://github.com/qdm12/ddns-updater
+# categories: networking
+# source: musdash
+services:
+  ddns-updater:
+    image: ghcr.io/qdm12/ddns-updater:latest
+    environment:
+      - SERVICE_FQDN_DDNS_UPDATER_8000
+      - CONFIG=${DDNS_CONFIG:-}
+      - PERIOD=${DDNS_PERIOD:-5m}
+      - LISTENING_ADDRESS=:8000
+      - ROOT_URL=/
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ddns-updater-data:/updater/data
+volumes:
+  ddns-updater-data:

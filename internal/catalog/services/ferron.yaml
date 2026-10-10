@@ -1,0 +1,17 @@
+# name: Ferron
+# about: A web server written in Rust that serves static files and reverse-proxies, set up with a simple config file.
+# docs: https://ferron.sh/docs/installation/docker
+# website: https://ferron.sh
+# categories: networking, devtools
+# source: musdash
+services:
+  ferron:
+    image: ferronserver/ferron:3
+    environment:
+      - SERVICE_FQDN_FERRON_80
+    volumes:
+      - ferron-www:/var/www/ferron
+      - ferron-conf:/etc/ferron/conf.d
+volumes:
+  ferron-conf:
+  ferron-www:
