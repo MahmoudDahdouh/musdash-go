@@ -31,6 +31,8 @@ A domain can also ask for a user name and password before anything reaches the a
 
 A domain can lead to another port of the app's container than the app's own: the Add domain dialog has the port beside the domain, filled with the app's. A deployment publishes every port the app's domains name, so a domain with a new port is served from the next deployment on. The dialog's **Generate domain** button makes an address that needs no DNS (`<name>.<server's IP>.sslip.io`), served over plain HTTP.
 
+A Compose stack has a Domains tab of its own, where a domain is given to one of its services: see [Services](services.md#domains).
+
 Both a path and a password need a proxy of this version. A proxy that was running before the upgrade answers "nothing is deployed" for such a domain until it is restarted (`systemctl restart musdash-proxy`; the install script does it) or, on another server, installed again from the Servers page. The dashboard says so when such a domain is added while an earlier proxy is running, and on the Servers page.
 
 ## Deploying from Git

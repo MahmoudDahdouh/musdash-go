@@ -26,7 +26,7 @@ Your apps are ordinary Docker containers on a server you control. The proxy that
 - **Deploys that drop no requests.** A new version takes over only after it passes its health check. If it fails, the old one keeps serving. Roll back to any of the last five deployments.
 - **A deploy on every push.** Through a GitHub App or a webhook, and a preview of every pull request at an address of its own.
 - **Eight databases.** PostgreSQL, MySQL, MariaDB, MongoDB, Redis, KeyDB, Dragonfly and ClickHouse, each with a generated password and a connection string ready to copy.
-- **Nearly 600 one-click services.** n8n, WordPress, Ghost, Uptime Kuma, MinIO and hundreds more, or a Docker Compose file of your own.
+- **Nearly 600 one-click services.** n8n, WordPress, Ghost, Uptime Kuma, MinIO and hundreds more, or a Docker Compose file of your own, with a domain for any of its services.
 - **Domains and HTTPS.** Certificates from Let's Encrypt are issued on their own. Route by path, or put a password in front of a domain.
 - **Backups.** Scheduled database backups with copies to S3-compatible storage, retention and restore. [Which engines](docs/databases.md#backups).
 - **Scheduled tasks and notifications.** Run commands on a schedule, and hear about deployments, backups and stopped containers on Discord, Slack, Mattermost, Telegram, Pushover, email or a webhook.

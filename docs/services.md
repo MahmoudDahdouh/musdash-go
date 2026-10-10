@@ -2,9 +2,9 @@
 
 [← All documentation](../README.md#documentation)
 
-One-click services from the catalogue, a Docker Compose file of your own, and stacks kept in a Git repository.
+One-click services from the catalogue, a Docker Compose file of your own with a domain for any of its services, and stacks kept in a Git repository.
 
-## The catalogue and your own Compose file
+## The catalogue
 
 A service is a stack of containers described by a Docker Compose file. **Add resource** offers a catalogue of nearly 600 services, "Your own Compose file" and a Compose file in a Git repository.
 
@@ -22,12 +22,29 @@ Six of the templates were written for musdash (n8n, WordPress, Ghost, Uptime Kum
 - A template asks on its form for what only you can give it: an address to sign in with, or the password of the app's first account where its makers had written one into the file for everybody.
 - About 130 services of the two catalogues are not there. Most need what a stack may not have (the Docker socket, the server's own network or directories, extra capabilities); some are reached on a port of their own rather than a web address (a game server, a VPN); and some thirty are projects that are over: archived by their makers, given up, or replaced by another that the catalogue has. [catalogue-left-out.md](catalogue-left-out.md) lists each with the reason. A service you made from a template that has since left the catalogue keeps running: it has its own copy of the Compose file.
 
-- Give a service of the stack a web address by adding `SERVICE_FQDN_<NAME>_<PORT>` to its environment: `NAME` is the Compose service, `PORT` the port it listens on. musdash gives it a domain (a generated one at first; change it under Settings) and routes it.
-- `SERVICE_URL_<NAME>` is the same address with its scheme, `SERVICE_HTTPS_<NAME>` is `true` or `false`.
-- `SERVICE_PASSWORD_<ID>`, `SERVICE_USER_<ID>`, `SERVICE_BASE64_<ID>` and `SERVICE_HEX_<ID>` are filled with values generated once per service. They are listed on the service's Overview page.
-- Any other `${NAME}` in the file is yours to set, in the Variables box.
+## Your own Compose file
 
-These names follow Coolify's convention, so a template written for it can be pasted.
+Paste the file as you would run it with `docker compose`. The form lists what the text reads while you type: the variables that need a value from you, the ones the file has a default for, the values musdash generates and the services that get a domain. Nothing is started until the service is deployed, and the first deployment says what Docker made of the file.
+
+- Any `${NAME}` in the file is yours to set, in the Variables box (one `NAME=value` a line, stored encrypted). One the file gives no default for (`${NAME}` or `${NAME:?message}`) is listed under "Needs a value".
+- `SERVICE_PASSWORD_<ID>`, `SERVICE_USER_<ID>`, `SERVICE_BASE64_<ID>` and `SERVICE_HEX_<ID>` are filled with values generated once per service. They are listed on the service's Overview page.
+- A template written for Coolify can be pasted as it is: `SERVICE_FQDN_<NAME>_<PORT>` in a service's environment gets that service a domain on that port (a generated one at first), `SERVICE_URL_<NAME>` is the same address with its scheme, and `SERVICE_HTTPS_<NAME>` is `true` or `false`.
+
+## Domains
+
+A service of the stack is given a domain on the stack's **Domains** tab, whatever the file says: **Add domain** asks for the service, the domain and the port the service listens on inside its container. Once the stack has been deployed the services are listed with the ports the file names (`ports:` and `expose:`), and choosing one fills in its port; before that, type the service's name as the file has it.
+
+- A stack can have many domains: several services, several ports of one service, several names for the same port.
+- A container publishes what it was started with. A domain for a port that no domain led to before is served from the next deployment on, and its row says "Redeploy to serve" until then; one more name for a port that is already served works at once.
+- A domain that leads to a service the file no longer has stops the deployment, with the domain and the service named, and what was running keeps running. Remove the domain or add it again for the right service.
+- An address the file itself asks for with `SERVICE_FQDN_…` is in the same list, marked "From the file". It can be changed there and goes when the file stops naming it. The stack is told its own address when it starts, so redeploy after changing one.
+- **Generate domain** makes an address that needs no DNS, served over plain HTTP. A domain of your own needs a DNS record that leads to the server, which the tab names; **Check DNS** in a domain's row says whether it is there. A stack's domain takes the whole name: paths and passwords are an app's.
+
+## What is running
+
+The Overview lists the stack's containers one by one as the server reports them: each service's state (running, unhealthy, starting, exited, or finished for one that ran once and ended well, as a migration does), its image, and the ports its file publishes on the server itself. A service the file has and the server has no container for is named too. The list is read when the page opens and when the stack's state changes; **Refresh** asks again.
+
+**Logs** shows every container's output together, or one service's: the stack's services are above the log. **Terminal** opens a shell in the container you choose.
 
 A stack is held to the same limits as an app. Its file is read inside a container that has no network and sees nothing of the server, then checked: privileged mode, the host's network or process namespaces, devices, extra capabilities, mounts of system directories, of the Docker socket or of the stack's own directory, networks with a subnet of their own, and volumes or networks that belong to something else are refused, with a message naming the line. Files the Compose file names (`env_file`, `include`, `extends`) are not read: a stack is one file plus its variables. The first deployment on a server downloads the `docker:<version>-cli` image used for that check.
 
@@ -44,3 +61,4 @@ A service also takes a Compose file that lives in a repository ("Compose file in
 - `include`, `extends` and `env_file` may name files of the repository.
 - A push to the branch redeploys it, through the GitHub App or through a webhook you add to the repository; a deploy token does the same for a CI pipeline. Both are made on the Keys & tokens page, under API Tokens.
 - Only the Compose file itself is scanned for `SERVICE_…` variables, not files it includes.
+- Domains are given on the Domains tab as for a pasted file. The services it offers are those of the file as it was last deployed: deploy first when the repository has a new one.
