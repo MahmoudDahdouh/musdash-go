@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/MahmoudDahdouh/musdash-go/internal/notify"
 	"hash/fnv"
+	"io"
 	"log/slog"
 	"math/rand/v2"
 	"os"
@@ -89,6 +90,12 @@ type Deployer struct {
 	// routesMu guards the map.
 	routesMu sync.Mutex
 	routesOf map[string]*sync.Mutex
+	// sandboxOf holds a lock per server for fetching the image Compose
+	// files are read with: stacks that are first deployed at the same
+	// moment would otherwise each pull it, and Docker fails pulls of one
+	// image that run side by side. sandboxMu guards the map.
+	sandboxMu sync.Mutex
+	sandboxOf map[string]*sync.Mutex
 	// appLocks serialise everything that changes one app's container: a
 	// deployment, a stop, a delete. They are striped by app id so the set
 	// never grows.
@@ -451,8 +458,8 @@ func (d *Deployer) deploy(ctx context.Context, app db.App, dep db.Deployment, lo
 		}
 	default:
 		log.Step("Pulling %s", image)
-		if err := dk.Pull(ctx, image, log); err != nil {
-			return fmt.Errorf("pull %s: %w", image, err)
+		if err := pullExplained(ctx, dk, image, log); err != nil {
+			return err
 		}
 	}
 	if dep.RollbackOf == "" {
@@ -923,4 +930,20 @@ func (d *Deployer) destroy(ctx context.Context, appID string) error {
 		os.Remove(d.Cfg.TaskLogPath(id))
 	}
 	return nil
+}
+
+// pullExplained pulls an image with its progress in the log. When the pull
+// fails, the error ends with what Docker last said: that the image does not
+// exist, that the registry wants a login, that the disk is full. The exit
+// status alone says none of it.
+func pullExplained(ctx context.Context, dk docker.Client, image string, log io.Writer) error {
+	said := &tail{limit: 1500}
+	err := dk.Pull(ctx, image, teeWriter{log, said})
+	if err == nil || ctx.Err() != nil {
+		return err
+	}
+	if reason := lastOutput(said.String(), 3); reason != "" {
+		return fmt.Errorf("pull %s: %w. Docker said:\n%s", image, err, reason)
+	}
+	return fmt.Errorf("pull %s: %w", image, err)
 }

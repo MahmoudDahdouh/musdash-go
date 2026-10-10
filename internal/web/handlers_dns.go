@@ -130,12 +130,19 @@ func (s *Server) appDomainDNS(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
+	s.answerDNS(w, r, names, v.App.ServerID, "app "+v.App.ID)
+}
+
+// answerDNS looks the names up and renders a line for each: what Check DNS
+// puts under a domain. The names are stored ones; what is the resource the
+// log names when its server cannot be read.
+func (s *Server) answerDNS(w http.ResponseWriter, r *http.Request, names []string, serverID, what string) {
 	// What follows answers 200 whatever happens: htmx puts nothing else
 	// under the domain.
-	server, err := s.DB.ServerByID(r.Context(), v.App.ServerID)
+	server, err := s.DB.ServerByID(r.Context(), serverID)
 	if err != nil {
-		s.Log.Error("check DNS: the app's server", "app", v.App.ID, "err", err)
-		s.render(w, r, http.StatusOK, pages.DomainDNS([]pages.DNSLine{{Host: names[0], Tone: ui.ToneNeutral, Label: "Not checked", Text: "The app's server could not be read just now. Try again in a moment."}}))
+		s.Log.Error("check DNS: the server of "+what, "err", err)
+		s.render(w, r, http.StatusOK, pages.DomainDNS([]pages.DNSLine{{Host: names[0], Tone: ui.ToneNeutral, Label: "Not checked", Text: "The server could not be read just now. Try again in a moment."}}))
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), dnsCheckTimeout)

@@ -359,3 +359,43 @@ func TestCheckMountTarget(t *testing.T) {
 		}
 	}
 }
+
+// TestStackContainers: what a server says of a stack's containers is read
+// as data. A name or a state that is not one is not taken, text is cut, and
+// only ports reachable from outside the server are named.
+func TestStackContainers(t *testing.T) {
+	r := &scripted{answers: map[string]answer{
+		"docker ps": {out: strings.Join([]string{
+			"musdash-x-web-1\trunning\tUp 2 minutes (healthy)\tnginx:alpine\tweb\t0.0.0.0:8088->80/tcp, [::]:8088->80/tcp, 127.0.0.1:26001->80/tcp, 443/tcp",
+			"musdash-x-migrate-1\texited\tExited (0) 1 minute ago\tbusybox\tmigrate\t",
+			"musdash-x-dns-1\trunning\tUp 5 seconds\tcoredns\tdns\t0.0.0.0:5353->53/udp",
+			"musdash-x-odd-1\tflying\t<b>Up</b>\x1b[31m " + strings.Repeat("x", 200) + "\timg\t../../etc\t",
+			"-rm; reboot\trunning\tUp\timg\tweb\t",
+			"too\tfew",
+		}, "\n")},
+	}}
+	got, err := Client{R: r}.StackContainers(context.Background(), "x")
+	if err != nil || len(got) != 4 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	// By service, and the one whose service is not a name first.
+	odd, dns, migrate, web := got[0], got[1], got[2], got[3]
+	if web.Service != "web" || web.State != "running" || web.Status != "Up 2 minutes (healthy)" || len(web.Published) != 1 || web.Published[0] != "8088 \u2192 80" {
+		t.Fatalf("web: %+v", web)
+	}
+	if migrate.State != "exited" || len(migrate.Published) != 0 {
+		t.Fatalf("migrate: %+v", migrate)
+	}
+	if len(dns.Published) != 1 || dns.Published[0] != "5353 \u2192 53/udp" {
+		t.Fatalf("dns: %+v", dns)
+	}
+	if odd.Service != "" || odd.State != "unknown" || len(odd.Status) != 80 || strings.ContainsAny(odd.Status, "\x1b") {
+		t.Fatalf("a line that says odd things: %+v", odd)
+	}
+	if !strings.Contains(r.calls[0], "--filter label=musdash.resource=x") || !strings.Contains(r.calls[0], "--filter label=musdash.kind=service") {
+		t.Fatalf("command: %s", r.calls[0])
+	}
+	if _, err := (Client{R: r}).StackContainers(context.Background(), "x --all"); err == nil {
+		t.Fatal("an id that is not one was asked about")
+	}
+}

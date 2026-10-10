@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
@@ -31,6 +32,10 @@ import (
 
 // JobService is the job kind that deploys a service.
 const JobService = "service"
+
+// maxLayoutMembers bounds the services of a stack that are recorded for its
+// pages.
+const maxLayoutMembers = 200
 
 // sandboxEnvFile holds a stack's variables for the sandboxed load.
 const sandboxEnvFile = "sandbox.env"
@@ -251,7 +256,7 @@ func serviceEnv(composeText string, vars map[string]string, endpoints []db.Endpo
 		}
 		e := byName[v.ID]
 		if e.Host == "" {
-			return "", fmt.Errorf("%s has no domain: give %s one under Settings", v.Name, strings.ToLower(v.ID))
+			return "", fmt.Errorf("%s has no domain: give %s one under Domains", v.Name, strings.ToLower(v.ID))
 		}
 		all[v.Name] = catalog.AddressValue(v, e.Host, e.TLS)
 	}
@@ -370,13 +375,8 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		opt.Dir = path.Join(checkout, path.Dir(s.ComposePath))
 		opt.File = path.Base(s.ComposePath)
 	}
-	if have, err := dk.HasImage(ctx, opt.Image); err != nil {
+	if err := d.fetchSandbox(ctx, server.ID, dk, opt.Image, log); err != nil {
 		return err
-	} else if !have {
-		log.Step("Fetching %s, which reads Compose files safely", opt.Image)
-		if err := dk.Pull(ctx, opt.Image, log); err != nil {
-			return fmt.Errorf("pull %s: %w", opt.Image, err)
-		}
 	}
 
 	log.Step("Reading the Compose file")
@@ -452,33 +452,103 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		return err
 	}
 
-	// Each endpoint gets a loopback port of the server for the proxy.
-	byName := map[string]db.Endpoint{}
-	for _, e := range endpoints {
-		byName[e.Name] = e
+	// What the file holds, for the pages that offer its services: recorded
+	// whether or not the stack then comes up.
+	// It is what a server printed: each part is cut to size before it is
+	// kept.
+	layout := resolved.Layout()
+	stack := make([]db.StackMember, 0, len(layout))
+	for _, m := range layout {
+		if len(stack) == maxLayoutMembers {
+			break
+		}
+		if len(m.Image) > 200 {
+			m.Image = m.Image[:200]
+		}
+		if len(m.Ports) > 16 {
+			m.Ports = m.Ports[:16]
+		}
+		stack = append(stack, db.StackMember{Name: m.Name, Image: m.Image, Ports: m.Ports, Built: m.Built})
 	}
+	if err := d.DB.SetServiceLayout(ctx, s.ID, s.Compose, stack); err != nil {
+		return err
+	}
+
+	// Where each endpoint leads: the ones the file names, as it was just
+	// read, and the ones a person added, as they chose.
+	type target struct {
+		endpoint db.Endpoint
+		service  string
+		port     int
+	}
+	byName := map[string]db.Endpoint{}
+	var targets []target
+	for _, e := range endpoints {
+		if !e.Manual {
+			byName[e.Name] = e
+			continue
+		}
+		// A domain for a service the file does not have would answer
+		// nothing, and nothing would say why.
+		known := false
+		for _, m := range members {
+			known = known || m == e.ComposeService
+		}
+		if !known {
+			return fmt.Errorf("the domain %s leads to the service %q, which the Compose file does not have (it has %s). Remove the domain under Domains, or add it again for one of them", e.Host, e.ComposeService, strings.Join(members, ", "))
+		}
+		if !resolved.OwnNetwork(e.ComposeService) {
+			return fmt.Errorf("the domain %s leads to the service %q, which shares another container's network and cannot publish a port of its own. Give the domain to the service whose network it uses", e.Host, e.ComposeService)
+		}
+		targets = append(targets, target{endpoint: e, service: e.ComposeService, port: e.Port})
+	}
+	for _, f := range found {
+		e, ok := byName[f.Name]
+		if !ok {
+			return fmt.Errorf("no endpoint is recorded for %s", f.Name)
+		}
+		targets = append(targets, target{endpoint: e, service: f.Service, port: f.Port})
+	}
+	// Each service and port that has a domain gets one loopback port of the
+	// server for the proxy, however many domains lead to it.
 	assign := func(fresh bool) error {
 		used, err := d.DB.UsedHostPorts(ctx, s.ServerID)
 		if err != nil {
 			return err
 		}
 		override.Publish = override.Publish[:0]
-		for _, f := range found {
-			e, ok := byName[f.Name]
-			if !ok {
-				return fmt.Errorf("no endpoint is recorded for %s", f.Name)
+		chosen := map[string]int{}
+		kept := map[int]bool{}
+		key := func(t target) string { return t.service + ":" + strconv.Itoa(t.port) }
+		// A port the stack already has is kept, so a redeployment does not
+		// move what the proxy is sending requests to. One port goes to one
+		// target: two endpoints that shared a target, and so a port, may
+		// lead to different ones now that the file has changed.
+		for _, t := range targets {
+			if p := t.endpoint.HostPort; !fresh && p > 0 && chosen[key(t)] == 0 && !kept[p] {
+				chosen[key(t)], kept[p] = p, true
 			}
-			if e.HostPort == 0 || fresh {
-				if e.HostPort = pickPort(used); e.HostPort == 0 {
+		}
+		for _, t := range targets {
+			hostPort := chosen[key(t)]
+			if hostPort == 0 {
+				if hostPort = pickPort(used); hostPort == 0 {
 					return errors.New("no free host port is left on this server")
 				}
-				used[e.HostPort] = true
+				used[hostPort] = true
+				chosen[key(t)] = hostPort
 			}
-			if err := d.DB.SetEndpointTarget(ctx, e.ID, f.Service, f.Port, e.HostPort); err != nil {
+			// A domain a person removed while this deployment was under way
+			// is gone, and that is all: its port is published this once.
+			if err := d.DB.SetEndpointTarget(ctx, t.endpoint.ID, t.service, t.port, hostPort); err != nil && !(t.endpoint.Manual && errors.Is(err, db.ErrNotFound)) {
 				return err
 			}
-			byName[f.Name] = e
-			override.Publish = append(override.Publish, compose.Published{Service: f.Service, Port: f.Port, HostPort: e.HostPort})
+		}
+		for _, t := range targets {
+			if hostPort := chosen[key(t)]; hostPort > 0 {
+				override.Publish = append(override.Publish, compose.Published{Service: t.service, Port: t.port, HostPort: hostPort})
+				chosen[key(t)] = 0
+			}
 		}
 		return nil
 	}
@@ -511,9 +581,15 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		if attempt == 1 {
 			log.Step("Pulling images")
 			pull := d.composeCmd(r, s.ID, "pull", "--ignore-buildable")
-			pull.Stdout, pull.Stderr = log, log
+			pullOut := &tail{limit: 1500}
+			pull.Stdout, pull.Stderr = teeWriter{log, pullOut}, teeWriter{log, pullOut}
 			if err := r.Run(ctx, pull); err != nil {
-				return fmt.Errorf("pull the images: %w", err)
+				if ctx.Err() != nil {
+					return err
+				}
+				// What Docker said is the reason: a name that does not
+				// exist, a registry that wants a login, no room left.
+				return fmt.Errorf("pull the images: %w. Docker's last output:\n%s", err, lastOutput(pullOut.String(), 8))
 			}
 			if doc.Builds() {
 				log.Step("Building images")
@@ -576,6 +652,31 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		return fmt.Errorf("the stack is running, but its routes could not be published: %w", err)
 	}
 	return nil
+}
+
+// fetchSandbox makes sure the image Compose files are read with is on the
+// server. One deployment a server looks and pulls at a time: the first
+// stacks of a new server are often made together, and each would pull the
+// image the others are pulling.
+func (d *Deployer) fetchSandbox(ctx context.Context, serverID string, dk docker.Client, image string, log *Log) error {
+	d.sandboxMu.Lock()
+	if d.sandboxOf == nil {
+		d.sandboxOf = map[string]*sync.Mutex{}
+	}
+	mu := d.sandboxOf[serverID]
+	if mu == nil {
+		mu = &sync.Mutex{}
+		d.sandboxOf[serverID] = mu
+	}
+	d.sandboxMu.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
+	have, err := dk.HasImage(ctx, image)
+	if err != nil || have {
+		return err
+	}
+	log.Step("Fetching %s, which reads Compose files safely", image)
+	return pullExplained(ctx, dk, image, log)
 }
 
 // maxComposeFile bounds a Compose file read from a repository.
@@ -685,6 +786,20 @@ func GeneratedSuffix(server db.Server) string {
 	}
 	// IPv6 addresses use dashes in sslip.io names.
 	return "." + strings.ReplaceAll(ip, ":", "-") + ".sslip.io"
+}
+
+// lastOutput returns the last n lines of text that say something.
+func lastOutput(text string, n int) string {
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // teeWriter writes to each of its writers.
@@ -805,8 +920,15 @@ func (d *Deployer) DestroyService(ctx context.Context, id string, deleteData boo
 
 // ServiceLogs writes the output of a stack's containers to w: the last
 // tail lines of each, then what follows, until ctx ends or they all stop.
-func (d *Deployer) ServiceLogs(ctx context.Context, r runner.Runner, id string, tail int, w io.Writer) error {
-	cmd := d.composeCmd(r, id, "logs", "--follow", "--no-color", "--tail", strconv.Itoa(tail))
+//
+// With only, it is the output of that one Compose service: the caller has
+// found the name among the stack's own.
+func (d *Deployer) ServiceLogs(ctx context.Context, r runner.Runner, id string, tail int, w io.Writer, only string) error {
+	args := []string{"logs", "--follow", "--no-color", "--tail", strconv.Itoa(tail)}
+	if only != "" {
+		args = append(args, "--", only)
+	}
+	cmd := d.composeCmd(r, id, args...)
 	cmd.Stdout, cmd.Stderr = w, w
 	return r.Run(ctx, cmd)
 }

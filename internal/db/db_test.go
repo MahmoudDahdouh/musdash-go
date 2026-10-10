@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -525,6 +526,41 @@ func TestAHostIsSharedByPathWithinOneTeamAndServer(t *testing.T) {
 		t.Fatalf("an endpoint's own host saved again: %v", err)
 	}
 	d.Exec(`DELETE FROM domains WHERE host = 'api.example.com'`)
+
+	// A domain a person adds to a service of the stack: a whole host too,
+	// only for a stack of the team's own, and only so many.
+	for _, host := range []string{"shop.example.com", "stack.example.com"} {
+		if _, err := d.AddEndpoint(ctx, team, "svc1", "web", 80, host, true); !errors.Is(err, ErrHostTaken) {
+			t.Fatalf("a domain added on %s, which is in use: %v", host, err)
+		}
+	}
+	if _, err := d.AddEndpoint(ctx, "teamb", "svc1", "web", 80, "grab.example.com", true); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a domain added to another team's stack: %v", err)
+	}
+	added, err := d.AddEndpoint(ctx, team, "svc1", "web", 8080, "added.example.com", true)
+	if err != nil || !added.Manual || added.HostPort != 0 || added.DomainID == "" {
+		t.Fatalf("a domain added to the team's stack: %+v %v", added, err)
+	}
+	if err := d.SyncEndpoints(ctx, "svc1", []string{"WEB"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	eps, _ := d.ListEndpoints(ctx, "svc1")
+	if len(eps) != 2 || eps[0].Name != "WEB" || eps[1].ID != added.ID || eps[1].Host != "added.example.com" {
+		t.Fatalf("after the file's endpoints were brought in line: %+v", eps)
+	}
+	if err := d.DeleteEndpoint(ctx, "other", added.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("an endpoint removed through another service: %v", err)
+	}
+	for i := 1; i < MaxManualEndpoints; i++ {
+		if _, err := d.AddEndpoint(ctx, team, "svc1", "web", 8080, fmt.Sprintf("n%d.example.com", i), false); err != nil {
+			t.Fatalf("domain %d: %v", i, err)
+		}
+	}
+	if _, err := d.AddEndpoint(ctx, team, "svc1", "web", 8080, "onemore.example.com", false); !errors.Is(err, ErrTooManyEndpoints) {
+		t.Fatalf("a domain past the limit: %v", err)
+	}
+	d.Exec(`DELETE FROM domains WHERE resource_id IN (SELECT id FROM service_endpoints WHERE manual = 1)`)
+	d.Exec(`DELETE FROM service_endpoints WHERE manual = 1`)
 
 	// A row nobody can be found for shares its host with no one.
 	d.Exec(`INSERT INTO domains (id, resource_kind, resource_id, host, created_at) VALUES ('orphan', 'app', 'gone', 'old.example.com', 1)`)

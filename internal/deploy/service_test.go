@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1526,5 +1527,322 @@ func TestPastedStackWithAnEnvFileIsRefused(t *testing.T) {
 		if strings.HasPrefix(c, "docker compose") {
 			t.Fatalf("Compose was run on the server for a refused file: %s", c)
 		}
+	}
+}
+
+// TestDomainsAddedToAStack: a domain a person gave to a service of a stack
+// is published and routed like one the file names, a service and port is
+// published once however many domains lead to it, and a domain for a
+// service the file does not have stops the deployment with both names.
+func TestDomainsAddedToAStack(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, _ := e.scriptedService(false)
+	dir := e.cfg.AppDir(s.ID)
+
+	// Saving the file again leaves the person's domains alone.
+	cache, err := e.db.AddEndpoint(ctx, e.team, s.ID, "cache", 6379, "cache.example.test", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.db.AddEndpoint(ctx, e.team, s.ID, "front", 80, "second.example.test", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.d.PrepareService(ctx, s, map[string]string{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := e.db.ListEndpoints(ctx, s.ID); len(list) != 3 || list[0].Manual || !list[1].Manual || list[1].ID != cache.ID {
+		t.Fatalf("endpoints after the file was saved: %+v", list)
+	}
+
+	got := e.deployService(s, 10*time.Second)
+	if got.Status != db.AppRunning {
+		t.Fatalf("%+v\n%s", got, e.serviceLog(s))
+	}
+	byHost := map[string]db.Endpoint{}
+	list, _ := e.db.ListEndpoints(ctx, s.ID)
+	for _, ep := range list {
+		byHost[ep.Host] = ep
+	}
+	file, second, redis := byHost["front.site.example.test"], byHost["second.example.test"], byHost["cache.example.test"]
+	if file.HostPort == 0 || second.HostPort != file.HostPort || redis.HostPort == 0 || redis.HostPort == file.HostPort {
+		t.Fatalf("host ports: the file's %d, the second domain's %d, the cache's %d", file.HostPort, second.HostPort, redis.HostPort)
+	}
+	resolved, _, _ := e.fake.File(dir + "/compose.resolved.json")
+	if n := strings.Count(resolved, `"published": "`+strconv.Itoa(file.HostPort)+`"`); n != 1 {
+		t.Fatalf("front's port 80 is published %d times, want once:\n%s", n, resolved)
+	}
+	if !strings.Contains(resolved, `"published": "`+strconv.Itoa(redis.HostPort)+`"`) || !strings.Contains(resolved, `"target": 6379`) {
+		t.Fatalf("the cache's port is not published:\n%s", resolved)
+	}
+	routed := map[string]string{}
+	for _, r := range e.routes().Routes {
+		routed[r.Host] = r.Target
+	}
+	for host, ep := range byHost {
+		if routed[host] != "127.0.0.1:"+strconv.Itoa(ep.HostPort) {
+			t.Errorf("%s is routed to %q, want port %d", host, routed[host], ep.HostPort)
+		}
+	}
+	// What the file holds is kept for the pages that offer its services.
+	members := got.StackMembers()
+	if len(members) != 2 || members[0].Name != "cache" || members[1].Name != "front" || members[1].Image != "nginx:alpine" {
+		t.Fatalf("layout: %+v (%q)", members, got.Layout)
+	}
+
+	// A third domain for a target that is published takes its port at once.
+	third, err := e.db.AddEndpoint(ctx, e.team, s.ID, "front", 80, "third.example.test", false)
+	if err != nil || third.HostPort != file.HostPort {
+		t.Fatalf("a domain for a published target: port %d, want %d (%v)", third.HostPort, file.HostPort, err)
+	}
+	// A redeployment moves nothing.
+	if got = e.deployService(got, 10*time.Second); got.Status != db.AppRunning {
+		t.Fatalf("%+v", got)
+	}
+	for _, ep := range mustEndpoints(t, e, s.ID) {
+		if before, ok := byHost[ep.Host]; ok && ep.HostPort != before.HostPort {
+			t.Errorf("%s moved from port %d to %d", ep.Host, before.HostPort, ep.HostPort)
+		}
+	}
+
+	// A domain for a service the file does not have: nothing is started.
+	if _, err := e.db.AddEndpoint(ctx, e.team, s.ID, "api", 3000, "api.example.test", true); err != nil {
+		t.Fatal(err)
+	}
+	before := len(e.fake.Calls())
+	got = e.deployService(got, 10*time.Second)
+	if !strings.Contains(got.LastError, `api.example.test leads to the service "api", which the Compose file does not have (it has cache, front)`) {
+		t.Fatalf("status %s, error %q", got.Status, got.LastError)
+	}
+	for _, c := range e.fake.Calls()[before:] {
+		if strings.Contains(c, " up ") || strings.Contains(c, " pull ") {
+			t.Fatalf("something was started for a stack with a domain that leads nowhere: %s", c)
+		}
+	}
+
+	// An endpoint the file names is not removed by hand; one a person added
+	// is, and its domain with it.
+	if err := e.db.DeleteEndpoint(ctx, s.ID, file.ID); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("removing the file's endpoint: %v", err)
+	}
+	if err := e.db.DeleteEndpoint(ctx, s.ID, redis.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, ep := range mustEndpoints(t, e, s.ID) {
+		if ep.Host == "cache.example.test" {
+			t.Fatal("the removed domain is still there")
+		}
+	}
+}
+
+func mustEndpoints(t *testing.T, e *env, id string) []db.Endpoint {
+	t.Helper()
+	list, err := e.db.ListEndpoints(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return list
+}
+
+// TestLayoutGoesWithItsText: the recorded layout describes the stored text.
+// A different text empties it, and a deployment that read an older text
+// does not write its layout over a newer one.
+func TestLayoutGoesWithItsText(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, _ := e.scriptedService(false)
+	if s = e.deployService(s, 10*time.Second); len(s.StackMembers()) != 2 {
+		t.Fatalf("layout after a deployment: %q", s.Layout)
+	}
+	// Saved unchanged: kept.
+	if err := e.db.UpdateServiceCompose(ctx, e.team, s); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ = e.db.ServiceByID(ctx, s.ID); len(s.StackMembers()) != 2 {
+		t.Fatal("saving the same text emptied the layout")
+	}
+	old := s.Compose
+	s.Compose += "\n# a comment\n"
+	if err := e.db.UpdateServiceCompose(ctx, e.team, s); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ = e.db.ServiceByID(ctx, s.ID); s.Layout != "" {
+		t.Fatalf("a changed text kept the layout of the one before: %q", s.Layout)
+	}
+	if err := e.db.SetServiceLayout(ctx, s.ID, old, []db.StackMember{{Name: "stale"}}); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ = e.db.ServiceByID(ctx, s.ID); s.Layout != "" {
+		t.Fatalf("the layout of an older text was stored: %q", s.Layout)
+	}
+
+	// A stack from a repository: read from another branch it is another
+	// file, and what the last one held says nothing about it.
+	g, err := e.db.CreateService(ctx, e.team, db.Service{
+		EnvironmentID: e.app.EnvironmentID, ServerID: e.server.ID, Name: "fromgit", Template: db.TemplateGit,
+		RepoURL: "https://git.example.test/acme/stack.git", RepoName: "acme/stack", Branch: "main", ComposePath: "compose.yaml",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.db.Exec(`UPDATE services SET layout = '[{"name":"web"}]' WHERE id = ?`, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	g.AutoDeploy = true
+	if err := e.db.UpdateServiceSource(ctx, e.team, g); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.db.ServiceByID(ctx, g.ID); len(got.StackMembers()) != 1 {
+		t.Fatal("saving the same source emptied the layout")
+	}
+	g.Branch = "next"
+	if err := e.db.UpdateServiceSource(ctx, e.team, g); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.db.ServiceByID(ctx, g.ID); got.Layout != "" {
+		t.Fatalf("another branch kept the layout of the one before: %q", got.Layout)
+	}
+}
+
+// TestOneLoopbackPortGoesToOneTarget: two endpoints that shared a target
+// share its port. When they lead to different targets afterwards, only one
+// of them keeps it: the same port for two container ports is refused by
+// Docker when the stack is started.
+func TestOneLoopbackPortGoesToOneTarget(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, _ := e.scriptedService(false)
+	if _, err := e.db.AddEndpoint(ctx, e.team, s.ID, "front", 80, "second.example.test", false); err != nil {
+		t.Fatal(err)
+	}
+	if s = e.deployService(s, 10*time.Second); s.Status != db.AppRunning {
+		t.Fatalf("%+v", s)
+	}
+	list := mustEndpoints(t, e, s.ID)
+	shared := list[0].HostPort
+	if shared == 0 || list[1].HostPort != shared {
+		t.Fatalf("endpoints: %+v", list)
+	}
+	// The second domain now leads to the cache, with the port it had.
+	if _, err := e.db.Exec(`UPDATE service_endpoints SET compose_service = 'cache', port = 6379 WHERE id = ?`, list[1].ID); err != nil {
+		t.Fatal(err)
+	}
+	if s = e.deployService(s, 10*time.Second); s.Status != db.AppRunning {
+		t.Fatalf("%+v", s)
+	}
+	list = mustEndpoints(t, e, s.ID)
+	if list[0].HostPort == list[1].HostPort || (list[0].HostPort != shared && list[1].HostPort != shared) {
+		t.Fatalf("after the targets parted: ports %d and %d, of which one should be %d", list[0].HostPort, list[1].HostPort, shared)
+	}
+	resolved, _, _ := e.fake.File(e.cfg.AppDir(s.ID) + "/compose.resolved.json")
+	if n := strings.Count(resolved, `"published": "`+strconv.Itoa(shared)+`"`); n != 1 {
+		t.Fatalf("port %d is published %d times:\n%s", shared, n, resolved)
+	}
+
+	// A domain removed while a deployment is under way does not fail it.
+	removed := false
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		if !removed && strings.Contains(line, "config --format json --no-interpolate") {
+			removed = true
+			if err := e.db.DeleteEndpoint(ctx, s.ID, list[1].ID); err != nil {
+				t.Error(err)
+			}
+		}
+		return (&scriptedStack{project: ServiceProject(s.ID), dir: e.cfg.AppDir(s.ID)}).handle(line, c)
+	}
+	if s = e.deployService(s, 10*time.Second); s.Status != db.AppRunning || s.LastError != "" || !removed {
+		t.Fatalf("a deployment during which a domain was removed: %s %q", s.Status, s.LastError)
+	}
+}
+
+// TestSandboxImageIsFetchedByOneDeploymentAtATime: stacks first deployed
+// at the same moment on a server that has never read a Compose file do not
+// each pull the image that reads them. Docker fails pulls of one image that
+// run side by side, and every one of the stacks failed with them.
+func TestSandboxImageIsFetchedByOneDeploymentAtATime(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	first := e.newService(db.TemplateCustom, "first", scriptedCompose, false)
+	second := e.newService(db.TemplateCustom, "second", scriptedCompose, false)
+
+	var mu sync.Mutex
+	have, pulling, pulls, together := false, 0, 0, false
+	projectRE := regexp.MustCompile(`--project-name (\S+)`)
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		switch {
+		case strings.HasPrefix(line, "docker image inspect --format {{.Id}} docker:"):
+			mu.Lock()
+			defer mu.Unlock()
+			if !have {
+				return "", &runner.ExitError{Name: "docker", Code: 1, Stderr: "No such image"}
+			}
+			return "sha256:1\n", nil
+		case strings.HasPrefix(line, "docker pull docker:"):
+			mu.Lock()
+			pulls++
+			pulling++
+			together = together || pulling > 1
+			mu.Unlock()
+			time.Sleep(150 * time.Millisecond)
+			mu.Lock()
+			pulling--
+			have = true
+			mu.Unlock()
+			return "", nil
+		}
+		project := ""
+		if m := projectRE.FindStringSubmatch(line); m != nil {
+			project = m[1]
+		}
+		return (&scriptedStack{project: project, dir: e.cfg.AppDir(strings.TrimPrefix(project, "musdash-"))}).handle(line, c)
+	}
+	for _, s := range []db.Service{first, second} {
+		if err := e.d.EnqueueService(ctx, s, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		a, _ := e.db.ServiceByID(ctx, first.ID)
+		b, _ := e.db.ServiceByID(ctx, second.ID)
+		if a.Status != db.AppDeploying && b.Status != db.AppDeploying {
+			if a.Status != db.AppRunning || b.Status != db.AppRunning {
+				t.Fatalf("%s (%s), %s (%s)", a.Status, a.LastError, b.Status, b.LastError)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the services did not settle")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if together || pulls != 1 {
+		t.Fatalf("the sandbox image was pulled %d times, side by side: %v", pulls, together)
+	}
+}
+
+// TestAFailedPullSaysWhy: the reason Docker gave is in the error, not only
+// that the command failed.
+func TestAFailedPullSaysWhy(t *testing.T) {
+	e := newEnv(t)
+	s, st := e.scriptedService(false)
+	st.fail = func(line string) error {
+		if strings.Contains(line, " pull --ignore-buildable") {
+			return &runner.ExitError{Name: "docker", Code: 1}
+		}
+		return nil
+	}
+	previous := e.fake.Handle
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		if strings.Contains(line, " pull --ignore-buildable") && c.Stderr != nil {
+			io.WriteString(c.Stderr, " front Pulling\n\n front Error pull access denied for nginx, repository does not exist or may require 'docker login'\n")
+		}
+		return previous(line, c)
+	}
+	got := e.deployService(s, 10*time.Second)
+	if got.Status != db.AppFailed || !strings.Contains(got.LastError, "pull the images") || !strings.Contains(got.LastError, "pull access denied for nginx") {
+		t.Fatalf("%s: %q", got.Status, got.LastError)
 	}
 }

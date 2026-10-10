@@ -184,6 +184,13 @@ templ Textarea(p InputProps) {
 type Option struct {
 	Value string
 	Label string
+	// Note is said beside the label in the menu and not on the button: what
+	// tells this option from the others, such as a service's ports.
+	Note string
+	// Suggest is a value for the field of the form marked data-suggest-here,
+	// which takes it when this option is chosen unless a person typed their
+	// own there: a service's port, for the Port field beside it.
+	Suggest string
 }
 
 // chosen is the option a Select shows: the selected one or, when selected
@@ -264,10 +271,21 @@ templ selectBox(p selectProps) {
 						role="option"
 						aria-selected={ strconv.FormatBool(o.Value == chosen(p.Options, p.Selected).Value) }
 						data-value={ o.Value }
+						if o.Note != "" {
+							data-label={ o.Label }
+						}
+						if o.Suggest != "" {
+							data-suggest={ o.Suggest }
+						}
 						tabindex="-1"
 					>
 						@Icon("check", "menu-tick")
-						<span class="min-w-0 flex-1">{ o.Label }</span>
+						<span class="min-w-0 flex-1">
+							{ o.Label }
+							if o.Note != "" {
+								<span class="ms-2 text-sm text-ink-mute">{ o.Note }</span>
+							}
+						</span>
 					</button>
 				}
 			</div>

@@ -798,7 +798,7 @@ func ServiceVariablesField(v ServiceView, f ui.Form, variables string, shown boo
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 5, Value: variables, Invalid: f.E("variables") != "", Described: true}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 5, Value: variables, Invalid: f.E("variables") != "", Described: true, Attrs: composeReadsAttrs(v.Path()+"/compose/reads", nil)}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

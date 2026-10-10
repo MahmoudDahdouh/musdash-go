@@ -274,22 +274,29 @@ func (s *Server) Handler() http.Handler {
 
 	handle("GET "+inEnv+"/service/new", member, s.serviceNew)
 	handle("POST "+inEnv+"/service", member, s.serviceCreate)
+	handle("POST "+inEnv+"/service/reads", member, s.serviceNewReads)
 	service("GET", "", member, s.serviceOverview)
 	service("GET", "/status", member, s.serviceStatus)
 	service("POST", "/deploy", member, s.serviceDeploy)
 	service("POST", "/stop", member, s.serviceStop)
 	service("GET", "/deploy-log/stream", member, s.serviceDeployLog)
+	service("GET", "/containers", member, s.serviceContainersNow)
 	service("GET", "/logs", member, s.serviceLogs)
 	service("GET", "/logs/stream", member, s.serviceLogsStream)
 	service("GET", "/compose", member, s.serviceCompose)
 	service("GET", "/compose/variables", member, s.serviceComposeVariables)
 	service("POST", "/compose", member, s.serviceComposeSave)
+	service("POST", "/compose/reads", member, s.serviceComposeReads)
 	service("GET", "/settings", member, s.serviceSettings)
 	service("POST", "/source", member, s.serviceSourceSave)
 	service("GET", "/webhook-secret", member, s.serviceWebhookShow)
 	service("POST", "/webhook-secret", member, s.serviceWebhookSecret)
 	service("POST", "/deploy-token", member, s.serviceDeployToken)
-	service("POST", "/endpoints/{eid}", member, s.serviceEndpointSave)
+	service("GET", "/domains", member, s.serviceDomains)
+	service("POST", "/domains", member, s.serviceDomainAdd)
+	service("POST", "/domains/{eid}", member, s.serviceEndpointSave)
+	service("POST", "/domains/{eid}/delete", member, s.serviceDomainDelete)
+	service("GET", "/domains/{eid}/dns", member, s.serviceDomainDNS)
 	service("POST", "/tags", member, s.serviceTagsSave)
 	service("POST", "/delete", member, s.serviceDelete)
 
@@ -398,6 +405,13 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, c te
 // The fragment is rendered before anything is sent, since which answer it
 // is depends on it. It is a part of a page, a few kilobytes.
 func (s *Server) renderPolled(w http.ResponseWriter, r *http.Request, c templ.Component) {
+	s.renderPolledThen(w, r, c, nil)
+}
+
+// renderPolledThen is renderPolled for an answer that says more than its
+// body when it has something new: fresh sets the headers of an answer that
+// is put into the page, and is not called for one that is not.
+func (s *Server) renderPolledThen(w http.ResponseWriter, r *http.Request, c templ.Component, fresh func(http.Header)) {
 	ctx, mark := ui.WatchPoll(r.Context())
 	var page bytes.Buffer
 	if err := c.Render(ctx, &page); err != nil {
@@ -408,6 +422,9 @@ func (s *Server) renderPolled(w http.ResponseWriter, r *http.Request, c templ.Co
 	if seen := r.URL.Query().Get("seen"); seen != "" && seen == *mark {
 		w.WriteHeader(http.StatusNoContent)
 		return
+	}
+	if fresh != nil {
+		fresh(w.Header())
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(page.Bytes())

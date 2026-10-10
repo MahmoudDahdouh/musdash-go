@@ -4,6 +4,7 @@ import (
 	"context"
 	"html"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -268,11 +269,12 @@ func TestCreateServiceFromTheCatalogue(t *testing.T) {
 		t.Fatalf("the service was not told its address:\n%s", envFile)
 	}
 
-	// The overview: address, containers, generated values behind bullets.
+	// The overview: address, the question about its containers, generated
+	// values behind bullets.
 	res, overview := a.get(a.servicePath(s.ID))
 	wantStatus(t, res, http.StatusOK)
 	overview = html.UnescapeString(overview)
-	for _, want := range []string{"Running", "WordPress", endpoints[0].Host, "to wordpress:80", "db, wordpress", "Redeploy", "Stop",
+	for _, want := range []string{"Running", "WordPress", endpoints[0].Host, "to wordpress:80", `hx-get="` + a.servicePath(s.ID) + `/containers"`, "Redeploy", "Stop",
 		`data-copy="` + vars["SERVICE_PASSWORD_ROOT"] + `"`, "SERVICE_USER_WORDPRESS", a.servicePath(s.ID) + "/deploy-log/stream"} {
 		if !strings.Contains(overview, want) {
 			t.Errorf("the overview is missing %q", want)
@@ -411,7 +413,7 @@ func TestEditServiceComposeAndVariables(t *testing.T) {
 		t.Fatal("the Compose page has no way to ask for the variables")
 	}
 	_, field := a.get(composePage + "/variables")
-	if !strings.Contains(field, "API_KEY=k-123") || strings.Contains(field, "variables_kept") || strings.Contains(field, before["SERVICE_PASSWORD_DB"]) {
+	if !strings.Contains(field, "API_KEY=k-123") || strings.Contains(field, `name="variables_kept"`) || strings.Contains(field, before["SERVICE_PASSWORD_DB"]) {
 		t.Fatalf("asking for the variables does not answer with the entered ones only:\n%s", field)
 	}
 	// A form sent from the page as it first was changes no variable.
@@ -484,23 +486,27 @@ func TestServiceEndpointDomain(t *testing.T) {
 	_ = appID
 	endpoints, _ := a.db.ListEndpoints(ctx, s.ID)
 	otherEndpoints, _ := a.db.ListEndpoints(ctx, other.ID)
-	settings := a.servicePath(s.ID) + "/settings"
-	// The form sends what the handler reads: the HTTPS box is "tls", and
-	// the box's own id is not a second name for it.
-	if _, page := a.get(settings); !strings.Contains(page, `id="tls-`+endpoints[0].ID+`" name="tls"`) || strings.Contains(page, `name="tls-`) {
-		t.Fatal("the HTTPS box of an endpoint is not sent as tls")
+	settings := a.servicePath(s.ID) + "/domains"
+	// The form sends what the handler reads: the scheme of each endpoint's
+	// dialog under the one name, its button under an id of its own.
+	if _, page := a.get(settings); !strings.Contains(page, `id="scheme-`+endpoints[0].ID+`"`) || strings.Contains(page, `name="scheme-`) {
+		t.Fatal("the scheme of an endpoint is not sent as scheme")
 	}
 	save := func(endpointID string, form url.Values) (*http.Response, string) {
-		res, body := a.post(settings, a.servicePath(s.ID)+"/endpoints/"+endpointID, form)
+		res, body := a.post(settings, a.servicePath(s.ID)+"/domains/"+endpointID, form)
 		return res, html.UnescapeString(body)
 	}
 
 	_, page := a.get(settings)
 	if !strings.Contains(page, endpoints[0].Host) || !strings.Contains(page, "Domain for front:3000") {
-		t.Fatal("the settings page does not show the endpoint's domain")
+		t.Fatal("the Domains tab does not show the endpoint's domain")
+	}
+	// The file's own endpoint is changed here and not removed.
+	if !strings.Contains(page, "From the file") || strings.Contains(page, "/domains/"+endpoints[0].ID+"/delete") {
+		t.Fatal("an endpoint the file names is not marked as the file's, or is offered for removal")
 	}
 
-	res, _ := save(endpoints[0].ID, url.Values{"host": {"Shop.Example.com"}, "tls": {"1"}})
+	res, _ := save(endpoints[0].ID, url.Values{"host": {"Shop.Example.com"}, "scheme": {"https"}})
 	wantRedirect(t, res, settings)
 	got, _ := a.db.ListEndpoints(ctx, s.ID)
 	if got[0].Host != "shop.example.com" || !got[0].TLS {
@@ -523,8 +529,8 @@ func TestServiceEndpointDomain(t *testing.T) {
 	if !strings.Contains(envFile, "SERVICE_FQDN_FRONT_3000=shop.example.com\n") {
 		t.Fatalf("variables after the change:\n%s", envFile)
 	}
-	// Only the HTTPS box changed: the same name is not "taken" by itself.
-	res, _ = save(endpoints[0].ID, url.Values{"host": {"shop.example.com"}})
+	// Only the scheme changed: the same name is not "taken" by itself.
+	res, _ = save(endpoints[0].ID, url.Values{"host": {"shop.example.com"}, "scheme": {"http"}})
 	wantRedirect(t, res, settings)
 	if got, _ := a.db.ListEndpoints(ctx, s.ID); got[0].TLS {
 		t.Fatal("HTTPS was not switched off")
@@ -537,7 +543,8 @@ func TestServiceEndpointDomain(t *testing.T) {
 		"not a domain":          {url.Values{"host": {"http://x/y"}}, "Enter a domain such as"},
 		"taken by an app":       {url.Values{"host": {"taken.example.com"}}, "already routed"},
 		"taken by an endpoint":  {url.Values{"host": {otherEndpoints[0].Host}}, "already routed"},
-		"generated, with HTTPS": {url.Values{"host": {"abcd1234.127.0.0.1.sslip.io"}, "tls": {"1"}}, "served over plain HTTP"},
+		"generated, with HTTPS": {url.Values{"host": {"abcd1234.127.0.0.1.sslip.io"}, "scheme": {"https"}}, "served over plain HTTP"},
+		"a scheme of its own":   {url.Values{"host": {"new.example.com"}, "scheme": {"ftp"}}, "Choose https or http"},
 	} {
 		res, body := save(endpoints[0].ID, c.form)
 		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, c.want) {
@@ -662,7 +669,7 @@ func TestOtherTeamsServiceIsNotFound(t *testing.T) {
 	theirs, _ := a.db.ListEndpoints(ctx, other.ID)
 	base := a.servicePath(other.ID)
 
-	for _, path := range []string{"", "/status", "/deploy-log/stream", "/logs", "/logs/stream", "/compose", "/settings"} {
+	for _, path := range []string{"", "/status", "/deploy-log/stream", "/logs", "/logs/stream", "/compose", "/domains", "/domains/" + theirs[0].ID + "/dns", "/settings"} {
 		res, body := a.get(base + path)
 		if res.StatusCode != http.StatusNotFound || strings.Contains(body, "secret-stack") || strings.Contains(body, "their-") {
 			t.Errorf("GET %s: %d", path, res.StatusCode)
@@ -670,11 +677,13 @@ func TestOtherTeamsServiceIsNotFound(t *testing.T) {
 	}
 	token := a.csrf("/projects")
 	for path, form := range map[string]url.Values{
-		"/deploy":                    {},
-		"/stop":                      {},
-		"/compose":                   {"compose": {"services:\n  a:\n    image: x\n"}},
-		"/endpoints/" + theirs[0].ID: {"host": {"mine.example.com"}},
-		"/delete":                    {"confirm": {"secret-stack"}, "delete_data": {"1"}},
+		"/deploy":                              {},
+		"/stop":                                {},
+		"/compose":                             {"compose": {"services:\n  a:\n    image: x\n"}},
+		"/domains":                             {"service": {"front"}, "port": {"3000"}, "host": {"grab.example.com"}},
+		"/domains/" + theirs[0].ID:             {"host": {"mine.example.com"}},
+		"/domains/" + theirs[0].ID + "/delete": {},
+		"/delete":                              {"confirm": {"secret-stack"}, "delete_data": {"1"}},
 	} {
 		form.Set("_csrf", token)
 		if res, _ := a.postRaw(a.client, base+path, form, nil); res.StatusCode != http.StatusNotFound {
@@ -684,8 +693,23 @@ func TestOtherTeamsServiceIsNotFound(t *testing.T) {
 	// Their endpoint cannot be reached through a service of ours either.
 	projectID, env := a.project("Mine")
 	mine := a.newService(projectID, env, "site", url.Values{})
-	res, _ := a.post(a.servicePath(mine.ID)+"/settings", a.servicePath(mine.ID)+"/endpoints/"+theirs[0].ID, url.Values{"host": {"mine.example.com"}})
+	res, _ := a.post(a.servicePath(mine.ID)+"/domains", a.servicePath(mine.ID)+"/domains/"+theirs[0].ID, url.Values{"host": {"mine.example.com"}})
 	wantStatus(t, res, http.StatusNotFound)
+	// One they added themselves is the kind that can be removed at all.
+	added, err := a.db.AddEndpoint(ctx, "otherteam", other.ID, "front", 3000, "added.theirs.example.com", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{theirs[0].ID, added.ID} {
+		res, _ = a.post(a.servicePath(mine.ID)+"/domains", a.servicePath(mine.ID)+"/domains/"+id+"/delete", nil)
+		wantStatus(t, res, http.StatusNotFound)
+	}
+	if list, _ := a.db.ListEndpoints(ctx, other.ID); len(list) != 2 {
+		t.Fatalf("their endpoints after the attempts: %+v", list)
+	}
+	if res, _ := a.get(a.servicePath(mine.ID) + "/domains/" + theirs[0].ID + "/dns"); res.StatusCode != http.StatusNotFound {
+		t.Fatalf("their domain's DNS through a service of ours: %d", res.StatusCode)
+	}
 	// Nor can a service be created in their environment.
 	res, _ = a.post("/projects/"+projectID+"/env/"+env.ID+"/service/new?template=custom", "/projects/"+projectID+"/env/"+envs[0].ID+"/service",
 		url.Values{"template": {db.TemplateCustom}, "name": {"x"}, "compose": {ownCompose}})
@@ -693,10 +717,305 @@ func TestOtherTeamsServiceIsNotFound(t *testing.T) {
 
 	got, _ := a.db.ServiceByID(ctx, other.ID)
 	after, _ := a.db.ListEndpoints(ctx, other.ID)
-	if got.Compose != ownCompose || got.Status != db.AppCreated || after[0].Host != "theirs.example.com" {
+	if got.Compose != ownCompose || got.Status != db.AppCreated || after[0].Host != "theirs.example.com" || len(after) != 2 {
 		t.Fatalf("the other team's service was changed: %+v %+v", got, after)
 	}
 	if n := countCalls(a.fake.Calls(), "docker"); n != 0 {
 		t.Fatalf("%d docker commands ran for another team's service", n)
+	}
+}
+
+// TestDomainsOfAStack: a domain is given to any service of a stack from its
+// Domains tab, with no magic variable in the file, and taken away again.
+func TestDomainsOfAStack(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+	projectID, env := a.project("Shop")
+	a.stackServer("front", "3000", nil)
+	// Not deployed yet: nothing has read the file, so the service is typed.
+	s := a.newService(projectID, env, "site", url.Values{})
+	tab := a.servicePath(s.ID) + "/domains"
+	add := func(form url.Values) (*http.Response, string) {
+		res, body := a.post(tab, tab, form)
+		return res, html.UnescapeString(body)
+	}
+	_, page := a.get(tab)
+	if !strings.Contains(page, `id="service" name="service"`) || strings.Contains(page, `aria-controls="service-list"`) {
+		t.Fatal("before a deployment the service is not a text field")
+	}
+	if _, overview := a.get(a.servicePath(s.ID)); !strings.Contains(overview, tab) {
+		t.Fatal("the overview does not lead to the Domains tab")
+	}
+	res, _ := add(url.Values{"service": {"db"}, "port": {"5432"}, "scheme": {"http"}, "host": {"Early.Example.com"}})
+	wantRedirect(t, res, tab)
+	if routes := a.routesFile(); strings.Contains(routes, "early.example.com") {
+		t.Fatalf("a stack that was never started is routed: %s", routes)
+	}
+
+	a.post(tab, a.servicePath(s.ID)+"/deploy", nil)
+	s = a.waitService(s.ID)
+	if s.Status != db.AppRunning {
+		t.Fatalf("status %s: %s", s.Status, s.LastError)
+	}
+	// Deployed: the file's services are offered, each with its ports, and
+	// the domain from before is served.
+	_, page = a.get(tab)
+	page = html.UnescapeString(page)
+	for _, want := range []string{`aria-controls="service-list"`, `data-value="front"`, `data-value="db"`, "no port named", "early.example.com", "db:5432", "From the file"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the tab of a deployed stack is missing %q", want)
+		}
+	}
+	if !strings.Contains(a.routesFile(), `"host": "early.example.com"`) {
+		t.Fatalf("the added domain is not routed after the deployment: %s", a.routesFile())
+	}
+
+	// A second domain for a published target is served at once; one for a
+	// port nothing publishes yet says to redeploy.
+	res, _ = add(url.Values{"service": {"db"}, "port": {"5432"}, "scheme": {"https"}, "host": {"again.example.com"}})
+	wantRedirect(t, res, tab)
+	if !strings.Contains(a.routesFile(), `"host": "again.example.com"`) {
+		t.Fatal("a second domain for a published port was not routed at once")
+	}
+	res, _ = add(url.Values{"service": {"front"}, "port": {"9000"}, "scheme": {"https"}, "host": {"admin.example.com"}})
+	wantRedirect(t, res, tab)
+	_, page = a.get(tab)
+	page = html.UnescapeString(page)
+	if !strings.Contains(page, "Redeploy the service to serve it: front:9000 is not published to the proxy yet.") || !strings.Contains(page, "Redeploy to serve") {
+		t.Fatal("a domain for an unpublished port does not say to redeploy")
+	}
+	if strings.Contains(a.routesFile(), "admin.example.com") {
+		t.Fatal("a domain whose port is not published is routed")
+	}
+
+	for name, c := range map[string]struct {
+		form url.Values
+		want string
+	}{
+		"a service the file does not have": {url.Values{"service": {"api"}, "port": {"80"}, "host": {"x.example.com"}}, "The Compose file has no service called api. It has db, front."},
+		"a name that is not one":           {url.Values{"service": {"-x; rm"}, "port": {"80"}, "host": {"x.example.com"}}, "Enter the service's name"},
+		"no port":                          {url.Values{"service": {"front"}, "port": {""}, "host": {"x.example.com"}}, "Enter 1 to 65535."},
+		"a port out of range":              {url.Values{"service": {"front"}, "port": {"70000"}, "host": {"x.example.com"}}, "Enter 1 to 65535."},
+		"not a domain":                     {url.Values{"service": {"front"}, "port": {"80"}, "host": {"http://x/y"}}, "Enter a domain such as"},
+		"taken":                            {url.Values{"service": {"front"}, "port": {"80"}, "host": {"early.example.com"}}, "already routed"},
+		"generated, with https":            {url.Values{"service": {"front"}, "port": {"80"}, "scheme": {"https"}, "host": {"abcd1234.127.0.0.1.sslip.io"}}, "served over plain HTTP"},
+	} {
+		res, body := add(c.form)
+		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, c.want) {
+			t.Errorf("%s: status %d, want 422 with %q", name, res.StatusCode, c.want)
+		}
+		// The dialog comes back open with what was typed.
+		if !strings.Contains(body, "data-autoopen") {
+			t.Errorf("%s: the dialog is not open again", name)
+		}
+	}
+
+	// Check DNS reads the stored name of the service's own endpoint.
+	var asked []string
+	a.server.Resolve = func(_ context.Context, host string) ([]netip.Addr, error) {
+		asked = append(asked, host)
+		return []netip.Addr{netip.MustParseAddr("203.0.113.9")}, nil
+	}
+	list, _ := a.db.ListEndpoints(ctx, s.ID)
+	var early, file db.Endpoint
+	for _, e := range list {
+		switch {
+		case e.Host == "early.example.com":
+			early = e
+		case !e.Manual:
+			file = e
+		}
+	}
+	res, body := a.get(tab + "/" + early.ID + "/dns")
+	if res.StatusCode != http.StatusOK || len(asked) != 1 || asked[0] != "early.example.com" || strings.Contains(body, "<html") {
+		t.Fatalf("Check DNS: %d, asked %v", res.StatusCode, asked)
+	}
+
+	// Removing: only what a person added, and the route goes with it.
+	res, _ = a.post(tab, tab+"/"+file.ID+"/delete", nil)
+	wantStatus(t, res, http.StatusNotFound)
+	res, _ = a.post(tab, tab+"/"+early.ID+"/delete", nil)
+	wantRedirect(t, res, tab)
+	if routes := a.routesFile(); strings.Contains(routes, "early.example.com") || !strings.Contains(routes, "again.example.com") {
+		t.Fatalf("after removing a domain: %s", routes)
+	}
+
+	// The file is saved with another text: the list of services is no
+	// longer known, and the domains a person added are still there.
+	res, _ = a.post(a.servicePath(s.ID)+"/compose", a.servicePath(s.ID)+"/compose", url.Values{"compose": {ownCompose + "# changed\n"}, "variables_kept": {"1"}})
+	wantRedirect(t, res, a.servicePath(s.ID)+"/compose")
+	_, page = a.get(tab)
+	if !strings.Contains(page, `id="service" name="service"`) || !strings.Contains(page, "again.example.com") || !strings.Contains(page, "admin.example.com") {
+		t.Fatal("after the file changed: the service is not typed again, or an added domain is gone")
+	}
+}
+
+// TestStackContainersAndLogsByService: the Overview asks the server about
+// the stack's containers and shows each with its state, a service of the
+// file that has none is named, and the logs can be narrowed to one of the
+// stack's own services and to nothing else.
+func TestStackContainersAndLogsByService(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	projectID, env := a.project("Shop")
+	var logs []string
+	a.stackServer("front", "3000", func(line string) (string, error, bool) {
+		switch {
+		case strings.HasPrefix(line, "docker ps --all") && strings.Contains(line, "label=musdash.kind=service"):
+			id := line[strings.Index(line, "musdash.resource=")+len("musdash.resource="):]
+			id = id[:strings.IndexByte(id, ' ')]
+			return "musdash-" + id + "-front-1\trunning\tUp 3 minutes (unhealthy)\tmain:1\tfront\t0.0.0.0:8088->3000/tcp, 127.0.0.1:20001->3000/tcp\n" +
+				"musdash-" + id + "-job-1\texited\tExited (0) 2 minutes ago\tjob:1\tjob\t\n" +
+				"musdash-" + id + "-odd-1\trunning\t<script>alert(1)</script>\tx\t<i>odd</i>\t\n", nil, true
+		case strings.Contains(line, " logs --follow"):
+			logs = append(logs, line)
+			return "front-1  | ready\n", nil, true
+		}
+		return "", nil, false
+	})
+	s := a.newService(projectID, env, "site", url.Values{"deploy": {"1"}})
+	base := a.servicePath(s.ID)
+
+	_, overview := a.get(base)
+	if !strings.Contains(overview, `hx-get="`+base+`/containers"`) {
+		t.Fatal("the overview does not ask for the stack's containers")
+	}
+	res, body := a.get(base + "/containers")
+	wantStatus(t, res, http.StatusOK)
+	plain := html.UnescapeString(body)
+	for _, want := range []string{
+		"Unhealthy", "Up 3 minutes (unhealthy)", "8088 → 3000", // the web container, and the port outside
+		"Finished", "Exited (0) 2 minutes ago", // one that did its job
+		"No container", // db is in the file and has none
+		base + "/logs?service=front", base + "/terminal?container=musdash-" + s.ID + "-front-1",
+	} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("the containers are missing %q", want)
+		}
+	}
+	// The loopback port is the proxy's, and what a server says is text.
+	if strings.Contains(plain, "20001") || strings.Contains(body, "<script>") || strings.Contains(body, "<i>odd</i>") {
+		t.Fatalf("the containers fragment shows what it should not:\n%s", body)
+	}
+	if strings.Contains(body, "<html") {
+		t.Fatal("the containers answer is a page, not a fragment")
+	}
+	// It asks again when the stack's state changes, not on a timer: each
+	// answer is a command on the server.
+	if !strings.Contains(body, `hx-trigger="stack-changed from:body"`) || strings.Contains(body, "every ") {
+		t.Fatalf("when the fragment asks again:\n%s", body)
+	}
+	// The header says so when it has something new to show, and only then.
+	res, header := a.get(base + "/status")
+	if res.Header.Get("HX-Trigger") != "stack-changed" {
+		t.Fatalf("a header with something new: HX-Trigger %q", res.Header.Get("HX-Trigger"))
+	}
+	seen := regexp.MustCompile(`status\?was=running&(?:amp;)?seen=([0-9a-f]+)`).FindStringSubmatch(header)
+	if seen == nil {
+		t.Fatalf("the header does not ask for itself again:\n%s", header)
+	}
+	if res, _ := a.get(base + "/status?was=running&seen=" + seen[1]); res.StatusCode != http.StatusNoContent || res.Header.Get("HX-Trigger") != "" {
+		t.Fatalf("an unchanged header: %d, HX-Trigger %q", res.StatusCode, res.Header.Get("HX-Trigger"))
+	}
+
+	// Logs: all of them, one service's, and a name the stack does not have.
+	_, page := a.get(base + "/logs")
+	if !strings.Contains(page, base+"/logs?service=db") || !strings.Contains(page, "All services") {
+		t.Fatal("the Logs tab does not offer the stack's services")
+	}
+	_, page = a.get(base + "/logs?service=db")
+	if !strings.Contains(page, `sse-connect="`+base+`/logs/stream?service=db"`) {
+		t.Fatal("the Logs tab of one service does not stream that service")
+	}
+	for query, want := range map[string]string{
+		"":                       "--tail 200",
+		"?service=db":            "--tail 200 -- db",
+		"?service=nope":          "--tail 200",
+		"?service=--volumes":     "--tail 200",
+		"?service=db%20--follow": "--tail 200",
+	} {
+		logs = nil
+		res, _ := a.get(base + "/logs/stream" + query)
+		wantStatus(t, res, http.StatusOK)
+		if len(logs) != 1 || !strings.HasSuffix(logs[0], want) {
+			t.Errorf("logs%s ran %v, want one command ending in %q", query, logs, want)
+		}
+	}
+}
+
+// TestWhatAComposeTextReads: the forms list the variables a Compose text
+// reads as it is typed, by what each needs, without loading the file.
+func TestWhatAComposeTextReads(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	projectID, env := a.project("Shop")
+	form := "/projects/" + projectID + "/env/" + env.ID + "/service/new?template=custom"
+	reads := "/projects/" + projectID + "/env/" + env.ID + "/service/reads"
+	_, page := a.get(form)
+	if !strings.Contains(page, `hx-post="`+reads+`"`) || !strings.Contains(page, `id="compose-reads"`) || strings.Contains(page, "What the file reads") {
+		t.Fatal("the new-service form does not ask what its text reads, or lists something before there is a text")
+	}
+	ask := func(path string, form url.Values) string {
+		res, body := a.post(path, path, form)
+		wantStatus(t, res, http.StatusOK)
+		if strings.Contains(body, "<html") {
+			t.Fatal("the answer is a page, not a fragment")
+		}
+		return html.UnescapeString(regexp.MustCompile(`<[^>]*>`).ReplaceAllString(body, " "))
+	}
+	in := func(text, label string, names ...string) bool {
+		i := strings.Index(text, label)
+		if i < 0 {
+			return false
+		}
+		rest := text[i:]
+		if j := strings.Index(rest[len(label):], "  Has a "); j >= 0 && label == "Needs a value" {
+			rest = rest[:len(label)+j]
+		}
+		for _, n := range names {
+			if !strings.Contains(rest, n) {
+				return false
+			}
+		}
+		return true
+	}
+	got := ask(reads, url.Values{"compose": {ownCompose}})
+	if !in(got, "Needs a value", "API_KEY") || !in(got, "Has a default", "REGION") || !in(got, "Generated", "SERVICE_PASSWORD_DB") || !in(got, "Gets a domain", "front") {
+		t.Fatalf("what the text reads:\n%s", got)
+	}
+	// A value typed under Variables is no longer missing; an empty one is.
+	got = ask(reads, url.Values{"compose": {ownCompose}, "variables": {"API_KEY=k-1"}})
+	if strings.Contains(got, "Needs a value") || !in(got, "Has a value", "API_KEY") {
+		t.Fatalf("with the value given:\n%s", got)
+	}
+	if got = ask(reads, url.Values{"compose": {ownCompose}, "variables": {"API_KEY="}}); !in(got, "Needs a value", "API_KEY") {
+		t.Fatalf("with an empty value:\n%s", got)
+	}
+	if got = ask(reads, url.Values{"compose": {"services:\n  a:\n    image: x\n"}}); !strings.Contains(got, "No variables") {
+		t.Fatalf("a text with no variables:\n%s", got)
+	}
+	// A name in the text is text on the page.
+	res, body := a.post(reads, reads, url.Values{"compose": {"x: ${A<b>}\ny: ${OK}"}})
+	wantStatus(t, res, http.StatusOK)
+	if strings.Contains(body, "<b>") {
+		t.Fatal("a name from the text reached the page as markup")
+	}
+	if got = ask(reads, url.Values{"compose": {""}}); strings.TrimSpace(got) != "" {
+		t.Fatalf("no text: %q", got)
+	}
+
+	// The Compose tab counts what is stored as given, without showing it.
+	a.stackServer("front", "3000", nil)
+	s := a.newService(projectID, env, "site", url.Values{})
+	tab := a.servicePath(s.ID) + "/compose"
+	_, page = a.get(tab)
+	plain := html.UnescapeString(regexp.MustCompile(`<[^>]*>`).ReplaceAllString(page, " "))
+	if !in(plain, "Has a value", "API_KEY") || strings.Contains(plain, "Needs a value") || strings.Contains(page, "k-123") {
+		t.Fatal("the Compose tab does not count the stored value as given, or shows it")
+	}
+	got = ask(tab+"/reads", url.Values{"compose": {ownCompose + "      - NEW=${NEW_ONE}\n"}, "variables_kept": {"1"}})
+	if !in(got, "Needs a value", "NEW_ONE") || !in(got, "Has a value", "API_KEY") || strings.Contains(got, "k-123") {
+		t.Fatalf("the Compose tab's answer:\n%s", got)
 	}
 }

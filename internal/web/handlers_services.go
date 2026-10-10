@@ -1,15 +1,19 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"os"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
+	"github.com/MahmoudDahdouh/musdash-go/internal/docker"
 	"github.com/MahmoudDahdouh/musdash-go/internal/source"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
@@ -103,7 +107,7 @@ func (s *Server) serviceNew(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), ui.Form{}, choices, serverList))
+	s.render(w, r, http.StatusOK, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), ui.Form{}, choices, serverList, pages.ComposeReads{}))
 }
 
 // parseServiceSource reads the repository fields of a service from Git.
@@ -154,6 +158,102 @@ func checkCompose(f *ui.Form, text string) {
 	case strings.ContainsRune(text, 0):
 		f.Fail("compose", "The file contains a character that cannot be part of a Compose file.")
 	}
+}
+
+// maxReadsShown is how many names of one kind the list of what a Compose
+// file reads holds; the rest are counted.
+const maxReadsShown = 40
+
+// composeReads lists what a Compose text reads: the variables a person
+// supplies, the values musdash generates and the addresses it gives. given
+// holds the variables that already have a value. Nothing is loaded and no
+// server is asked: the text is only searched for names.
+func composeReads(text string, given map[string]bool) pages.ComposeReads {
+	var out pages.ComposeReads
+	if strings.TrimSpace(text) == "" || len(text) > maxComposeBytes {
+		return out
+	}
+	out.Scanned = true
+	add := func(list *[]string, name string) {
+		if len(*list) < maxReadsShown {
+			*list = append(*list, name)
+		} else {
+			out.More++
+		}
+	}
+	for _, v := range catalog.ScanVariables(text) {
+		switch {
+		case given[v.Name]:
+			add(&out.Given, v.Name)
+		case v.Required:
+			add(&out.Missing, v.Name)
+		default:
+			add(&out.Defaulted, v.Name)
+		}
+	}
+	seen := map[string]bool{}
+	for _, v := range catalog.ScanMagic(text) {
+		if !v.Address() {
+			add(&out.Generated, v.Name)
+		} else if !seen[v.ID] {
+			seen[v.ID] = true
+			add(&out.Addresses, strings.ToLower(v.ID))
+		}
+	}
+	return out
+}
+
+// givenIn is the set of names a Variables box gives a value to. A box that
+// cannot be read gives none: the form says what is wrong with it when it is
+// sent.
+func givenIn(text string, given map[string]bool) map[string]bool {
+	list, err := deploy.ParseEnv(text)
+	if err != nil {
+		return given
+	}
+	for _, v := range list {
+		if v.Value != "" {
+			given[v.Key] = true
+		}
+	}
+	return given
+}
+
+// serviceNewReads answers the new-service form as its Compose text is
+// typed: what the text reads, and which of it still needs a value.
+func (s *Server) serviceNewReads(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := s.loadProjectEnv(w, r); !ok {
+		return
+	}
+	given := givenIn(r.PostFormValue("variables"), map[string]bool{})
+	s.render(w, r, http.StatusOK, pages.ComposeReadsList(composeReads(r.PostFormValue("compose"), given)))
+}
+
+// serviceComposeReads is the same for the Compose tab of a service, whose
+// stored variables count as given unless the form holds them itself.
+func (s *Server) serviceComposeReads(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
+	s.render(w, r, http.StatusOK, pages.ComposeReadsList(composeReads(r.PostFormValue("compose"), s.givenTo(v.Service, r.PostFormValue("variables"), r.PostFormValue("variables_kept") != "1"))))
+}
+
+// givenTo is the set of variables of a service that have a value: the ones
+// typed into the form when it holds them, the stored ones otherwise.
+func (s *Server) givenTo(svc db.Service, typed string, held bool) map[string]bool {
+	given := map[string]bool{}
+	if held {
+		return givenIn(typed, given)
+	}
+	if _, entered, _, err := s.serviceValues(svc); err == nil {
+		for _, v := range entered {
+			if v.Value != "" {
+				given[v.Key] = true
+			}
+		}
+	}
+	return given
 }
 
 func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
@@ -222,7 +322,11 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	rerender := func() {
 		shell := s.shell(w, r, "New service", "projects", newResourceCrumbs(p, env, "Service")...)
-		s.render(w, r, http.StatusUnprocessableEntity, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), f, choices, serverList))
+		reads := pages.ComposeReads{}
+		if key == db.TemplateCustom {
+			reads = composeReads(f.V("compose"), givenIn(f.V("variables"), map[string]bool{}))
+		}
+		s.render(w, r, http.StatusUnprocessableEntity, pages.ServiceNew(shell, p, env, key, tpl, requiredVars(tpl.Compose), f, choices, serverList, reads))
 	}
 	if !f.OK() {
 		rerender()
@@ -326,7 +430,11 @@ func (s *Server) serviceStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refreshWhenSettled(w, r, svc.Status)
-	s.renderPolled(w, r, pages.ServiceHeader(sessionFrom(r).CSRFToken, placeInPath(r, db.KindService), svc))
+	// A header that has something new to show is a stack whose state has
+	// changed: the list of its containers asks the server again.
+	s.renderPolledThen(w, r, pages.ServiceHeader(sessionFrom(r).CSRFToken, placeInPath(r, db.KindService), svc), func(h http.Header) {
+		h.Set("HX-Trigger", "stack-changed")
+	})
 }
 
 func (s *Server) serviceDeploy(w http.ResponseWriter, r *http.Request) {
@@ -393,10 +501,113 @@ func (s *Server) serviceDeployLog(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// logsOf is the Compose service a request narrows the logs to: one of the
+// stack's own, as its last deployment recorded them, or "" for all.
+func logsOf(r *http.Request, svc db.Service) string {
+	asked := r.URL.Query().Get("service")
+	for _, member := range svc.MemberNames() {
+		if member == asked && composeServiceRE.MatchString(member) {
+			return member
+		}
+	}
+	return ""
+}
+
 func (s *Server) serviceLogs(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadService(w, r); ok {
-		s.render(w, r, http.StatusOK, pages.ServiceLogs(s.serviceShell(w, r, v), v))
+		s.render(w, r, http.StatusOK, pages.ServiceLogs(s.serviceShell(w, r, v), v, logsOf(r, v.Service)))
 	}
+}
+
+// serviceContainersNow answers the Overview's question about the stack's
+// containers: what the server says of each, right now. Nothing of it is
+// kept.
+func (s *Server) serviceContainersNow(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
+	release, ok := s.takeReading()
+	if !ok {
+		// The page does not ask again by itself, so it is told why it has
+		// no list and how to get one.
+		s.render(w, r, http.StatusOK, pages.StackContainers(v, nil, "The dashboard is busy asking servers other questions. Choose Refresh to ask again."))
+		return
+	}
+	defer release()
+	ctx, cancel := context.WithTimeout(r.Context(), readingTimeout)
+	defer cancel()
+	list, err := func() ([]docker.StackContainer, error) {
+		server, err := s.DB.ServerByID(ctx, v.Service.ServerID)
+		if err != nil {
+			return nil, err
+		}
+		dk, err := s.Pool.Docker(ctx, server)
+		if err != nil {
+			return nil, err
+		}
+		return dk.StackContainers(ctx, v.Service.ID)
+	}()
+	if r.Context().Err() != nil {
+		return
+	}
+	problem := ""
+	if err != nil {
+		s.Log.Warn("list a service's containers", "service", v.Service.ID, "err", err)
+		problem = "The server did not answer the question. Choose Refresh to ask again."
+	}
+	s.render(w, r, http.StatusOK, pages.StackContainers(v, stackRows(v.Service, list), problem))
+}
+
+// stackRows lines up what the server reports with what the file holds: a
+// row for every container, and one for each service of the file that has
+// none.
+func stackRows(svc db.Service, list []docker.StackContainer) []pages.StackRow {
+	rows := make([]pages.StackRow, 0, len(list))
+	have := map[string]bool{}
+	for _, c := range list {
+		have[c.Service] = true
+		row := pages.StackRow{Service: c.Service, Container: c.Name, Image: c.Image, Status: c.Status, Published: c.Published}
+		health := strings.ToLower(c.Status)
+		switch {
+		case c.State == "running" && strings.Contains(health, "(unhealthy)"):
+			row.State, row.Label = "unhealthy", "Unhealthy"
+		case c.State == "running" && strings.Contains(health, "(health: starting)"):
+			row.State, row.Label = "starting", "Starting"
+		case c.State == "running":
+			row.State, row.Label, row.Running = "running", "Running", true
+		case c.State == "exited" && svc.Status == db.AppStopped:
+			// Stopped on purpose: not a failure, whatever code it left with.
+			row.State, row.Label = "", "Stopped"
+		case c.State == "exited" && strings.HasPrefix(c.Status, "Exited (0)"):
+			// Did its job and ended, as a migration does.
+			row.State, row.Label = "", "Finished"
+		case c.State == "exited":
+			row.State, row.Label = "exited", "Exited"
+		case c.State == "restarting":
+			row.State, row.Label = "restarting", "Restarting"
+		default:
+			row.State, row.Label = "", strings.ToUpper(c.State[:1])+c.State[1:]
+		}
+		if row.State == "unhealthy" || row.State == "starting" {
+			row.Running = true
+		}
+		rows = append(rows, row)
+	}
+	names := svc.MemberNames()
+	if members := svc.StackMembers(); len(members) > 0 {
+		names = names[:0:0]
+		for _, m := range members {
+			names = append(names, m.Name)
+		}
+	}
+	for _, name := range names {
+		if !have[name] && composeServiceRE.MatchString(name) {
+			rows = append(rows, pages.StackRow{Service: name, Label: "No container"})
+		}
+	}
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Service < rows[j].Service })
+	return rows
 }
 
 // serviceLogsStream streams the output of the stack's containers.
@@ -428,7 +639,7 @@ func (s *Server) serviceLogsStream(w http.ResponseWriter, r *http.Request) {
 	defer stop()
 	out := startSSE(w)
 	// Returns when the containers stop or the stream is cancelled.
-	s.Deploy.ServiceLogs(ctx, run, v.Service.ID, 200, out)
+	s.Deploy.ServiceLogs(ctx, run, v.Service.ID, 200, out, logsOf(r, v.Service))
 	if ctx.Err() == nil {
 		out.finish()
 	}
@@ -478,7 +689,8 @@ func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request,
 			count = len(entered)
 		}
 	}
-	s.render(w, r, status, pages.ServiceCompose(s.serviceShell(w, r, v), v, f, composeText, variables, typed, count, git))
+	reads := composeReads(composeText, s.givenTo(v.Service, variables, typed))
+	s.render(w, r, status, pages.ServiceCompose(s.serviceShell(w, r, v), v, f, composeText, variables, typed, count, git, reads))
 }
 
 // serviceSourceSave stores where a Git service's Compose file comes from.
@@ -653,24 +865,142 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, v.Path()+"/compose")
 }
 
-// renderServiceSettings draws a service's Settings page. failed is the
-// endpoint whose form was refused.
-func (s *Server) renderServiceSettings(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, failed string, f ui.Form) {
+func (s *Server) serviceSettings(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
 	var err error
 	if v.Tags, v.TeamTags, err = s.tagChoices(r, db.KindService, v.Service.ID); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, status, pages.ServiceSettings(s.serviceShell(w, r, v), v, failed, f))
+	s.render(w, r, http.StatusOK, pages.ServiceSettings(s.serviceShell(w, r, v), v))
 }
 
-func (s *Server) serviceSettings(w http.ResponseWriter, r *http.Request) {
+// composeServiceRE is the shape of a service's name in a Compose file.
+var composeServiceRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
+
+// renderServiceDomains draws a stack's Domains tab with the state of its
+// forms.
+func (s *Server) renderServiceDomains(w http.ResponseWriter, r *http.Request, status int, v pages.ServiceView, forms pages.ServiceDomainForms) {
+	// Domains of one service stand together, the file's own first.
+	sort.SliceStable(v.Endpoints, func(i, j int) bool {
+		a, b := v.Endpoints[i], v.Endpoints[j]
+		if a.ComposeService != b.ComposeService {
+			return a.ComposeService < b.ComposeService
+		}
+		return a.Port < b.Port
+	})
+	// What an address made for the stack's server ends with, and the record
+	// a domain of one's own needs; the page is drawn without them when the
+	// server cannot be read.
+	var at pages.DomainTarget
+	if server, err := s.DB.ServerByID(r.Context(), v.Service.ServerID); err == nil {
+		at.Suffix = deploy.GeneratedSuffix(server)
+		at.Record, at.IP = dnsRecord(server.IP)
+	}
+	s.render(w, r, status, pages.ServiceDomains(s.serviceShell(w, r, v), v, forms, at))
+}
+
+func (s *Server) serviceDomains(w http.ResponseWriter, r *http.Request) {
 	if v, ok := s.loadService(w, r); ok {
-		s.renderServiceSettings(w, r, http.StatusOK, v, "", ui.Form{})
+		s.renderServiceDomains(w, r, http.StatusOK, v, pages.ServiceDomainForms{Open: r.URL.Query().Get("add") == "1"})
 	}
 }
 
-// serviceEndpointSave gives one endpoint of a service its domain.
+// domainScheme reads the scheme of a domain form. Without the field it is
+// HTTPS, the one that sends nothing in the clear.
+func domainScheme(r *http.Request, f *ui.Form) (tls bool) {
+	scheme := r.PostFormValue("scheme")
+	if scheme == "" {
+		scheme = "https"
+	}
+	f.Set("scheme", scheme)
+	if scheme != "https" && scheme != "http" {
+		f.Fail("scheme", "Choose https or http.")
+	}
+	return scheme == "https"
+}
+
+// serviceDomainAdd gives a service of the stack a domain on a port of its
+// container. The service is one the stored file has, where that is known;
+// where it is not, the deployment is what finds out.
+func (s *Server) serviceDomainAdd(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	var f ui.Form
+	name := strings.TrimSpace(r.PostFormValue("service"))
+	raw := strings.TrimSpace(r.PostFormValue("host"))
+	f.Set("service", name)
+	f.Set("host", raw)
+	f.Set("port", strings.TrimSpace(r.PostFormValue("port")))
+	tls := domainScheme(r, &f)
+
+	members := v.Service.StackMembers()
+	known := len(members) == 0
+	names := make([]string, 0, len(members))
+	for _, m := range members {
+		known = known || m.Name == name
+		names = append(names, m.Name)
+	}
+	switch {
+	case !composeServiceRE.MatchString(name):
+		f.Fail("service", "Enter the service's name as the Compose file has it, such as web.")
+	case !known && v.Service.FromGit():
+		f.Fail("service", "The Compose file, as it was last deployed, has no service called "+name+". It has "+strings.Join(names, ", ")+". Deploy first if the repository has it now.")
+	case !known:
+		f.Fail("service", "The Compose file has no service called "+name+". It has "+strings.Join(names, ", ")+".")
+	}
+	port := parsePort(&f, "port", r.PostFormValue("port"))
+	if f.E("port") != "" {
+		// The field is a few characters wide, and so is what is under it.
+		f.Fail("port", "Enter 1 to 65535.")
+	}
+	host := s.checkDomain(ctx, &f, "host", raw)
+	if host != "" && tls && isGeneratedDomain(host) {
+		f.Fail("host", "A generated address is served over plain HTTP. Choose http, or enter a domain of your own.")
+	}
+	var added db.Endpoint
+	if f.OK() {
+		var err error
+		added, err = s.DB.AddEndpoint(ctx, sessionFrom(r).TeamID, v.Service.ID, name, port, host, tls)
+		switch {
+		case db.IsUnique(err), errors.Is(err, db.ErrHostTaken):
+			f.Fail("host", domainTaken)
+		case errors.Is(err, db.ErrTooManyEndpoints):
+			f.Fail("host", "A service can have up to "+strconv.Itoa(db.MaxManualEndpoints)+" domains added to it.")
+		case errors.Is(err, db.ErrNotFound):
+			s.notFound(w, r)
+			return
+		case err != nil:
+			s.fail(w, r, err)
+			return
+		}
+	}
+	if !f.OK() {
+		s.renderServiceDomains(w, r, http.StatusUnprocessableEntity, v, pages.ServiceDomainForms{Add: f})
+		return
+	}
+	target := name + ":" + strconv.Itoa(port)
+	switch {
+	case added.HostPort > 0:
+		// Another domain already leads there: the port is published.
+		s.syncRoutes(r, v.Service.ServerID)
+		setFlash(w, r, ui.ToneOK, "Domain added.")
+	case v.Service.Members != "" && v.Service.Status != db.AppStopped, v.Service.Status == db.AppDeploying:
+		// Containers publish the ports they were started with.
+		setFlash(w, r, ui.ToneInfo, "Domain added. Redeploy the service to serve it: "+target+" is not published to the proxy yet.")
+	default:
+		setFlash(w, r, ui.ToneOK, "Domain added. It is served once the service is deployed.")
+	}
+	redirect(w, r, v.Path()+"/domains")
+}
+
+// serviceEndpointSave gives one endpoint of a service another domain.
 func (s *Server) serviceEndpointSave(w http.ResponseWriter, r *http.Request) {
 	v, ok := s.loadService(w, r)
 	if !ok {
@@ -691,15 +1021,17 @@ func (s *Server) serviceEndpointSave(w http.ResponseWriter, r *http.Request) {
 	var f ui.Form
 	raw := strings.TrimSpace(r.PostFormValue("host"))
 	f.Set("host", raw)
-	tls := r.PostFormValue("tls") == "1"
-	back := v.Path() + "/settings"
+	tls := domainScheme(r, &f)
+	if f.E("scheme") != "" {
+		f.Fail("host", f.E("scheme"))
+	}
 
 	host := current.Host
-	if !strings.EqualFold(raw, current.Host) {
+	if !strings.EqualFold(raw, current.Host) || raw == "" {
 		host = s.checkDomain(ctx, &f, "host", raw)
 	}
 	if f.OK() && tls && isGeneratedDomain(host) {
-		f.Fail("host", "A generated address is served over plain HTTP. Untick HTTPS, or enter a domain of your own.")
+		f.Fail("host", "A generated address is served over plain HTTP. Choose http, or enter a domain of your own.")
 	}
 	if f.OK() {
 		err := s.DB.SetEndpointDomain(ctx, v.Service.ID, current.ID, host, tls)
@@ -715,18 +1047,56 @@ func (s *Server) serviceEndpointSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.renderServiceSettings(w, r, http.StatusUnprocessableEntity, v, current.ID, f)
+		s.renderServiceDomains(w, r, http.StatusUnprocessableEntity, v, pages.ServiceDomainForms{Change: f, Failed: current.ID})
 		return
 	}
-	// The new name is routed at once; the service itself learns its address
-	// when it is next deployed.
+	// The new name is routed at once. A stack whose file reads the address
+	// learns it when it is next deployed.
 	s.syncRoutes(r, v.Service.ServerID)
-	if v.Service.Members != "" {
+	if !current.Manual && v.Service.Members != "" {
 		setFlash(w, r, ui.ToneOK, "Domain saved and routed. Redeploy so the service knows its new address.")
 	} else {
 		setFlash(w, r, ui.ToneOK, "Domain saved.")
 	}
-	redirect(w, r, back)
+	redirect(w, r, v.Path()+"/domains")
+}
+
+// serviceDomainDelete removes a domain a person added to the stack. One the
+// Compose file names is not found here: it goes when the file stops naming
+// it.
+func (s *Server) serviceDomainDelete(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
+	err := s.DB.DeleteEndpoint(r.Context(), v.Service.ID, r.PathValue("eid"))
+	if errors.Is(err, db.ErrNotFound) {
+		s.notFound(w, r)
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.syncRoutes(r, v.Service.ServerID)
+	setFlash(w, r, ui.ToneOK, "Domain removed.")
+	redirect(w, r, v.Path()+"/domains")
+}
+
+// serviceDomainDNS answers Check DNS for one of the stack's domains. The
+// name is the stored row's, found among the service's own endpoints.
+func (s *Server) serviceDomainDNS(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
+	for _, e := range v.Endpoints {
+		if e.ID == r.PathValue("eid") && e.Host != "" {
+			s.answerDNS(w, r, []string{e.Host}, v.Service.ServerID, "service "+v.Service.ID)
+			return
+		}
+	}
+	s.notFound(w, r)
 }
 
 func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) {

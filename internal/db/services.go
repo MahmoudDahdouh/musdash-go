@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -55,6 +56,9 @@ type Service struct {
 	DeployTokenHash string
 	Commit          string // what the running stack was deployed from
 	Checkout        string // the checkout directory the running stack uses; "" before the first deployment
+	// Layout is what the Compose file holds, as JSON: see StackMember. Empty
+	// while no deployment has read the stored text.
+	Layout string
 }
 
 // FromGit reports whether the service's Compose file comes from a
@@ -72,14 +76,14 @@ func (s Service) MemberNames() []string {
 const serviceColumns = `s.id, s.environment_id, s.server_id, s.name, s.template, s.compose, s.variables, s.connect_env,
 	s.members, s.status, s.last_error, s.created_at, s.updated_at,
 	s.repo_url, s.repo_name, s.branch, s.compose_path, s.git_source_id, s.ssh_key_id, s.auto_deploy, s.webhook_secret,
-	s.deploy_token_hash, s.commit_sha, s.checkout`
+	s.deploy_token_hash, s.commit_sha, s.checkout, s.layout`
 
 func scanService(row interface{ Scan(...any) error }) (Service, error) {
 	var m Service
 	err := row.Scan(&m.ID, &m.EnvironmentID, &m.ServerID, &m.Name, &m.Template, &m.Compose, &m.Variables, &m.ConnectEnv,
 		&m.Members, &m.Status, &m.LastError, &m.CreatedAt, &m.UpdatedAt,
 		&m.RepoURL, &m.RepoName, &m.Branch, &m.ComposePath, &m.GitSourceID, &m.SSHKeyID, &m.AutoDeploy, &m.WebhookSecret,
-		&m.DeployTokenHash, &m.Commit, &m.Checkout)
+		&m.DeployTokenHash, &m.Commit, &m.Checkout, &m.Layout)
 	return m, notFound(err)
 }
 
@@ -165,10 +169,12 @@ func (d *DB) ServicesOnServer(ctx context.Context, serverID string) ([]Service, 
 }
 
 // UpdateServiceCompose saves the Compose file, the (sealed) variables and
-// whether the stack joins the environment's network.
+// whether the stack joins the environment's network. The layout goes with a
+// text that is not the one it was read from.
 func (d *DB) UpdateServiceCompose(ctx context.Context, teamID string, m Service) error {
-	return affected(d.ExecContext(ctx, `UPDATE services SET compose = ?, variables = ?, connect_env = ?, updated_at = ? WHERE id = ?`+teamServices,
-		m.Compose, m.Variables, m.ConnectEnv, now(), m.ID, teamID))
+	return affected(d.ExecContext(ctx, `UPDATE services SET layout = CASE WHEN compose = ? THEN layout ELSE '' END,
+			compose = ?, variables = ?, connect_env = ?, updated_at = ? WHERE id = ?`+teamServices,
+		m.Compose, m.Compose, m.Variables, m.ConnectEnv, now(), m.ID, teamID))
 }
 
 // UpdateServiceSource stores where a Git service's Compose file comes
@@ -177,8 +183,13 @@ func (d *DB) UpdateServiceSource(ctx context.Context, teamID string, m Service) 
 	if err := d.checkSourceOwnership(ctx, teamID, App{GitSourceID: m.GitSourceID, SSHKeyID: m.SSHKeyID}); err != nil {
 		return err
 	}
-	return affected(d.ExecContext(ctx, `UPDATE services SET repo_url = ?, repo_name = ?, branch = ?, compose_path = ?, git_source_id = ?,
+	// The layout is that of the file the last deployment read. From another
+	// repository, branch or path it is another file.
+	return affected(d.ExecContext(ctx, `UPDATE services SET
+			layout = CASE WHEN repo_url = ? AND branch = ? AND compose_path = ? THEN layout ELSE '' END,
+			repo_url = ?, repo_name = ?, branch = ?, compose_path = ?, git_source_id = ?,
 			ssh_key_id = ?, auto_deploy = ?, updated_at = ? WHERE id = ? AND template = ?`+teamServices,
+		m.RepoURL, m.Branch, m.ComposePath,
 		m.RepoURL, strings.ToLower(m.RepoName), m.Branch, m.ComposePath, m.GitSourceID, m.SSHKeyID, m.AutoDeploy, now(), m.ID, TemplateGit, teamID))
 }
 
@@ -186,7 +197,38 @@ func (d *DB) UpdateServiceSource(ctx context.Context, teamID string, m Service) 
 // repository, whether or not that deployment then succeeds: it is what the
 // service's pages explain themselves with.
 func (d *DB) SetServiceComposeRead(ctx context.Context, id, composeText string) error {
-	return affected(d.ExecContext(ctx, `UPDATE services SET compose = ?, updated_at = ? WHERE id = ?`, composeText, now(), id))
+	return affected(d.ExecContext(ctx, `UPDATE services SET layout = CASE WHEN compose = ? THEN layout ELSE '' END,
+		compose = ?, updated_at = ? WHERE id = ?`, composeText, composeText, now(), id))
+}
+
+// StackMember is one service of a stack's Compose file.
+type StackMember struct {
+	Name  string `json:"name"`
+	Image string `json:"image,omitempty"`
+	// Ports are the container ports the file names for it, through expose
+	// or ports.
+	Ports []int `json:"ports,omitempty"`
+	Built bool  `json:"built,omitempty"`
+}
+
+// StackMembers reads the stored layout. It is nil while there is none.
+func (s Service) StackMembers() []StackMember {
+	var out []StackMember
+	if s.Layout == "" || json.Unmarshal([]byte(s.Layout), &out) != nil {
+		return nil
+	}
+	return out
+}
+
+// SetServiceLayout records what a deployment found in the Compose file, if
+// the stored text is still the one it read.
+func (d *DB) SetServiceLayout(ctx context.Context, id, composeText string, members []StackMember) error {
+	raw, err := json.Marshal(members)
+	if err != nil {
+		return err
+	}
+	_, err = d.ExecContext(ctx, `UPDATE services SET layout = ? WHERE id = ? AND compose = ?`, string(raw), id, composeText)
+	return err
 }
 
 // SetServiceDeployed records what the stack that is now running came from:
@@ -361,17 +403,29 @@ type Endpoint struct {
 	Port           int
 	HostPort       int
 	// Host and TLS are the endpoint's domain; Host is empty when it has
-	// none.
-	Host string
-	TLS  bool
+	// none. DomainID is that domain's row.
+	Host     string
+	TLS      bool
+	DomainID string
+	// Manual is set for an endpoint a person added on the Domains tab: the
+	// Compose file does not name it, and its service and port are theirs.
+	Manual bool
 }
 
-// ListEndpoints returns a service's endpoints with their domains, by name.
+// MaxManualEndpoints bounds the domains a person may add to one stack.
+const MaxManualEndpoints = 50
+
+// ErrTooManyEndpoints is returned by AddEndpoint at the limit.
+var ErrTooManyEndpoints = errors.New("the service has as many domains as it may have")
+
+// ListEndpoints returns a service's endpoints with their domains: the ones
+// the Compose file names first, by name, then the ones a person added, in
+// the order they were added.
 func (d *DB) ListEndpoints(ctx context.Context, serviceID string) ([]Endpoint, error) {
 	rows, err := d.QueryContext(ctx, `SELECT ep.id, ep.service_id, ep.name, ep.compose_service, ep.port, ep.host_port,
-			coalesce(m.host, ''), coalesce(m.tls, 0)
+			coalesce(m.host, ''), coalesce(m.tls, 0), coalesce(m.id, ''), ep.manual
 		FROM service_endpoints ep LEFT JOIN domains m ON m.resource_kind = ? AND m.resource_id = ep.id
-		WHERE ep.service_id = ? ORDER BY ep.name`, KindService, serviceID)
+		WHERE ep.service_id = ? ORDER BY ep.manual, CASE WHEN ep.manual = 1 THEN '' ELSE ep.name END, ep.rowid`, KindService, serviceID)
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +433,7 @@ func (d *DB) ListEndpoints(ctx context.Context, serviceID string) ([]Endpoint, e
 	var out []Endpoint
 	for rows.Next() {
 		var e Endpoint
-		if err := rows.Scan(&e.ID, &e.ServiceID, &e.Name, &e.ComposeService, &e.Port, &e.HostPort, &e.Host, &e.TLS); err != nil {
+		if err := rows.Scan(&e.ID, &e.ServiceID, &e.Name, &e.ComposeService, &e.Port, &e.HostPort, &e.Host, &e.TLS, &e.DomainID, &e.Manual); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
@@ -390,11 +444,10 @@ func (d *DB) ListEndpoints(ctx context.Context, serviceID string) ([]Endpoint, e
 // SyncEndpoints makes a service's endpoints match the names its Compose
 // file uses: missing ones are added, each with the host that newHost
 // returns for it, and ones no longer named are removed with their domains.
-// It returns the hosts that could not be given because something else
-// routes them already.
+// An endpoint a person added is not the file's and is left as it is.
 func (d *DB) SyncEndpoints(ctx context.Context, serviceID string, names []string, newHost func(name string) (host string, tls bool)) error {
 	return d.Tx(ctx, func(tx *sql.Tx) error {
-		rows, err := tx.QueryContext(ctx, `SELECT id, name FROM service_endpoints WHERE service_id = ?`, serviceID)
+		rows, err := tx.QueryContext(ctx, `SELECT id, name FROM service_endpoints WHERE service_id = ? AND manual = 0`, serviceID)
 		if err != nil {
 			return err
 		}
@@ -449,6 +502,64 @@ func (d *DB) SyncEndpoints(ctx context.Context, serviceID string, names []string
 			}
 		}
 		return nil
+	})
+}
+
+// AddEndpoint gives a service of a stack a domain on a port a person named.
+// The host must be routed by nothing else. Where another endpoint of the
+// stack already leads to the same service and port, the new one takes the
+// loopback port that one is published on, and so is served at once.
+func (d *DB) AddEndpoint(ctx context.Context, teamID, serviceID, composeService string, port int, host string, tls bool) (Endpoint, error) {
+	e := Endpoint{ID: secret.RandomID(), ServiceID: serviceID, ComposeService: composeService, Port: port, Host: host, TLS: tls, Manual: true}
+	e.Name = "~" + e.ID
+	err := d.Tx(ctx, func(tx *sql.Tx) error {
+		var n int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM services s`+serviceTeamJoin+`WHERE s.id = ? AND p.team_id = ?`, serviceID, teamID).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrNotFound
+		}
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM service_endpoints WHERE service_id = ? AND manual = 1`, serviceID).Scan(&n); err != nil {
+			return err
+		}
+		if n >= MaxManualEndpoints {
+			return ErrTooManyEndpoints
+		}
+		if err := hostUnused(ctx, tx, host); err != nil {
+			return err
+		}
+		if err := tx.QueryRowContext(ctx, `SELECT coalesce(max(host_port), 0) FROM service_endpoints
+			WHERE service_id = ? AND compose_service = ? AND port = ?`, serviceID, composeService, port).Scan(&e.HostPort); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO service_endpoints (id, service_id, name, compose_service, port, host_port, manual)
+			VALUES (?, ?, ?, ?, ?, ?, 1)`, e.ID, serviceID, e.Name, composeService, port, e.HostPort); err != nil {
+			return err
+		}
+		e.DomainID = secret.RandomID()
+		_, err := tx.ExecContext(ctx, `INSERT INTO domains (id, resource_kind, resource_id, host, tls, redirect_www, created_at)
+			VALUES (?, ?, ?, ?, ?, 0, ?)`, e.DomainID, KindService, e.ID, host, tls, now())
+		return err
+	})
+	return e, err
+}
+
+// DeleteEndpoint removes an endpoint a person added, with its domain. One
+// the Compose file names is not removed here: it answers ErrNotFound.
+func (d *DB) DeleteEndpoint(ctx context.Context, serviceID, endpointID string) error {
+	return d.Tx(ctx, func(tx *sql.Tx) error {
+		var n int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM service_endpoints WHERE id = ? AND service_id = ? AND manual = 1`, endpointID, serviceID).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrNotFound
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM domains WHERE resource_kind = ? AND resource_id = ?`, KindService, endpointID); err != nil {
+			return err
+		}
+		return affected(tx.ExecContext(ctx, `DELETE FROM service_endpoints WHERE id = ?`, endpointID))
 	})
 }
 

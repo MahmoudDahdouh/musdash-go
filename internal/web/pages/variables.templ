@@ -177,7 +177,7 @@ templ ServiceVariablesField(v ServiceView, f ui.Form, variables string, shown bo
 	<div id="service-variables">
 		if shown {
 			@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the ${NAME} references in the file, other than the generated ones. One NAME=value per line. Stored encrypted. A value can name a shared variable, such as {{project.NAME}}.", Error: f.E("variables")}) {
-				@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 5, Value: variables, Invalid: f.E("variables") != "", Described: true})
+				@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 5, Value: variables, Invalid: f.E("variables") != "", Described: true, Attrs: composeReadsAttrs(v.Path()+"/compose/reads", nil)})
 			}
 		} else {
 			<input type="hidden" name="variables_kept" value="1"/>

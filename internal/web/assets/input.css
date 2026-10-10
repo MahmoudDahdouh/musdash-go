@@ -1096,6 +1096,41 @@
     background: none;
   }
 
+  /* What a Compose text reads: a row a kind, the kind's badge first and
+     the names after it. The names wrap; a long one breaks. */
+  .reads {
+    display: grid;
+    gap: 0.5rem;
+  }
+  .reads-list {
+    display: grid;
+    gap: 0.5rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-md);
+    padding: 0.625rem 0.75rem;
+  }
+  .reads-row {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: 0.25rem 0.75rem;
+    align-items: start;
+  }
+  .reads-row dd {
+    display: grid;
+    gap: 0.125rem;
+  }
+  .reads-names {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.125rem 0.75rem;
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 30rem) {
+    .reads-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
   /* Row list: stacked clickable rows inside a card. Clipping keeps each
      row's state rail inside the card's rounded corners. */
   .rows {
@@ -1171,6 +1206,18 @@
   .tab:hover {
     background: var(--color-veil);
     text-decoration: none;
+  }
+  /* A bar of nine tabs or more (an app's) is wider than the page beside
+     the sidebar on a laptop, and what does not fit is out of sight with
+     nothing to say so. There the tabs are their words alone. Narrower
+     still, the bar is scrolled, as before. */
+  @media (max-width: 84rem) {
+    .tabs:has(.tab:nth-child(9)) {
+      gap: 4px;
+    }
+    .tabs:has(.tab:nth-child(9)) .tab .icon {
+      display: none;
+    }
   }
   .tab .icon {
     color: var(--color-ink-mute);

@@ -1,0 +1,47 @@
+# A web service with a cache behind it, as a file written for plain
+# `docker compose` is: a port published from a variable, a variable that
+# must be given, a generated password, health checks, a volume, and
+# depends_on with a condition. No SERVICE_FQDN variable: the domain is
+# given on the Domains tab.
+services:
+  web:
+    image: busybox:1.36
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /www
+        echo "$$GREETING from web" > /www/index.html
+        exec httpd -f -p 8080 -h /www
+    environment:
+      GREETING: ${GREETING:?say what the page greets with}
+      CACHE_URL: redis://:${SERVICE_PASSWORD_CACHE}@cache:6379
+      REGION: ${REGION:-eu}
+    ports:
+      - "${WEB_PORT:-8088}:8080"
+    depends_on:
+      cache:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  cache:
+    image: redis:7-alpine
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${SERVICE_PASSWORD_CACHE}
+    expose:
+      - "6379"
+    volumes:
+      - cache:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+volumes:
+  cache:

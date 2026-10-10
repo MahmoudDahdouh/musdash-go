@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -297,5 +298,94 @@ func (c Client) List(ctx context.Context) ([]Listed, error) {
 		}
 		list = append(list, c)
 	}
+	return list, nil
+}
+
+// StackContainer is one container of a Compose stack, as the server
+// describes it. Every field is the server's word: Name and Service are
+// empty unless they look like names, State is one of Docker's own or
+// "unknown", and the rest is text of bounded length for a person to read.
+type StackContainer struct {
+	Name    string
+	Service string // the Compose service it belongs to
+	State   string
+	Status  string // Docker's sentence, such as "Up 2 hours (healthy)"
+	Image   string
+	// Published are the ports reachable from outside the server, each as
+	// "host port → container port". Loopback ports, which are the proxy's,
+	// are left out.
+	Published []string
+}
+
+var (
+	composeNameRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
+	publishedRE   = regexp.MustCompile(`^(.+):(\d{1,5})->(\d{1,5})/(tcp|udp)$`)
+)
+
+var containerStates = map[string]bool{"created": true, "running": true, "restarting": true, "exited": true, "paused": true, "dead": true, "removing": true}
+
+// readable cuts text from a server to n characters of printable ASCII.
+func readable(text string, n int) string {
+	out := make([]byte, 0, n)
+	for i := 0; i < len(text) && len(out) < n; i++ {
+		if c := text[i]; c >= 0x20 && c < 0x7f {
+			out = append(out, c)
+		}
+	}
+	return string(out)
+}
+
+// maxStackContainers bounds how many containers of one stack are read.
+const maxStackContainers = 100
+
+// StackContainers lists the containers of one service's stack, running or
+// not, by Compose service and name.
+func (c Client) StackContainers(ctx context.Context, resource string) ([]StackContainer, error) {
+	if !ValidName(resource) {
+		return nil, fmt.Errorf("docker: %q is not a resource id", resource)
+	}
+	format := "{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}\t{{.Label \"com.docker.compose.service\"}}\t{{.Ports}}"
+	out, err := c.R.Output(ctx, cmd("ps", "--all", "--filter", "label="+ManagedLabel+"=true",
+		"--filter", "label="+LabelKind+"=service", "--filter", "label="+LabelResource+"="+resource, "--format", format))
+	if err != nil {
+		return nil, err
+	}
+	var list []StackContainer
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Split(strings.TrimRight(line, "\r"), "\t")
+		if len(f) < 6 || !ValidName(f[0]) || len(list) >= maxStackContainers {
+			continue
+		}
+		sc := StackContainer{Name: f[0], State: f[1], Status: readable(f[2], 80), Image: readable(f[3], 120)}
+		if !containerStates[sc.State] {
+			sc.State = "unknown"
+		}
+		if composeNameRE.MatchString(f[4]) {
+			sc.Service = f[4]
+		}
+		seen := map[string]bool{}
+		for _, port := range strings.Split(f[5], ", ") {
+			m := publishedRE.FindStringSubmatch(port)
+			if m == nil || m[1] == "127.0.0.1" || m[1] == "[::1]" || len(sc.Published) >= 8 {
+				continue
+			}
+			// The same port on IPv4 and IPv6 is one port to a person.
+			text := m[2] + " \u2192 " + m[3]
+			if m[4] == "udp" {
+				text += "/udp"
+			}
+			if !seen[text] {
+				seen[text] = true
+				sc.Published = append(sc.Published, text)
+			}
+		}
+		list = append(list, sc)
+	}
+	sort.SliceStable(list, func(i, j int) bool {
+		if list[i].Service != list[j].Service {
+			return list[i].Service < list[j].Service
+		}
+		return list[i].Name < list[j].Name
+	})
 	return list, nil
 }

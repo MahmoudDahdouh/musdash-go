@@ -6,6 +6,7 @@ import (
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/catalog"
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/deploy"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
 
@@ -30,6 +31,7 @@ func serviceTabs(v ServiceView) []ui.Tab {
 		{Key: "metrics", Label: "Metrics", Href: b + "/metrics", Icon: "chart"},
 		{Key: "terminal", Label: "Terminal", Href: b + "/terminal", Icon: "terminal"},
 		{Key: "compose", Label: "Compose file", Href: b + "/compose", Icon: "code"},
+		{Key: "domains", Label: "Domains", Href: b + "/domains", Icon: "globe"},
 		{Key: "settings", Label: "Settings", Href: b + "/settings", Icon: "settings"},
 	}
 }
@@ -116,13 +118,103 @@ templ serviceFrame(s ui.Shell, v ServiceView, tab string) {
 }
 
 const composePlaceholder = `services:
-  app:
+  web:
     image: ghcr.io/you/app:1.4
     environment:
-      - SERVICE_FQDN_APP_3000
-      - DATABASE_PASSWORD=${SERVICE_PASSWORD_DB}`
+      DATABASE_URL: postgres://app:${SERVICE_PASSWORD_DB}@db/app
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_DB}`
 
-const composeHint = "Give a service a web address by adding SERVICE_FQDN_<NAME>_<PORT> to its environment, where NAME is the service and PORT is the port it listens on. SERVICE_PASSWORD_<ID> and SERVICE_USER_<ID> are filled with generated values."
+const composeHint = "Paste the file as it is. A service of the stack is given a domain afterwards, on the Domains tab. SERVICE_PASSWORD_<ID> and SERVICE_USER_<ID> are filled with generated values, and a template written for Coolify works as it is: SERVICE_FQDN_<NAME>_<PORT> gets a domain."
+
+// ComposeReads is what a Compose text reads, found by name alone.
+type ComposeReads struct {
+	// Scanned is unset while there is no text to look at.
+	Scanned bool
+	// Missing are the variables the text gives no default for and that have
+	// no value yet; Given the ones that have one; Defaulted the ones the
+	// text itself has a value for.
+	Missing, Given, Defaulted []string
+	// Generated are the values musdash makes, and Addresses the services a
+	// SERVICE_FQDN variable asks a domain for.
+	Generated, Addresses []string
+	// More counts the names past the ones listed.
+	More int
+}
+
+func (c ComposeReads) none() bool {
+	return len(c.Missing)+len(c.Given)+len(c.Defaulted)+len(c.Generated)+len(c.Addresses) == 0
+}
+
+// composeReadsAttrs make a field of a Compose form ask what the text reads
+// as it is typed in: the answer replaces the list under the text. Only the
+// text, the Variables box and the form's token are sent.
+func composeReadsAttrs(url string, more templ.Attributes) templ.Attributes {
+	attrs := templ.Attributes{
+		"hx-post":    url,
+		"hx-trigger": "input changed delay:500ms",
+		"hx-target":  "#compose-reads",
+		"hx-swap":    "innerHTML",
+		"hx-include": "closest form",
+		"hx-params":  "_csrf,compose,variables,variables_kept",
+		"hx-sync":    "closest form:replace",
+	}
+	for k, v := range more {
+		attrs[k] = v
+	}
+	return attrs
+}
+
+// ComposeReadsBox is where the list of what a Compose text reads stands.
+templ ComposeReadsBox(c ComposeReads) {
+	<div id="compose-reads" aria-live="polite">
+		@ComposeReadsList(c)
+	</div>
+}
+
+// ComposeReadsList is the list itself, and the answer to the form's
+// question as the text is typed.
+templ ComposeReadsList(c ComposeReads) {
+	if c.Scanned {
+		<div class="reads">
+			<p class="field-label">What the file reads</p>
+			if c.none() {
+				<p class="field-hint">No variables: the file needs nothing filled in.</p>
+			} else {
+				<dl class="reads-list">
+					@readsRow("Needs a value", "Enter each under Variables: the file has no default for it.", ui.ToneWarn, c.Missing)
+					@readsRow("Has a value", "Given under Variables.", ui.ToneOK, c.Given)
+					@readsRow("Has a default", "The file's own value is used unless Variables gives another.", ui.ToneNeutral, c.Defaulted)
+					@readsRow("Generated", "Made once by musdash and kept across deployments.", ui.ToneSoft, c.Generated)
+					@readsRow("Gets a domain", "A generated address at first; change it on the Domains tab.", ui.ToneSoft, c.Addresses)
+				</dl>
+				if c.More > 0 {
+					<p class="field-hint">And { strconv.Itoa(c.More) } more.</p>
+				}
+			}
+		</div>
+	}
+}
+
+templ readsRow(label, hint, tone string, names []string) {
+	if len(names) > 0 {
+		<div class="reads-row">
+			<dt>
+				@ui.Badge(label, tone)
+			</dt>
+			<dd>
+				<span class="reads-names">
+					for _, name := range names {
+						<span class="fact">{ name }</span>
+					}
+				</span>
+				<span class="field-hint">{ hint }</span>
+			</dd>
+		</div>
+	}
+}
 
 // varFieldID is the form field for a variable the person must supply.
 func varFieldID(name string) string { return "var_" + name }
@@ -152,7 +244,7 @@ templ serviceGitFields(f ui.Form, c GitChoices, m db.Service, autoDeployDefault 
 	}
 }
 
-templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, t catalog.ServiceTemplate, required []catalog.VarRef, f ui.Form, git GitChoices, serverList []db.Server) {
+templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, t catalog.ServiceTemplate, required []catalog.VarRef, f ui.Form, git GitChoices, serverList []db.Server, reads ComposeReads) {
 	@ui.Layout(s) {
 		if template == db.TemplateCustom {
 			@ui.PageHeader("New service from your own Compose file", "Runs in "+env.Name+".")
@@ -169,10 +261,11 @@ templ ServiceNew(s ui.Shell, p db.Project, env db.Environment, template string, 
 					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: true, Value: t.Key, Attrs: templ.Attributes{"maxlength": "32"}})
 					if template == db.TemplateCustom {
 						@ui.Field(ui.FieldProps{Label: "Compose file", For: "compose", Hint: composeHint, Error: f.E("compose")}) {
-							@ui.Textarea(ui.InputProps{ID: "compose", Mono: true, Rows: 16, Required: true, Value: f.V("compose"), Invalid: f.E("compose") != "", Described: true, Placeholder: composePlaceholder, Attrs: templ.Attributes{"wrap": "off"}})
+							@ui.Textarea(ui.InputProps{ID: "compose", Mono: true, Rows: 16, Required: true, Value: f.V("compose"), Invalid: f.E("compose") != "", Described: true, Placeholder: composePlaceholder, Attrs: composeReadsAttrs(EnvPath(p.ID, env.ID)+"/service/reads", templ.Attributes{"wrap": "off"})})
 						}
-						@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the other ${NAME} references in the file. One NAME=value per line. Stored encrypted.", Error: f.E("variables")}) {
-							@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 4, Value: f.V("variables"), Invalid: f.E("variables") != "", Described: true})
+						@ComposeReadsBox(reads)
+						@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the ${NAME} references in the file. One NAME=value per line. Stored encrypted.", Error: f.E("variables")}) {
+							@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 4, Value: f.V("variables"), Invalid: f.E("variables") != "", Described: true, Attrs: composeReadsAttrs(EnvPath(p.ID, env.ID)+"/service/reads", nil)})
 						}
 					} else if template == db.TemplateGit {
 						@serviceGitFields(f, git, db.Service{}, true)
@@ -263,15 +356,19 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 			}
 			<section class="card">
 				<div class="card-head">
-					<h2 class="card-title">Addresses</h2>
+					<h2 class="card-title">Domains</h2>
 					if len(v.Endpoints) > 0 {
-						@ui.LinkButton(v.Path()+"/settings", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
-							Change
+						@ui.LinkButton(v.Path()+"/domains", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+							Manage
 						}
 					}
 				</div>
 				if len(v.Endpoints) == 0 {
-					@noAddress(v)
+					@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No domain yet", Text: "Give a service of the stack one to reach it from outside.", Size: ui.EmptySmall}) {
+						@ui.LinkButton(v.Path()+"/domains?add=1", ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus"}) {
+							Add domain
+						}
+					}
 				} else {
 					<div class="rows">
 						for _, e := range v.Endpoints {
@@ -287,6 +384,9 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 										<p class="fact truncate">{ e.Host }</p>
 										<p class="muted text-sm">to { endpointTarget(e) }</p>
 									</div>
+									if endpointWaits(v.Service, e) {
+										@ui.Badge("Redeploy to serve", ui.ToneWarn)
+									}
 									if e.TLS {
 										@ui.Badge("HTTPS", ui.ToneOK)
 									} else {
@@ -301,18 +401,35 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 			</section>
 			<section class="card">
 				<div class="card-head">
-					<h2 class="card-title">Containers</h2>
+					<h2 class="card-title">Stack</h2>
+				</div>
+				<div class="card-body">
+					@ui.KeyValue([]ui.KVItem{
+						{Key: "From", Value: stackSource(v.Service)},
+						{Key: "Services", Value: stackCount(v.Service)},
+						{Key: "Network", Value: serviceNetwork(v)},
+					})
+				</div>
+			</section>
+			<section class="card lg:col-span-2">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Containers</h2>
+						<p class="muted text-sm">What the server says of each, asked when this page opens and when the stack's state changes.</p>
+					</div>
+					if v.Service.Members != "" {
+						@ui.Button(ui.ButtonProps{Small: true, Icon: "refresh", Attrs: templ.Attributes{"hx-get": v.Path() + "/containers", "hx-target": "#stack-containers", "hx-swap": "outerHTML", "hx-disabled-elt": "this"}}) {
+							Refresh
+						}
+					}
 				</div>
 				if v.Service.Members == "" && v.Service.Status == db.AppDeploying {
 					@ui.EmptyState(ui.EmptyProps{Icon: "layers", Title: "The first deployment is under way", Text: "Its containers are listed here once they are up.", Size: ui.EmptySmall})
 				} else if v.Service.Members == "" {
 					@ui.EmptyState(ui.EmptyProps{Icon: "layers", Title: "Not deployed yet", Text: "Choose Deploy to start the stack.", Size: ui.EmptySmall})
 				} else {
-					<div class="card-body">
-						@ui.KeyValue([]ui.KVItem{
-							{Key: "Services", Value: strings.Join(v.Service.MemberNames(), ", "), Mono: true},
-							{Key: "Network", Value: serviceNetwork(v)},
-						})
+					<div id="stack-containers" hx-get={ v.Path() + "/containers" } hx-trigger="load, stack-changed from:body" hx-swap="outerHTML">
+						<p class="muted card-body text-sm">Asking the server…</p>
 					</div>
 				}
 			</section>
@@ -358,25 +475,6 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 	}
 }
 
-// noAddress stands where a stack's endpoints would be listed. A file that
-// is read from a repository is not changed here, so it has no button.
-templ noAddress(v ServiceView) {
-	if v.Service.FromGit() {
-		@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No web address", Text: "To give a service one, add SERVICE_FQDN_NAME_PORT to its environment in the repository's Compose file.", Size: ui.EmptySmall})
-	} else {
-		@noAddressOwn(v)
-	}
-}
-
-// noAddressOwn is the same for a stack whose Compose file is edited here.
-templ noAddressOwn(v ServiceView) {
-	@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No web address", Text: "To give a service one, add SERVICE_FQDN_NAME_PORT to its environment in the Compose file.", Size: ui.EmptySmall}) {
-		@ui.LinkButton(v.Path()+"/compose", ui.ButtonProps{Variant: ui.Primary, Small: true}) {
-			Open the Compose file
-		}
-	}
-}
-
 func serviceNetwork(v ServiceView) string {
 	if v.Service.ConnectEnv {
 		return "Its own, and the network of " + v.Env.Name
@@ -384,21 +482,158 @@ func serviceNetwork(v ServiceView) string {
 	return "Its own"
 }
 
-templ ServiceLogs(s ui.Shell, v ServiceView) {
+// logsNote says what the Logs tab is showing.
+func logsNote(only string) string {
+	if only != "" {
+		return "The last 200 lines of " + only + ", then new output as it arrives."
+	}
+	return "The last 200 lines of every container, then new output as it arrives."
+}
+
+func logsStream(v ServiceView, only string) string {
+	if only != "" {
+		return v.Path() + "/logs/stream?service=" + only
+	}
+	return v.Path() + "/logs/stream"
+}
+
+templ ServiceLogs(s ui.Shell, v ServiceView, only string) {
 	@serviceFrame(s, v, "logs") {
 		if !serviceDeployed(v.Service) {
 			@ui.EmptyState(ui.EmptyProps{Icon: "file", Title: "Nothing is running", Text: "The containers' output appears here once the service is deployed."})
 		} else {
-			<div class="grid gap-2">
-				<p class="muted text-sm">The last 200 lines of every container, then new output as it arrives.</p>
+			<div class="grid gap-3">
+				if members := v.Service.MemberNames(); len(members) > 1 {
+					<nav class="flex flex-wrap gap-1" aria-label="Service">
+						@logsChoice(v.Path()+"/logs", "All services", only == "")
+						for _, name := range members {
+							@logsChoice(v.Path()+"/logs?service="+name, name, name == only)
+						}
+					</nav>
+				}
+				<p class="muted text-sm">{ logsNote(only) }</p>
 				@ui.LogView("runtime-log", templ.Attributes{
 					"hx-ext":      "sse",
-					"sse-connect": v.Path() + "/logs/stream",
+					"sse-connect": logsStream(v, only),
 					"sse-swap":    "line",
 					"sse-close":   "done",
 					"hx-swap":     "beforeend",
 				})
 			</div>
+		}
+	}
+}
+
+// logsChoice is one of the services the Logs tab can be narrowed to.
+templ logsChoice(href, label string, current bool) {
+	<a
+		class={ "btn btn-sm", templ.KV("btn-secondary", current), templ.KV("btn-ghost", !current) }
+		href={ templ.SafeURL(href) }
+		if current {
+			aria-current="true"
+		}
+	>{ label }</a>
+}
+
+// StackRow is one container of a stack on its Overview, or a service of
+// the file that has none.
+type StackRow struct {
+	Service   string
+	Container string // "" for a service with no container
+	Image     string
+	// State is what the pill is drawn for ("" for a neutral one), Label its
+	// words and Status Docker's own sentence.
+	State, Label, Status string
+	Published            []string
+	// Running says a terminal can be opened in it.
+	Running bool
+}
+
+// stackSource says where a stack's Compose file comes from.
+func stackSource(s db.Service) string {
+	if s.FromGit() {
+		return s.RepoName + " @ " + s.Branch
+	}
+	return templateName(s.Template)
+}
+
+// stackCount says how many services the stack's file has, once known.
+func stackCount(s db.Service) string {
+	n := len(s.MemberNames())
+	if members := s.StackMembers(); len(members) > 0 {
+		n = len(members)
+	}
+	switch n {
+	case 0:
+		return "Known after the first deployment"
+	case 1:
+		return "1"
+	}
+	return strconv.Itoa(n)
+}
+
+// StackContainers is the list the Overview's Containers card asks for. It
+// asks again when the header says the stack's state has changed, and when
+// Refresh is pressed: not on a timer, because each answer is a command run
+// on the server.
+templ StackContainers(v ServiceView, rows []StackRow, problem string) {
+	<div id="stack-containers" hx-get={ v.Path() + "/containers" } hx-trigger="stack-changed from:body" hx-swap="outerHTML">
+		@stackContainersBody(v, rows, problem)
+	</div>
+}
+
+templ stackContainersBody(v ServiceView, rows []StackRow, problem string) {
+	if problem != "" {
+		<p class="muted card-body text-sm" role="status">{ problem }</p>
+	} else if len(rows) == 0 {
+		@ui.EmptyState(ui.EmptyProps{Icon: "layers", Title: "No containers", Text: "The server has none for this stack. Deploy it to start them.", Size: ui.EmptySmall})
+	} else {
+		@ui.Table("Service", "State", "Image", "Published on the server", "") {
+			for _, row := range rows {
+				<tr>
+					<td>
+						<span class="fact">{ orDefault(row.Service, row.Container) }</span>
+					</td>
+					<td>
+						<span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+							if row.State == "" {
+								@ui.Pill(ui.ToneNeutral, row.Label)
+							} else {
+								@ui.StatePill(row.State, row.Label)
+							}
+							if row.Status != "" {
+								<span class="muted text-sm">{ row.Status }</span>
+							}
+						</span>
+					</td>
+					<td>
+						<span class="fact break-all text-sm">{ row.Image }</span>
+					</td>
+					<td>
+						if len(row.Published) == 0 {
+							<span class="muted">none</span>
+						} else {
+							<span class="fact text-sm">{ strings.Join(row.Published, ", ") }</span>
+						}
+					</td>
+					<td>
+						if row.Container != "" {
+							<div class="flex items-center justify-end gap-2">
+								if row.Service != "" {
+									@ui.LinkButton(v.Path()+"/logs?service="+row.Service, ui.ButtonProps{Variant: ui.Ghost, Small: true, Icon: "file"}) {
+										Logs
+									}
+								}
+								if row.Running {
+									@ui.LinkButton(v.Path()+"/terminal?container="+row.Container, ui.ButtonProps{Variant: ui.Ghost, Small: true, Icon: "terminal"}) {
+										Terminal
+									}
+								}
+							</div>
+						}
+					</td>
+				</tr>
+			}
 		}
 	}
 }
@@ -413,7 +648,7 @@ func shortCommit(c string) string {
 // ServiceCompose is a service's Compose tab. Its variables are part of the
 // form but not of the page: showVars says the person typed them and the
 // form came back, and varCount how many are stored otherwise.
-templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables string, showVars bool, varCount int, git *ServiceGit) {
+templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variables string, showVars bool, varCount int, git *ServiceGit, reads ComposeReads) {
 	@serviceFrame(s, v, "compose") {
 		<div class="grid max-w-3xl gap-6">
 			<form class="card" method="post" action={ templ.SafeURL(v.Path() + "/compose") }>
@@ -445,9 +680,10 @@ templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variable
 						}
 					} else {
 						@ui.Field(ui.FieldProps{Label: "docker-compose.yml", For: "compose", Hint: composeHint, Error: f.E("compose")}) {
-							@ui.Textarea(ui.InputProps{ID: "compose", Mono: true, Rows: 22, Required: true, Value: composeText, Invalid: f.E("compose") != "", Described: true, Attrs: templ.Attributes{"wrap": "off"}})
+							@ui.Textarea(ui.InputProps{ID: "compose", Mono: true, Rows: 22, Required: true, Value: composeText, Invalid: f.E("compose") != "", Described: true, Attrs: composeReadsAttrs(v.Path()+"/compose/reads", templ.Attributes{"wrap": "off"})})
 						}
 					}
+					@ComposeReadsBox(reads)
 					@ServiceVariablesField(v, f, variables, showVars, varCount)
 					<div>
 						@ui.Checkbox("connect_env", checked(f, "connect_env", v.Service.ConnectEnv), nil) {
@@ -473,54 +709,9 @@ templ ServiceCompose(s ui.Shell, v ServiceView, f ui.Form, composeText, variable
 	}
 }
 
-func endpointFormID(e db.Endpoint) string { return "host-" + e.ID }
-
-templ ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) {
+templ ServiceSettings(s ui.Shell, v ServiceView) {
 	@serviceFrame(s, v, "settings") {
 		<div class="grid max-w-2xl gap-6">
-			<section class="card" id="addresses">
-				<div class="card-head">
-					<div>
-						<h2 class="card-title">Addresses</h2>
-						<p class="muted text-sm">Point a domain's DNS at this server first, so its certificate can be issued. A change takes effect on the next deployment: the service is told its own address when it starts.</p>
-					</div>
-				</div>
-				if len(v.Endpoints) == 0 {
-					@noAddress(v)
-				}
-				if len(v.Endpoints) > 0 {
-					<div class="rows">
-						for _, e := range v.Endpoints {
-							<div class="row">
-								<div class="min-w-0 flex-1">
-									<p class="fact truncate">{ orDefault(e.Host, "No domain") }</p>
-									<p class="muted text-sm">{ endpointTarget(e) }</p>
-								</div>
-								if e.Host != "" {
-									if e.TLS {
-										@ui.Badge("HTTPS", ui.ToneOK)
-									} else {
-										@ui.Badge("HTTP", ui.ToneNeutral)
-									}
-								}
-								@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "endpoint-" + e.ID}) {
-									Change
-								}
-							</div>
-						}
-					</div>
-				}
-			</section>
-			for _, e := range v.Endpoints {
-				@ui.FormDialog(ui.DialogProps{ID: "endpoint-" + e.ID, Title: "Domain for " + endpointTarget(e), Description: "Point the domain's DNS at this server first. The change takes effect on the next deployment.", Action: v.Path() + "/endpoints/" + e.ID, CSRF: s.CSRF, Submit: "Save domain", Open: endpointError(e, failed, f) != ""}) {
-					@ui.Field(ui.FieldProps{Label: "Domain", For: endpointFormID(e), Error: endpointError(e, failed, f)}) {
-						@ui.Input(ui.InputProps{ID: endpointFormID(e), Name: "host", Mono: true, Required: true, Value: endpointValue(e, failed, f), Invalid: endpointError(e, failed, f) != "", Placeholder: "app.example.com"})
-					}
-					@ui.CheckboxNamed("tls-"+e.ID, "tls", e.TLS, nil) {
-						Serve over HTTPS with an automatic certificate
-					}
-				}
-			}
 			@tagsCard(s.CSRF, v.Path()+"/tags", v.Tags, v.TeamTags)
 			<section class="card card-danger">
 				<div class="card-head">
@@ -551,18 +742,263 @@ templ ServiceSettings(s ui.Shell, v ServiceView, failed string, f ui.Form) {
 	}
 }
 
-// endpointError and endpointValue show a rejected domain on the form of the
-// endpoint it was entered for.
-func endpointError(e db.Endpoint, failed string, f ui.Form) string {
-	if e.ID == failed {
-		return f.E("host")
+// endpointWaits reports whether a domain is not served yet although the
+// stack is up: its service's port was not published when the containers
+// were started.
+func endpointWaits(svc db.Service, e db.Endpoint) bool {
+	return e.Host != "" && e.HostPort == 0 && serviceDeployed(svc)
+}
+
+// ServiceDomainForms is the state of the forms on a stack's Domains tab.
+type ServiceDomainForms struct {
+	// Add is the Add domain form, and Open says to show it at once.
+	Add  ui.Form
+	Open bool
+	// Change is the form of the endpoint Failed, whose domain was refused.
+	Change ui.Form
+	Failed string
+}
+
+func (d ServiceDomainForms) changeError(e db.Endpoint) string {
+	if e.ID == d.Failed {
+		return d.Change.E("host")
 	}
 	return ""
 }
 
-func endpointValue(e db.Endpoint, failed string, f ui.Form) string {
-	if e.ID == failed {
-		return f.V("host")
+func (d ServiceDomainForms) changeHost(e db.Endpoint) string {
+	if e.ID == d.Failed {
+		return d.Change.V("host")
 	}
 	return e.Host
+}
+
+func (d ServiceDomainForms) changeScheme(e db.Endpoint) string {
+	if e.ID == d.Failed {
+		return d.Change.V("scheme")
+	}
+	// An endpoint with no domain yet is offered what a domain of one's own
+	// gets.
+	if e.TLS || e.Host == "" {
+		return "https"
+	}
+	return "http"
+}
+
+// memberPorts says which container ports a service of the stack names.
+func memberPorts(m db.StackMember) string {
+	switch len(m.Ports) {
+	case 0:
+		return "no port named"
+	case 1:
+		return "port " + strconv.Itoa(m.Ports[0])
+	}
+	list := make([]string, len(m.Ports))
+	for i, p := range m.Ports {
+		list[i] = strconv.Itoa(p)
+	}
+	return "ports " + strings.Join(list, ", ")
+}
+
+// memberOptions offers the stack's services, each with the port it would
+// most likely be reached on.
+func memberOptions(members []db.StackMember) []ui.Option {
+	opts := make([]ui.Option, 0, len(members))
+	for _, m := range members {
+		o := ui.Option{Value: m.Name, Label: m.Name, Note: memberPorts(m)}
+		if len(m.Ports) > 0 {
+			o.Suggest = strconv.Itoa(m.Ports[0])
+		}
+		opts = append(opts, o)
+	}
+	return opts
+}
+
+// firstPort is the port the dialog starts with: the one of the service it
+// starts with.
+func firstPort(members []db.StackMember, chosen string) string {
+	for i, m := range members {
+		if (m.Name == chosen || chosen == "" && i == 0) && len(m.Ports) > 0 {
+			return strconv.Itoa(m.Ports[0])
+		}
+	}
+	return ""
+}
+
+const stackDomainsIntro = "Where the stack's services are reached from outside. "
+
+// ServiceDomains is a stack's Domains tab: the addresses its services
+// answer at, and the dialog one is added with.
+templ ServiceDomains(s ui.Shell, v ServiceView, d ServiceDomainForms, at DomainTarget) {
+	@serviceFrame(s, v, "domains") {
+		<div class="grid max-w-4xl gap-6">
+			<section class="card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Domains</h2>
+						<p class="muted text-sm">{ stackDomainsIntro }{ at.dnsStepFor("service") }</p>
+					</div>
+					if len(v.Endpoints) > 0 {
+						@ui.Button(ui.ButtonProps{Small: true, Icon: "plus", Opens: "add-domain"}) {
+							Add domain
+						}
+					}
+				</div>
+				if len(v.Endpoints) == 0 {
+					@ui.EmptyState(ui.EmptyProps{Icon: "globe", Title: "No domain yet", Text: "Until a service has one, the stack is reached only from inside its network and on the ports its file publishes.", Size: ui.EmptySmall}) {
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: "add-domain"}) {
+							Add domain
+						}
+					}
+				} else {
+					@ui.Table("Domain", "Leads to", "Served", "") {
+						for _, e := range v.Endpoints {
+							<tr>
+								<td>
+									if e.Host == "" {
+										<span class="muted">No domain</span>
+									} else {
+										<a class="fact break-all" href={ templ.SafeURL(endpointURL(e)) } target="_blank" rel="noopener">{ e.Host }</a>
+									}
+								</td>
+								<td>
+									<span class="flex flex-wrap items-center gap-1">
+										<span class="fact">{ endpointTarget(e) }</span>
+										if !e.Manual {
+											@ui.Badge("From the file", ui.ToneSoft)
+										}
+									</span>
+								</td>
+								<td>
+									<span class="flex flex-wrap gap-1">
+										if e.Host != "" {
+											if e.TLS {
+												@ui.Badge("HTTPS", ui.ToneOK)
+											} else {
+												@ui.Badge("HTTP", ui.ToneNeutral)
+											}
+										}
+										if endpointWaits(v.Service, e) {
+											@ui.Badge("Redeploy to serve", ui.ToneWarn)
+										}
+									</span>
+								</td>
+								<td>
+									<div class="flex items-center justify-end gap-2">
+										if e.Host != "" && !deploy.Generated(e.Host) {
+											@ui.Button(ui.ButtonProps{Small: true, Icon: "search", Attrs: templ.Attributes{"hx-get": v.Path() + "/domains/" + e.ID + "/dns", "hx-target": "#dns-" + e.ID, "hx-swap": "innerHTML", "hx-disabled-elt": "this"}}) {
+												Check DNS
+											}
+										}
+										@ui.Button(ui.ButtonProps{Small: true, Icon: "pencil", Opens: "endpoint-" + e.ID}) {
+											Change
+										}
+										if e.Manual {
+											<form method="post" action={ templ.SafeURL(v.Path() + "/domains/" + e.ID + "/delete") }>
+												@ui.CSRF(s.CSRF)
+												@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove "+e.Host+"?", v.Service.Name+" stops answering at this address at once.", "Remove domain", true)}) {
+													Remove
+												}
+											</form>
+										}
+									</div>
+								</td>
+							</tr>
+							if e.Host != "" && !deploy.Generated(e.Host) {
+								<tr class="table-under">
+									<td colspan="4">
+										<div id={ "dns-" + e.ID } aria-live="polite"></div>
+									</td>
+								</tr>
+							}
+						}
+					}
+				}
+			</section>
+			@ui.FormDialog(ui.DialogProps{ID: "add-domain", Title: "Add domain", Description: at.dnsStepFor("service"), Action: v.Path() + "/domains", CSRF: s.CSRF, Submit: "Add domain", Wide: true, Open: d.Open || !d.Add.OK()}) {
+				if members := v.Service.StackMembers(); len(members) > 0 {
+					@ui.Field(ui.FieldProps{Label: "Service", For: "service", Hint: "The service of the stack the domain leads to.", Error: d.Add.E("service")}) {
+						@ui.Select("service", memberOptions(members), d.Add.V("service"), templ.Attributes{"aria-describedby": "service-hint"})
+					}
+					@stackAddress(d.Add, at, orDefault(d.Add.V("port"), firstPort(members, d.Add.V("service"))))
+				} else {
+					@ui.TextField(d.Add, "Service", serviceNameHint(v.Service), ui.InputProps{ID: "service", Mono: true, Required: true, Placeholder: "web", Autocomplete: "off", Attrs: templ.Attributes{"maxlength": "64"}})
+					@stackAddress(d.Add, at, d.Add.V("port"))
+				}
+			}
+			for _, e := range v.Endpoints {
+				@ui.FormDialog(ui.DialogProps{ID: "endpoint-" + e.ID, Title: "Domain for " + endpointTarget(e), Description: at.dnsStepFor("service"), Action: v.Path() + "/domains/" + e.ID, CSRF: s.CSRF, Submit: "Save domain", Wide: true, Open: d.changeError(e) != ""}) {
+					<div class="address-row">
+						@ui.Field(ui.FieldProps{Label: "Scheme", For: "scheme-" + e.ID}) {
+							@ui.SelectNamed("scheme-"+e.ID, "scheme", schemeOptions, d.changeScheme(e), nil)
+						}
+						<div class="address-domain">
+							@ui.Field(ui.FieldProps{Label: "Domain", For: "host-" + e.ID, Error: d.changeError(e)}) {
+								@ui.Input(ui.InputProps{ID: "host-" + e.ID, Name: "host", Mono: true, Required: true, Value: d.changeHost(e), Invalid: d.changeError(e) != "", Placeholder: "app.example.com", Autocomplete: "off"})
+							}
+						</div>
+					</div>
+					<div class="flex flex-wrap items-start gap-x-3 gap-y-2">
+						<p class="field-hint min-w-0 flex-1 basis-56">
+							if !e.Manual {
+								<span class="block">The Compose file reads this address ({ "SERVICE_FQDN_" + e.Name }): the stack learns a new one when it is next deployed.</span>
+							}
+							if at.Suffix != "" {
+								<span class="block">A generated domain needs no DNS and is served over plain HTTP.</span>
+							}
+						</p>
+						if at.Suffix != "" {
+							<span class="ms-auto">
+								@ui.Button(ui.ButtonProps{Small: true, Icon: "refresh", Attrs: templ.Attributes{"data-generate": "host-" + e.ID, "data-suffix": at.Suffix, "data-scheme": "scheme-" + e.ID}}) {
+									Generate domain
+								}
+							</span>
+						}
+					</div>
+				}
+			}
+		</div>
+	}
+}
+
+// serviceNameHint is under the Service field while the stack's services
+// are not known: nothing has read the stored file yet.
+func serviceNameHint(svc db.Service) string {
+	if svc.FromGit() {
+		return "The service's name in the repository's Compose file. Once the stack has been deployed, its services are listed here."
+	}
+	return "The service's name in the Compose file. Once the stack has been deployed, its services are listed here."
+}
+
+// stackAddress is the line a stack's domain is written on, with the port of
+// the service's container it leads to.
+templ stackAddress(f ui.Form, at DomainTarget, port string) {
+	<div class="address-row">
+		@ui.Field(ui.FieldProps{Label: "Scheme", For: "scheme", Error: f.E("scheme")}) {
+			@ui.Select("scheme", schemeOptions, f.V("scheme"), nil)
+		}
+		<div class="address-domain">
+			@ui.TextField(f, "Domain", "", ui.InputProps{ID: "host", Mono: true, Required: true, Placeholder: "app.example.com", Autocomplete: "off"})
+		</div>
+		<div class="address-port">
+			@ui.Field(ui.FieldProps{Label: "Port", For: "port", Error: f.E("port")}) {
+				@ui.Input(ui.InputProps{ID: "port", Mono: true, Required: true, Value: port, Invalid: f.E("port") != "", Autocomplete: "off", Attrs: templ.Attributes{"inputmode": "numeric", "maxlength": "5", "data-suggest-here": true, "data-suggested": port}})
+			}
+		</div>
+	</div>
+	<div class="flex flex-wrap items-start gap-x-3 gap-y-2">
+		<p class="field-hint min-w-0 flex-1 basis-56">
+			if at.Suffix != "" {
+				<span class="block">A generated domain needs no DNS and is served over plain HTTP.</span>
+			}
+			<span class="block">The port is the one the service listens on inside its container.</span>
+		</p>
+		if at.Suffix != "" {
+			<span class="ms-auto">
+				@ui.Button(ui.ButtonProps{Small: true, Icon: "refresh", Attrs: templ.Attributes{"data-generate": "host", "data-suffix": at.Suffix, "data-scheme": "scheme"}}) {
+					Generate domain
+				}
+			</span>
+		}
+	</div>
 }

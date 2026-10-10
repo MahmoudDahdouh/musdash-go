@@ -563,3 +563,36 @@ func TestNestedInCheckout(t *testing.T) {
 		t.Fatalf("got %+v\nwant %+v", got, want)
 	}
 }
+
+// TestLayout: the services of a document with the container ports each
+// names, in every way a port can be written.
+func TestLayout(t *testing.T) {
+	p, err := Parse([]byte(`{"name":"musdash-x","services":{
+		"web":{"image":"nginx:alpine","ports":[
+			{"mode":"ingress","target":80,"published":"8080","protocol":"tcp"},
+			{"mode":"ingress","target":443,"published":"8443","protocol":"tcp"},
+			{"mode":"ingress","target":53,"published":"5353","protocol":"udp"},
+			{"mode":"ingress","target":80,"published":"8081","protocol":"tcp"}],
+			"expose":["9000","9100/udp"]},
+		"api":{"build":{"context":"/srv/api"},"expose":[3000]},
+		"raw":{"image":"x","ports":["${WEB_PORT:-8080}:8000","127.0.0.1:9090:9091/tcp","70000:70000","5000/udp"]},
+		"sidecar":{"image":"y","network_mode":"service:web"},
+		"worker":{"image":"busybox"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := p.Layout()
+	want := []Member{
+		{Name: "api", Ports: []int{3000}, Built: true},
+		{Name: "raw", Image: "x", Ports: []int{8000, 9091}},
+		{Name: "sidecar", Image: "y"},
+		{Name: "web", Image: "nginx:alpine", Ports: []int{80, 443, 9000}},
+		{Name: "worker", Image: "busybox"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("layout:\n got %+v\nwant %+v", got, want)
+	}
+	if !p.OwnNetwork("web") || p.OwnNetwork("sidecar") {
+		t.Fatal("which service has a network of its own")
+	}
+}

@@ -120,6 +120,77 @@ func (p Project) FirstPort(service string) int {
 	return 0
 }
 
+// Ports are the container ports a service names, through expose or ports,
+// in the order of the file and without repeats. A port that is not TCP is
+// left out: the proxy has nothing to send to it.
+func (p Project) Ports(service string) []int {
+	svc := p.service(service)
+	seen := map[int]bool{}
+	var out []int
+	add := func(n int) {
+		if n >= 1 && n <= 65535 && !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	// The short forms, "80", "8080:80/tcp" and "127.0.0.1:8080:80", as a
+	// document that was not filled in keeps them: the container port is
+	// the last number.
+	short := func(spec string) {
+		spec, proto, _ := strings.Cut(spec, "/")
+		if proto != "" && proto != "tcp" {
+			return
+		}
+		add(toInt(spec[strings.LastIndexByte(spec, ':')+1:]))
+	}
+	for _, e := range asList(svc["ports"]) {
+		switch port := e.(type) {
+		case map[string]any:
+			if proto, _ := port["protocol"].(string); proto == "" || proto == "tcp" {
+				add(toInt(port["target"]))
+			}
+		case string:
+			short(port)
+		default:
+			add(toInt(e))
+		}
+	}
+	for _, e := range asList(svc["expose"]) {
+		if spec, ok := e.(string); ok {
+			short(spec)
+		} else {
+			add(toInt(e))
+		}
+	}
+	return out
+}
+
+// OwnNetwork reports whether a service has a network stack of its own to
+// publish a port from. One that shares another container's, or has none,
+// cannot: the port belongs to the service whose network it is.
+func (p Project) OwnNetwork(service string) bool {
+	mode, _ := p.service(service)["network_mode"].(string)
+	return mode == "" || mode == "bridge"
+}
+
+// Member is one service of a stack, as its Compose file describes it.
+type Member struct {
+	Name  string
+	Image string
+	Ports []int
+	Built bool
+}
+
+// Layout lists the stack's services by name.
+func (p Project) Layout() []Member {
+	names := p.Services()
+	out := make([]Member, 0, len(names))
+	for _, name := range names {
+		out = append(out, Member{Name: name, Image: p.Image(name), Ports: p.Ports(name), Built: p.service(name)["build"] != nil})
+	}
+	return out
+}
+
 func toInt(v any) int {
 	switch n := v.(type) {
 	case json.Number:

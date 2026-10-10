@@ -1,0 +1,6 @@
+# The smallest stack: one service, and the file names no port, no variable
+# and no volume. Its image listens on 80; a domain is given to it on the
+# service's Domains tab.
+services:
+  hello:
+    image: traefik/whoami:v1.10
