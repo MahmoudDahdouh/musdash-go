@@ -1,0 +1,55 @@
+# name: Semaphore UI
+# about: A web interface for running Ansible playbooks, Terraform, OpenTofu and shell scripts, with schedules and access control.
+# docs: https://docs.semaphoreui.com/administration-guide/installation/docker/
+# website: https://semaphoreui.com
+# categories: automation, devtools
+# source: musdash
+services:
+  semaphore:
+    image: semaphoreui/semaphore:latest
+    environment:
+      - SERVICE_FQDN_SEMAPHORE_3000
+      - SEMAPHORE_WEB_ROOT=${SERVICE_URL_SEMAPHORE}
+      - SEMAPHORE_DB_DIALECT=postgres
+      - SEMAPHORE_DB_HOST=postgres
+      - SEMAPHORE_DB_PORT=5432
+      - SEMAPHORE_DB_USER=semaphore
+      - SEMAPHORE_DB_PASS=${SERVICE_PASSWORD_POSTGRES}
+      - SEMAPHORE_DB=semaphore
+      - SEMAPHORE_PLAYBOOK_PATH=/tmp/semaphore/
+      - SEMAPHORE_ADMIN=${SERVICE_USER_ADMIN}
+      - SEMAPHORE_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - SEMAPHORE_ADMIN_NAME=${SEMAPHORE_ADMIN_NAME:-Admin}
+      - SEMAPHORE_ADMIN_EMAIL=${SEMAPHORE_ADMIN_EMAIL:-admin@localhost}
+      - SEMAPHORE_ACCESS_KEY_ENCRYPTION=${SERVICE_BASE64_SEMAPHORE}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - semaphore-data:/var/lib/semaphore
+      - semaphore-config:/etc/semaphore
+      - semaphore-tmp:/tmp/semaphore
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/api/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=semaphore
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=semaphore
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  postgres-data:
+  semaphore-config:
+  semaphore-data:
+  semaphore-tmp:

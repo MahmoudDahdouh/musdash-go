@@ -392,6 +392,7 @@ inkvoice dokploy dokploy:inkvoice.svg
 inngest coolify coolify:inngest.png
 instantdb dokploy dokploy:instant.svg
 instatic dokploy dokploy:instatic.svg
+investbrain musdash selfhst:investbrain.svg
 invidious musdash selfhst:invidious.svg
 invoice-ninja coolify selfhst:invoice-ninja.svg
 invoiceshelf dokploy selfhst:invoiceshelf.svg
@@ -767,6 +768,7 @@ seanime dokploy selfhst:seanime.webp
 searxng coolify selfhst:searxng.svg
 seaweedfs coolify selfhst:seaweedfs.svg
 selfh-st-icons musdash selfhst:selfh-st.svg
+semaphore-ui musdash selfhst:semaphore-ui.svg
 send-visee musdash selfhst:send-visee.svg
 senddock dokploy dokploy:senddock.svg
 seq dokploy selfhst:seq.svg
@@ -910,6 +912,7 @@ vikunja-with-postgresql coolify selfhst:vikunja.svg
 viniplay musdash selfhst:viniplay.webp
 vito musdash selfhst:vito.svg
 voidauth musdash selfhst:voidauth.svg
+vouchervault musdash selfhst:vouchervault.svg
 vvveb coolify coolify:vvveb.svg
 vvveb-with-mariadb coolify coolify:vvveb.svg
 vvveb-with-mysql coolify coolify:vvveb.svg
@@ -948,6 +951,7 @@ yamtrack coolify selfhst:yamtrack.svg
 yamtrack-with-postgresql coolify selfhst:yamtrack.svg
 yarr musdash selfhst:yarr.svg
 yourls dokploy selfhst:yourls.svg
+youtarr musdash selfhst:youtarr.webp
 youtubedl-material musdash selfhst:youtube-dl.svg
 yt-dlp-web-player musdash selfhst:yt-dlp-web-player.svg
 yt-zero musdash selfhst:yt-zero.svg

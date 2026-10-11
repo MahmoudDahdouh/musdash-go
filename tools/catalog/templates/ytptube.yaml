@@ -8,6 +8,8 @@ services:
     image: ghcr.io/arabcoders/ytptube:latest
     environment:
       - SERVICE_FQDN_YTPTUBE_8081
+      - YTP_AUTH_USERNAME=${SERVICE_USER_ADMIN}
+      - YTP_AUTH_PASSWORD=${SERVICE_PASSWORD_ADMIN}
       - TZ=${TZ:-UTC}
     volumes:
       - ytptube-config:/config

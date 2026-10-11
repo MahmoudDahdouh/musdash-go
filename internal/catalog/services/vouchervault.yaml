@@ -1,0 +1,53 @@
+# name: VoucherVault
+# about: A tracker for vouchers, coupons, loyalty cards and gift cards that sends reminders before they expire.
+# docs: https://github.com/l4rm4nd/VoucherVault/wiki
+# website: https://github.com/l4rm4nd/VoucherVault
+# categories: finance, home
+# source: musdash
+services:
+  vouchervault:
+    image: l4rm4nd/vouchervault:1.30.x
+    environment:
+      - SERVICE_FQDN_VOUCHERVAULT_8000
+      - DOMAIN=${SERVICE_FQDN_VOUCHERVAULT}
+      - SECURE_COOKIES=True
+      - EXPIRY_THRESHOLD_DAYS=${EXPIRY_THRESHOLD_DAYS:-90}
+      - TZ=${TZ:-UTC}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRET}
+      - DB_ENGINE=postgres
+      - POSTGRES_USER=vouchervault
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=vouchervault
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - vouchervault-database:/opt/app/database
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=vouchervault
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=vouchervault
+    volumes:
+      - vouchervault-psql:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  vouchervault-database:
+  vouchervault-psql:

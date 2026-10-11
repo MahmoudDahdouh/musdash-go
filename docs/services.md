@@ -6,7 +6,7 @@ One-click services from the catalogue, a Docker Compose file of your own with a 
 
 ## The catalogue
 
-A service is a stack of containers described by a Docker Compose file. **Add resource** offers a catalogue of more than 600 services, "Your own Compose file" and a Compose file in a Git repository.
+A service is a stack of containers described by a Docker Compose file. **Add resource** offers a catalogue of more than 900 services, "Your own Compose file" and a Compose file in a Git repository.
 
 Every card has two links: **Website** is the project's own site, and **Docs** is the page to read before you run it, the project's self-hosting or Docker guide where it has one.
 

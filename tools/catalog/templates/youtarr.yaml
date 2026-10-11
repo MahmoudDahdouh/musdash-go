@@ -1,0 +1,53 @@
+# name: Youtarr
+# about: Downloads videos from YouTube channels on a schedule, keeps them organised on disk and can refresh a Plex library.
+# docs: https://github.com/DialmasterOrg/Youtarr/blob/main/docs/INSTALLATION.md
+# website: https://github.com/DialmasterOrg/Youtarr
+# categories: media
+services:
+  youtarr:
+    image: dialmaster/youtarr:latest
+    environment:
+      - SERVICE_FQDN_YOUTARR_3011
+      - TZ=${TZ:-UTC}
+      - IN_DOCKER_CONTAINER=1
+      - DB_HOST=youtarr-db
+      - DB_PORT=3321
+      - DB_USER=root
+      - DB_PASSWORD=${SERVICE_PASSWORD_DB}
+      - DB_NAME=youtarr
+      - AUTH_PRESET_USERNAME=${SERVICE_USER_ADMIN}
+      - AUTH_PRESET_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - TRUST_PROXY=1
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - YOUTUBE_OUTPUT_DIR=/usr/src/app/data
+    volumes:
+      - youtarr-videos:/usr/src/app/data
+      - youtarr-images:/app/server/images
+      - youtarr-config:/app/config
+      - youtarr-jobs:/app/jobs
+    depends_on:
+      youtarr-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://127.0.0.1:3011/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+  youtarr-db:
+    image: mariadb:10.3
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_DB}
+      - MYSQL_DATABASE=youtarr
+      - MYSQL_TCP_PORT=3321
+      - MYSQL_CHARSET=utf8mb4
+      - MYSQL_COLLATION=utf8mb4_unicode_ci
+    command: --port=3321 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-file-per-table=1 --innodb-large-prefix=ON
+    volumes:
+      - youtarr-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -P 3321 -u root -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s

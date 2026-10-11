@@ -1,0 +1,66 @@
+# name: Investbrain
+# about: A smart portfolio tracker that follows your holdings, market data and daily changes, with optional AI chat.
+# docs: https://github.com/investbrainapp/investbrain#self-hosting
+# website: https://investbra.in/
+# categories: finance
+services:
+  investbrain:
+    image: investbrainapp/investbrain:latest
+    environment:
+      - SERVICE_FQDN_INVESTBRAIN_80
+      - APP_URL=${SERVICE_URL_INVESTBRAIN}
+      - ASSET_URL=${SERVICE_URL_INVESTBRAIN}
+      - APP_KEY=base64:${SERVICE_BASE64_INVESTBRAIN}
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=investbrain
+      - DB_USERNAME=${SERVICE_USER_POSTGRES}
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+      - CACHE_STORE=redis
+      - REDIS_HOST=redis
+      - APP_TIMEZONE=${TZ:-UTC}
+      - REGISTRATION_ENABLED=${REGISTRATION_ENABLED:-true}
+      - MARKET_DATA_PROVIDER=${MARKET_DATA_PROVIDER:-yahoo}
+      - ALPHAVANTAGE_API_KEY=${ALPHAVANTAGE_API_KEY:-}
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY:-}
+      - AI_CHAT_ENABLED=${AI_CHAT_ENABLED:-false}
+      - CHAT_PROVIDER=${CHAT_PROVIDER:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - investbrain-storage:/var/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1/up || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 40
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - investbrain-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=investbrain
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - investbrain-pgsql:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
