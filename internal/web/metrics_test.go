@@ -143,18 +143,32 @@ func TestServerMetrics(t *testing.T) {
 		})
 	base := "/servers/" + app.ServerID + "/metrics"
 
-	if _, page := a.get("/servers"); !strings.Contains(page, `href="`+base+`"`) {
-		t.Fatal("the servers page does not link to the server's usage")
+	own := "/servers/" + app.ServerID
+	if _, page := a.get(own); !strings.Contains(page, `href="`+base+`"`) {
+		t.Fatal("the server's page does not lead to its usage")
 	}
 	_, page := a.get(base)
 	if !strings.Contains(page, "Switch sampling on") || !strings.Contains(page, `hx-get="`+base+`/now"`) {
 		t.Fatalf("the usage page:\n%s", page)
 	}
+	// Both tabs, and the reading's place drawn whole before there is one:
+	// its four cells by name, marked as still being read.
+	for _, want := range []string{`href="` + own + `"`, `aria-current="page"`, `aria-busy="true"`, "Reading what is in use", "Processor", "Memory", "Load", "Disk"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the usage page before a reading lacks %q", want)
+		}
+	}
+	// Sampling is switched in the card it fills, and there is one card
+	// about it.
+	if strings.Count(page, "Sampling is switched off") != 1 || strings.Contains(page, "switched on below") {
+		t.Error("the usage page says more than once that sampling is off, or points at another card")
+	}
 	res, now := a.get(base + "/now")
 	wantStatus(t, res, http.StatusOK)
 	// 1827000 of 2030000 kB in use: nine tenths, said in words as well.
+	// A container is listed under the name of what it belongs to.
 	for _, want := range []string{"60%", "Of 2 cores", "1.7 GiB of 1.9 GiB", "Nearly full", "0.52", "9.5 GiB of 23.8 GiB",
-		app.Container, `href="` + a.appPath(appID) + `/metrics"`, "12.5%", `hx-trigger="every 10s"`} {
+		app.Container, `href="` + a.appPath(appID) + `/metrics">web</a>`, "12.5%", `hx-trigger="every 10s"`} {
 		if !strings.Contains(now, want) {
 			t.Errorf("the reading lacks %q:\n%s", want, now)
 		}
@@ -179,7 +193,8 @@ func TestServerMetrics(t *testing.T) {
 	a.db.AddSamples(ctx, app.ServerID, time.Now().Truncate(time.Minute).Unix(), map[string]db.Sample{
 		"": {CPU: 6000, Mem: 812000 << 10, MemTotal: 2030000 << 10, Load: 52, DiskUsed: 10000000 << 10, DiskTotal: 25000000 << 10}})
 	_, page = a.get(base)
-	for _, want := range []string{"Switch sampling off", "<svg", "Processor", "Memory", "Load", "Disk", "of all cores"} {
+	// Switching it off removes what was kept, so it asks first.
+	for _, want := range []string{"Switch sampling off", "<svg", "Processor", "Memory", "Load", "Disk", "of all cores", `data-confirm="`, "samples that were kept"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the usage page lacks %q", want)
 		}

@@ -71,7 +71,7 @@ func TestCheckDNS(t *testing.T) {
 	ctx := context.Background()
 	servers, _ := a.db.ListServers(ctx, firstTeam(t, a))
 	res, _ := a.post("/servers", "/servers/"+servers[0].ID, url.Values{"ip": {"203.0.113.7"}})
-	wantRedirect(t, res, "/servers")
+	wantRedirect(t, res, "/servers/"+servers[0].ID)
 
 	var mu sync.Mutex
 	var asked []string

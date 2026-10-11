@@ -50,11 +50,7 @@ func (s *Server) homeView(r *http.Request) (pages.HomeView, error) {
 	for _, server := range servers {
 		h := pages.HomeServer{Server: server}
 		if sample, ok := samples[server.ID]; ok {
-			h.Meters = []ui.MeterProps{
-				{Label: "Processor", Value: ui.Percent(float64(sample.CPU) / 100), Share: float64(sample.CPU) / 10000},
-				{Label: "Memory", Value: ui.Bytes(float64(sample.Mem)) + " of " + ui.Bytes(float64(sample.MemTotal)), Share: share(sample.Mem, sample.MemTotal)},
-				{Label: "Disk", Value: ui.Bytes(float64(sample.DiskUsed)) + " of " + ui.Bytes(float64(sample.DiskTotal)), Share: share(sample.DiskUsed, sample.DiskTotal)},
-			}
+			h.Meters = sampleMeters(sample)
 		}
 		v.Servers = append(v.Servers, h)
 	}
@@ -84,4 +80,14 @@ func (s *Server) homeLive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, r, http.StatusOK, pages.HomeLive(v))
+}
+
+// sampleMeters is a server's stored reading as Home and the list of
+// servers show it: how busy and how full it was.
+func sampleMeters(sample db.Sample) []ui.MeterProps {
+	return []ui.MeterProps{
+		{Label: "Processor", Value: ui.Percent(float64(sample.CPU) / 100), Share: float64(sample.CPU) / 10000},
+		{Label: "Memory", Value: ui.Bytes(float64(sample.Mem)) + " of " + ui.Bytes(float64(sample.MemTotal)), Share: share(sample.Mem, sample.MemTotal)},
+		{Label: "Disk", Value: ui.Bytes(float64(sample.DiskUsed)) + " of " + ui.Bytes(float64(sample.DiskTotal)), Share: share(sample.DiskUsed, sample.DiskTotal)},
+	}
 }

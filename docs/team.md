@@ -44,7 +44,7 @@ A value that several apps need is written once and taken by name. There are four
 | Team, Shared variables | `{{team.NAME}}` | Admins |
 | A project's Settings | `{{project.NAME}}` | everybody |
 | An environment's Settings | `{{environment.NAME}}` | everybody |
-| Servers, on a server's card | `{{server.NAME}}` | Admins |
+| Servers, on a server's page | `{{server.NAME}}` | Admins |
 
 An app or a service uses one by naming it in a variable of its own, alone or inside a longer value:
 

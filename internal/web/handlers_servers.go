@@ -31,9 +31,6 @@ func (s *Server) serverInfo(ctx context.Context, server db.Server) pages.ServerI
 		// What the last check found is shown as stored. Asking every
 		// remote server on every page view would make the page as slow as
 		// the slowest of them.
-		if key, err := s.DB.SSHKeyByID(ctx, server.SSHKeyID); err == nil {
-			info.PublicKey = key.PublicKey
-		}
 		return info
 	}
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
@@ -52,37 +49,73 @@ func (s *Server) serverInfo(ctx context.Context, server db.Server) pages.ServerI
 	return info
 }
 
+// renderServers draws the list of servers: a tile each, with what it used
+// when it was last sampled. f is the Add server form, with what was
+// refused when it comes back.
 func (s *Server) renderServers(w http.ResponseWriter, r *http.Request, status int, f ui.Form) {
-	s.renderServersWith(w, r, status, f, "", nil)
-}
-
-// renderServersWith draws the Servers page with the report of a check
-// that was just made of one of them.
-func (s *Server) renderServersWith(w http.ResponseWriter, r *http.Request, status int, f ui.Form, checked string, report *servers.Report) {
+	ctx := r.Context()
 	teamID := sessionFrom(r).TeamID
-	if _, err := s.DB.EnsureLocalServer(r.Context(), teamID, ""); err != nil {
+	if _, err := s.DB.EnsureLocalServer(ctx, teamID, ""); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	list, err := s.DB.ListServers(r.Context(), teamID)
+	list, err := s.DB.ListServers(ctx, teamID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// As on Home, a reading is the stored one, and an old one is not shown
+	// as the present: the list asks no remote server anything.
+	samples, err := s.DB.LatestServerSamples(ctx, teamID, time.Now().Add(-homeReadingAge).Unix())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	infos := make([]pages.ServerInfo, 0, len(list))
 	for _, server := range list {
-		info := s.serverInfo(r.Context(), server)
-		if server.ID == checked {
-			info.Report = report
+		info := s.serverInfo(ctx, server)
+		if sample, ok := samples[server.ID]; ok {
+			info.Meters = sampleMeters(sample)
+		}
+		if info.Sampled, err = s.DB.ServerSampled(ctx, server.ID); err != nil {
+			s.fail(w, r, err)
+			return
 		}
 		infos = append(infos, info)
 	}
-	keys, err := s.DB.ListSSHKeys(r.Context(), teamID)
+	keys, err := s.DB.ListSSHKeys(ctx, teamID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	s.render(w, r, status, pages.Servers(s.shell(w, r, "Servers", "servers"), infos, keys, f))
+}
+
+// serverPath is a server's own page.
+func serverPath(server db.Server) string { return "/servers/" + server.ID }
+
+// renderServer draws a server's own page. f is the address form of this
+// machine when it was refused, and report the check that was just made.
+func (s *Server) renderServer(w http.ResponseWriter, r *http.Request, status int, server db.Server, f ui.Form, report *servers.Report) {
+	info := s.serverInfo(r.Context(), server)
+	info.Report = report
+	if server.Kind == db.ServerSSH {
+		if key, err := s.DB.SSHKeyByID(r.Context(), server.SSHKeyID); err == nil {
+			info.PublicKey = key.PublicKey
+		}
+	}
+	shell := s.shell(w, r, server.Name, "servers", ui.Crumb{Label: "Servers", Href: "/servers"}, ui.Crumb{Label: server.Name})
+	if report != nil {
+		// The answer to a check: Refresh shows the page, not another check.
+		shell.Address = serverPath(server)
+	}
+	s.render(w, r, status, pages.ServerShow(shell, info, f))
+}
+
+func (s *Server) serverShow(w http.ResponseWriter, r *http.Request) {
+	if server, ok := s.loadServer(w, r); ok {
+		s.renderServer(w, r, http.StatusOK, server, ui.Form{}, nil)
+	}
 }
 
 var (
@@ -166,7 +199,8 @@ func (s *Server) serverCreate(w http.ResponseWriter, r *http.Request) {
 		keyChoice = key.ID
 	}
 	server.SSHKeyID = keyChoice
-	if _, err := s.DB.CreateServer(ctx, server); errors.Is(err, db.ErrNotFound) {
+	created, err := s.DB.CreateServer(ctx, server)
+	if errors.Is(err, db.ErrNotFound) {
 		f.Fail("key", "Choose one of the keys listed.")
 		s.renderServers(w, r, http.StatusUnprocessableEntity, f)
 		return
@@ -174,8 +208,9 @@ func (s *Server) serverCreate(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// Its own page is where the key to install and Check are.
 	setFlash(w, r, ui.ToneOK, "Server added. Install its key on the server, then choose Check.")
-	redirect(w, r, "/servers")
+	redirect(w, r, serverPath(created))
 }
 
 // loadRemoteServer fetches the remote server in the path for the signed-in
@@ -203,8 +238,13 @@ func (s *Server) serverCheck(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// The check changed what is stored of the server. A row that cannot
+	// be read again is drawn as it was: the report is what matters.
+	if checked, err := s.DB.Server(r.Context(), server.TeamID, server.ID); err == nil {
+		server = checked
+	}
 	// Rendered directly: the report is for this one view.
-	s.renderServersWith(w, r, http.StatusOK, ui.Form{}, server.ID, &report)
+	s.renderServer(w, r, http.StatusOK, server, ui.Form{}, &report)
 }
 
 func (s *Server) serverProxy(w http.ResponseWriter, r *http.Request) {
@@ -215,7 +255,7 @@ func (s *Server) serverProxy(w http.ResponseWriter, r *http.Request) {
 	if err := s.Pool.InstallProxy(r.Context(), server, filepath.Join(s.Cfg.DataDir, "dist")); err != nil {
 		s.Log.Warn("install proxy", "server", server.ID, "err", err)
 		setFlash(w, r, ui.ToneDanger, "The proxy was not installed: "+err.Error())
-		redirect(w, r, "/servers")
+		redirect(w, r, serverPath(server))
 		return
 	}
 	// The proxy starts with the routes of what already runs there.
@@ -223,7 +263,7 @@ func (s *Server) serverProxy(w http.ResponseWriter, r *http.Request) {
 		s.Log.Warn("publish routes after a proxy install", "server", server.ID, "err", err)
 	}
 	setFlash(w, r, ui.ToneOK, "The proxy is installed on "+server.Name+" and running.")
-	redirect(w, r, "/servers")
+	redirect(w, r, serverPath(server))
 }
 
 func (s *Server) serverForgetHostKey(w http.ResponseWriter, r *http.Request) {
@@ -237,7 +277,7 @@ func (s *Server) serverForgetHostKey(w http.ResponseWriter, r *http.Request) {
 	}
 	s.Pool.Forget(server.ID)
 	setFlash(w, r, ui.ToneOK, "Host key forgotten. Check the server to record the key it presents now.")
-	redirect(w, r, "/servers")
+	redirect(w, r, serverPath(server))
 }
 
 func (s *Server) serverDelete(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +288,10 @@ func (s *Server) serverDelete(w http.ResponseWriter, r *http.Request) {
 	err := s.DB.DeleteServer(r.Context(), server.TeamID, server.ID)
 	switch {
 	case errors.Is(err, db.ErrInUse):
+		// The server is still there, and so is its page.
 		setFlash(w, r, ui.ToneWarn, "Something still runs on "+server.Name+". Delete or move it first.")
+		redirect(w, r, serverPath(server))
+		return
 	case err != nil:
 		s.fail(w, r, err)
 		return
@@ -282,7 +325,7 @@ func targetServer(r *http.Request, f *ui.Form, list []db.Server) db.Server {
 			continue
 		}
 		if server.Kind == db.ServerSSH && server.HostKey == "" {
-			f.Fail("server", server.Name+" has not been checked yet. Open Servers and choose Check first.")
+			f.Fail("server", server.Name+" has not been checked yet. Open its page under Servers and choose Check first.")
 		}
 		return server
 	}
@@ -295,15 +338,19 @@ func (s *Server) serverList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request) {
+	server, ok := s.loadServer(w, r)
+	if !ok {
+		return
+	}
 	var f ui.Form
 	ip := strings.TrimSpace(r.PostFormValue("ip"))
 	f.Set("ip", ip)
 	if ip != "" && net.ParseIP(ip) == nil {
 		f.Fail("ip", "Enter an IP address such as 203.0.113.7.")
-		s.renderServers(w, r, http.StatusUnprocessableEntity, f)
+		s.renderServer(w, r, http.StatusUnprocessableEntity, server, f, nil)
 		return
 	}
-	err := s.DB.UpdateServerIP(r.Context(), sessionFrom(r).TeamID, r.PathValue("id"), ip)
+	err := s.DB.UpdateServerIP(r.Context(), server.TeamID, server.ID, ip)
 	if errors.Is(err, db.ErrNotFound) {
 		s.notFound(w, r)
 		return
@@ -313,7 +360,7 @@ func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setFlash(w, r, ui.ToneOK, "Address saved.")
-	redirect(w, r, "/servers")
+	redirect(w, r, serverPath(server))
 }
 
 func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {

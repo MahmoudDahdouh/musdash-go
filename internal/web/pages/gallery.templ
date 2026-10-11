@@ -24,6 +24,12 @@ templ swatch(name, class string) {
 	</div>
 }
 
+// galleryMeters is what a server's tile shows of how full it is.
+templ galleryMeters() {
+	@ui.Meter(ui.MeterProps{Label: "Processor", Value: "41%", Share: 0.41})
+	@ui.Meter(ui.MeterProps{Label: "Memory", Value: "6.7 GiB of 7.7 GiB", Share: 0.87})
+}
+
 templ gallerySection(title string) {
 	<section class="grid gap-3">
 		<h2 class="eyebrow">{ title }</h2>
@@ -241,12 +247,37 @@ templ Gallery(s ui.Shell) {
 					@ui.Tile(ui.TileProps{Href: "#", Icon: "database", Title: "postgres", Text: "postgres:17-alpine", Mono: true, State: "degraded"}) {
 						@ui.Meta("database", "PostgreSQL", "engine")
 					}
+					@ui.Tile(ui.TileProps{Href: "#", Icon: "server", Title: "Frankfurt", Text: "root@203.0.113.20:22", Mono: true, State: "running", StateText: "Ready", Body: galleryMeters()}) {
+						@ui.Meta("box", "4", "apps, databases and services run here")
+						@ui.Meta("", "Docker 28.3.2", "")
+						@ui.Meta("globe", "Proxy installed", "")
+					}
 				}
 				@ui.Offers("Kinds of resource") {
 					@ui.Offer(ui.OfferProps{Href: "#", Logo: "postgres", Icon: "database", Title: "PostgreSQL", Text: "The general-purpose relational database.", Docs: "https://www.postgresql.org/docs/", Website: "https://www.postgresql.org/"})
 					@ui.Offer(ui.OfferProps{Href: "#", Logo: "docker", Icon: "box", Title: "Docker image", Text: "Run an image from a registry.", TagLabels: []string{"Developer tools", "Automation"}})
 					@ui.Offer(ui.OfferProps{Href: "#", Icon: "key", Title: "Private repository, with a deploy key", Text: "No logo of its own: its icon, in the brand's blue.", Action: "Add key"})
 				}
+			}
+			@gallerySection("Figures: a strip, and the cells before a reading") {
+				<div class="grid gap-4">
+					<section class="card">
+						@ui.Stats() {
+							@ui.Stat(ui.MeterProps{Label: "Processor", Value: "41%", Share: 0.41, Detail: "Of 4 cores, over one second."})
+							@ui.Stat(ui.MeterProps{Label: "Memory", Value: "6.7 GiB of 7.7 GiB", Share: 0.87})
+							@ui.Stat(ui.MeterProps{Label: "Load", Value: "0.82", Share: -1, Detail: "One-minute average."})
+							@ui.Stat(ui.MeterProps{Label: "Disk", Value: "72.7 GiB of 78.2 GiB", Share: 0.93, Detail: "The root filesystem."})
+						}
+					</section>
+					<section class="card">
+						@ui.Stats() {
+							@ui.Stat(ui.MeterProps{Label: "Processor", Share: -1})
+							@ui.Stat(ui.MeterProps{Label: "Memory", Share: -1})
+							@ui.Stat(ui.MeterProps{Label: "Load", Share: -1})
+							@ui.Stat(ui.MeterProps{Label: "Disk", Share: -1})
+						}
+					</section>
+				</div>
 			}
 			@gallerySection("Trail and switcher") {
 				<div class="card card-body">

@@ -777,6 +777,12 @@
     color: var(--color-ink-mute);
     overflow-wrap: anywhere;
   }
+  /* What a tile shows between its text and its figures. */
+  .tile-body {
+    display: grid;
+    gap: 10px;
+    padding-block: 4px;
+  }
   .tile-meta {
     display: flex;
     flex-wrap: wrap;
@@ -1543,6 +1549,92 @@
   .meter-detail {
     font-size: var(--text-xs);
     color: var(--color-ink-mute);
+  }
+
+  /* A strip of figures across a card. The cells are equal whatever each
+     holds: the bar's place is kept in a cell that has none. The lines
+     between cells are each cell's own start edges, and the strip cuts off
+     the ones at its own edge, so they are right however the cells wrap. */
+  .stats {
+    overflow: hidden;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    margin-block-start: -1px;
+    margin-inline-start: -1px;
+  }
+  @media (min-width: 30rem) {
+    .stats-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 72rem) {
+    .stats-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  .stat {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: start;
+    gap: 6px 8px;
+    min-width: 0;
+    padding: 14px 16px 16px;
+    border-block-start: 1px solid var(--color-line);
+    border-inline-start: 1px solid var(--color-line);
+  }
+  .stat-label {
+    font-size: var(--text-sm);
+    color: var(--color-ink-mute);
+  }
+  .stat-flag {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .stat-value {
+    grid-column: 1 / -1;
+    font-family: var(--font-mono);
+    font-size: var(--text-lg);
+    line-height: var(--text-lg--line-height);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .stat-pending {
+    color: var(--color-ink-faint);
+  }
+  .stat-bar {
+    grid-column: 1 / -1;
+    height: 8px;
+  }
+  .stat-detail {
+    grid-column: 1 / -1;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    color: var(--color-ink-mute);
+  }
+  /* A strip under a notice, and the containers of a reading under either:
+     a line between them. Straight under the card's head there is the
+     head's own. */
+  .card-body + .stats,
+  .card-body + .usage-rows,
+  .stats + .usage-rows {
+    border-block-start: 1px solid var(--color-line);
+  }
+  /* Figures at the end of their column, to be compared down it. */
+  .table .num {
+    /* As narrow as its figures on a small screen, where the name needs
+       the room; a column of its own width where there is room to spare. */
+    width: 1%;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  @media (min-width: 48rem) {
+    .table .num {
+      width: 9rem;
+    }
   }
 
   /* Terminal -----------------------------------------------------------

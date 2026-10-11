@@ -138,7 +138,7 @@ func TestSearchFindsWhatTheTeamHas(t *testing.T) {
 		"site":      a.servicePath(site.ID),
 		"shop.exam": a.appPath(web) + "/domains",
 		"press.ex":  a.servicePath(site.ID),
-		"localhost": "/servers#server-" + servers[0].ID,
+		"localhost": "/servers/" + servers[0].ID,
 		"frontend":  "/tags/frontend",
 		web:         a.appPath(web),
 	} {
@@ -146,10 +146,9 @@ func TestSearchFindsWhatTheTeamHas(t *testing.T) {
 			t.Errorf("%q leads to %v, want %s first", text, got, href)
 		}
 	}
-	// A server has no page of its own: its row leads to its card in the
-	// list, which must be there to lead to.
-	if _, page := a.get("/servers"); !strings.Contains(page, `id="server-`+servers[0].ID+`"`) {
-		t.Error("the list of servers has no place the server's row leads to")
+	// A server's row leads to its page, which must be there to lead to.
+	if res, _ := a.get("/servers/" + servers[0].ID); res.StatusCode != http.StatusOK {
+		t.Errorf("the page a server's row leads to: %d", res.StatusCode)
 	}
 	if row := rowTo(t, a.find("shop.exam"), a.appPath(web)+"/domains"); !strings.Contains(row, "Domain of web") || !strings.Contains(row, "<mark>shop.exam</mark>ple.com") {
 		t.Errorf("a domain's row does not say what it points at:\n%s", row)

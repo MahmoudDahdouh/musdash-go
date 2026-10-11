@@ -95,8 +95,7 @@ func said(parts ...string) []string {
 }
 
 // HitRow is the row of something the database found. A hit leads to the
-// page that shows it: a server to its card in the list of servers, which
-// is all the page a server has, and a domain to where its routing is set.
+// page that shows it, and a domain to where its routing is set.
 func HitRow(h db.Hit) SearchRow {
 	row := SearchRow{Name: h.Name, Rank: h.Rank}
 	switch h.Kind {
@@ -126,7 +125,7 @@ func HitRow(h db.Hit) SearchRow {
 		row.Said = said("Domain of "+h.Owner, place(h))
 	case db.HitServer:
 		server := db.Server{Status: h.Status}
-		row.Href, row.Icon, row.Fact = "/servers#server-"+h.ID, "server", h.Detail
+		row.Href, row.Icon, row.Fact = "/servers/"+h.ID, "server", h.Detail
 		row.Said = said("Server")
 		row.Pill = ui.Pill(serverTone(server), serverStateLabel(server))
 	case db.HitTag:

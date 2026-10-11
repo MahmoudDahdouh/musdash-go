@@ -346,6 +346,7 @@ func (s *Server) Handler() http.Handler {
 	handle("POST /sources/keys/{id}/delete", admin, s.sshKeyDelete)
 
 	handle("GET /servers", member, s.serverList)
+	handle("GET /servers/{id}", member, s.serverShow)
 	handle("POST /servers/{id}", admin, s.serverUpdate)
 	handle("POST /servers", admin, s.serverCreate)
 	handle("POST /servers/{id}/check", admin, s.serverCheck)

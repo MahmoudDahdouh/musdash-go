@@ -198,6 +198,17 @@ func TestMemberCannotDeleteAServer(t *testing.T) {
 	if !strings.Contains(page, "frankfurt") || !strings.Contains(page, `href="/team"`) {
 		t.Error("a Member should still see the servers and the Team link")
 	}
+	// The server's own page is a Member's to read, with nothing to press.
+	res, page = m.get("/servers/" + server.ID)
+	wantStatus(t, res, http.StatusOK)
+	for _, absent := range []string{"Remove server", "Forget host key", "/check", "Install proxy", "authorized_keys", `data-open="server-ip"`} {
+		if strings.Contains(page, absent) {
+			t.Errorf("a Member's page of a server shows %q", absent)
+		}
+	}
+	if _, page = m.get("/servers/" + server.ID + "/metrics"); strings.Contains(page, "Switch sampling on") || !strings.Contains(page, "An Admin or an Owner") {
+		t.Error("a Member's usage page offers the sampling switch, or does not say whose it is")
+	}
 	_, page = m.get("/sources")
 	for _, absent := range []string{"Create GitHub App", "Create deploy key"} {
 		if strings.Contains(page, absent) {

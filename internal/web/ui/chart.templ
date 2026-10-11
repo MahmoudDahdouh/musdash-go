@@ -98,3 +98,48 @@ templ Meter(p MeterProps) {
 		}
 	</div>
 }
+
+// Stats is a strip of figures across a card: what is in use now. Its
+// children are Stat cells, which are equal whatever each one holds.
+templ Stats() {
+	<div class="stats">
+		<dl class="stats-grid">
+			{ children... }
+		</dl>
+	</div>
+}
+
+// Stat is one cell of a strip: what is measured, the figure, a bar when
+// the figure is a share of a whole, and a note. Without a Value it is the
+// cell before its first reading: the same size, with a dash for a figure,
+// so that nothing moves when the reading arrives.
+templ Stat(p MeterProps) {
+	<div class="stat">
+		<dt class="stat-label">{ p.Label }</dt>
+		if p.Value == "" {
+			<dd class="stat-value stat-pending" aria-hidden="true">–</dd>
+		} else {
+			<dd class="stat-value">{ p.Value }</dd>
+		}
+		if p.Share >= 0.9 {
+			<dd class="stat-flag">
+				@Badge("Nearly full", ToneDanger)
+			</dd>
+		} else if p.Share >= 0.75 {
+			<dd class="stat-flag">
+				@Badge("High", ToneWarn)
+			</dd>
+		}
+		<dd class="stat-bar" aria-hidden="true">
+			if p.Share >= 0 || p.Value == "" {
+				<svg class="meter-bar" viewBox="0 0 100 4" preserveAspectRatio="none">
+					<rect class="meter-track" x="0" y="0" width="100" height="4"></rect>
+					<rect class={ meterTone(p.Share) } x="0" y="0" width={ meterWidth(p.Share) } height="4"></rect>
+				</svg>
+			}
+		</dd>
+		if p.Detail != "" {
+			<dd class="stat-detail">{ p.Detail }</dd>
+		}
+	</div>
+}

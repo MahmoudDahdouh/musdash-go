@@ -524,7 +524,10 @@ func TestServersAndInstanceSettings(t *testing.T) {
 		t.Error("a bad address was accepted")
 	}
 	res, _ = a.post("/servers", path, url.Values{"ip": {"203.0.113.7"}})
-	wantRedirect(t, res, "/servers")
+	wantRedirect(t, res, path)
+	if _, body = a.get(path); !strings.Contains(body, "203.0.113.7") || !strings.Contains(body, "This machine") {
+		t.Error("the server's page does not show the address that was saved")
+	}
 	res, _ = a.post("/servers", "/servers/nope", url.Values{"ip": {"203.0.113.7"}})
 	wantStatus(t, res, http.StatusNotFound)
 
@@ -732,8 +735,13 @@ func TestGuardedDomainOnAnEarlierProxySaysSo(t *testing.T) {
 	if body := add(guarded("one.example.com")); !strings.Contains(body, warning) || !strings.Contains(body, "systemctl restart musdash-proxy") {
 		t.Error("a password on an earlier proxy: the page does not say that it will not be served, or what to do")
 	}
-	if _, body := a.get("/servers"); !strings.Contains(body, "Running, an earlier version") {
+	// The list says so in a word and the server's page with what to do.
+	local, _ := a.db.ListServers(context.Background(), firstTeam(t, a))
+	if _, body := a.get("/servers"); !strings.Contains(body, "an earlier version") {
 		t.Error("the Servers page does not say that the proxy is an earlier one")
+	}
+	if _, body := a.get("/servers/" + local[0].ID); !strings.Contains(body, "Running, an earlier version") || !strings.Contains(body, "systemctl restart musdash-proxy") {
+		t.Error("the server's page does not say that the proxy is an earlier one, or what to do")
 	}
 	// What a proxy that was killed left behind is not the running one's.
 	a.fake.PutFile(a.cfg.ProxyFormatPath(), "999 2\n")
@@ -744,8 +752,10 @@ func TestGuardedDomainOnAnEarlierProxySaysSo(t *testing.T) {
 	if body := add(guarded("three.example.com")); strings.Contains(body, warning) {
 		t.Error("a proxy of this version came with the warning")
 	}
-	if _, body := a.get("/servers"); strings.Contains(body, "an earlier version") {
-		t.Error("the Servers page calls a proxy of this version an earlier one")
+	for _, path := range []string{"/servers", "/servers/" + local[0].ID} {
+		if _, body := a.get(path); strings.Contains(body, "an earlier version") {
+			t.Errorf("%s calls a proxy of this version an earlier one", path)
+		}
 	}
 	// With no proxy running there is nothing to restart.
 	a.fake.RemoveAll(context.Background(), a.cfg.ProxyPIDPath())

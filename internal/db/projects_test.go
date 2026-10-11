@@ -76,3 +76,28 @@ func TestEnvironmentUsesServer(t *testing.T) {
 		}
 	}
 }
+
+// NamedPlace is what a container on a server's usage page is named with:
+// the resource's name and where it is, for the team that asks and nobody
+// else.
+func TestNamedPlace(t *testing.T) {
+	d := openTest(t)
+	ctx := context.Background()
+	h := newHomeTeams(t, d)
+
+	name, projectID, envID, err := d.NamedPlace(ctx, h.team, KindApp, h.web.ID)
+	if err != nil || name != h.web.Name || projectID != h.project.ID || envID != h.env.ID {
+		t.Fatalf("NamedPlace = %q, %q, %q, %v", name, projectID, envID, err)
+	}
+	for what, ask := range map[string][3]string{
+		"another team's app":     {h.team, KindApp, h.otherApp.ID},
+		"an app asked as theirs": {h.other, KindApp, h.web.ID},
+		"a kind that is not one": {h.team, "servers", h.web.ID},
+		"the wrong kind":         {h.team, KindDatabase, h.web.ID},
+		"no id":                  {h.team, KindApp, ""},
+	} {
+		if name, _, _, err := d.NamedPlace(ctx, ask[0], ask[1], ask[2]); err != ErrNotFound || name != "" {
+			t.Errorf("%s: %q, %v", what, name, err)
+		}
+	}
+}

@@ -81,7 +81,8 @@ func (s *Server) sharedServer(w http.ResponseWriter, r *http.Request) (sharedTar
 	}
 	return sharedTarget{
 		scope: db.ScopeServer, id: server.ID, active: "servers",
-		crumbs: []ui.Crumb{{Label: "Servers", Href: "/servers"}, {Label: server.Name + " variables"}},
+		// The server has a page of its own, which is where this one is reached from.
+		crumbs: []ui.Crumb{{Label: "Servers", Href: "/servers"}, {Label: server.Name, Href: serverPath(server)}, {Label: "Shared variables"}},
 		view: pages.SharedView{
 			Title: "Variables of " + server.Name, Intro: "Shared by everything that runs on this server.",
 			Scope: db.ScopeServer, Action: "/servers/" + server.ID + "/variables", CanEdit: may(r, admin), AdminSet: true,

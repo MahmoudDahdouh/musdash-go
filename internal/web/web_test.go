@@ -1010,7 +1010,10 @@ func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
 	svc := a.newService(projectID, env, "site", nil)
 	mdb := a.newDatabase(projectID, env, "postgres", "maindb", nil)
 	base := "/projects/" + projectID
+	machines, _ := a.db.ListServers(context.Background(), firstTeam(t, a))
+	machine := "/servers/" + machines[0].ID
 	for _, page := range []string{
+		machine, machine + "/metrics",
 		a.databasePath(mdb.ID), a.databasePath(mdb.ID) + "/backups", a.databasePath(mdb.ID) + "/settings",
 		a.appPath(git.ID) + "/settings", a.appPath(git.ID) + "/tasks", a.appPath(git.ID) + "/environment",
 		a.servicePath(svc.ID), a.servicePath(svc.ID) + "/compose", a.servicePath(svc.ID) + "/domains", a.servicePath(svc.ID) + "/logs", a.servicePath(svc.ID) + "/settings",

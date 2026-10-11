@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"time"
 
@@ -81,6 +82,10 @@ func nextPoll(r *http.Request, base string) string {
 // resource on it.
 func (s *Server) history(r *http.Request, serverID, resourceID, base string) (pages.History, error) {
 	h := pages.History{ServerHref: "/servers/" + serverID + "/metrics"}
+	if resourceID == "" {
+		// The server's own page: the switch is here, not somewhere to go.
+		h.ServerHref, h.Switch, h.Admin, h.CSRF = "", base, may(r, admin), sessionFrom(r).CSRFToken
+	}
 	sampled, err := s.DB.ServerSampled(r.Context(), serverID)
 	if err != nil || !sampled {
 		return h, err
@@ -322,7 +327,6 @@ func (s *Server) serverMetrics(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	h.ServerHref = ""
 	shell := s.shell(w, r, server.Name, "servers", ui.Crumb{Label: "Servers", Href: "/servers"}, ui.Crumb{Label: server.Name})
 	s.render(w, r, http.StatusOK, pages.ServerMetrics(shell, server, h))
 }
@@ -403,9 +407,23 @@ func (s *Server) serverMetricsNow(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			row := pages.UsageRow{Name: c.Name, CPU: ui.Percent(float64(c.CPU) / 100), Mem: ui.Bytes(float64(c.Mem))}
-			row.Href = s.resourcePage(r, o.Kind, o.Resource)
+			if row.Title, row.Href = s.resourcePage(r, o.Kind, o.Resource); row.Title != "" {
+				row.Kind = o.Kind
+			}
 			u.Rows = append(u.Rows, row)
 		}
+		// By what a person knows them by, and always in the same order: a
+		// list sorted by use would be shuffled with every reading.
+		sort.SliceStable(u.Rows, func(i, j int) bool {
+			a, b := u.Rows[i], u.Rows[j]
+			if (a.Title == "") != (b.Title == "") {
+				return a.Title != ""
+			}
+			if a.Title != b.Title {
+				return a.Title < b.Title
+			}
+			return a.Name < b.Name
+		})
 	}
 	s.render(w, r, http.StatusOK, pages.UsageNow(u))
 }
@@ -429,16 +447,17 @@ func (s *Server) serverMetricsSave(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, "/servers/"+server.ID+"/metrics")
 }
 
-// resourcePage is the metrics page of what a container says it belongs to,
-// or "" when that is nothing of the signed-in team's. The label is the
-// server's word: it becomes a link only when it names something here.
-func (s *Server) resourcePage(r *http.Request, kind, id string) string {
+// resourcePage is the name and the metrics page of what a container says
+// it belongs to, or nothing when that is nothing of the signed-in team's.
+// The label is the server's word: it becomes a name and a link only when
+// it names something here, and the name shown is the database's.
+func (s *Server) resourcePage(r *http.Request, kind, id string) (name, href string) {
 	if !resourceIDRE.MatchString(id) {
-		return ""
+		return "", ""
 	}
-	projectID, envID, err := s.DB.PlaceOf(r.Context(), sessionFrom(r).TeamID, kind, id)
+	name, projectID, envID, err := s.DB.NamedPlace(r.Context(), sessionFrom(r).TeamID, kind, id)
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	return pages.ResourcePath(projectID, envID, kind, id) + "/metrics"
+	return name, pages.ResourcePath(projectID, envID, kind, id) + "/metrics"
 }

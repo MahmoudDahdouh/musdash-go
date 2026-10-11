@@ -279,8 +279,14 @@ type TileProps struct {
 	// machine's value: an image, a repository, a domain.
 	Text string
 	Mono bool
-	// State, when set, is written as a pill at the top right.
-	State string
+	// State, when set, is written as a pill at the top right, in the
+	// state's own word unless StateText gives another: a server is "Ready"
+	// where an app is "Running".
+	State     string
+	StateText string
+	// Body stands between the text and the row of figures: what a tile
+	// shows besides them, such as how full a server is.
+	Body templ.Component
 	// Search is the text a filter field looks in. Empty leaves the tile
 	// out of filtering.
 	Search string
@@ -313,12 +319,19 @@ templ Tile(p TileProps) {
 			<h3 class="tile-title flex-1 truncate">
 				<a class="tile-link" href={ templ.SafeURL(p.Href) }>{ p.Title }</a>
 			</h3>
-			if p.State != "" {
+			if p.State != "" && p.StateText != "" {
+				@StatePill(p.State, p.StateText)
+			} else if p.State != "" {
 				@StatusPill(p.State)
 			}
 		</div>
 		if p.Text != "" {
 			<p class={ "tile-text", templ.KV("fact", p.Mono) }>{ p.Text }</p>
+		}
+		if p.Body != nil {
+			<div class="tile-body">
+				@p.Body
+			</div>
 		}
 		<div class="tile-meta">
 			{ children... }

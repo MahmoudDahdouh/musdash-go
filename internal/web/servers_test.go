@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
@@ -23,6 +25,10 @@ func (a *app) remoteServer(name string) (db.Server, *sshtest.Server) {
 	res, body := a.post("/servers", "/servers", url.Values{"name": {name}, "host": {"198.51.100.20"}, "port": {"22"}, "ssh_user": {"deploy"}, "key": {"new"}, "data_dir": {"/srv/musdash"}})
 	if res.StatusCode != http.StatusSeeOther {
 		a.t.Fatalf("add server: %d\n%s", res.StatusCode, body)
+	}
+	// The next step, installing the key, is on the new server's page.
+	if to := res.Header.Get("Location"); !regexp.MustCompile(`^/servers/[a-z][a-z2-7]{11}$`).MatchString(to) {
+		a.t.Fatalf("adding a server leads to %q", to)
 	}
 	list, _ := a.db.ListServers(ctx, firstTeam(a.t, a))
 	var server db.Server
@@ -114,14 +120,37 @@ func TestServersPage(t *testing.T) {
 		t.Fatalf("%+v", server)
 	}
 	key, _ := a.db.SSHKeyByID(ctx, server.SSHKeyID)
+	// The list is a tile a server, the whole of it a link to the server's
+	// page; what acts on a server is on that page and not in the list.
+	own := "/servers/" + server.ID
 	_, page = a.get("/servers")
-	for _, want := range []string{"Frankfurt", "Not checked yet", key.PublicKey, "authorized_keys"} {
+	for _, want := range []string{"Frankfurt", "Not checked yet", `href="` + own + `"`, "deploy@" + server.Host + ":" + strconv.Itoa(server.Port)} {
 		if !strings.Contains(page, want) {
-			t.Errorf("the page is missing %q", want)
+			t.Errorf("the list is missing %q", want)
+		}
+	}
+	for _, absent := range []string{key.PublicKey, own + "/check", own + "/delete", "PRIVATE KEY"} {
+		if strings.Contains(page, absent) {
+			t.Errorf("the list holds %q", absent)
+		}
+	}
+	res, page = a.get(own)
+	wantStatus(t, res, http.StatusOK)
+	for _, want := range []string{"Frankfurt", "Not checked yet", key.PublicKey, "authorized_keys", server.DataDir, `action="` + own + `/check"`,
+		`href="` + own + `/metrics"`, `href="` + own + `/variables"`, "Remove server"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the server's page is missing %q", want)
 		}
 	}
 	if strings.Contains(page, "PRIVATE KEY") {
 		t.Fatal("the page shows a private key")
+	}
+	// Its variables are a page of their own, which leads back.
+	if _, vars := a.get(own + "/variables"); !strings.Contains(vars, `href="`+own+`"`) {
+		t.Error("a server's variables do not lead back to its page")
+	}
+	if res, _ := a.get("/servers/nosuchserver"); res.StatusCode != http.StatusNotFound {
+		t.Fatalf("a server that is not there: %d", res.StatusCode)
 	}
 	// Nothing is deployed to a server that was never checked.
 	projectID, env := a.project("Shop")
@@ -140,11 +169,17 @@ func TestServersPage(t *testing.T) {
 	}
 	// The fingerprint comes with the kind of key and the file to compare it
 	// with: a server has three host keys.
+	// The answer is the server's own page, under the address a Refresh
+	// may fetch: a second check is not what Refresh is for.
 	for _, want := range []string{"What the check found", "signed in as deploy", "host key was recorded", "ED25519 " + servers.Fingerprint(checked.HostKey),
-		"ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub", "Forwarding"} {
+		"ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub", "Forwarding", `data-address="` + own + `"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the report is missing %q", want)
 		}
+	}
+	// What the header says of the server is what the check just stored.
+	if strings.Contains(page, "Not checked yet") {
+		t.Error("the page after a check shows the server as it was before it")
 	}
 
 	// With two servers the forms ask which one, and an app goes where it
@@ -179,20 +214,20 @@ func TestServersPage(t *testing.T) {
 	// message says which file is missing.
 	a.db.Exec(`UPDATE servers SET arch = 'riscv64', status = 'ok' WHERE id = ?`, server.ID)
 	res, _ = a.post("/servers", "/servers/"+server.ID+"/proxy", url.Values{})
-	wantRedirect(t, res, "/servers")
-	if _, page = a.get("/servers"); !strings.Contains(page, "musdash-linux-riscv64") {
+	wantRedirect(t, res, own)
+	if _, page = a.get(own); !strings.Contains(page, "musdash-linux-riscv64") {
 		t.Fatal("the missing proxy binary was not explained")
 	}
 
-	// A server with something on it is not removed.
+	// A server with something on it is not removed, and its page says why.
 	res, _ = a.post("/servers", "/servers/"+server.ID+"/delete", url.Values{})
-	wantRedirect(t, res, "/servers")
+	wantRedirect(t, res, own)
 	if _, err := a.db.ServerByID(ctx, server.ID); err != nil {
 		t.Fatal("a server with an app on it was removed")
 	}
 	// Forgetting the host key means the next check is a first contact again.
 	res, _ = a.post("/servers", "/servers/"+server.ID+"/forget-host-key", url.Values{})
-	wantRedirect(t, res, "/servers")
+	wantRedirect(t, res, own)
 	if got, _ := a.db.ServerByID(ctx, server.ID); got.HostKey != "" || got.Status != db.ServerUnknown {
 		t.Fatalf("after forgetting: %+v", got)
 	}
@@ -213,6 +248,56 @@ func TestServersPage(t *testing.T) {
 	}
 }
 
+// A tile shows what its server used when it was last sampled, and says so
+// in a line when there is nothing recent.
+func TestServersPageShowsLastReading(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+	team := firstTeam(t, a)
+	local, err := a.db.EnsureLocalServer(ctx, team, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, page := a.get("/servers"); !strings.Contains(page, "Usage is not recorded.") || strings.Contains(page, "meter-bar") {
+		t.Fatal("a server that is not sampled does not say so")
+	}
+	if err := a.db.SetServerSampled(ctx, team, local.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	const gib = 1 << 30
+	reading := db.Sample{CPU: 4250, Mem: 1 * gib, MemTotal: 4 * gib, DiskUsed: 19 * gib, DiskTotal: 20 * gib}
+	// One from an hour ago is not what the server uses now.
+	if err := a.db.AddSamples(ctx, local.ID, time.Now().Add(-time.Hour).Unix(), map[string]db.Sample{"": reading}); err != nil {
+		t.Fatal(err)
+	}
+	if _, page := a.get("/servers"); !strings.Contains(page, "No recent reading of what it uses.") || strings.Contains(page, "meter-bar") {
+		t.Fatal("an old reading is shown as the present, or its absence is not said")
+	}
+	if err := a.db.AddSamples(ctx, local.ID, time.Now().Unix(), map[string]db.Sample{"": reading}); err != nil {
+		t.Fatal(err)
+	}
+	_, page := a.get("/servers")
+	for _, want := range []string{"42.5%", "1.0 GiB of 4.0 GiB", "19.0 GiB of 20.0 GiB", "Nearly full", "meter-bar"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the tile lacks %q", want)
+		}
+	}
+	server, _ := a.remoteServer("Frankfurt")
+	a.db.Exec(`UPDATE servers SET status = 'ok', docker_version = '28.3.2', proxy = 'installed' WHERE id = ?`, server.ID)
+	_, page = a.get("/servers")
+	for _, want := range []string{"Frankfurt", "Ready", "Docker 28.3.2", "Proxy installed"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("a remote server's tile lacks %q", want)
+		}
+	}
+	// What the list says of a remote server is what was stored: the
+	// connection the pool would open for a question is not there.
+	if a.server.Pool.Connections() != 0 {
+		t.Fatal("the list reached for a remote server")
+	}
+}
+
 func TestOtherTeamsServerIsNotReachable(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
@@ -230,6 +315,9 @@ func TestOtherTeamsServerIsNotReachable(t *testing.T) {
 
 	if _, page := a.get("/servers"); strings.Contains(page, "their-server") || strings.Contains(page, "198.51.100.99") {
 		t.Fatal("another team's server is listed")
+	}
+	if res, page := a.get("/servers/" + theirs.ID); res.StatusCode != http.StatusNotFound || strings.Contains(page, "their-server") {
+		t.Fatalf("another team's server has a page here: %d", res.StatusCode)
 	}
 	token := a.csrf("/servers")
 	for _, path := range []string{"", "/check", "/proxy", "/forget-host-key", "/delete"} {
@@ -277,7 +365,7 @@ func TestAppBuildServerSetting(t *testing.T) {
 	}
 	// A server that builds for an app is in use.
 	res, _ = a.post("/servers", "/servers/"+server.ID+"/delete", url.Values{})
-	wantRedirect(t, res, "/servers")
+	wantRedirect(t, res, "/servers/"+server.ID)
 	if _, err := a.db.ServerByID(ctx, server.ID); err != nil {
 		t.Fatal("a server an app is built on was removed")
 	}

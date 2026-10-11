@@ -211,6 +211,20 @@ func (d *DB) PlaceOf(ctx context.Context, teamID, kind, id string) (projectID, e
 	return projectID, envID, notFound(err)
 }
 
+// NamedPlace is PlaceOf with the resource's name: what a list made from a
+// server's own answer (its containers) calls each thing by. The id is the
+// server's word, so nothing is found for one that is not the team's.
+func (d *DB) NamedPlace(ctx context.Context, teamID, kind, id string) (name, projectID, envID string, err error) {
+	table, ok := map[string]string{KindApp: "apps", KindDatabase: "databases", KindService: "services"}[kind]
+	if !ok {
+		return "", "", "", ErrNotFound
+	}
+	err = d.QueryRowContext(ctx, `SELECT r.name, e.project_id, e.id FROM `+table+` r
+		JOIN environments e ON e.id = r.environment_id JOIN projects p ON p.id = e.project_id
+		WHERE r.id = ? AND p.team_id = ?`, id, teamID).Scan(&name, &projectID, &envID)
+	return name, projectID, envID, notFound(err)
+}
+
 // Place says where an environment is: its project and its own name.
 type Place struct {
 	ProjectID string

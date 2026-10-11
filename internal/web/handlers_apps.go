@@ -973,7 +973,7 @@ func (s *Server) proxyBehind(r *http.Request, serverID string) string {
 	if servers.IsLocal(server) {
 		return "Restart it on the server: systemctl restart musdash-proxy"
 	}
-	return "Install the proxy again from the Servers page."
+	return "Install the proxy again from the server's page, under Servers."
 }
 
 // addAppDomain reads the Add domain form and gives the app the domain,

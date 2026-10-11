@@ -35,7 +35,7 @@ A domain can lead to another port of the app's container than the app's own: the
 
 A Compose stack has a Domains tab of its own, where a domain is given to one of its services: see [Services](services.md#domains).
 
-Both a path and a password need a proxy of this version. A proxy that was running before the upgrade answers "nothing is deployed" for such a domain until it is restarted (`systemctl restart musdash-proxy`; the install script does it) or, on another server, installed again from the Servers page. The dashboard says so when such a domain is added while an earlier proxy is running, and on the Servers page.
+Both a path and a password need a proxy of this version. A proxy that was running before the upgrade answers "nothing is deployed" for such a domain until it is restarted (`systemctl restart musdash-proxy`; the install script does it) or, on another server, installed again from the server's page. The dashboard says so when such a domain is added while an earlier proxy is running, and on the server's tile and page.
 
 ## Deploying from Git
 
