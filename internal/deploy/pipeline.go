@@ -935,7 +935,8 @@ func (d *Deployer) destroy(ctx context.Context, appID string) error {
 // pullExplained pulls an image with its progress in the log. When the pull
 // fails, the error ends with what Docker last said: that the image does not
 // exist, that the registry wants a login, that the disk is full. The exit
-// status alone says none of it.
+// status alone says none of it. A refusal is followed by what to do about
+// a private image (refusedHint).
 func pullExplained(ctx context.Context, dk docker.Client, image string, log io.Writer) error {
 	said := &tail{limit: 1500}
 	err := dk.Pull(ctx, image, teeWriter{log, said})
@@ -943,7 +944,7 @@ func pullExplained(ctx context.Context, dk docker.Client, image string, log io.W
 		return err
 	}
 	if reason := lastOutput(said.String(), 3); reason != "" {
-		return fmt.Errorf("pull %s: %w. Docker said:\n%s", image, err, reason)
+		return fmt.Errorf("pull %s: %w. Docker said:\n%s%s", image, err, reason, refusedHint(reason))
 	}
 	return fmt.Errorf("pull %s: %w", image, err)
 }

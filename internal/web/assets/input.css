@@ -1191,6 +1191,27 @@
     overflow-x: auto;
     scrollbar-width: none;
   }
+  /* An edge that has more tabs behind it fades out, so a bar that is cut
+     says that it scrolls. static/app.js says which edges (data-more). The
+     mask reads only how opaque its colours are. */
+  .tabs[data-more~="start"],
+  .tabs[data-more~="end"] {
+    --tabs-fade-start: 0px;
+    --tabs-fade-end: 0px;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      var(--color-ink) var(--tabs-fade-start),
+      var(--color-ink) calc(100% - var(--tabs-fade-end)),
+      transparent
+    );
+  }
+  .tabs[data-more~="start"] {
+    --tabs-fade-start: 2.5rem;
+  }
+  .tabs[data-more~="end"] {
+    --tabs-fade-end: 2.5rem;
+  }
   .tab {
     position: relative;
     display: inline-flex;

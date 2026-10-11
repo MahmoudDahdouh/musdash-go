@@ -517,7 +517,7 @@ templ appAddressFields(f ui.Form, suggestedDomain string) {
 }
 
 // lastCommit is the commit of the latest deployment, shortened, or "none"
-// for image deployments.
+// before the first one.
 func lastCommit(d *db.Deployment) string {
 	if d == nil || len(d.CommitSHA) < 12 {
 		return "none"
@@ -541,6 +541,21 @@ func orNone(v string) string {
 		return "none"
 	}
 	return v
+}
+
+// runningFacts are the rows of the Overview's Running now card. Only an
+// app built from a repository has a commit to name.
+func runningFacts(app db.App, server db.Server, last *db.Deployment) []ui.KVItem {
+	facts := []ui.KVItem{{Key: "Image", Value: orNone(app.DeployedImage), Mono: true}}
+	if app.Source == db.SourceGit {
+		facts = append(facts, ui.KVItem{Key: "Commit", Value: lastCommit(last), Mono: true})
+	}
+	return append(facts,
+		ui.KVItem{Key: "Server", Value: server.Name},
+		ui.KVItem{Key: "Inside the environment", Value: internalAddress(app), Mono: true},
+		ui.KVItem{Key: "On the server", Value: hostPort(app), Mono: true},
+		ui.KVItem{Key: "Container", Value: orNone(app.Container), Mono: true},
+	)
 }
 
 templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) {
@@ -588,14 +603,7 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 					<h2 class="card-title">Running now</h2>
 				</div>
 				<div class="card-body">
-					@ui.KeyValue([]ui.KVItem{
-						{Key: "Image", Value: orNone(v.App.DeployedImage), Mono: true},
-						{Key: "Commit", Value: lastCommit(last), Mono: true},
-						{Key: "Server", Value: server.Name},
-						{Key: "Inside the environment", Value: internalAddress(v.App), Mono: true},
-						{Key: "On the server", Value: hostPort(v.App), Mono: true},
-						{Key: "Container", Value: orNone(v.App.Container), Mono: true},
-					})
+					@ui.KeyValue(runningFacts(v.App, server, last))
 				</div>
 			</section>
 			<section class="card lg:col-span-2">

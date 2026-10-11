@@ -591,14 +591,18 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 			log.Step("Pulling images")
 			pull := d.composeCmd(r, s.ID, "pull", "--ignore-buildable")
 			pullOut := &tail{limit: 1500}
-			pull.Stdout, pull.Stderr = teeWriter{log, pullOut}, teeWriter{log, pullOut}
-			if err := r.Run(ctx, pull); err != nil {
+			said := &unrepeated{w: teeWriter{log, pullOut}}
+			pull.Stdout, pull.Stderr = said, said
+			err := r.Run(ctx, pull)
+			said.Flush()
+			if err != nil {
 				if ctx.Err() != nil {
 					return err
 				}
 				// What Docker said is the reason: a name that does not
 				// exist, a registry that wants a login, no room left.
-				return fmt.Errorf("pull the images: %w. Docker's last output:\n%s", err, lastOutput(pullOut.String(), 8))
+				reason := lastOutput(pullOut.String(), 8)
+				return fmt.Errorf("pull the images: %w. Docker's last output:\n%s%s", err, reason, refusedHint(reason))
 			}
 			if doc.Builds() {
 				log.Step("Building images")
@@ -620,8 +624,10 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		log.Step("Starting %s", strings.Join(members, ", "))
 		upOut := &tail{limit: 4096}
 		up := d.composeCmd(r, s.ID, "up", "--detach", "--remove-orphans", "--wait", "--wait-timeout", strconv.Itoa(int(d.serviceStartTimeout.Seconds())))
-		up.Stdout, up.Stderr = teeWriter{log, upOut}, teeWriter{log, upOut}
+		said := &unrepeated{w: teeWriter{log, upOut}}
+		up.Stdout, up.Stderr = said, said
 		err = r.Run(ctx, up)
+		said.Flush()
 		if err == nil {
 			break
 		}

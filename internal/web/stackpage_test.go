@@ -150,3 +150,19 @@ func TestSaid(t *testing.T) {
 		}
 	}
 }
+
+// Only an app built from a repository has a commit to name: the card of a
+// Docker image app has no such row.
+func TestAnImageAppNamesNoCommit(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	projectID, env := a.project("Shop")
+	image := a.newApp(projectID, env, "web", false, nil)
+	if _, page := a.get(a.appPath(image)); strings.Contains(page, ">Commit<") || !strings.Contains(page, ">Image<") {
+		t.Error("the card of a Docker image app names a commit")
+	}
+	built := a.newGitApp(projectID, env, "built", nil)
+	if _, page := a.get(a.appPath(built.ID)); !strings.Contains(page, ">Commit<") {
+		t.Error("the card of an app from Git names no commit")
+	}
+}

@@ -56,6 +56,20 @@
     const from = tab.getBoundingClientRect().left - row.getBoundingClientRect().left;
     row.scrollLeft += from - (row.clientWidth - tab.offsetWidth) / 2;
   });
+  // A row of tabs that is cut says so: the edge with more behind it fades
+  // out (data-more, which the stylesheet reads), where a tab's name used to
+  // end in the middle of a word with nothing to say that the row scrolls.
+  const more = (row) => {
+    const from = Math.abs(row.scrollLeft);
+    const start = from > 1;
+    const end = from + row.clientWidth < row.scrollWidth - 1;
+    row.dataset.more = [start && "start", end && "end"].filter(Boolean).join(" ");
+  };
+  document.querySelectorAll(".tabs").forEach((row) => {
+    more(row);
+    row.addEventListener("scroll", () => more(row), { passive: true });
+  });
+  window.addEventListener("resize", () => document.querySelectorAll(".tabs").forEach(more));
 
   // Critical actions: a submit button carrying data-confirm does not send
   // its form. It fills in the page's one confirm dialog and opens it, and

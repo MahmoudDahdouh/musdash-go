@@ -1938,4 +1938,8 @@ func TestAFailedPullSaysWhy(t *testing.T) {
 	if got.Status != db.AppFailed || !strings.Contains(got.LastError, "pull the images") || !strings.Contains(got.LastError, "pull access denied for nginx") {
 		t.Fatalf("%s: %q", got.Status, got.LastError)
 	}
+	// A refusal is followed by what to do about a private image.
+	if !strings.HasSuffix(got.LastError, "\n"+signInHint) {
+		t.Errorf("a refused pull does not say what to do: %q", got.LastError)
+	}
 }
