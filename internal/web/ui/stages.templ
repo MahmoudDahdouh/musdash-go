@@ -1,0 +1,62 @@
+package ui
+
+// The states of a Stage.
+const (
+	StageDone    = "done"
+	StageNow     = "now"
+	StageFailed  = "failed"
+	StageWaiting = "waiting"
+)
+
+// Stage is one part of something that is done in a fixed order.
+type Stage struct {
+	Label string
+	State string
+}
+
+func stageIcon(state string) string {
+	switch state {
+	case StageDone:
+		return "check"
+	case StageNow:
+		return "loading"
+	case StageFailed:
+		return "x"
+	}
+	return ""
+}
+
+// stageSays is a stage's state in words, for a reader who does not see its
+// mark.
+func stageSays(state string) string {
+	switch state {
+	case StageDone:
+		return "done"
+	case StageNow:
+		return "in progress"
+	case StageFailed:
+		return "failed"
+	}
+	return "not started"
+}
+
+// Stages shows how far something that is done in parts has come: each part
+// in order with a mark for its state. It is a list with an order because
+// the order is what it says. Every mark has a shape of its own (a tick, a
+// turning ring, a cross, an empty ring), so a state is not told by colour
+// alone, and is written out for a screen reader.
+templ Stages(stages []Stage) {
+	<ol class="stages">
+		for _, s := range stages {
+			<li class="stage" data-state={ s.State }>
+				<span class="stage-mark">
+					if icon := stageIcon(s.State); icon != "" {
+						@Icon(icon, pillIconClass(icon))
+					}
+				</span>
+				<span>{ s.Label }</span>
+				<span class="sr-only">{ ", " + stageSays(s.State) }</span>
+			</li>
+		}
+	</ol>
+}

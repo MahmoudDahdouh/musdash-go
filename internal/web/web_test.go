@@ -1008,6 +1008,10 @@ func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
 	git := a.newGitApp(projectID, env, "api", nil)
 	a.stackServer("front", "3000", nil)
 	svc := a.newService(projectID, env, "site", nil)
+	svcDep, err := a.db.CreateServiceDeployment(context.Background(), svc.ID, db.TriggerManual)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mdb := a.newDatabase(projectID, env, "postgres", "maindb", nil)
 	base := "/projects/" + projectID
 	machines, _ := a.db.ListServers(context.Background(), firstTeam(t, a))
@@ -1016,7 +1020,7 @@ func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
 		machine, machine + "/metrics",
 		a.databasePath(mdb.ID), a.databasePath(mdb.ID) + "/backups", a.databasePath(mdb.ID) + "/settings",
 		a.appPath(git.ID) + "/settings", a.appPath(git.ID) + "/tasks", a.appPath(git.ID) + "/environment",
-		a.servicePath(svc.ID), a.servicePath(svc.ID) + "/compose", a.servicePath(svc.ID) + "/domains", a.servicePath(svc.ID) + "/logs", a.servicePath(svc.ID) + "/settings",
+		a.servicePath(svc.ID), a.servicePath(svc.ID) + "/deployments", a.servicePath(svc.ID) + "/deployments/" + svcDep.ID, a.servicePath(svc.ID) + "/compose", a.servicePath(svc.ID) + "/domains", a.servicePath(svc.ID) + "/logs", a.servicePath(svc.ID) + "/settings",
 		"/", "/projects", base + "/env/" + env.ID, base + "/env/" + env.ID + "/new", base + "/env/" + env.ID + "/settings", base + "/env/" + env.ID + "/variables", base, base + "/settings", base + "/variables",
 		a.appPath(appID), a.appPath(appID) + "/environment", a.appPath(appID) + "/environment/edit", a.appPath(appID) + "/domains", a.appPath(appID) + "/storage", a.appPath(appID) + "/settings",
 		"/tags", "/keys", "/keys/tokens", "/servers", "/sources", "/team", "/team/invitations", "/team/variables", "/account",

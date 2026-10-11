@@ -15,13 +15,23 @@ const maxStreams = 16
 // maxLogLine cuts a single over-long log line.
 const maxLogLine = 8 << 10
 
-// sseWriter turns a byte stream into Server-Sent Events, one "line" event
-// per line of text. The text is HTML-escaped: the browser inserts each event
-// as markup, and log output is not trusted.
+// sseWriter turns a byte stream into Server-Sent Events: a "line" event
+// for the lines of each piece it is handed. The text is HTML-escaped: the
+// browser inserts each event as markup, and log output is not trusted.
+//
+// An event holds every line of its piece, not one line each. The page puts
+// an event into the log and lays the log out again to stay at its end, and
+// a deployment's log has thousands of lines: sent one a line, a log that
+// is read from its file kept the page busy for as long as it took to do
+// that thousands of times. A piece is at most what a follower reads at
+// once, and a live log still arrives as it is written.
 type sseWriter struct {
 	w       http.ResponseWriter
 	rc      *http.ResponseController
 	partial []byte
+	// event is the event being put together, kept between calls so that a
+	// long log is not a new buffer a piece.
+	event bytes.Buffer
 }
 
 // startSSE prepares the response for an event stream.
@@ -40,8 +50,8 @@ func startSSE(w http.ResponseWriter) *sseWriter {
 // browser before the stream is given up on.
 const writeTimeout = 30 * time.Second
 
-// Write emits a "line" event for each complete line and keeps the rest for
-// the next call.
+// Write emits one "line" event for the complete lines of p and keeps the
+// rest for the next call.
 func (s *sseWriter) Write(p []byte) (int, error) {
 	// Armed before writing: a deadline left over from an earlier call would
 	// have expired during a quiet spell and fail the first write after it.
@@ -56,19 +66,18 @@ func (s *sseWriter) Write(p []byte) (int, error) {
 		if i < 0 {
 			break
 		}
-		if err := s.line(data[:i]); err != nil {
-			return 0, err
-		}
+		s.line(data[:i])
 		data = data[i+1:]
 	}
 	switch {
 	case len(data) > maxLogLine:
 		// A line with no end in sight: emit what there is.
-		if err := s.line(data); err != nil {
-			return 0, err
-		}
+		s.line(data)
 	case len(data) > 0:
 		s.partial = append([]byte(nil), data...)
+	}
+	if err := s.send(); err != nil {
+		return 0, err
 	}
 	// A dead connection must surface as an error so the producer stops.
 	if err := s.rc.Flush(); err != nil {
@@ -77,19 +86,35 @@ func (s *sseWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (s *sseWriter) line(line []byte) error {
+// line adds one line of output to the event being put together.
+func (s *sseWriter) line(line []byte) {
 	line = bytes.TrimRight(line, "\r")
 	if len(line) > maxLogLine {
 		line = append(line[:maxLogLine:maxLogLine], " …"...)
+	}
+	if s.event.Len() == 0 {
+		s.event.WriteString("event: line\n")
 	}
 	// A carriage return also ends a line in the event-stream format. Left
 	// in, log output could start a line of its own and forge fields such as
 	// "event: done". Progress bars use it to redraw; a space keeps them
 	// readable.
-	text := strings.ReplaceAll(html.EscapeString(string(line)), "\r", " ")
-	// Two data lines join into "<text>\n", which gives each event its own
-	// line inside the <pre>.
-	_, err := s.w.Write([]byte("event: line\ndata: " + text + "\ndata: \n\n"))
+	s.event.WriteString("data: ")
+	s.event.WriteString(strings.ReplaceAll(html.EscapeString(string(line)), "\r", " "))
+	s.event.WriteByte('\n')
+}
+
+// send writes the event that was put together, if there is one. The data
+// lines of an event are joined by line breaks, and an empty one after the
+// last gives that line its break too: each is a line of its own inside
+// the <pre>.
+func (s *sseWriter) send() error {
+	if s.event.Len() == 0 {
+		return nil
+	}
+	s.event.WriteString("data: \n\n")
+	_, err := s.w.Write(s.event.Bytes())
+	s.event.Reset()
 	return err
 }
 
@@ -100,6 +125,7 @@ func (s *sseWriter) finish() {
 	if len(s.partial) > 0 {
 		s.line(s.partial)
 		s.partial = nil
+		s.send()
 	}
 	s.w.Write([]byte("event: done\ndata: \n\n"))
 	s.rc.Flush()

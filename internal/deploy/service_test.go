@@ -69,10 +69,16 @@ func (e *env) newServiceWith(template, name, composeText string, connect bool, t
 // deployService queues a deployment and waits for the service to settle.
 func (e *env) deployService(s db.Service, limit time.Duration) db.Service {
 	e.t.Helper()
-	ctx := context.Background()
-	if err := e.d.EnqueueService(ctx, s, false); err != nil {
+	if _, err := e.d.EnqueueService(context.Background(), s, db.TriggerManual, false); err != nil {
 		e.t.Fatal(err)
 	}
+	return e.settle(s, limit)
+}
+
+// settle waits until the service is no longer being deployed.
+func (e *env) settle(s db.Service, limit time.Duration) db.Service {
+	e.t.Helper()
+	ctx := context.Background()
 	deadline := time.Now().Add(limit)
 	for time.Now().Before(deadline) {
 		got, err := e.db.ServiceByID(ctx, s.ID)
@@ -88,8 +94,13 @@ func (e *env) deployService(s db.Service, limit time.Duration) db.Service {
 	return s
 }
 
+// serviceLog is the output of the service's latest deployment.
 func (e *env) serviceLog(s db.Service) string {
-	raw, _ := os.ReadFile(e.cfg.ServiceLogPath(s.ID))
+	dep, err := e.db.CurrentServiceDeployment(context.Background(), s.ID)
+	if err != nil {
+		return ""
+	}
+	raw, _ := os.ReadFile(e.cfg.ServiceLogPath(dep.ID))
 	return string(raw)
 }
 
@@ -1969,7 +1980,7 @@ func TestSandboxImageIsFetchedByOneDeploymentAtATime(t *testing.T) {
 		return (&scriptedStack{project: project, dir: e.cfg.AppDir(strings.TrimPrefix(project, "musdash-"))}).handle(line, c)
 	}
 	for _, s := range []db.Service{first, second} {
-		if err := e.d.EnqueueService(ctx, s, false); err != nil {
+		if _, err := e.d.EnqueueService(ctx, s, db.TriggerManual, false); err != nil {
 			t.Fatal(err)
 		}
 	}

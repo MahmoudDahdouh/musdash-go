@@ -270,12 +270,13 @@ func TestCreateServiceFromTheCatalogue(t *testing.T) {
 	}
 
 	// The overview: address, the question about its containers, generated
-	// values behind bullets.
+	// values behind bullets, and the latest deployment as a card that
+	// follows no log.
 	res, overview := a.get(a.servicePath(s.ID))
 	wantStatus(t, res, http.StatusOK)
 	overview = html.UnescapeString(overview)
 	for _, want := range []string{"Running", "WordPress", endpoints[0].Host, "to wordpress:80", `hx-get="` + a.servicePath(s.ID) + `/containers"`, "Redeploy", "Stop",
-		`data-copy="` + vars["SERVICE_PASSWORD_ROOT"] + `"`, "SERVICE_USER_WORDPRESS", a.servicePath(s.ID) + "/deploy-log/stream"} {
+		`data-copy="` + vars["SERVICE_PASSWORD_ROOT"] + `"`, "SERVICE_USER_WORDPRESS", `id="latest-deployment"`} {
 		if !strings.Contains(overview, want) {
 			t.Errorf("the overview is missing %q", want)
 		}
@@ -301,8 +302,13 @@ func TestCreateServiceFromTheCatalogue(t *testing.T) {
 		t.Fatal("the project page does not list the service")
 	}
 
-	// The deployment's output, and the containers' own.
-	res, stream := a.get(a.servicePath(s.ID) + "/deploy-log/stream")
+	// The deployment's output, on the deployment's page, and the
+	// containers' own.
+	latest, err := a.db.CurrentServiceDeployment(ctx, s.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, stream := a.get(a.servicePath(s.ID) + "/deployments/" + latest.ID + "/stream")
 	wantStatus(t, res, http.StatusOK)
 	if !strings.Contains(stream, "Reading the Compose file") || !strings.Contains(stream, "Deployed.") || !strings.Contains(stream, "event: done") {
 		t.Fatalf("deploy log stream:\n%s", stream)
@@ -669,7 +675,12 @@ func TestOtherTeamsServiceIsNotFound(t *testing.T) {
 	theirs, _ := a.db.ListEndpoints(ctx, other.ID)
 	base := a.servicePath(other.ID)
 
-	for _, path := range []string{"", "/status", "/deploy-log/stream", "/logs", "/logs/stream", "/compose", "/domains", "/domains/" + theirs[0].ID + "/dns", "/settings"} {
+	dep, err := a.db.CreateServiceDeployment(ctx, other.ID, db.TriggerManual)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"", "/status", "/deployments", "/deployments/latest", "/deployments/" + dep.ID, "/deployments/" + dep.ID + "/status", "/deployments/" + dep.ID + "/stream",
+		"/logs", "/logs/stream", "/compose", "/domains", "/domains/" + theirs[0].ID + "/dns", "/settings"} {
 		res, body := a.get(base + path)
 		if res.StatusCode != http.StatusNotFound || strings.Contains(body, "secret-stack") || strings.Contains(body, "their-") {
 			t.Errorf("GET %s: %d", path, res.StatusCode)

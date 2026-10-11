@@ -154,7 +154,7 @@ func (s *Server) enqueuePush(w http.ResponseWriter, r *http.Request, apps []db.A
 		}
 	}
 	for _, svc := range services {
-		started, err := s.deployServiceFromOutside(ctx, svc)
+		started, err := s.deployServiceFromOutside(ctx, svc, "push")
 		if err != nil {
 			forget, cancel := detached(r, 10*time.Second)
 			if ferr := s.DB.ForgetDelivery(forget, delivery); ferr != nil {
@@ -268,16 +268,17 @@ func (s *Server) pullRequest(w http.ResponseWriter, r *http.Request, sourceID st
 }
 
 // deployServiceFromOutside queues a deployment of a service for a push or
-// an API call. One that is already waiting will read the repository when
-// it starts, so nothing more is queued behind it.
-func (s *Server) deployServiceFromOutside(ctx context.Context, svc db.Service) (bool, error) {
+// an API call, which is its trigger. One that is already waiting will read
+// the repository when it starts, so nothing more is queued behind it.
+func (s *Server) deployServiceFromOutside(ctx context.Context, svc db.Service, trigger string) (bool, error) {
 	waiting, err := s.DB.ServiceDeployWaiting(ctx, svc.ID)
 	if err != nil || waiting {
 		return false, err
 	}
 	// "again": a deployment that is running has already read the
 	// repository as it was.
-	return true, s.Deploy.EnqueueService(ctx, svc, true)
+	_, err = s.Deploy.EnqueueService(ctx, svc, trigger, true)
+	return true, err
 }
 
 // githubWebhook receives events from a GitHub App created by musdash.
@@ -423,7 +424,7 @@ func (s *Server) apiDeploy(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if serr == nil {
-			_, serr = s.deployServiceFromOutside(r.Context(), svc)
+			_, serr = s.deployServiceFromOutside(r.Context(), svc, "api")
 		}
 		if serr != nil {
 			s.hookFail(w, r, serr)

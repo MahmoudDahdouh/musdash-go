@@ -60,8 +60,9 @@ func (c Config) DeployLogPath(id string) string {
 	return filepath.Join(c.LogDir(), "deployments", id+".log")
 }
 
-// ServiceLogPath is where the output of a service's latest deployment is
-// kept.
+// ServiceLogPath is where the output of one deployment of a service is
+// kept, by the deployment's id. Before each deployment had a file of its
+// own a service had one, under the service's id, in the same directory.
 func (c Config) ServiceLogPath(id string) string {
 	return filepath.Join(c.LogDir(), "services", id+".log")
 }

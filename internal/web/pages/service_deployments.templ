@@ -1,0 +1,270 @@
+package pages
+
+import (
+	"strings"
+
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// serviceStage is one part of a service's deployment as a page names it:
+// in a list of what there is to do, and in a sentence about what is being
+// done.
+type serviceStage struct {
+	step, label, doing string
+}
+
+// serviceStages are the parts of a deployment of this service, in order. A
+// stack from Git is fetched first, and may build what it does not pull:
+// whether its file builds anything is known only once it is read, so the
+// two are one part.
+func serviceStages(s db.Service) []serviceStage {
+	read := serviceStage{db.ServiceStepRead, "Read the Compose file", "Reading the Compose file"}
+	start := serviceStage{db.ServiceStepStart, "Start the containers", "Starting the containers"}
+	if s.FromGit() {
+		return []serviceStage{
+			{db.ServiceStepClone, "Fetch the repository", "Fetching the repository"},
+			read,
+			{db.ServiceStepImages, "Pull and build the images", "Pulling and building the images"},
+			start,
+		}
+	}
+	return []serviceStage{read, {db.ServiceStepImages, "Pull the images", "Pulling the images"}, start}
+}
+
+// serviceSteps is how far a deployment has come: the parts before the one
+// it is at are done, that one is under way or is where it failed, and the
+// ones after it have not begun.
+func serviceSteps(s db.Service, d db.ServiceDeployment) []ui.Stage {
+	stages := serviceStages(s)
+	at := -1
+	for i, stage := range stages {
+		if stage.step == d.Step {
+			at = i
+		}
+	}
+	steps := make([]ui.Stage, len(stages))
+	for i, stage := range stages {
+		state := ui.StageWaiting
+		switch {
+		case d.Status == db.DeploySuccess:
+			state = ui.StageDone
+		case d.Status == db.DeployQueued:
+			// Nothing of it has begun, whatever an earlier run left.
+		case i < at:
+			state = ui.StageDone
+		case i == at && d.Status == db.DeployFailed:
+			state = ui.StageFailed
+		case i == at:
+			state = ui.StageNow
+		}
+		steps[i] = ui.Stage{Label: stage.label, State: state}
+	}
+	return steps
+}
+
+// deploymentSays is a deployment in a few words: what it is doing, or how
+// it ended and where.
+func deploymentSays(s db.Service, d db.ServiceDeployment) string {
+	doing := ""
+	for _, stage := range serviceStages(s) {
+		if stage.step == d.Step {
+			doing = stage.doing
+		}
+	}
+	switch d.Status {
+	case db.DeployQueued:
+		return "Waiting for its turn"
+	case db.DeploySuccess:
+		return "Deployed"
+	case db.DeployFailed:
+		if doing == "" {
+			return "Failed before it began"
+		}
+		return "Failed while " + strings.ToLower(doing[:1]) + doing[1:]
+	}
+	if doing == "" {
+		return "Getting ready"
+	}
+	return doing
+}
+
+// deploymentFacts are what asked for a deployment, when, and how long it
+// took, in one line.
+func deploymentFacts(d db.ServiceDeployment) string {
+	var facts []string
+	if d.Trigger != "" {
+		facts = append(facts, ui.StateLabel(d.Trigger))
+	}
+	facts = append(facts, ui.Ago(d.CreatedAt))
+	if took := ui.Took(d.StartedAt, d.FinishedAt); took != "" {
+		facts = append(facts, "took "+took)
+	}
+	return strings.Join(facts, " · ")
+}
+
+// deploymentRail is the state a deployment's row shows on its edge. A
+// deployment that is "running" is in progress, which the rail calls
+// deploying: its "running" is something that is up.
+func deploymentRail(d db.ServiceDeployment) string {
+	if d.Status == db.DeployRunning {
+		return db.AppDeploying
+	}
+	return d.Status
+}
+
+// latestPoll is when the Overview's card asks for itself: every two
+// seconds while its deployment is in progress. Otherwise when the header
+// says that the stack's state has changed, which is how a deployment that
+// a push started gets onto a page that is open, and every fifteen seconds
+// besides: a deployment that began and ended between two of the header's
+// own polls changed nothing the header shows.
+func latestPoll(last *db.ServiceDeployment) string {
+	if last != nil && !last.Over() {
+		return "every 2s"
+	}
+	return "every 15s, stack-changed from:body"
+}
+
+// ServiceLatest is the Overview's card about the service's latest
+// deployment: what it is doing or how it ended, and the parts it goes
+// through. It holds no log. A deployment's output is on its own page,
+// where somebody asked for it: drawn here it was read from its start
+// whenever the Overview was opened.
+templ ServiceLatest(v ServiceView, last *db.ServiceDeployment) {
+	<section
+		id="latest-deployment"
+		class="card lg:col-span-2"
+		{ ui.Poll(ctx, v.Path()+"/deployments/latest", latestPoll(last), serviceLatestBody(v, last))... }
+	>
+		@serviceLatestBody(v, last)
+	</section>
+}
+
+// serviceLatestBody is what the card shows, and so what its poll compares.
+// Why a deployment failed is not in it: the notice at the top of the
+// Overview says that.
+templ serviceLatestBody(v ServiceView, last *db.ServiceDeployment) {
+	<div class="card-head">
+		<h2 class="card-title">Latest deployment</h2>
+		@ui.LinkButton(v.Path()+"/deployments", ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+			All deployments
+		}
+	</div>
+	if last == nil && v.Service.Status == db.AppCreated {
+		@ui.EmptyState(ui.EmptyProps{Icon: "rocket", Title: "Nothing has been deployed yet", Text: "A deployment is shown here with the parts it goes through.", Size: ui.EmptySmall})
+	} else if last == nil {
+		// Deployed before deployments were recorded.
+		@ui.EmptyState(ui.EmptyProps{Icon: "rocket", Title: "No deployment on record", Text: "The next one is shown here with the parts it goes through.", Size: ui.EmptySmall})
+	} else {
+		<a class="row rail" data-state={ deploymentRail(*last) } href={ templ.SafeURL(v.Path() + "/deployments/" + last.ID) }>
+			<div class="min-w-0 flex-1">
+				<p class="truncate">{ deploymentSays(v.Service, *last) }</p>
+				<p class="muted text-sm">{ deploymentFacts(*last) }</p>
+			</div>
+			@ui.JobPill(last.Status)
+			@ui.Icon("chevron-right", "text-ink-mute")
+		</a>
+		<div class="card-body">
+			@ui.Stages(serviceSteps(v.Service, *last))
+		</div>
+	}
+}
+
+// serviceDeploymentHeads are the columns of the Deployments tab. Only a
+// stack from a repository has a commit to name.
+func serviceDeploymentHeads(s db.Service) []string {
+	if s.FromGit() {
+		return []string{"Started", "Trigger", "Commit", "Status", "Took", ""}
+	}
+	return []string{"Started", "Trigger", "Status", "Took", ""}
+}
+
+templ ServiceDeployments(s ui.Shell, v ServiceView, list []db.ServiceDeployment) {
+	@serviceFrame(s, v, "deployments") {
+		if len(list) == 0 {
+			@ui.EmptyState(ui.EmptyProps{Icon: "rocket", Title: "No deployments yet", Text: "Choose Deploy to start the stack. Each deployment is listed here with its log."})
+		} else {
+			<section class="card">
+				@ui.Table(serviceDeploymentHeads(v.Service)...) {
+					for _, d := range list {
+						<tr>
+							<td class="whitespace-nowrap">{ ui.Ago(d.CreatedAt) }</td>
+							<td>{ ui.StateLabel(d.Trigger) }</td>
+							if v.Service.FromGit() {
+								<td class="fact">{ orDefault(shortCommit(d.CommitSHA), "none") }</td>
+							}
+							<td>
+								@ui.JobPill(d.Status)
+							</td>
+							<td class="fact">{ ui.Took(d.StartedAt, d.FinishedAt) }</td>
+							<td class="text-right">
+								@ui.LinkButton(v.Path()+"/deployments/"+d.ID, ui.ButtonProps{Variant: ui.Ghost, Small: true}) {
+									View log
+								}
+							</td>
+						</tr>
+					}
+				}
+			</section>
+		}
+	}
+}
+
+// serviceDeploymentPoll is how often a deployment's status asks for
+// itself: only until the deployment has finished.
+func serviceDeploymentPoll(d db.ServiceDeployment) string {
+	if d.Over() {
+		return ""
+	}
+	return "every 2s"
+}
+
+// ServiceDeploymentStatus is what stands above a deployment's log: its
+// state, the parts it goes through, and what went wrong. While the
+// deployment runs it asks for itself; once finished it stops.
+templ ServiceDeploymentStatus(v ServiceView, d db.ServiceDeployment) {
+	<div
+		id="deployment-status"
+		class="grid gap-4"
+		{ ui.Poll(ctx, v.Path()+"/deployments/"+d.ID+"/status", serviceDeploymentPoll(d), serviceDeploymentStatusBody(v, d))... }
+	>
+		@serviceDeploymentStatusBody(v, d)
+	</div>
+}
+
+// serviceDeploymentStatusBody is what the status shows, and so what its
+// poll compares.
+templ serviceDeploymentStatusBody(v ServiceView, d db.ServiceDeployment) {
+	<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+		@ui.JobPill(d.Status)
+		<span>{ deploymentSays(v.Service, d) }</span>
+		<span class="muted text-sm">{ deploymentFacts(d) }</span>
+		if commit := shortCommit(d.CommitSHA); commit != "" {
+			<span class="fact muted">{ commit }</span>
+		}
+	</div>
+	@ui.Stages(serviceSteps(v.Service, d))
+	if d.Error != "" {
+		@ui.Notice(ui.ToneDanger) {
+			<p class="whitespace-pre-line break-words">{ Said(d.Error) }</p>
+		}
+	}
+}
+
+// ServiceDeployment is one deployment's page: its status and its log,
+// which is followed while the deployment runs.
+templ ServiceDeployment(s ui.Shell, v ServiceView, d db.ServiceDeployment) {
+	@serviceFrame(s, v, "deployments") {
+		<div class="grid gap-4">
+			@ServiceDeploymentStatus(v, d)
+			@ui.LogView("deploy-log", templ.Attributes{
+				"hx-ext":      "sse",
+				"sse-connect": v.Path() + "/deployments/" + d.ID + "/stream",
+				"sse-swap":    "line",
+				"sse-close":   "done",
+				"hx-swap":     "beforeend",
+			})
+		</div>
+	}
+}

@@ -506,7 +506,7 @@ func (s *Server) queueApp(ctx context.Context, app db.App, trigger string) (apiQ
 // queueService does the same for a service.
 func (s *Server) queueService(ctx context.Context, svc db.Service) (apiQueued, error) {
 	out := apiQueued{Kind: "service", ID: svc.ID, Status: "waiting"}
-	started, err := s.deployServiceFromOutside(ctx, svc)
+	started, err := s.deployServiceFromOutside(ctx, svc, "api")
 	if started {
 		out.Status = db.DeployQueued
 	}

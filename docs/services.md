@@ -49,6 +49,8 @@ A service of the stack is given a domain on the stack's **Domains** tab, whateve
 
 The Overview lists the stack's containers one by one as the server reports them: each service's state (running, unhealthy, starting, exited, or finished for one that ran once and ended well, as a migration does), its image, and the ports its file publishes on the server itself. A service the file has and the server has no container for is named too. The list is read when the page opens and when the stack's state changes; **Refresh** asks again.
 
+Above it, **Latest deployment** says how the deployment in progress, or else the last one, is getting on: what asked for it, when, how long it took, and the parts it goes through (reading the Compose file, pulling the images, starting the containers; a stack from Git is fetched first), each marked done, under way, failed or not begun. The card shows no output. Every deployment is listed on the **Deployments** tab, newest first, and each leads to a page of its own with the same parts, what went wrong, and its log, followed live while it runs. The last fifty deployments of a service are kept with their logs.
+
 Each row has a menu: the container's logs, a terminal in it, and **Restart**, which stops that one container and starts it again as it is. Redeploy leaves a container alone whose settings did not change, so Restart is the way back for one that hangs; it applies no change to the file or its variables, which is what Redeploy is for. A container that did its job and ended, and the containers of a stopped stack, are not offered it.
 
 **Logs** shows every container's output together, or one service's: the stack's services are above the log. **Terminal** opens a shell in the container you choose, named as Logs names them.

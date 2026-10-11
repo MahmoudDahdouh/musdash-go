@@ -3,9 +3,7 @@ package web
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
-	"os"
 	"path"
 	"regexp"
 	"sort"
@@ -379,7 +377,7 @@ func (s *Server) storeService(w http.ResponseWriter, r *http.Request, p db.Proje
 		return false, err
 	}
 	if r.PostFormValue("deploy") == "1" {
-		if err := s.Deploy.EnqueueService(ctx, svc, false); err != nil {
+		if _, err := s.Deploy.EnqueueService(ctx, svc, db.TriggerManual, false); err != nil {
 			s.Log.Error("queue service deployment", "service", svc.ID, "err", err)
 		}
 	} else {
@@ -535,7 +533,12 @@ func (s *Server) serviceOverview(w http.ResponseWriter, r *http.Request) {
 	}
 	// Named on the page; a server that cannot be read leaves the row out.
 	server, _ := s.DB.ServerByID(r.Context(), v.Service.ServerID)
-	s.render(w, r, http.StatusOK, pages.ServiceOverview(s.serviceShell(w, r, v), v, server.Name, generated, missing))
+	last, err := s.latestDeployment(r.Context(), v.Service.ID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, pages.ServiceOverview(s.serviceShell(w, r, v), v, server.Name, generated, missing, last))
 }
 
 // refreshWhenSettled tells a page whose header was polling a deployment
@@ -582,7 +585,7 @@ func (s *Server) serviceDeploy(w http.ResponseWriter, r *http.Request) {
 
 // queueServiceDeploy queues a deployment and says so, or why not.
 func (s *Server) queueServiceDeploy(w http.ResponseWriter, r *http.Request, svc db.Service, again bool) {
-	err := s.Deploy.EnqueueService(r.Context(), svc, again)
+	_, err := s.Deploy.EnqueueService(r.Context(), svc, db.TriggerManual, again)
 	switch {
 	case errors.Is(err, deploy.ErrBusy):
 		setFlash(w, r, ui.ToneWarn, "The service is already being deployed.")
@@ -636,38 +639,6 @@ func (s *Server) serviceContainerRestart(w http.ResponseWriter, r *http.Request)
 		setFlash(w, r, ui.ToneOK, pages.ContainerLabel(v.Service.ID, name)+" was restarted.")
 	}
 	redirect(w, r, v.Path())
-}
-
-// serviceDeployLog streams the output of the service's latest deployment:
-// all of it at once when the deployment is over, as it is written while it
-// runs.
-func (s *Server) serviceDeployLog(w http.ResponseWriter, r *http.Request) {
-	v, ok := s.loadService(w, r)
-	if !ok {
-		return
-	}
-	release, ok := s.takeStream(w)
-	if !ok {
-		return
-	}
-	defer release()
-	ctx, stop := s.streamContext(r)
-	defer stop()
-	out := startSSE(w)
-	finished := func() bool {
-		cur, err := s.DB.ServiceByID(ctx, v.Service.ID)
-		return err != nil || cur.Status != db.AppDeploying
-	}
-	// A first deployment that waits its turn has no log yet: the page
-	// says so, where it would show an empty box for as long as the ones
-	// before it take (the queue's workers are few, and a server builds
-	// one stack from Git at a time).
-	if _, err := os.Stat(s.Cfg.ServiceLogPath(v.Service.ID)); err != nil && !finished() {
-		io.WriteString(out, "Waiting for its turn.\n")
-	}
-	if err := deploy.FollowWhenReady(ctx, s.Cfg.ServiceLogPath(v.Service.ID), out, finished); err == nil {
-		out.finish()
-	}
 }
 
 // logsOf is the Compose service a request narrows the logs to: one of the
@@ -1316,7 +1287,6 @@ func (s *Server) serviceDelete(w http.ResponseWriter, r *http.Request) {
 		redirect(w, r, back)
 		return
 	}
-	os.Remove(s.Cfg.ServiceLogPath(v.Service.ID))
 	if deleteData {
 		setFlash(w, r, ui.ToneOK, "Service and its volumes deleted.")
 	} else {

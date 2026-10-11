@@ -197,8 +197,8 @@ func TestAnImageAppNamesNoCommit(t *testing.T) {
 	}
 }
 
-// A first deployment that waits its turn has no log yet. Its page says
-// that it is waiting, where it would show an empty box.
+// A deployment that waits its turn has no log yet. Its page says that it
+// is waiting, where it would show an empty box.
 func TestAQueuedStackSaysItIsWaiting(t *testing.T) {
 	a := newApp(t, false)
 	a.setup()
@@ -207,19 +207,20 @@ func TestAQueuedStackSaysItIsWaiting(t *testing.T) {
 	s := a.newService(projectID, env, "site", nil)
 	base := a.servicePath(s.ID)
 
-	// Not deployed, and not being deployed: nothing to wait for.
-	if _, stream := a.get(base + "/deploy-log/stream"); strings.Contains(stream, "Waiting for its turn") {
-		t.Errorf("a stack that is not being deployed says it waits:\n%s", stream)
+	// Over without a log, as one that could not be queued is: nothing to
+	// wait for.
+	over, _ := a.db.CreateServiceDeployment(ctx, s.ID, db.TriggerManual)
+	a.db.FinishServiceDeployment(ctx, over.ID, db.DeployFailed, "it could not be queued")
+	if _, stream := a.get(base + "/deployments/" + over.ID + "/stream"); strings.Contains(stream, "Waiting for its turn") || !strings.Contains(stream, "ended before it wrote anything") || !strings.Contains(stream, "event: done") {
+		t.Errorf("a deployment that is over says it waits:\n%s", stream)
 	}
 	// Queued: said at once. The stream ends when the deployment does.
-	if err := a.db.SetServiceState(ctx, s.ID, db.AppDeploying, ""); err != nil {
-		t.Fatal(err)
-	}
+	queued, _ := a.db.CreateServiceDeployment(ctx, s.ID, db.TriggerManual)
 	go func() {
 		time.Sleep(300 * time.Millisecond)
-		a.db.SetServiceState(ctx, s.ID, db.AppFailed, "it never started")
+		a.db.FinishServiceDeployment(ctx, queued.ID, db.DeployFailed, "it never started")
 	}()
-	if _, stream := a.get(base + "/deploy-log/stream"); !strings.Contains(stream, "Waiting for its turn") {
-		t.Errorf("a queued stack's log:\n%s", stream)
+	if _, stream := a.get(base + "/deployments/" + queued.ID + "/stream"); !strings.Contains(stream, "Waiting for its turn") || !strings.Contains(stream, "event: done") {
+		t.Errorf("a queued deployment's log:\n%s", stream)
 	}
 }

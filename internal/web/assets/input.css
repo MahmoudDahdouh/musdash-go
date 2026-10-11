@@ -1016,6 +1016,75 @@
     color: var(--color-danger);
   }
 
+  /* Stages: how far something done in parts has come (ui.Stages). Each part
+     has a mark whose shape says its state, as a pill's icon does, in the
+     pills' own colours: a tick, a turning ring, a cross, and an empty ring
+     for a part that has not begun. One under the other on a narrow page;
+     side by side from 48rem, with a line between two. */
+  .stages {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .stage {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-ink-mute);
+  }
+  .stage-mark {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--color-idle-line);
+    border-radius: var(--radius-full);
+  }
+  .stage-mark .icon {
+    width: 12px;
+    height: 12px;
+    stroke-width: 2.5;
+  }
+  .stage[data-state="done"] {
+    color: var(--color-ink-soft);
+  }
+  .stage[data-state="done"] .stage-mark {
+    background: var(--color-ok-soft);
+    border-color: var(--color-ok-line);
+    color: var(--color-ok);
+  }
+  .stage[data-state="now"],
+  .stage[data-state="failed"] {
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+  .stage[data-state="now"] .stage-mark {
+    background: var(--color-warn-soft);
+    border-color: var(--color-warn-line);
+    color: var(--color-warn-mark);
+  }
+  .stage[data-state="failed"] .stage-mark {
+    background: var(--color-danger-soft);
+    border-color: var(--color-danger-line);
+    color: var(--color-danger);
+  }
+  @media (min-width: 48rem) {
+    .stages {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+    }
+    .stage + .stage::before {
+      content: "";
+      width: 24px;
+      height: 1px;
+      margin-inline-end: 4px;
+      background: var(--color-line-strong);
+    }
+  }
+
   /* Badge: a plain label with no icon, outlined and unfilled so a row of
      them stays quieter than the one pill beside it. */
   .badge,

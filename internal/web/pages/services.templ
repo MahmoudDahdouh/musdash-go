@@ -28,6 +28,7 @@ func serviceTabs(v ServiceView) []ui.Tab {
 	b := v.Path()
 	return []ui.Tab{
 		{Key: "overview", Label: "Overview", Href: b, Icon: "dashboard"},
+		{Key: "deployments", Label: "Deployments", Href: b + "/deployments", Icon: "rocket"},
 		{Key: "logs", Label: "Logs", Href: b + "/logs", Icon: "file"},
 		{Key: "metrics", Label: "Metrics", Href: b + "/metrics", Icon: "chart"},
 		{Key: "terminal", Label: "Terminal", Href: b + "/terminal", Icon: "terminal"},
@@ -348,7 +349,7 @@ type Generated struct {
 	Value string
 }
 
-templ ServiceOverview(s ui.Shell, v ServiceView, server string, generated []Generated, missing []string) {
+templ ServiceOverview(s ui.Shell, v ServiceView, server string, generated []Generated, missing []string, last *db.ServiceDeployment) {
 	@serviceFrame(s, v, "overview") {
 		<div class="grid gap-6 lg:grid-cols-2">
 			if v.Service.LastError != "" && (v.Service.Status == db.AppFailed || v.Service.Members == "" && v.Service.Status != db.AppDeploying) {
@@ -426,6 +427,7 @@ templ ServiceOverview(s ui.Shell, v ServiceView, server string, generated []Gene
 					@ui.KeyValue(stackFacts(v, server))
 				</div>
 			</section>
+			@ServiceLatest(v, last)
 			<section class="card lg:col-span-2">
 				<div class="card-head">
 					<div>
@@ -468,24 +470,6 @@ templ ServiceOverview(s ui.Shell, v ServiceView, server string, generated []Gene
 					</div>
 				</section>
 			}
-			<section class="card lg:col-span-2">
-				<div class="card-head">
-					<h2 class="card-title">Latest deployment</h2>
-				</div>
-				if v.Service.Status == db.AppCreated {
-					@ui.EmptyState(ui.EmptyProps{Icon: "rocket", Title: "Nothing has been deployed yet", Text: "The deployment's log appears here.", Size: ui.EmptySmall})
-				} else {
-					<div class="card-body">
-						@ui.LogView("deploy-log", templ.Attributes{
-							"hx-ext":      "sse",
-							"sse-connect": v.Path() + "/deploy-log/stream",
-							"sse-swap":    "line",
-							"sse-close":   "done",
-							"hx-swap":     "beforeend",
-						})
-					</div>
-				}
-			</section>
 		</div>
 	}
 }

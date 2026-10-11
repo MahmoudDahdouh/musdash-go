@@ -47,12 +47,16 @@ func ServiceProject(id string) string { return "musdash-" + id }
 
 type servicePayload struct {
 	ID string `json:"id"`
+	// DeploymentID is the row of this deployment. A job queued before
+	// deployments were recorded has none.
+	DeploymentID string `json:"deployment_id,omitempty"`
 }
 
-// EnqueueService queues a deployment of a service. A service that is
-// already deploying answers ErrBusy; again queues another deployment
-// regardless, for a change the one in progress may not have seen.
-func (d *Deployer) EnqueueService(ctx context.Context, s db.Service, again bool) error {
+// EnqueueService queues a deployment of a service and returns its record.
+// A service that is already deploying answers ErrBusy; again queues
+// another deployment regardless, for a change the one in progress may not
+// have seen. trigger is what asked for it.
+func (d *Deployer) EnqueueService(ctx context.Context, s db.Service, trigger string, again bool) (db.ServiceDeployment, error) {
 	// A stack from a repository may build images: it waits its turn with
 	// the server's other builds.
 	lock := "service:" + s.ID
@@ -61,28 +65,36 @@ func (d *Deployer) EnqueueService(ctx context.Context, s db.Service, again bool)
 	}
 	began, err := d.DB.BeginServiceDeploy(ctx, s.ID)
 	if err != nil {
-		return err
+		return db.ServiceDeployment{}, err
 	}
 	if !began && !again {
-		return ErrBusy
+		return db.ServiceDeployment{}, ErrBusy
 	}
-	if began {
-		// The previous deployment's output goes, so a page that follows the
-		// log waits for the new one instead of showing the old.
-		os.Remove(d.Cfg.ServiceLogPath(s.ID))
+	dep, err := d.DB.CreateServiceDeployment(ctx, s.ID, trigger)
+	if err == nil {
+		_, err = d.Queue.Enqueue(ctx, JobService, servicePayload{ID: s.ID, DeploymentID: dep.ID}, jobs.WithLockKey(lock), jobs.WithMaxAttempts(1))
 	}
-	_, err = d.Queue.Enqueue(ctx, JobService, servicePayload{ID: s.ID}, jobs.WithLockKey(lock), jobs.WithMaxAttempts(1))
-	if err != nil && began {
+	if err != nil {
+		// Nothing will run it: the record and the service say so, where
+		// they would otherwise wait for good.
 		rec, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 		defer cancel()
-		if serr := d.DB.SetServiceState(rec, s.ID, db.AppFailed, "the deployment could not be queued: "+err.Error()); serr != nil {
-			d.Log.Error("record service failure", "service", s.ID, "err", serr)
+		reason := "the deployment could not be queued: " + err.Error()
+		if dep.ID != "" {
+			if ferr := d.DB.FinishServiceDeployment(rec, dep.ID, db.DeployFailed, reason); ferr != nil {
+				d.Log.Error("record service failure", "service", s.ID, "err", ferr)
+			}
+		}
+		if began {
+			if serr := d.DB.SetServiceState(rec, s.ID, db.AppFailed, reason); serr != nil {
+				d.Log.Error("record service failure", "service", s.ID, "err", serr)
+			}
 		}
 	}
-	return err
+	return dep, err
 }
 
-func (d *Deployer) runServiceJob(ctx context.Context, raw []byte) error {
+func (d *Deployer) runServiceJob(ctx context.Context, raw []byte) (err error) {
 	var p servicePayload
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return jobs.Permanent(err)
@@ -94,10 +106,61 @@ func (d *Deployer) runServiceJob(ctx context.Context, raw []byte) error {
 	if err != nil {
 		return jobs.Permanent(fmt.Errorf("service %s: %w", p.ID, err))
 	}
+	var dep db.ServiceDeployment
+	if p.DeploymentID == "" {
+		// Queued before deployments were recorded. What asked for it is
+		// not known.
+		dep, err = d.DB.CreateServiceDeployment(ctx, s.ID, "")
+	} else {
+		dep, err = d.DB.ServiceDeploymentByID(ctx, p.DeploymentID)
+	}
+	if err != nil {
+		return jobs.Permanent(fmt.Errorf("deployment of service %s: %w", s.ID, err))
+	}
+	// How a deployment ended is written with a context of its own, made
+	// when it is needed: the job's may be over by then, and the record must
+	// not stay "running".
+	recording := func() (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	}
+	// settled says that the record has its end, or waits for the job to
+	// run again.
+	settled := false
+	finish := func(status, reason string) {
+		settled = true
+		rec, cancel := recording()
+		defer cancel()
+		if err := d.DB.FinishServiceDeployment(rec, dep.ID, status, reason); err != nil {
+			d.Log.Error("record a service's deployment", "service", s.ID, "deployment", dep.ID, "err", err)
+		}
+		d.pruneServiceDeployments(rec, s.ID)
+	}
+	// Whatever ends the job otherwise, a write below that failed or a
+	// panic, must not leave the record waiting and the service "deploying":
+	// its page has no button while it is, and this job has one attempt. A
+	// job that musdash's own shutdown ended runs again and is left alone.
+	defer func() {
+		if settled || ctx.Err() != nil {
+			return
+		}
+		reason := "the deployment stopped before it had finished"
+		if err != nil {
+			reason += ": " + err.Error()
+		}
+		finish(db.DeployFailed, reason)
+		rec, cancel := recording()
+		defer cancel()
+		if cur, cerr := d.DB.ServiceByID(rec, s.ID); cerr == nil && cur.Status == db.AppDeploying {
+			if serr := d.DB.SetServiceState(rec, s.ID, d.serviceStatusAfterFailure(rec, s), reason); serr != nil {
+				d.Log.Error("record service failure", "service", s.ID, "err", serr)
+			}
+		}
+	}()
 	switch s.Status {
 	case db.AppStopped:
 		// Stopped while this deployment waited its turn. The person's last
 		// word was "stop".
+		finish(db.DeployFailed, "the service was stopped before this deployment started")
 		return nil
 	case db.AppDeploying:
 	default:
@@ -107,29 +170,67 @@ func (d *Deployer) runServiceJob(ctx context.Context, raw []byte) error {
 			return err
 		}
 	}
-	log, err := OpenLog(d.Cfg.ServiceLogPath(s.ID))
+	// The one log a service had before each deployment had its own.
+	os.Remove(d.Cfg.ServiceLogPath(s.ID))
+	log, err := OpenLog(d.Cfg.ServiceLogPath(dep.ID))
 	if err != nil {
+		finish(db.DeployFailed, err.Error())
 		d.DB.SetServiceState(ctx, s.ID, db.AppFailed, err.Error())
 		return jobs.Permanent(err)
 	}
 	defer log.Close()
+	if err := d.DB.StartServiceDeployment(ctx, dep.ID); err != nil {
+		return err
+	}
 
-	err = d.deployService(ctx, s, log)
-	rec, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	err = d.deployService(ctx, s, dep, log)
+	rec, cancel := recording()
 	defer cancel()
+	// The record ends before the service's status says so: a page that
+	// sees the service settle looks for a deployment that is over.
 	if err == nil {
 		log.Step("Deployed.")
+		finish(db.DeploySuccess, "")
 		return d.DB.SetServiceState(rec, s.ID, db.AppRunning, "")
 	}
 	if ctx.Err() != nil {
+		// The job runs again, and until then the record waits as it does:
+		// it does not go on naming the part it was at.
 		log.Step("Interrupted: musdash is shutting down. The deployment will restart.")
+		settled = true
+		if rerr := d.DB.RequeueServiceDeployment(rec, dep.ID); rerr != nil {
+			d.Log.Error("record a service's deployment", "service", s.ID, "deployment", dep.ID, "err", rerr)
+		}
 		return err
 	}
 	log.Step("Failed: %v", err)
+	finish(db.DeployFailed, err.Error())
 	if serr := d.DB.SetServiceState(rec, s.ID, d.serviceStatusAfterFailure(rec, s), err.Error()); serr != nil {
 		d.Log.Error("record service failure", "service", s.ID, "err", serr)
 	}
 	return jobs.Permanent(err)
+}
+
+// pruneServiceDeployments drops a service's oldest finished deployments
+// and their logs.
+func (d *Deployer) pruneServiceDeployments(ctx context.Context, serviceID string) {
+	ids, err := d.DB.PruneServiceDeployments(ctx, serviceID, keepDeployments)
+	if err != nil {
+		d.Log.Error("prune a service's deployments", "service", serviceID, "err", err)
+		return
+	}
+	for _, id := range ids {
+		os.Remove(d.Cfg.ServiceLogPath(id))
+	}
+}
+
+// serviceStep records the part of a deployment that begins. It is what a
+// page shows of a deployment in progress; one that could not be written
+// costs the page a step and the deployment nothing.
+func (d *Deployer) serviceStep(ctx context.Context, dep db.ServiceDeployment, step string) {
+	if err := d.DB.SetServiceDeploymentStep(ctx, dep.ID, step); err != nil {
+		d.Log.Warn("record a deployment's step", "deployment", dep.ID, "err", err)
+	}
 }
 
 // serviceStatusAfterFailure is the status of a service whose deployment
@@ -317,9 +418,10 @@ func takenPort(output string) int {
 	return port
 }
 
-// deployService loads, checks and starts a service's stack. The caller
-// holds the service's lock.
-func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) error {
+// deployService loads, checks and starts a service's stack, and says on
+// the deployment's record which part it is at. The caller holds the
+// service's lock.
+func (d *Deployer) deployService(ctx context.Context, s db.Service, dep db.ServiceDeployment, log *Log) error {
 	server, err := d.DB.ServerByID(ctx, s.ServerID)
 	if err != nil {
 		return err
@@ -341,12 +443,21 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 	checkout, commit := "", ""
 	var newHost func(string) (string, bool)
 	if s.FromGit() {
+		d.serviceStep(ctx, dep, db.ServiceStepClone)
 		if checkout, commit, s, err = d.checkoutService(ctx, r, s, log); err != nil {
 			return err
+		}
+		// For the list of deployments; one that could not be written costs
+		// the list a commit and the deployment nothing.
+		if err := d.DB.SetServiceDeploymentCommit(ctx, dep.ID, commit); err != nil {
+			d.Log.Warn("record a deployment's commit", "deployment", dep.ID, "err", err)
 		}
 		newHost = func(string) (string, bool) { return GeneratedDomain(server), false }
 	}
 
+	// From here to the file's last check: what it asks for is found out,
+	// filled in and held against what a stack may do.
+	d.serviceStep(ctx, dep, db.ServiceStepRead)
 	vars, err := d.ServiceVariables(s)
 	if err != nil {
 		return err
@@ -624,6 +735,7 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		}
 
 		if attempt == 1 {
+			d.serviceStep(ctx, dep, db.ServiceStepImages)
 			log.Step("Pulling images")
 			pull := d.composeCmd(r, s.ID, "pull", "--ignore-buildable")
 			pullOut := &tail{limit: 1500}
@@ -657,6 +769,7 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 			}
 		}
 
+		d.serviceStep(ctx, dep, db.ServiceStepStart)
 		log.Step("Starting %s", strings.Join(members, ", "))
 		upOut := &tail{limit: 4096}
 		up := d.composeCmd(r, s.ID, "up", "--detach", "--remove-orphans", "--wait", "--wait-timeout", strconv.Itoa(int(d.serviceStartTimeout.Seconds())))
@@ -1049,8 +1162,18 @@ func (d *Deployer) DestroyService(ctx context.Context, id string, deleteData boo
 	if err := r.RemoveAll(ctx, d.at(r).AppDir(s.ID)); err != nil {
 		d.Log.Warn("remove a deleted service's directory", "service", s.ID, "err", err)
 	}
+	// The deployments' records go with the service; their logs are found
+	// through them, so they are listed first.
+	logs, err := d.DB.ServiceDeploymentIDs(ctx, s.ID)
+	if err != nil {
+		return err
+	}
 	if err := d.DB.DeleteService(ctx, s.ID); err != nil {
 		return err
+	}
+	// And the one log a service had before each deployment had its own.
+	for _, id := range append(logs, s.ID) {
+		os.Remove(d.Cfg.ServiceLogPath(id))
 	}
 	if err := d.SyncRoutes(ctx, server); err != nil && !errors.Is(err, ErrProxyDown) {
 		d.Log.Warn("withdraw a deleted service's routes", "service", s.ID, "err", err)

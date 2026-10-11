@@ -721,16 +721,74 @@
   armToasts(document);
   document.addEventListener("htmx:afterSettle", (e) => armToasts(e.target));
 
-  // Log views follow new output unless the reader has scrolled up.
-  // Old lines are dropped so a log left open for days stays small.
-  const maxLogNodes = 4000;
+  // Log views follow new output unless the reader has scrolled up, and old
+  // output is dropped so a log left open for days stays small.
+  //
+  // What is counted is a log's text, not its nodes: an event holds as many
+  // lines as the server had at hand, so a node is one line or a hundred. The
+  // count is kept beside the log and an event measures only what it added.
+  //
+  // Dropping what is too old and going to the end are not done for each
+  // event but once before the page is next drawn, for all the events since.
+  // Going to a log's end makes the browser lay its text out, all of it: done
+  // for every event, a log that arrives in a burst was laid out a hundred
+  // times before it was drawn once.
+  const maxLogChars = 512 * 1024;
+  const logs = new WeakMap(); // log -> { chars, last, end }
+  const due = new Set();
+  const logState = (log) => {
+    let state = logs.get(log);
+    if (!state) logs.set(log, (state = { chars: 0, last: null, end: 0 }));
+    return state;
+  };
   document.addEventListener("htmx:sseMessage", (e) => {
     const log = e.target.closest?.("[data-follow]");
     if (!log) return;
-    while (log.childNodes.length > maxLogNodes) log.firstChild.remove();
-    if (log.dataset.follow !== "paused") log.scrollTop = log.scrollHeight;
+    const state = logState(log);
+    // The node it stopped at is gone: something else emptied the log.
+    if (state.last && state.last.parentNode !== log) {
+      state.chars = 0;
+      state.last = null;
+    }
+    for (let n = state.last ? state.last.nextSibling : log.firstChild; n; n = n.nextSibling) {
+      state.chars += n.textContent.length;
+      state.last = n;
+    }
+    if (due.size === 0) tendSoon();
+    due.add(log);
   });
-  on("scroll", "[data-follow]", (el) => {
-    el.dataset.follow = el.scrollHeight - el.scrollTop - el.clientHeight < 40 ? "on" : "paused";
+  // A page that is not shown is not drawn and is given no frame. Its logs
+  // are tended once a second, so that they stay small there too.
+  const tendSoon = () => (document.hidden ? setTimeout(tendLogs, 1000) : requestAnimationFrame(tendLogs));
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && due.size > 0) setTimeout(tendLogs, 1000);
   });
+  function tendLogs() {
+    for (const log of due) {
+      const state = logState(log);
+      while (state.chars > maxLogChars && log.firstChild !== log.lastChild) {
+        state.chars -= log.firstChild.textContent.length;
+        log.firstChild.remove();
+      }
+      if (log.dataset.follow !== "paused") log.scrollTop = log.scrollHeight;
+      // Where the log ended when it was last looked after: see below.
+      state.end = log.scrollHeight;
+    }
+    due.clear();
+  }
+  // A scroll does not bubble, so it is heard on its way down. The reader is
+  // at the end while they are where the log was last taken to. Measured
+  // against the log as it is now, the scroll that took them there would
+  // read as a scroll away from the end: it is heard a frame later, and
+  // output that came in between has made the log longer without moving them.
+  document.addEventListener(
+    "scroll",
+    (e) => {
+      const log = e.target;
+      if (!(log instanceof Element) || !log.matches("[data-follow]")) return;
+      const end = logs.get(log)?.end || log.scrollHeight;
+      log.dataset.follow = log.scrollTop + log.clientHeight >= end - 40 ? "on" : "paused";
+    },
+    true,
+  );
 })();

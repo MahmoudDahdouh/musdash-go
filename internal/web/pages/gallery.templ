@@ -207,6 +207,14 @@ templ Gallery(s ui.Shell) {
 					@ui.Badge("Analytics", ui.ToneSoft)
 				</div>
 			}
+			@gallerySection("Stages") {
+				<div class="card">
+					<div class="card-body grid gap-4">
+						@ui.Stages([]ui.Stage{{Label: "Fetch the repository", State: ui.StageDone}, {Label: "Read the Compose file", State: ui.StageDone}, {Label: "Pull and build the images", State: ui.StageNow}, {Label: "Start the containers", State: ui.StageWaiting}})
+						@ui.Stages([]ui.Stage{{Label: "Read the Compose file", State: ui.StageDone}, {Label: "Pull the images", State: ui.StageFailed}, {Label: "Start the containers", State: ui.StageWaiting}})
+					</div>
+				</div>
+			}
 			@gallerySection("Table") {
 				@ui.Card("Deployments") {
 					@ui.Table("Commit", "Status", "Started", "Duration") {

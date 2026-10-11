@@ -249,6 +249,9 @@ func runServer(args []string) error {
 	if err := d.ResetStuckServices(ctx, "musdash stopped while this service was being deployed; deploy it again"); err != nil {
 		return err
 	}
+	if err := d.FailStaleServiceDeployments(ctx, "musdash stopped before this deployment had finished"); err != nil {
+		return err
+	}
 	go settle(ctx)
 	go republishRoutes(ctx, d, deployer, log)
 	go monitorServers(ctx, d, deployer, log)
