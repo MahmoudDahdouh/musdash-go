@@ -544,6 +544,10 @@ func fakeGitHubAPI(t *testing.T) *source.GitHub {
 			io.WriteString(w, `{"id":4242,"slug":"musdash-shop","name":"musdash shop","html_url":"https://github.com/apps/musdash-shop","client_id":"Iv1.x","client_secret":"client-secret-value","webhook_secret":"webhook-secret-value","pem":"-----BEGIN RSA PRIVATE KEY-----\nprivate-key-value\n-----END RSA PRIVATE KEY-----\n"}`)
 			return
 		}
+		if r.Method == "POST" && r.URL.Path == "/app-manifests/odd-slug/conversions" {
+			io.WriteString(w, `{"id":4243,"slug":"x/../../login?return_to=//evil.example","name":"odd","html_url":"https://github.com/apps/odd","client_id":"Iv1.y","client_secret":"s","webhook_secret":"w","pem":"k"}`)
+			return
+		}
 		w.WriteHeader(http.StatusNotFound)
 		io.WriteString(w, `{"message":"Not Found"}`)
 	}))
@@ -617,8 +621,10 @@ func TestGitHubAppManifestFlow(t *testing.T) {
 		t.Fatal("a rejected code completed the flow")
 	}
 
+	// The App exists: the browser goes on to where its repositories are
+	// chosen, without a stop here in between.
 	res, _ = a.get("/sources/github/callback?code=good-code&state=" + url.QueryEscape(state))
-	wantRedirect(t, res, "/sources")
+	wantRedirect(t, res, "https://github.com/apps/musdash-shop/installations/new")
 	list, _ := a.db.ListGitSources(ctx, team)
 	if len(list) != 1 || list[0].ID != sourceID || list[0].AppID != 4242 || list[0].Slug != "musdash-shop" || list[0].State != "" {
 		t.Fatalf("stored source: %+v", list)
@@ -658,6 +664,27 @@ func TestGitHubAppManifestFlow(t *testing.T) {
 	wantRedirect(t, res, "/sources")
 	if list, _ := a.db.ListGitSources(ctx, team); len(list) != 1 {
 		t.Fatal("a source in use was removed")
+	}
+}
+
+// The slug is GitHub's word and becomes part of an address the browser is
+// sent to: one that is no slug stores the App and sends nobody anywhere.
+func TestGitHubCallbackFollowsOnlyASlug(t *testing.T) {
+	a := newApp(t, false)
+	a.server.GitHub = fakeGitHubAPI(t)
+	a.setup()
+
+	res, page := a.post("/sources", "/sources/github", url.Values{"name": {"musdash odd"}, "base": {"https://dash.example.com"}})
+	wantStatus(t, res, http.StatusOK)
+	action := regexp.MustCompile(`action="https://github\.com/settings/apps/new\?state=([^"]+)"`).FindStringSubmatch(page)
+	if action == nil {
+		t.Fatalf("no form posting to GitHub:\n%s", page)
+	}
+	state, _ := url.QueryUnescape(action[1])
+	res, _ = a.get("/sources/github/callback?code=odd-slug&state=" + url.QueryEscape(state))
+	wantRedirect(t, res, "/sources")
+	if list, _ := a.db.ListGitSources(context.Background(), firstTeam(t, a)); len(list) != 1 {
+		t.Fatalf("the App was not stored: %+v", list)
 	}
 }
 

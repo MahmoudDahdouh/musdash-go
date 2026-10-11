@@ -42,7 +42,7 @@ An app can be built from a repository instead of pulling an image. Step 1 above 
 | Repository | How musdash reads it |
 |---|---|
 | Public | Its `https://` address, nothing to set up |
-| Private, on GitHub | A GitHub App: create one under **Sources**, then install it on the repositories |
+| Private, on GitHub | A GitHub App: add one under **Sources**. GitHub asks you to confirm its name and then which repositories it may read, and sends you back when both are done. **Choose repositories** changes the choice later |
 | Private, on GitLab | An access token: connect GitLab under **Sources** with a personal, group or project token that has the `read_api` and `read_repository` scopes. gitlab.com or your own instance, over HTTPS |
 | Private, anywhere | A deploy key: generate one under **Sources** and add its public half to the repository |
 

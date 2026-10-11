@@ -16,7 +16,9 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
 
-func installURL(g db.GitSource) string {
+// InstallURL is where on GitHub the repositories an App may read are
+// chosen. GitHub sends the browser back to /sources/github/installed.
+func InstallURL(g db.GitSource) string {
 	return "https://github.com/apps/" + g.Slug + "/installations/new"
 }
 
@@ -291,7 +293,7 @@ func Sources(s ui.Shell, sources []db.GitSource, appForm, gitlabForm ui.Form) te
 						var templ_7745c5c3_Var9 string
 						templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(g.Name)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 114, Col: 45}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 116, Col: 45}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 						if templ_7745c5c3_Err != nil {
@@ -312,7 +314,7 @@ func Sources(s ui.Shell, sources []db.GitSource, appForm, gitlabForm ui.Form) te
 						var templ_7745c5c3_Var10 templ.SafeURL
 						templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(g.HTMLURL))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 121, Col: 65}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 123, Col: 65}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 						if templ_7745c5c3_Err != nil {
@@ -325,7 +327,7 @@ func Sources(s ui.Shell, sources []db.GitSource, appForm, gitlabForm ui.Form) te
 						var templ_7745c5c3_Var11 string
 						templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(sourceAccount(g))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 121, Col: 117}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 123, Col: 117}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 						if templ_7745c5c3_Err != nil {
@@ -359,7 +361,7 @@ func Sources(s ui.Shell, sources []db.GitSource, appForm, gitlabForm ui.Form) te
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = ui.LinkButton(installURL(g), ui.ButtonProps{Small: true, Icon: "external", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = ui.LinkButton(InstallURL(g), ui.ButtonProps{Small: true, Icon: "external", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -371,7 +373,7 @@ func Sources(s ui.Shell, sources []db.GitSource, appForm, gitlabForm ui.Form) te
 							var templ_7745c5c3_Var13 templ.SafeURL
 							templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(removeSourcePath(g)))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 131, Col: 73}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 133, Col: 73}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 							if templ_7745c5c3_Err != nil {
@@ -459,7 +461,7 @@ func Sources(s ui.Shell, sources []db.GitSource, appForm, gitlabForm ui.Form) te
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "new-github-app", Title: "New GitHub App", Description: "A GitHub App gives musdash read access to the repositories you choose, and tells it when you push. Creating it takes two steps on GitHub: confirm its name, then choose which repositories it may read. You come back here in between.", Action: "/sources/github", CSRF: s.CSRF, Submit: "Create GitHub App", Open: !appForm.OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "new-github-app", Title: "New GitHub App", Description: "A GitHub App gives musdash read access to the repositories you choose, and tells it when you push. GitHub asks two things, one after the other: to confirm the App's name, then which repositories it may read. After that it sends you back here.", Action: "/sources/github", CSRF: s.CSRF, Submit: "Create GitHub App", Open: !appForm.OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -550,7 +552,7 @@ func GitHubHandoff(s ui.Shell, name, action, manifest string) templ.Component {
 			var templ_7745c5c3_Var19 templ.SafeURL
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(action))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 166, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 168, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -563,7 +565,7 @@ func GitHubHandoff(s ui.Shell, name, action, manifest string) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(manifest)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 167, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 169, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 			if templ_7745c5c3_Err != nil {
@@ -576,13 +578,13 @@ func GitHubHandoff(s ui.Shell, name, action, manifest string) templ.Component {
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 171, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 173, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</strong>. It can read the code of the repositories you choose and nothing else, and it belongs to you: you can remove it from GitHub at any time.</p><p class=\"muted text-sm\">After you confirm, GitHub sends you back here.</p></div><div class=\"card-foot\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</strong>. It can read the code of the repositories you choose and nothing else, and it belongs to you: you can remove it from GitHub at any time.</p><p class=\"muted text-sm\">After you confirm, GitHub asks which repositories the App may read, then sends you back here.</p></div><div class=\"card-foot\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -755,7 +757,7 @@ func RepoList(v RepoPick) templ.Component {
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(repo.FullName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 255, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 257, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 				if templ_7745c5c3_Err != nil {
@@ -854,7 +856,7 @@ func BranchList(v BranchPick) templ.Component {
 					var templ_7745c5c3_Var29 string
 					templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(branch)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 285, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 287, Col: 56}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 					if templ_7745c5c3_Err != nil {
@@ -948,7 +950,7 @@ func BuildDetected(d Detected) templ.Component {
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(d.Problem)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 323, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 325, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 			if templ_7745c5c3_Err != nil {
@@ -966,7 +968,7 @@ func BuildDetected(d Detected) templ.Component {
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Pack)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 326, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 328, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 			if templ_7745c5c3_Err != nil {
@@ -987,7 +989,7 @@ func BuildDetected(d Detected) templ.Component {
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(d.Found)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 328, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 330, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 			if templ_7745c5c3_Err != nil {
@@ -1000,7 +1002,7 @@ func BuildDetected(d Detected) templ.Component {
 			var templ_7745c5c3_Var34 string
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(d.says())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 328, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 330, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 			if templ_7745c5c3_Err != nil {

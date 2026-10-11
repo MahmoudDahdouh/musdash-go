@@ -8,7 +8,9 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
 
-func installURL(g db.GitSource) string {
+// InstallURL is where on GitHub the repositories an App may read are
+// chosen. GitHub sends the browser back to /sources/github/installed.
+func InstallURL(g db.GitSource) string {
 	return "https://github.com/apps/" + g.Slug + "/installations/new"
 }
 
@@ -124,7 +126,7 @@ templ Sources(s ui.Shell, sources []db.GitSource, appForm, gitlabForm ui.Form) {
 								if s.Admin {
 									<div class="flex flex-wrap justify-end gap-2">
 										if g.Kind == db.GitSourceGitHubApp {
-											@ui.LinkButton(installURL(g), ui.ButtonProps{Small: true, Icon: "external", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener"}}) {
+											@ui.LinkButton(InstallURL(g), ui.ButtonProps{Small: true, Icon: "external", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener"}}) {
 												Choose repositories
 											}
 										}
@@ -143,7 +145,7 @@ templ Sources(s ui.Shell, sources []db.GitSource, appForm, gitlabForm ui.Form) {
 			</section>
 		}
 		if s.Admin {
-			@ui.FormDialog(ui.DialogProps{ID: "new-github-app", Title: "New GitHub App", Description: "A GitHub App gives musdash read access to the repositories you choose, and tells it when you push. Creating it takes two steps on GitHub: confirm its name, then choose which repositories it may read. You come back here in between.", Action: "/sources/github", CSRF: s.CSRF, Submit: "Create GitHub App", Open: !appForm.OK()}) {
+			@ui.FormDialog(ui.DialogProps{ID: "new-github-app", Title: "New GitHub App", Description: "A GitHub App gives musdash read access to the repositories you choose, and tells it when you push. GitHub asks two things, one after the other: to confirm the App's name, then which repositories it may read. After that it sends you back here.", Action: "/sources/github", CSRF: s.CSRF, Submit: "Create GitHub App", Open: !appForm.OK()}) {
 				@ui.TextField(appForm, "App name", "Shown on GitHub. It must be unique across GitHub.", ui.InputProps{ID: "name", Required: true, Attrs: templ.Attributes{"maxlength": "34"}})
 				@ui.TextField(appForm, "Organisation", "Leave empty to create the App under your own account.", ui.InputProps{ID: "organization", Mono: true, Placeholder: "acme"})
 				@ui.TextField(appForm, "This dashboard's address", "GitHub sends you back here, and sends push events here. It must be reachable from the internet for pushes to deploy.", ui.InputProps{ID: "base", Mono: true, Required: true})
@@ -170,7 +172,7 @@ templ GitHubHandoff(s ui.Shell, name, action, manifest string) {
 					<p class="text-ink-soft">
 						GitHub will ask you to confirm creating an App called <strong>{ name }</strong>. It can read the code of the repositories you choose and nothing else, and it belongs to you: you can remove it from GitHub at any time.
 					</p>
-					<p class="muted text-sm">After you confirm, GitHub sends you back here.</p>
+					<p class="muted text-sm">After you confirm, GitHub asks which repositories the App may read, then sends you back here.</p>
 				</div>
 				<div class="card-foot">
 					@ui.LinkButton("/sources", ui.ButtonProps{}) {

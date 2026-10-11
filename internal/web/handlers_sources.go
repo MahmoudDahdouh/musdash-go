@@ -22,6 +22,8 @@ var (
 	// GitHub App names: letters, numbers, spaces and hyphens, up to 34.
 	githubAppNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 -]{1,32}[A-Za-z0-9]$`)
 	githubOrgRE     = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$`)
+	// An App's slug is its name made fit for an address.
+	githubSlugRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,99}$`)
 )
 
 // publicBase works out the address other machines reach this dashboard at:
@@ -152,6 +154,9 @@ func (s *Server) githubStart(w http.ResponseWriter, r *http.Request) {
 
 // githubCallback finishes the manifest flow: GitHub has created the App and
 // redirected back with a code that is exchanged for the App's credentials.
+// An App that is installed nowhere reads nothing, so the browser is sent
+// straight on to where its repositories are chosen, and GitHub sends it to
+// githubInstalled from there: one way through for the person, not two.
 func (s *Server) githubCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// The state ties this redirect to a flow this team started in this
@@ -195,8 +200,16 @@ func (s *Server) githubCallback(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// Shown only to somebody who comes back without having chosen: the
+	// answer to an installation replaces it.
 	setFlash(w, r, ui.ToneOK, "GitHub App created. Now install it on the repositories you want to deploy.")
-	redirect(w, r, "/sources")
+	// The slug is GitHub's word and about to be part of an address: one
+	// that is no slug leaves the person on Sources, where the App is listed.
+	if !githubSlugRE.MatchString(pending.Slug) {
+		redirect(w, r, "/sources")
+		return
+	}
+	redirect(w, r, pages.InstallURL(pending))
 }
 
 // githubInstalled is where GitHub sends the browser after the App was
