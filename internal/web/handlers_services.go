@@ -311,6 +311,11 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 		f.Set("variables", r.PostFormValue("variables"))
 		checkCompose(&f, svc.Compose)
 		vars = parseServiceVariables(&f, r.PostFormValue("variables"))
+		// A deployment of a file whose required variable has no value can
+		// only fail: said here, where the value is given.
+		if missing := missingValues(svc.Compose, vars); len(missing) > 0 && f.OK() && r.PostFormValue("deploy") == "1" {
+			f.Fail("variables", "The file needs a value for "+listed(missing)+". Give it here as NAME=value, or untick Deploy to give it later.")
+		}
 	} else {
 		for _, v := range requiredVars(tpl.Compose) {
 			value := strings.TrimSpace(r.PostFormValue("var_" + v.Name))
@@ -439,6 +444,42 @@ func (s *Server) stackFromGitForm(w http.ResponseWriter, r *http.Request, p db.P
 	}
 }
 
+// missingValues names the variables a Compose text requires (${NAME:?…})
+// that vars gives no value to.
+func missingValues(composeText string, vars map[string]string) []string {
+	var missing []string
+	for _, v := range requiredVars(composeText) {
+		if vars[v.Name] == "" {
+			missing = append(missing, v.Name)
+		}
+	}
+	return missing
+}
+
+// listed joins names as a sentence has them: "A", "A and B", "A, B and C".
+func listed(names []string) string {
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
+// heldBack reports whether a stack must not be deployed yet, and says so
+// in a note: its pasted file requires a variable that has no value. A
+// stack from Git is never held back: its file is read by the deployment,
+// and the one stored may be older than the repository's.
+func (s *Server) heldBack(w http.ResponseWriter, r *http.Request, svc db.Service, vars map[string]string) bool {
+	if svc.FromGit() {
+		return false
+	}
+	missing := missingValues(svc.Compose, vars)
+	if len(missing) == 0 {
+		return false
+	}
+	setFlash(w, r, ui.ToneWarn, "Not deployed: the Compose file needs a value for "+listed(missing)+". Enter it under Variables, then deploy.")
+	return true
+}
+
 // serviceValues splits a service's stored variables into the generated
 // ones and the ones a person entered, and lists the required ones that
 // have no value.
@@ -456,12 +497,7 @@ func (s *Server) serviceValues(svc db.Service) (generated []pages.Generated, ent
 	}
 	sort.Slice(generated, func(i, j int) bool { return generated[i].Name < generated[j].Name })
 	sort.Slice(entered, func(i, j int) bool { return entered[i].Key < entered[j].Key })
-	for _, v := range requiredVars(svc.Compose) {
-		if vars[v.Name] == "" {
-			missing = append(missing, v.Name)
-		}
-	}
-	return generated, entered, missing, nil
+	return generated, entered, missingValues(svc.Compose, vars), nil
 }
 
 func (s *Server) serviceOverview(w http.ResponseWriter, r *http.Request) {
@@ -511,6 +547,11 @@ func (s *Server) serviceStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) serviceDeploy(w http.ResponseWriter, r *http.Request) {
 	v, ok := s.loadService(w, r)
 	if !ok {
+		return
+	}
+	vars, err := s.Deploy.ServiceVariables(v.Service)
+	if err == nil && s.heldBack(w, r, v.Service, vars) {
+		redirect(w, r, v.Path()+"/compose")
 		return
 	}
 	s.queueServiceDeploy(w, r, v.Service, false)
@@ -755,13 +796,18 @@ func (s *Server) renderServiceComposeGit(w http.ResponseWriter, r *http.Request,
 	// the form that is coming back. Otherwise it gets their number.
 	variables, typed := f.Values["variables"]
 	count := 0
+	// With nothing stored there is nothing to keep from the page: the box
+	// is shown, empty. Not when the variables could not be read: a box
+	// sent back empty would then replace them.
+	shown := typed
 	if !typed {
 		if _, entered, _, err := s.serviceValues(v.Service); err == nil {
 			count = len(entered)
+			shown = count == 0
 		}
 	}
 	reads := composeReads(composeText, s.givenTo(v.Service, variables, typed))
-	s.render(w, r, status, pages.ServiceCompose(s.serviceShell(w, r, v), v, f, composeText, variables, typed, count, git, reads))
+	s.render(w, r, status, pages.ServiceCompose(s.serviceShell(w, r, v), v, f, composeText, variables, shown, count, git, reads))
 }
 
 // serviceSourceSave stores where a Git service's Compose file comes from.
@@ -928,6 +974,11 @@ func (s *Server) serviceComposeSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.PostFormValue("deploy") == "1" {
+		// Saved either way; deployed only when it can come up.
+		if s.heldBack(w, r, svc, vars) {
+			redirect(w, r, v.Path()+"/compose")
+			return
+		}
 		s.queueServiceDeploy(w, r, svc, true)
 		redirect(w, r, v.Path())
 		return
