@@ -27,7 +27,9 @@ templ PageHeader(title, description string) {
 // Crumb is one step of the trail in the bar at the top. The last one has no
 // Href: it is where you are. A step with a Menu is a switcher: a button
 // naming the place, and a menu of the places beside it that is fetched from
-// Menu (SwitchOption, MenuSep, MenuNote) the first time it is opened.
+// Menu (SwitchOption, MenuSep, MenuNote) the first time it is opened. A
+// switcher's Href is the page of the place it names: the trail does not
+// link it, and the bar's Back button leads there from a page under it.
 type Crumb struct {
 	Label string
 	Href  string

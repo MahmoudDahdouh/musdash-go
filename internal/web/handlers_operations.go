@@ -368,7 +368,7 @@ func (s *Server) renderTask(w http.ResponseWriter, r *http.Request, status int, 
 	if shown != "" {
 		output = s.taskOutput(shown)
 	}
-	s.render(w, r, status, pages.AppTask(s.appShell(w, r, v), v, t, runs, shown, output, f))
+	s.render(w, r, status, pages.AppTask(under(s.appShell(w, r, v), v.Path()+"/tasks"), v, t, runs, shown, output, f))
 }
 
 func (s *Server) appTask(w http.ResponseWriter, r *http.Request) {

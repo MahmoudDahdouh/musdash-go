@@ -79,7 +79,7 @@ func (s *Server) serviceDeployment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.ServiceDeployment(s.serviceShell(w, r, v), v, dep))
+	s.render(w, r, http.StatusOK, pages.ServiceDeployment(under(s.serviceShell(w, r, v), v.Path()+"/deployments"), v, dep))
 }
 
 func (s *Server) serviceDeploymentStatus(w http.ResponseWriter, r *http.Request) {

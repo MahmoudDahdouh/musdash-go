@@ -1245,3 +1245,56 @@ func TestHeader(t *testing.T) {
 		t.Errorf("/sys/mem: status %d", res.StatusCode)
 	}
 }
+
+// The bar's Back button is a link to the place above the page, so it leads
+// somewhere without script: from a resource to its environment, from an
+// environment to its project, from one deployment to the list of them. A
+// page with nothing above it has none.
+func TestBackButtonLeadsUp(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	projectID, env := a.project("Shop")
+	appID := a.newApp(projectID, env, "web", true, nil)
+	dep := a.waitDeployed(appID)
+	envPath := "/projects/" + projectID + "/env/" + env.ID
+
+	back := regexp.MustCompile(`<a class="[^"]*topbar-back[^"]*" href="([^"]*)" data-back aria-label="Back"`)
+	for page, up := range map[string]string{
+		a.appPath(appID):                            envPath,
+		a.appPath(appID) + "/logs":                  envPath,
+		a.appPath(appID) + "/deployments/" + dep.ID: a.appPath(appID) + "/deployments",
+		a.appPath(appID) + "/environment/edit":      a.appPath(appID) + "/environment",
+		envPath:                                     "/projects/" + projectID,
+		envPath + "/new":                            envPath,
+		envPath + "/app/new":                        envPath + "/new",
+		"/projects/" + projectID:                    "/projects",
+		"/projects/" + projectID + "/settings":      "/projects/" + projectID,
+		"/servers/" + a.localServerID():             "/servers",
+	} {
+		res, body := a.get(page)
+		wantStatus(t, res, http.StatusOK)
+		bar := between(t, page, body, `<div class="topbar">`, `<main class="page"`)
+		m := back.FindStringSubmatch(bar)
+		if m == nil {
+			t.Errorf("%s: the bar has no Back button", page)
+		} else if m[1] != up {
+			t.Errorf("%s: Back leads to %s, want %s", page, m[1], up)
+		}
+	}
+	for _, page := range []string{"/", "/projects", "/servers", "/tags", "/team", "/keys", "/account", "/nosuchpage"} {
+		_, body := a.get(page)
+		if bar := between(t, page, body, `<div class="topbar">`, `<main class="page"`); strings.Contains(bar, "data-back") {
+			t.Errorf("%s: a page with nothing above it has a Back button", page)
+		}
+	}
+}
+
+// localServerID is the id of this machine's server, which every install has.
+func (a *app) localServerID() string {
+	a.t.Helper()
+	local, err := a.db.EnsureLocalServer(context.Background(), firstTeam(a.t, a), "")
+	if err != nil {
+		a.t.Fatal(err)
+	}
+	return local.ID
+}

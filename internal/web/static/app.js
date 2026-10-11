@@ -54,6 +54,28 @@
   // Refresh fetch the page, where it would have sent the form again.
   if (document.body.dataset.address) history.replaceState(history.state, "", document.body.dataset.address);
 
+  // The bar's Back button (data-back) is a link to the place above this
+  // page. While the page was come to from another page of the dashboard,
+  // the browser's own Back is what is meant: where the person was, as they
+  // left it. That is told by the referrer: this origin, another address
+  // than this page's (a page that answered its own form came from itself,
+  // and going back would show it again), and not a page for somebody who is
+  // signed out, which would only send them on to Home. A click that asks
+  // for a new tab is the link's own.
+  on("click", "[data-back]", (el, e) => {
+    if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || history.length < 2) return;
+    let from;
+    try {
+      from = new URL(document.referrer);
+    } catch {
+      return;
+    }
+    if (from.origin !== location.origin || from.pathname + from.search === location.pathname + location.search) return;
+    if (/^\/(login|setup|invite|reset)(\/|$)/.test(from.pathname)) return;
+    e.preventDefault();
+    history.back();
+  });
+
   // data-alone="<id>" on a checkbox: while it is checked, the other
   // checkboxes inside that element cannot be, because it stands for them all.
   const alone = (el) =>

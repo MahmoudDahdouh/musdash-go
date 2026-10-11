@@ -24,6 +24,11 @@ type Shell struct {
 	Crumbs []Crumb
 	Flash  *Flash
 	Dev    bool
+	// Back is where the bar's Back button leads when the page is not the
+	// place its trail ends at but something under it: one deployment of an
+	// app, whose trail ends at the app. Empty for the place above the last
+	// step of the trail (backHref).
+	Back string
 	// Address is set on a page that is the answer to a POST and shows what
 	// that POST made: the address the same page has for a GET. The browser
 	// is given it in place of the POST's own (static/app.js), so that
@@ -109,6 +114,24 @@ func trail(s Shell) []Crumb {
 		return steps
 	}
 	return append([]Crumb{{Label: s.Team, Icon: "users", Menu: "/switch/teams"}}, steps...)
+}
+
+// backHref is where the bar's Back button leads without script: the place
+// above this one. That is the page's own word for it (Shell.Back) or the
+// nearest step before the trail's last that has a page. A page with
+// nothing above it, as every page of the sidebar is, has none, and no
+// button. The team's step is not asked: it leads to Home, which is above
+// nothing in particular.
+func backHref(s Shell) string {
+	if s.Back != "" {
+		return s.Back
+	}
+	for i := len(s.Crumbs) - 2; i >= 0; i-- {
+		if s.Crumbs[i].Href != "" {
+			return s.Crumbs[i].Href
+		}
+	}
+	return ""
 }
 
 // initial is the letter in the person's mark.
@@ -242,6 +265,9 @@ templ Layout(s Shell) {
 						<button type="button" class="btn btn-ghost btn-icon topbar-menu" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="Menu">
 							@Icon("menu")
 						</button>
+						if back := backHref(s); back != "" {
+							@backButton(back)
+						}
 						@Trail(trail(s))
 						<div class="topbar-end">
 							@searchButton()
@@ -258,6 +284,18 @@ templ Layout(s Shell) {
 			@Toasts(s.Flash)
 		</body>
 	</html>
+}
+
+// backButton is the way back, at the start of the bar. It is a link to the
+// place above this page, which is where it leads without script, in a new
+// tab, and on a page that was opened from outside. static/app.js makes it
+// the browser's own Back while the page was come to from another page of
+// the dashboard: where the person was, scrolled to where they were.
+templ backButton(href string) {
+	<a class="btn btn-ghost btn-sm topbar-back" href={ templ.SafeURL(href) } data-back aria-label="Back" title="Back">
+		@Icon("arrow-left")
+		<span class="topbar-back-text" aria-hidden="true">Back</span>
+	</a>
 }
 
 // confirmDialog is the one dialog that asks before a critical action. A

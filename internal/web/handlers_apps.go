@@ -516,7 +516,7 @@ func (s *Server) appDeployment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.render(w, r, http.StatusOK, pages.AppDeployment(s.appShell(w, r, v), v, dep))
+	s.render(w, r, http.StatusOK, pages.AppDeployment(under(s.appShell(w, r, v), v.Path()+"/deployments"), v, dep))
 }
 
 func (s *Server) appDeploymentStatus(w http.ResponseWriter, r *http.Request) {
@@ -702,7 +702,7 @@ func (s *Server) appEnvironmentEdit(w http.ResponseWriter, r *http.Request) {
 	var f ui.Form
 	f.Set("vars", deploy.FormatEnv(runtime))
 	f.Set("build_vars", deploy.FormatEnv(build))
-	s.render(w, r, http.StatusOK, pages.AppEnvironmentEdit(s.appShell(w, r, v), v, f))
+	s.render(w, r, http.StatusOK, pages.AppEnvironmentEdit(under(s.appShell(w, r, v), v.Path()+"/environment"), v, f))
 }
 
 func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
@@ -734,7 +734,7 @@ func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !f.OK() {
-		s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironmentEdit(s.appShell(w, r, v), v, f))
+		s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironmentEdit(under(s.appShell(w, r, v), v.Path()+"/environment"), v, f))
 		return
 	}
 	// One name cannot be both: the table holds each name once per app.
@@ -745,7 +745,7 @@ func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
 	for i := range buildVars {
 		if runtimeKeys[buildVars[i].Key] {
 			f.Fail("build_vars", buildVars[i].Key+" is already a runtime variable. Use a different name for the build-time one.")
-			s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironmentEdit(s.appShell(w, r, v), v, f))
+			s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironmentEdit(under(s.appShell(w, r, v), v.Path()+"/environment"), v, f))
 			return
 		}
 		buildVars[i].BuildTime = true
@@ -753,7 +753,7 @@ func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
 	all := append(vars, buildVars...)
 	if len(all) > maxAppVars {
 		f.Fail("vars", "Keep to "+itoa(maxAppVars)+" variables for one app.")
-		s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironmentEdit(s.appShell(w, r, v), v, f))
+		s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironmentEdit(under(s.appShell(w, r, v), v.Path()+"/environment"), v, f))
 		return
 	}
 	values := make([]string, 0, len(all))

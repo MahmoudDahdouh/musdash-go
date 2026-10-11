@@ -2054,6 +2054,20 @@
   .topbar > .crumbs {
     flex: 1;
   }
+  /* The way back, before the trail: the arrow alone where the bar is
+     short of room, with its word once the sidebar stands beside the page. */
+  .topbar-back {
+    flex: none;
+    color: var(--color-ink-soft);
+  }
+  .topbar-back-text {
+    display: none;
+  }
+  @media (min-width: 64rem) {
+    .topbar-back-text {
+      display: inline;
+    }
+  }
   /* The end of the bar: the search, then the person. */
   .topbar-end {
     flex: none;

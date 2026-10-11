@@ -32,9 +32,10 @@ func (s *Server) loadProjectEnv(w http.ResponseWriter, r *http.Request) (db.Proj
 }
 
 // projectCrumb is a project's step of the trail: a switcher to the team's
-// other projects.
+// other projects. Its Href is the project's own page, which the trail does
+// not link (a switcher opens its menu) and the bar's Back button leads to.
 func projectCrumb(p db.Project) ui.Crumb {
-	return ui.Crumb{Label: p.Name, Icon: "folder", Filter: "Find a project", Menu: "/switch/projects?at=" + p.ID}
+	return ui.Crumb{Label: p.Name, Href: "/projects/" + p.ID, Icon: "folder", Filter: "Find a project", Menu: "/switch/projects?at=" + p.ID}
 }
 
 // projectCrumbs is the trail of a page that is the project's own, whatever
@@ -50,14 +51,14 @@ func envCrumbs(p db.Project, env db.Environment, here ...ui.Crumb) []ui.Crumb {
 	return append([]ui.Crumb{
 		{Label: "Projects", Href: "/projects"},
 		projectCrumb(p),
-		{Label: env.Name, Menu: "/projects/" + p.ID + "/switch/environments?at=" + env.ID},
+		{Label: env.Name, Href: pages.EnvPath(p.ID, env.ID), Menu: "/projects/" + p.ID + "/switch/environments?at=" + env.ID},
 	}, here...)
 }
 
 // resourceCrumb is a resource's step of the trail: a switcher to what else
 // is in its environment.
 func resourceCrumb(env db.Environment, kind, id, name string) ui.Crumb {
-	return ui.Crumb{Label: name, Icon: pages.KindIcon(kind), Filter: "Find a resource",
+	return ui.Crumb{Label: name, Href: pages.ResourcePath(env.ProjectID, env.ID, kind, id), Icon: pages.KindIcon(kind), Filter: "Find a resource",
 		Menu: pages.EnvPath(env.ProjectID, env.ID) + "/switch/resources?at=" + kind + ":" + id}
 }
 

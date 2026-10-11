@@ -473,6 +473,14 @@ func (s *Server) shell(w http.ResponseWriter, r *http.Request, title, active str
 	}
 }
 
+// under is the shell of a page that is not the place its trail ends at but
+// something under it: back is where the bar's Back button leads from it
+// (ui.Shell.Back).
+func under(shell ui.Shell, back string) ui.Shell {
+	shell.Back = back
+	return shell
+}
+
 func (s *Server) gallery(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, pages.Gallery(s.shell(w, r, "Components", "ui")))
 }
