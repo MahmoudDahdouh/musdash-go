@@ -76,6 +76,7 @@
 
   /* Layout ------------------------------------------------------------- */
   --size-sidebar: 232px;
+  --size-topbar: 3rem; /* 48px: the bar at the top, and where a row sticks under it */
   --size-control: 2rem; /* 32px: inputs and buttons */
   --size-control-sm: 1.75rem; /* 28px */
   --size-rail: 3px;
@@ -835,6 +836,37 @@
   }
   .offers-more > * {
     pointer-events: auto;
+  }
+  /* A row of controls that stays in sight under the bar while the list it
+     narrows scrolls: the field and the menu of Add resource. It is on the
+     page's own colour, a little past its content at every side, so that
+     what scrolls under it is covered up to its edge and a card's outline
+     is not left showing beside it. The margins take back what the padding
+     adds: it stands where it would without them. The line under it is
+     there only while it is stuck (data-stuck, static/app.js): cards that
+     slide under an edge nobody sees look cut off. Between the cards (1)
+     and the bar (30). */
+  .sticky-bar {
+    position: sticky;
+    top: var(--size-topbar);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: -12px -4px;
+    padding: 12px 4px;
+    background: var(--color-canvas);
+    border-block-end: 1px solid transparent;
+    transition: border-color var(--duration-fast);
+  }
+  /* The field gives way, the menu and the button do not: their words stay
+     whole on a phone. */
+  .sticky-bar > .select,
+  .sticky-bar > span {
+    flex: none;
+  }
+  .sticky-bar[data-stuck] {
+    border-block-end-color: var(--color-line);
   }
   /* A list that is being asked for again, while the answer is on its way. */
   .found {
@@ -2045,7 +2077,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 48px;
+    height: var(--size-topbar);
     padding: 0 12px;
     background: var(--color-sunk);
     border-bottom: 1px solid var(--color-line-strong);

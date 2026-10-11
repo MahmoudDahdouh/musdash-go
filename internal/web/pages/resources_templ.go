@@ -502,6 +502,9 @@ func kindGroup(title string, count int, about string) templ.Component {
 // ResourceNew is the one page a resource of any kind is added from. The
 // row above the list is a form that asks this same address for the list
 // again (ResourceFound) as its field is typed in and a category is ticked.
+// It stays in sight under the bar while the list scrolls (data-sticky names
+// the list, which static/app.js takes back to its start when it is asked
+// for again from a row that is stuck), so it is one line at every width.
 // The field's own typing is waited out, and the Category menu's filter
 // field, which has no name, asks nothing: hence the "from" of each trigger.
 func ResourceNew(s ui.Shell, v NewResource) templ.Component {
@@ -545,14 +548,14 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"grid gap-8\"><form class=\"flex flex-wrap items-center gap-2\" role=\"search\" method=\"get\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"grid gap-8\"><form class=\"sticky-bar\" data-sticky=\"kinds\" role=\"search\" method=\"get\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var19 templ.SafeURL
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/new"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 158, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 162, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -565,13 +568,13 @@ func ResourceNew(s ui.Shell, v NewResource) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.Path() + "/new")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 159, Col: 30}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 163, Col: 30}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" hx-trigger=\"input delay:300ms from:#kind-filter, search from:#kind-filter, change from:#category-list, submit\" hx-target=\"#kinds\" hx-swap=\"innerHTML\" hx-sync=\"this:replace\" hx-indicator=\"#kinds\"><div class=\"min-w-0 max-w-md grow basis-64\"><label class=\"sr-only\" for=\"kind-filter\">Find a kind of resource</label>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" hx-trigger=\"input delay:300ms from:#kind-filter, search from:#kind-filter, change from:#category-list, submit\" hx-target=\"#kinds\" hx-swap=\"innerHTML\" hx-sync=\"this:replace\" hx-indicator=\"#kinds\"><div class=\"min-w-0 max-w-md flex-1 basis-40\"><label class=\"sr-only\" for=\"kind-filter\">Find a kind of resource</label>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -651,7 +654,8 @@ func ResourceFound(v NewResource) templ.Component {
 
 // clearFilters is the way back to everything, there only while something
 // narrows. It is a link to the bare address: a page drawn from that has the
-// field empty and nothing ticked.
+// field empty and nothing ticked. On a narrow screen the row has room for
+// its icon alone, so its words are its label as well.
 func clearFilters(v NewResource, outOfBand bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -700,13 +704,13 @@ func clearFilters(v NewResource, outOfBand bool) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "Clear filters")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<span class=\"hidden sm:inline\">Clear filters</span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.LinkButton(v.Path()+"/new", ui.ButtonProps{Variant: ui.Ghost, Icon: "x"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var23), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.LinkButton(v.Path()+"/new", ui.ButtonProps{Variant: ui.Ghost, Icon: "x", Attrs: templ.Attributes{"aria-label": "Clear filters", "title": "Clear filters"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var23), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -956,7 +960,7 @@ func ResourceMore(v NewResource) templ.Component {
 			var templ_7745c5c3_Var34 string
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(v.address(v.Page + 1))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 251, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/resources.templ`, Line: 256, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 			if templ_7745c5c3_Err != nil {

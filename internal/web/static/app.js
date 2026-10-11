@@ -399,7 +399,46 @@
   // the page can leave the page shorter than where it was scrolled to, and
   // the browser scrolls it there. The list they are still choosing in is put
   // by its button again; settling is that list, for the frames it takes.
+  //
+  // Nor is the scroll that a new list causes: the list of Add resource is
+  // asked for again from a row that stays in sight (data-sticky), with the
+  // Category menu still open in it. settling covers that swap as well.
   let settling = null;
+  // A row marked data-sticky="<id of its list>" stays under the bar while
+  // the list scrolls (.sticky-bar). It is the first thing in its parent, so
+  // it is stuck while it is further down in the parent than its own margin
+  // puts it, and it says so (data-stuck, which draws the line under it).
+  // Asked at every scroll, which is two boxes read: an observer would not
+  // be told of a row that does not move.
+  const stickyFor = (list) => (list?.id ? document.querySelector(`[data-sticky="${CSS.escape(list.id)}"]`) : null);
+  const stuck = (row) => row.getBoundingClientRect().top - row.parentElement.getBoundingClientRect().top > (parseFloat(getComputedStyle(row).marginTop) || 0) + 1;
+  const stickyRows = [...document.querySelectorAll("[data-sticky]")];
+  const markStuck = () => stickyRows.forEach((row) => row.toggleAttribute("data-stuck", stuck(row)));
+  if (stickyRows.length) {
+    window.addEventListener("scroll", markStuck, { passive: true });
+    window.addEventListener("resize", markStuck);
+    markStuck();
+  }
+  // The list was asked for again from a row that is stuck: what was found
+  // starts at the list's start, which is somewhere above the window. The
+  // page goes there, to where the row is back in its place, and the menu a
+  // person may still be choosing in stays open through it.
+  document.addEventListener("htmx:beforeSwap", (e) => {
+    if (openList && stickyFor(e.detail.target)?.contains(openList)) settling = openList;
+  });
+  document.addEventListener("htmx:afterSwap", (e) => {
+    const list = e.detail.target;
+    const row = stickyFor(list);
+    if (!row) return;
+    if (stuck(row)) {
+      const between = (parseFloat(getComputedStyle(row.parentElement).rowGap) || 0) + (parseFloat(getComputedStyle(row).marginBottom) || 0);
+      const over = list.getBoundingClientRect().top - row.getBoundingClientRect().bottom - between;
+      if (over < 0) window.scrollBy({ top: over, behavior: "instant" });
+    }
+    markStuck();
+    const held = settling;
+    if (held) requestAnimationFrame(() => requestAnimationFrame(() => settling === held && (settling = null)));
+  });
   const shutUnlessInside = (e) => {
     if (!openList || (e.target instanceof Node && openList.contains(e.target))) return;
     if (e.type === "scroll" && settling === openList) return place(openList, openList.closest("[data-select]").querySelector("[popovertarget]"));

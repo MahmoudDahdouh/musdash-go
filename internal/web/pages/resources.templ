@@ -144,6 +144,9 @@ templ kindGroup(title string, count int, about string) {
 // ResourceNew is the one page a resource of any kind is added from. The
 // row above the list is a form that asks this same address for the list
 // again (ResourceFound) as its field is typed in and a category is ticked.
+// It stays in sight under the bar while the list scrolls (data-sticky names
+// the list, which static/app.js takes back to its start when it is asked
+// for again from a row that is stuck), so it is one line at every width.
 // The field's own typing is waited out, and the Category menu's filter
 // field, which has no name, asks nothing: hence the "from" of each trigger.
 templ ResourceNew(s ui.Shell, v NewResource) {
@@ -152,7 +155,8 @@ templ ResourceNew(s ui.Shell, v NewResource) {
 		@ui.IconDefs(ui.OfferIcons("git-branch", "github", "gitlab", "key", "box", "code", KindIcon(db.KindDatabase), KindIcon(db.KindService))...)
 		<div class="grid gap-8">
 			<form
-				class="flex flex-wrap items-center gap-2"
+				class="sticky-bar"
+				data-sticky="kinds"
 				role="search"
 				method="get"
 				action={ templ.SafeURL(v.Path() + "/new") }
@@ -163,7 +167,7 @@ templ ResourceNew(s ui.Shell, v NewResource) {
 				hx-sync="this:replace"
 				hx-indicator="#kinds"
 			>
-				<div class="min-w-0 max-w-md grow basis-64">
+				<div class="min-w-0 max-w-md flex-1 basis-40">
 					<label class="sr-only" for="kind-filter">Find a kind of resource</label>
 					@ui.Input(ui.InputProps{ID: "kind-filter", Name: "q", Type: "search", Value: v.Query, Placeholder: "Find: postgres, wordpress, git…", Autofocus: true, Autocomplete: "off"})
 				</div>
@@ -187,7 +191,8 @@ templ ResourceFound(v NewResource) {
 
 // clearFilters is the way back to everything, there only while something
 // narrows. It is a link to the bare address: a page drawn from that has the
-// field empty and nothing ticked.
+// field empty and nothing ticked. On a narrow screen the row has room for
+// its icon alone, so its words are its label as well.
 templ clearFilters(v NewResource, outOfBand bool) {
 	<span
 		id="kinds-clear"
@@ -196,8 +201,8 @@ templ clearFilters(v NewResource, outOfBand bool) {
 		}
 	>
 		if v.Narrowed() {
-			@ui.LinkButton(v.Path()+"/new", ui.ButtonProps{Variant: ui.Ghost, Icon: "x"}) {
-				Clear filters
+			@ui.LinkButton(v.Path()+"/new", ui.ButtonProps{Variant: ui.Ghost, Icon: "x", Attrs: templ.Attributes{"aria-label": "Clear filters", "title": "Clear filters"}}) {
+				<span class="hidden sm:inline">Clear filters</span>
 			}
 		}
 	</span>

@@ -170,7 +170,7 @@ func TestAddResourceIsFoundAndPaged(t *testing.T) {
 	if strings.Contains(found, `aria-label="Kinds of app"`) || strings.Contains(found, `aria-label="Database engines"`) {
 		t.Error("WordPress finds a way to make an app, or an engine")
 	}
-	if strings.Count(found, "Clear filters") != 1 || !strings.Contains(found, `href="`+base+`"`) {
+	if strings.Count(found, `<a href="`+base+`"`) != 1 || !strings.Contains(found, `aria-label="Clear filters"`) {
 		t.Error("a narrowed page has no Clear filters that leads to the bare address")
 	}
 	label := catalog.CategoryLabel(byKey["wordpress"].Categories[0])
@@ -244,7 +244,8 @@ func TestAddResourceIsFoundAndPaged(t *testing.T) {
 
 	// Nothing found: no group, and the way back to everything.
 	_, nothing := a.get(base + "?q=zzzzqq")
-	if strings.Contains(nothing, "Kinds of") || !strings.Contains(nothing, "Nothing matches") || strings.Count(nothing, "Clear filters") != 2 || servicesFound(nothing) != -1 {
+	// Two links lead back to the bare address: the row's and the empty state's.
+	if strings.Contains(nothing, "Kinds of") || !strings.Contains(nothing, "Nothing matches") || strings.Count(nothing, `<a href="`+base+`"`) != 2 || servicesFound(nothing) != -1 {
 		t.Errorf("a text that finds nothing does not say so")
 	}
 
@@ -278,5 +279,28 @@ func TestAddResourceIsFoundAndPaged(t *testing.T) {
 	res, _ = a.hx(base+"?q="+strings.Repeat("é", 500), "kinds")
 	if got := res.Header.Get("HX-Replace-Url"); got != base+"?q="+url.QueryEscape(strings.Repeat("é", 64)) {
 		t.Errorf("a long text is not cut to 64 characters: %q", got)
+	}
+}
+
+// The field and the Category menu stay in sight while the list scrolls: the
+// row is the sticky one and names the list it narrows, which is how the
+// script knows what to take back to its start. It holds the field, the
+// menu and, once something narrows, the way back to everything.
+func TestAddResourceFiltersStayInSight(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	projectID, env := a.project("Shop")
+	base := "/projects/" + projectID + "/env/" + env.ID + "/new"
+
+	res, body := a.get(base + "?q=post")
+	wantStatus(t, res, http.StatusOK)
+	row := between(t, base, body, `<form class="sticky-bar" data-sticky="kinds"`, `</form>`)
+	for _, want := range []string{`id="kind-filter"`, `id="category"`, `id="kinds-clear"`, `aria-label="Clear filters"`} {
+		if !strings.Contains(row, want) {
+			t.Errorf("the sticky row lacks %s", want)
+		}
+	}
+	if !regexp.MustCompile(`</form>\s*<div class="found[^"]*" id="kinds"`).MatchString(body) {
+		t.Error("the list is not the element after the row, in the same parent: the script measures the gap between the two")
 	}
 }
