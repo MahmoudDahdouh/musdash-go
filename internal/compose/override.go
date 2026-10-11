@@ -3,6 +3,7 @@ package compose
 import (
 	"fmt"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -291,6 +292,67 @@ func exposed(svc map[string]any, port int) bool {
 		}
 	}
 	return false
+}
+
+// Unnamed is a container name a file asked for that Unname took out.
+type Unnamed struct {
+	Service string
+	Name    string
+	// Alias says the service still answers to the name inside the stack.
+	Alias bool
+}
+
+// aliasRE is what a container name has to look like to become a name on a
+// network.
+var aliasRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$`)
+
+// Unname takes container_name out of every service, and reports what it
+// took. Containers are named by Compose under the stack's own project, so
+// that two stacks cannot claim one name and a stack cannot take a name
+// something else on the server is known by. What the rest of the stack may
+// rely on is kept: a container answers to its name on its networks, so the
+// name becomes an alias of the service on the stack's own networks. Call
+// it before Validate, which refuses a container name.
+func (p Project) Unname() []Unnamed {
+	var out []Unnamed
+	for _, service := range p.Services() {
+		svc := p.service(service)
+		name, _ := svc["container_name"].(string)
+		if _, asked := svc["container_name"]; !asked {
+			continue
+		}
+		delete(svc, "container_name")
+		if name == "" {
+			continue
+		}
+		u := Unnamed{Service: service, Name: name}
+		// A service that shares another's network stack, or has none, is on
+		// no network of its own to be known on.
+		if aliasRE.MatchString(name) && p.OwnNetwork(service) {
+			networks := asMap(svc["networks"])
+			if networks == nil {
+				networks = map[string]any{"default": nil}
+				svc["networks"] = networks
+			}
+			for key, raw := range networks {
+				network := asMap(raw)
+				if network == nil {
+					network = map[string]any{}
+					networks[key] = network
+				}
+				known := false
+				for _, a := range asList(network["aliases"]) {
+					known = known || a == name
+				}
+				if !known {
+					network["aliases"] = append(asList(network["aliases"]), name)
+				}
+			}
+			u.Alias = true
+		}
+		out = append(out, u)
+	}
+	return out
 }
 
 // CheckoutPaths returns every path inside the checkout that the stack reads

@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -635,6 +636,12 @@ func (s *Server) serviceDeployLog(w http.ResponseWriter, r *http.Request) {
 	finished := func() bool {
 		cur, err := s.DB.ServiceByID(ctx, v.Service.ID)
 		return err != nil || cur.Status != db.AppDeploying
+	}
+	// A first deployment that waits its turn has no log yet (one stack is
+	// read and built at a time on a server): the page says so, where it
+	// would show an empty box for as long as the ones before it take.
+	if _, err := os.Stat(s.Cfg.ServiceLogPath(v.Service.ID)); err != nil && !finished() {
+		io.WriteString(out, "Waiting for its turn: one deployment at a time is read and built on a server.\n")
 	}
 	if err := deploy.FollowWhenReady(ctx, s.Cfg.ServiceLogPath(v.Service.ID), out, finished); err == nil {
 		out.finish()

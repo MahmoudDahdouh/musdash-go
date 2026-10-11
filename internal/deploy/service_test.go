@@ -594,6 +594,38 @@ func TestProxyPortsAreNotPublished(t *testing.T) {
 	}
 }
 
+// TestAContainerNameIsNotGiven: a file that names its containers, as many
+// written for plain `docker compose` do, is deployed with Compose's own
+// names. The log says so, and the name is what the service still answers
+// to inside the stack.
+func TestAContainerNameIsNotGiven(t *testing.T) {
+	e := newEnv(t)
+	s, st := e.scriptedService(false)
+	e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+		if strings.Contains(line, "config --format json") && !strings.Contains(line, "--no-interpolate") {
+			return `{"name":"` + st.project + `","networks":{"default":{"name":"` + st.project + `_default"}},"services":{
+				"front":{"image":"nginx:alpine","container_name":"shop-front","networks":{"default":null}},
+				"cache":{"image":"redis:7-alpine","networks":{"default":null}}}}`, nil
+		}
+		return st.handle(line, c)
+	}
+	got := e.deployService(s, 10*time.Second)
+	if got.Status != db.AppRunning {
+		t.Fatalf("the stack did not come up: %+v\n%s", got, e.serviceLog(s))
+	}
+	if log := e.serviceLog(s); !strings.Contains(log, "The container of front is named by musdash, not shop-front as the file asks") || !strings.Contains(log, "still answers to shop-front") {
+		t.Errorf("the log does not say what became of the name:\n%s", log)
+	}
+	file, _, ok := e.fake.File(e.cfg.AppDir(s.ID) + "/compose.resolved.json")
+	if !ok {
+		t.Fatal("no resolved file was written")
+	}
+	flat := strings.NewReplacer(" ", "", "\n", "", "\t", "").Replace(file)
+	if strings.Contains(flat, "container_name") || !strings.Contains(flat, `"aliases":["shop-front"]`) {
+		t.Errorf("what Compose starts:\n%s", file)
+	}
+}
+
 func TestServiceFailuresAreExplained(t *testing.T) {
 	e := newEnv(t)
 	s, st := e.scriptedService(false)

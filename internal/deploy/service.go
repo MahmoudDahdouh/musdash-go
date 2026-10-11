@@ -406,6 +406,17 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 	for _, u := range resolved.Unpublish(proxyPorts...) {
 		log.Step("Port %d of the server is the proxy's, so %s is not published on it. To reach port %d of %s from outside, give it a domain on the Domains tab.", u.Published, u.Service, u.Target, u.Service)
 	}
+	// A container name the file asks for is not given: Compose names the
+	// containers under the stack's own project, so that two stacks cannot
+	// claim one name. The name stays what the service answers to inside
+	// the stack, which is what the file's other services rely on.
+	for _, u := range resolved.Unname() {
+		if u.Alias {
+			log.Step("The container of %s is named by musdash, not %s as the file asks: no two stacks may claim one name. Inside the stack it still answers to %s.", u.Service, u.Name, u.Name)
+		} else {
+			log.Step("The container of %s is named by musdash, not %s as the file asks: no two stacks may claim one name.", u.Service, u.Name)
+		}
+	}
 	if err := resolved.Validate(compose.ValidateOptions{Dir: dir, BuildDir: checkout, Protected: []string{d.at(r).DataDir}, ValidPort: ValidPublicPort}); err != nil {
 		return fmt.Errorf("the Compose file asks for things a service may not do:\n%w", err)
 	}

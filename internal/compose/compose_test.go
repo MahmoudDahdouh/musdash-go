@@ -661,3 +661,54 @@ func TestUnpublish(t *testing.T) {
 		t.Error("a second pass changed the document")
 	}
 }
+
+// TestUnname: a container name a file asks for is taken out, since two
+// stacks could claim the same one, and stays a name the service answers to
+// on the stack's own networks, where the others of the stack look for it.
+func TestUnname(t *testing.T) {
+	p, err := Parse([]byte(`{"name":"musdash-x","networks":{"default":{"name":"musdash-x_default"},"back":{"name":"musdash-x_back"}},"services":{
+		"api":{"image":"api:1","container_name":"fastapi-application","networks":{"default":null}},
+		"db":{"image":"db:1","container_name":"shop_db","networks":{"back":{"aliases":["database","shop_db"]},"default":null}},
+		"plain":{"image":"x","container_name":"plain"},
+		"side":{"image":"y","container_name":"side-car","network_mode":"service:api"},
+		"odd":{"image":"z","container_name":"-not a name","networks":{"default":null}},
+		"web":{"image":"nginx","networks":{"default":null}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := p.Unname()
+	want := []Unnamed{
+		{Service: "api", Name: "fastapi-application", Alias: true},
+		{Service: "db", Name: "shop_db", Alias: true},
+		{Service: "odd", Name: "-not a name"},
+		{Service: "plain", Name: "plain", Alias: true},
+		{Service: "side", Name: "side-car"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unnamed:\n got %+v\nwant %+v", got, want)
+	}
+	raw, _ := p.Marshal()
+	flat := strings.NewReplacer(" ", "", "\n", "", "\t", "").Replace(string(raw))
+	if strings.Contains(flat, "container_name") {
+		t.Errorf("a container name is left:\n%s", raw)
+	}
+	for what, piece := range map[string]string{
+		"api answers to its old name":                       `"api":{"image":"api:1","networks":{"default":{"aliases":["fastapi-application"]}}}`,
+		"db on both its networks, the alias it had kept":    `"back":{"aliases":["database","shop_db"]},"default":{"aliases":["shop_db"]}`,
+		"a service with no networks named gets the default": `"plain":{"image":"x","networks":{"default":{"aliases":["plain"]}}}`,
+		"one that shares a network joins none":              `"side":{"image":"y","network_mode":"service:api"}`,
+		"a name that is none becomes no alias":              `"odd":{"image":"z","networks":{"default":null}}`,
+		"a service that asked for nothing is as it was":     `"web":{"image":"nginx","networks":{"default":null}}`,
+	} {
+		if !strings.Contains(flat, piece) {
+			t.Errorf("%s: no %s in\n%s", what, piece, flat)
+		}
+	}
+	// What is left passes the checks a stack is held to.
+	if err := p.Validate(ValidateOptions{}); err != nil {
+		t.Errorf("the document after: %v", err)
+	}
+	if again := p.Unname(); len(again) != 0 {
+		t.Errorf("a second pass took out %+v", again)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
@@ -164,5 +165,32 @@ func TestAnImageAppNamesNoCommit(t *testing.T) {
 	built := a.newGitApp(projectID, env, "built", nil)
 	if _, page := a.get(a.appPath(built.ID)); !strings.Contains(page, ">Commit<") {
 		t.Error("the card of an app from Git names no commit")
+	}
+}
+
+// A first deployment that waits its turn has no log yet. Its page says
+// that it is waiting, where it would show an empty box.
+func TestAQueuedStackSaysItIsWaiting(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+	projectID, env := a.project("Shop")
+	s := a.newService(projectID, env, "site", nil)
+	base := a.servicePath(s.ID)
+
+	// Not deployed, and not being deployed: nothing to wait for.
+	if _, stream := a.get(base + "/deploy-log/stream"); strings.Contains(stream, "Waiting for its turn") {
+		t.Errorf("a stack that is not being deployed says it waits:\n%s", stream)
+	}
+	// Queued: said at once. The stream ends when the deployment does.
+	if err := a.db.SetServiceState(ctx, s.ID, db.AppDeploying, ""); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		a.db.SetServiceState(ctx, s.ID, db.AppFailed, "it never started")
+	}()
+	if _, stream := a.get(base + "/deploy-log/stream"); !strings.Contains(stream, "Waiting for its turn") {
+		t.Errorf("a queued stack's log:\n%s", stream)
 	}
 }
