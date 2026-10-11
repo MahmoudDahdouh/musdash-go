@@ -15,6 +15,8 @@ What happens when an app is deployed, and what you can do around a deployment: r
 
 If any step before 5 fails, the new container is removed and the previous one keeps serving.
 
+**Seeing it from anywhere.** While anything of the team's is being deployed (an app, a service, or a database that is starting), a note in the bottom corner of every page names it, with "Queued" for one that waits its turn. Click a row to open that deployment and its log. It shows up to three and counts the rest; one that somebody else or a push started appears within a few seconds.
+
 **Private images.** musdash keeps no registry passwords. An image that needs a sign-in is pulled with the sign-in of the account that runs Docker's commands on the server, which is where Docker itself looks: on the machine musdash is installed on, `sudo -H -u musdash docker login ghcr.io` (or your registry's name; none for Docker Hub), and on a remote server `docker login` as the user musdash connects as. A pull that a registry refused says so in the deployment's error, with this as what to do. The same sign-in serves the images of a Compose stack.
 
 Apps in one environment reach each other by name (`web:80`) on that network. From outside, the only way in is the proxy.

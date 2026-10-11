@@ -24,6 +24,8 @@ type Shell struct {
 	Crumbs []Crumb
 	Flash  *Flash
 	Dev    bool
+	// Deploying is what is being deployed now, for the note in the corner.
+	Deploying DeployingProps
 	// Back is where the bar's Back button leads when the page is not the
 	// place its trail ends at but something under it: one deployment of an
 	// app, whose trail ends at the app. Empty for the place above the last
@@ -281,7 +283,9 @@ templ Layout(s Shell) {
 			</div>
 			@confirmDialog()
 			@searchDialog()
-			@Toasts(s.Flash)
+			@Toasts(s.Flash) {
+				@Deploying(s.Deploying)
+			}
 		</body>
 	</html>
 }

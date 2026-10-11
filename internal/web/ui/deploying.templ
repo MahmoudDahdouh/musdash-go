@@ -1,0 +1,91 @@
+package ui
+
+import "strconv"
+
+// The note in the corner of every signed-in page that says what is being
+// deployed now. It is in the page as the page is drawn, and asks for itself
+// again (Poll): often while it shows something, seldom while it shows
+// nothing, which is how a deployment that was started somewhere else (a
+// push, a colleague) comes to be shown at all.
+
+// How often the note asks: while something is in progress, and while
+// nothing is.
+const (
+	deployingBusy = "every 3s"
+	deployingIdle = "every 15s"
+)
+
+// DeployingPath is where the note asks for itself.
+const DeployingPath = "/deploying"
+
+// DeployingShown is how many rows the note has at most. What is in
+// progress beyond them is counted in its last line.
+const DeployingShown = 3
+
+// DeployingItem is one thing being deployed.
+type DeployingItem struct {
+	Name string
+	// Href is the source of the deployment: its own page, where its log
+	// and stages are, or the page of a database that is starting.
+	Href string
+	// State is what is happening to it, in a word: Deploying, Starting,
+	// Queued. Waiting is true for one that waits its turn, which is not
+	// work in progress and does not turn.
+	State   string
+	Waiting bool
+}
+
+// DeployingProps is what the note shows.
+type DeployingProps struct {
+	Items []DeployingItem
+	// More is how many are in progress besides Items, and MoreHref where
+	// they are all listed.
+	More     int
+	MoreHref string
+}
+
+func (p DeployingProps) trigger() string {
+	if len(p.Items) > 0 {
+		return deployingBusy
+	}
+	return deployingIdle
+}
+
+// Deploying is the note. With nothing in progress it is an element with
+// nothing in it, which is what keeps asking. It is polite live text: a
+// reader who does not see the corner is told when it changes, and is not
+// interrupted.
+templ Deploying(p DeployingProps) {
+	<div id="deploying" class="deploying" aria-live="polite" { Poll(ctx, DeployingPath, p.trigger(), deployingBody(p))... }>
+		@deployingBody(p)
+	</div>
+}
+
+// deployingBody is what the note shows, and so what its poll compares.
+templ deployingBody(p DeployingProps) {
+	if len(p.Items) > 0 {
+		<nav aria-label="Deploying now">
+			<ul class="deploying-list">
+				for _, item := range p.Items {
+					<li>
+						<a class="deploying-item" href={ templ.SafeURL(item.Href) }>
+							if item.Waiting {
+								@Icon("clock", "text-ink-mute")
+							} else {
+								@Icon("loading", "animate-spin text-brand-600")
+							}
+							<span class="min-w-0 flex-1 truncate font-semibold">{ item.Name }</span>
+							<span class="text-sm text-ink-mute">{ item.State }</span>
+							@Icon("chevron-right", "text-ink-mute")
+						</a>
+					</li>
+				}
+				if p.More > 0 {
+					<li>
+						<a class="deploying-item deploying-more" href={ templ.SafeURL(p.MoreHref) }>and { strconv.Itoa(p.More) } more</a>
+					</li>
+				}
+			</ul>
+		</nav>
+	}
+}

@@ -164,6 +164,7 @@ func (s *Server) Handler() http.Handler {
 
 	handle("GET /{$}", member, s.home)
 	handle("GET /home/live", member, s.homeLive)
+	handle("GET "+ui.DeployingPath, member, s.deployingNow)
 	handle("GET /projects", member, s.projectList)
 	handle("POST /projects", member, s.projectCreate)
 	handle("GET /projects/{id}", member, s.projectShow)
@@ -472,6 +473,9 @@ func (s *Server) shell(w http.ResponseWriter, r *http.Request, title, active str
 		Crumbs: crumbs,
 		Flash:  takeFlash(w, r),
 		Dev:    s.Cfg.Dev,
+		// One small statement more for every page: the note in the corner
+		// is there on the page a person lands on after pressing Deploy.
+		Deploying: s.deploying(r),
 	}
 }
 

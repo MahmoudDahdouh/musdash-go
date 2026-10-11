@@ -87,7 +87,10 @@ func (s *Server) loadSession(r *http.Request) *http.Request {
 		}
 		return r
 	}
-	if time.Until(time.Unix(sess.ExpiresAt, 0)) < sessionLifetime-sessionRefresh {
+	// A session lives on while its person does something. The note of what
+	// is deploying asks every few seconds on every page with nobody there:
+	// if that counted, a tab left open would never be signed out.
+	if r.URL.Path != ui.DeployingPath && time.Until(time.Unix(sess.ExpiresAt, 0)) < sessionLifetime-sessionRefresh {
 		if err := s.DB.TouchSession(r.Context(), sess.TokenHash, time.Now().Add(sessionLifetime).Unix()); err != nil {
 			s.Log.Error("touch session", "err", err)
 		}

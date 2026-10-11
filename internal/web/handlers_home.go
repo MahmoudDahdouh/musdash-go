@@ -91,3 +91,49 @@ func sampleMeters(sample db.Sample) []ui.MeterProps {
 		{Label: "Disk", Value: ui.Bytes(float64(sample.DiskUsed)) + " of " + ui.Bytes(float64(sample.DiskTotal)), Share: share(sample.DiskUsed, sample.DiskTotal)},
 	}
 }
+
+// deployingLimit is how many things in progress the note in the corner is
+// told of: the few it shows and enough more to count the rest.
+const deployingLimit = 50
+
+// deploying reads what the note in the corner of every page shows: what of
+// the team's is being deployed now, each leading to where that is seen. It
+// is one statement on the database. A failure costs the note and not the
+// page it is on, which was asked for something else.
+func (s *Server) deploying(r *http.Request) ui.DeployingProps {
+	var p ui.DeployingProps
+	sess := sessionFrom(r)
+	if sess == nil {
+		return p
+	}
+	now, err := s.DB.Deploying(r.Context(), sess.TeamID, deployingLimit)
+	if err != nil {
+		s.Log.Error("deploying", "route", logRoute(r), "err", err)
+		return p
+	}
+	for i, m := range now {
+		if i == ui.DeployingShown {
+			p.More, p.MoreHref = len(now)-i, "/#home-activity"
+			break
+		}
+		item := ui.DeployingItem{Name: m.Name, Href: pages.ResourcePath(m.ProjectID, m.EnvironmentID, m.Kind, m.ID), State: "Deploying", Waiting: m.Status == db.DeployQueued}
+		switch {
+		case m.Kind == db.KindDatabase:
+			// A database is started, and has no deployment to show.
+			item.State = "Starting"
+		default:
+			item.Href += "/deployments/" + m.DeploymentID
+		}
+		if item.Waiting {
+			item.State = "Queued"
+		}
+		p.Items = append(p.Items, item)
+	}
+	return p
+}
+
+// deployingNow answers the note's own question: itself again, or nothing
+// when it would be the same.
+func (s *Server) deployingNow(w http.ResponseWriter, r *http.Request) {
+	s.renderPolled(w, r, ui.Deploying(s.deploying(r)))
+}

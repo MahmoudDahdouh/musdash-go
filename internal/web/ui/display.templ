@@ -737,7 +737,8 @@ type Flash struct {
 }
 
 // Toasts renders the flash message, if any, as a toast. Confirmations leave
-// on their own; errors stay until dismissed.
+// on their own; errors stay until dismissed. Its children are what else
+// stands in that corner, under the toast: the note of what is deploying.
 templ Toasts(f *Flash) {
 	<div class="toasts" id="toasts">
 		if f != nil {
@@ -753,6 +754,7 @@ templ Toasts(f *Flash) {
 				@Button(ButtonProps{Variant: Ghost, Small: true, IconOnly: true, Icon: "x", Label: "Dismiss", Attrs: templ.Attributes{"data-dismiss": true}})
 			</div>
 		}
+		{ children... }
 	</div>
 }
 
