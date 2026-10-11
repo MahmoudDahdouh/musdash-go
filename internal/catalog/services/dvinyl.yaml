@@ -1,0 +1,45 @@
+# name: DVinyl
+# about: Catalogues collections of records, books, films, games and other physical media, with metadata fetched from public databases.
+# docs: https://github.com/Kyonew/DVinyl/blob/main/docs/docker.md
+# website: https://github.com/Kyonew/DVinyl
+# categories: media, home
+# source: musdash
+services:
+  dvinyl:
+    image: ghcr.io/kyonew/dvinyl:latest
+    environment:
+      - SERVICE_FQDN_DVINYL_3099
+      - VINYL_PORT=3099
+      - MONGODB_URL=mongodb://mongodb:27017/dvinyl
+      - PASSJWT=${SERVICE_HEX_64_PASSJWT}
+      - SESSION_SECRET=${SERVICE_HEX_64_SESSION}
+      - PROD=${PROD:-false}
+      - DISCOGS_TOKEN=${DISCOGS_TOKEN:-}
+      - HARDCOVER_API_KEY=${HARDCOVER_API_KEY:-}
+      - TMDB_API_KEY=${TMDB_API_KEY:-}
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID:-}
+      - TWITCH_CLIENT_SECRET=${TWITCH_CLIENT_SECRET:-}
+      - REBRICKABLE_API_KEY=${REBRICKABLE_API_KEY:-}
+    volumes:
+      - dvinyl-uploads:/app/public/uploads
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3099/login || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  mongodb:
+    image: mongo:7
+    volumes:
+      - dvinyl-mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+volumes:
+  dvinyl-mongo:
+  dvinyl-uploads:

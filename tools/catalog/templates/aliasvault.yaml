@@ -1,0 +1,16 @@
+# name: AliasVault
+# about: An end-to-end encrypted password manager that also creates email aliases, with browser extensions and mobile apps.
+# docs: https://docs.aliasvault.com/installation/docker-compose
+# website: https://www.aliasvault.com
+# categories: security, auth
+services:
+  aliasvault:
+    image: ghcr.io/aliasvault/aliasvault:latest
+    environment:
+      - SERVICE_FQDN_ALIASVAULT_80
+      - FORCE_HTTPS_REDIRECT=false
+      - PUBLIC_REGISTRATION_ENABLED=${PUBLIC_REGISTRATION_ENABLED:-true}
+    volumes:
+      - aliasvault-database:/database
+      - aliasvault-logs:/logs
+      - aliasvault-secrets:/secrets

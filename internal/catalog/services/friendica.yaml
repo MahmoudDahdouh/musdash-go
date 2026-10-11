@@ -1,0 +1,69 @@
+# name: Friendica
+# about: A decentralised social network that talks ActivityPub and other federation protocols, with a cron worker for background jobs.
+# docs: https://github.com/friendica/docker
+# website: https://friendi.ca/
+# categories: communication
+# source: musdash
+services:
+  friendica:
+    image: friendica:apache
+    environment:
+      - SERVICE_FQDN_FRIENDICA_80
+      - FRIENDICA_URL=${SERVICE_URL_FRIENDICA}
+      - FRIENDICA_ADMIN_MAIL=${FRIENDICA_ADMIN_MAIL:?}
+      - FRIENDICA_SITENAME=${FRIENDICA_SITENAME:-Friendica Social Network}
+      - FRIENDICA_TZ=${TZ:-UTC}
+      - FRIENDICA_LANG=${FRIENDICA_LANG:-en}
+      - MYSQL_HOST=db
+      - MYSQL_USER=friendica
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_DB}
+      - MYSQL_DATABASE=friendica
+      - SMTP=${SMTP:-localhost}
+      - SMTP_DOMAIN=${SMTP_DOMAIN:-localhost}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_AUTH_USER=${SMTP_AUTH_USER:-}
+      - SMTP_AUTH_PASS=${SMTP_AUTH_PASS:-}
+    volumes:
+      - friendica-html:/var/www/html
+      - friendica-data:/var/www/data
+    depends_on:
+      db:
+        condition: service_healthy
+  cron:
+    image: friendica:apache
+    entrypoint: /cron.sh
+    environment:
+      - FRIENDICA_SITENAME=${FRIENDICA_SITENAME:-Friendica Social Network}
+      - MYSQL_HOST=db
+      - MYSQL_USER=friendica
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_DB}
+      - MYSQL_DATABASE=friendica
+      - SMTP=${SMTP:-localhost}
+      - SMTP_DOMAIN=${SMTP_DOMAIN:-localhost}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_AUTH_USER=${SMTP_AUTH_USER:-}
+      - SMTP_AUTH_PASS=${SMTP_AUTH_PASS:-}
+    volumes:
+      - friendica-html:/var/www/html
+      - friendica-data:/var/www/data
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: mariadb:11
+    environment:
+      - MARIADB_RANDOM_ROOT_PASSWORD=yes
+      - MARIADB_DATABASE=friendica
+      - MARIADB_USER=friendica
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_DB}
+    volumes:
+      - friendica-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  friendica-data:
+  friendica-db:
+  friendica-html:

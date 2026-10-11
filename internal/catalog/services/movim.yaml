@@ -1,0 +1,37 @@
+# name: Movim
+# about: A web client for the XMPP network that works as a social network and chat, with communities, blogs and calls.
+# docs: https://github.com/movim/movim/blob/master/INSTALL.md
+# website: https://movim.eu
+# categories: communication
+# source: musdash
+services:
+  movim:
+    image: ghcr.io/movim/movim:latest
+    environment:
+      - SERVICE_FQDN_MOVIM_8080
+      - SSL_MODE=off
+      - DB_DRIVER=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=movim
+      - DB_USERNAME=${SERVICE_USER_POSTGRES}
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - DAEMON_URL=${SERVICE_URL_MOVIM}/
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=movim
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  postgres-data:

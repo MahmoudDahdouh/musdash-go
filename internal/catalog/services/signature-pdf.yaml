@@ -1,0 +1,21 @@
+# name: Signature PDF
+# about: A web tool for signing PDF files, filling in forms, and reordering, editing or compressing their pages.
+# docs: https://github.com/24eme/signaturepdf/blob/master/installation.md#docker
+# website: https://pdf.24eme.fr
+# categories: productivity, docs
+# source: musdash
+services:
+  signature-pdf:
+    image: xgaia/signaturepdf:latest
+    environment:
+      - SERVICE_FQDN_SIGNATURE_PDF_80
+      - SERVERNAME=${SERVICE_FQDN_SIGNATURE_PDF}
+      - UPLOAD_MAX_FILESIZE=${UPLOAD_MAX_FILESIZE:-24M}
+      - POST_MAX_SIZE=${POST_MAX_SIZE:-24M}
+      - MAX_FILE_UPLOADS=201
+      - PDF_STORAGE_PATH=/data
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-en_US.UTF-8}
+    volumes:
+      - signature-pdf-data:/data
+volumes:
+  signature-pdf-data:

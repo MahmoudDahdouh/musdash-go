@@ -1,0 +1,30 @@
+# name: Tagr
+# about: A web app for browsing a music library and editing the tags and cover art of its files.
+# docs: https://github.com/suitux/Tagr#quick-start-with-docker
+# website: https://github.com/suitux/Tagr
+# categories: media
+# source: musdash
+services:
+  tagr:
+    image: ghcr.io/suitux/tagr:latest
+    environment:
+      - SERVICE_FQDN_TAGR_3000
+      - PUID=1000
+      - PGID=1000
+      - NODE_ENV=production
+      - DATABASE_URL=file:/data/tagr.db
+      - AUTH_SECRET=${SERVICE_HEX_64_AUTH}
+      - AUTH_USER=${SERVICE_USER_ADMIN}
+      - AUTH_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - AUTH_URL=${SERVICE_URL_TAGR}
+    volumes:
+      - tagr-data:/data
+      - tagr-music:/music
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  tagr-data:
+  tagr-music:

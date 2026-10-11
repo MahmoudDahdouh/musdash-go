@@ -1,0 +1,24 @@
+# name: ViniPlay
+# about: An IPTV player that turns M3U playlists and EPG guides into a web TV guide with recording and transcoding.
+# docs: https://github.com/ardoviniandrea/ViniPlay#-getting-started
+# website: https://github.com/ardoviniandrea/ViniPlay
+# categories: media
+# source: musdash
+services:
+  viniplay:
+    image: ardovini/viniplay:latest
+    environment:
+      - SERVICE_FQDN_VINIPLAY_8998
+      - SESSION_SECRET=${SERVICE_PASSWORD_64_SESSION}
+    volumes:
+      - viniplay-data:/data
+      - viniplay-dvr:/dvr
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -o /dev/null http://127.0.0.1:8998/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+volumes:
+  viniplay-data:
+  viniplay-dvr:

@@ -1,0 +1,16 @@
+# name: WatchState
+# about: Keeps the watched state of your Plex, Jellyfin and Emby users in step across media servers.
+# docs: https://github.com/arabcoders/watchstate#install
+# website: https://github.com/arabcoders/watchstate
+# categories: media
+# source: musdash
+services:
+  watchstate:
+    image: ghcr.io/arabcoders/watchstate:latest
+    environment:
+      - SERVICE_FQDN_WATCHSTATE_8080
+      - TZ=${TZ:-UTC}
+    volumes:
+      - watchstate-config:/config
+volumes:
+  watchstate-config:

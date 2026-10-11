@@ -1,0 +1,23 @@
+# name: PiGallery2
+# about: A directory-based photo gallery that reads photos and videos from a folder, built to run on small servers.
+# docs: https://bpatrik.github.io/pigallery2/setup/docker/
+# website: https://bpatrik.github.io/pigallery2/
+# categories: media
+# source: musdash
+services:
+  pigallery2:
+    image: bpatrik/pigallery2:latest
+    environment:
+      - SERVICE_FQDN_PIGALLERY2_80
+      - NODE_ENV=production
+      - Users-enforcedUsers=[{"name":"${SERVICE_USER_ADMIN}","password":"${SERVICE_PASSWORD_ADMIN}","role":4}]
+    volumes:
+      - pigallery2-config:/app/data/config
+      - pigallery2-db:/app/data/db
+      - pigallery2-images:/app/data/images
+      - pigallery2-tmp:/app/data/tmp
+volumes:
+  pigallery2-config:
+  pigallery2-db:
+  pigallery2-images:
+  pigallery2-tmp:

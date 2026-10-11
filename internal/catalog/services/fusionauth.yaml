@@ -1,0 +1,46 @@
+# name: FusionAuth
+# about: A customer identity and access management server with single sign-on, OAuth, OpenID Connect and user management.
+# docs: https://fusionauth.io/docs/get-started/download-and-install/docker
+# website: https://fusionauth.io/
+# categories: auth, security
+# source: musdash
+services:
+  fusionauth:
+    image: fusionauth/fusionauth-app:latest
+    environment:
+      - SERVICE_FQDN_FUSIONAUTH_9011
+      - DATABASE_URL=jdbc:postgresql://db:5432/fusionauth
+      - DATABASE_ROOT_USERNAME=${SERVICE_USER_POSTGRES}
+      - DATABASE_ROOT_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - DATABASE_USERNAME=${SERVICE_USER_FUSIONAUTH}
+      - DATABASE_PASSWORD=${SERVICE_PASSWORD_FUSIONAUTH}
+      - FUSIONAUTH_APP_MEMORY=${FUSIONAUTH_APP_MEMORY:-512M}
+      - FUSIONAUTH_APP_RUNTIME_MODE=production
+      - FUSIONAUTH_APP_URL=http://fusionauth:9011
+      - SEARCH_TYPE=database
+    volumes:
+      - fusionauth-config:/usr/local/fusionauth/config
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --silent --fail http://127.0.0.1:9011/api/status -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  db:
+    image: postgres:17-alpine
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  db-data:
+  fusionauth-config:

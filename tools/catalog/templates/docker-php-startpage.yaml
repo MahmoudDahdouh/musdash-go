@@ -1,0 +1,36 @@
+# name: docker-php-startpage
+# about: A start page of links with a status check for each, written in PHP and set up with a JSON file.
+# docs: https://github.com/loganmarchione/docker-php-startpage#docker-image-information
+# website: https://github.com/loganmarchione/docker-php-startpage
+# categories: home
+services:
+  startpage:
+    image: loganmarchione/docker-php-startpage:latest
+    environment:
+      - SERVICE_FQDN_STARTPAGE_80
+    volumes:
+      - user-includes:/var/www/html/user_includes
+    configs:
+      - source: startpage-config
+        target: /var/www/html/user_includes/config.json
+configs:
+  startpage-config:
+    content: |
+      {
+        "page_title": "Start page",
+        "navbar_title_image": "./vendor/fortawesome/font-awesome/svgs/solid/house.svg",
+        "navbar_title": "Start page",
+        "favicon": "./vendor/fortawesome/font-awesome/svgs/solid/house.svg",
+        "link_target": "_self",
+        "Groups": {
+          "Links": {
+            "Project": {
+              "name": "docker-php-startpage",
+              "href": "https://github.com/loganmarchione/docker-php-startpage",
+              "icon": "./vendor/fortawesome/font-awesome/svgs/solid/earth-americas.svg",
+              "stat": true,
+              "misc": ""
+            }
+          }
+        }
+      }

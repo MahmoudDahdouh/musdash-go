@@ -1,0 +1,23 @@
+# name: Many Notes
+# about: A Markdown note-taking app that keeps notes in vaults, with search and sign-in through OpenID Connect.
+# docs: https://github.com/brufdev/many-notes#installation
+# website: https://github.com/brufdev/many-notes
+# categories: docs
+# source: musdash
+services:
+  many-notes:
+    image: brufdev/many-notes:latest
+    environment:
+      - SERVICE_FQDN_MANY_NOTES_8080
+      - APP_URL=${SERVICE_URL_MANY_NOTES}
+      - APP_TIMEZONE=${TZ:-UTC}
+    volumes:
+      - many-notes-database:/var/www/html/database/sqlite
+      - many-notes-logs:/var/www/html/storage/logs
+      - many-notes-private:/var/www/html/storage/app/private
+      - many-notes-typesense:/var/www/html/typesense
+volumes:
+  many-notes-database:
+  many-notes-logs:
+  many-notes-private:
+  many-notes-typesense:

@@ -1,0 +1,22 @@
+# name: Fireshare
+# about: Share game clips, videos and images through short links, with thumbnails and an admin panel.
+# docs: https://github.com/fireshare-app/fireshare#installation
+# website: https://fireshare.net
+# categories: media, storage
+services:
+  fireshare:
+    image: shaneisrael/fireshare:latest-lite
+    environment:
+      - SERVICE_FQDN_FIRESHARE_80
+      - ADMIN_USERNAME=${SERVICE_USER_ADMIN}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - DOMAIN=${SERVICE_FQDN_FIRESHARE}
+      - PUID=1000
+      - PGID=1000
+      - MINUTES_BETWEEN_VIDEO_SCANS=${MINUTES_BETWEEN_VIDEO_SCANS:-5}
+      - STEAMGRIDDB_API_KEY=${STEAMGRIDDB_API_KEY:-}
+    volumes:
+      - fireshare-data:/data
+      - fireshare-processed:/processed
+      - fireshare-videos:/videos
+      - fireshare-images:/images

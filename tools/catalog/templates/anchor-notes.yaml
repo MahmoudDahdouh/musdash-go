@@ -1,0 +1,15 @@
+# name: Anchor
+# about: A note-taking app with a web client and mobile apps, running with its own embedded PostgreSQL in one container.
+# docs: https://github.com/ZhFahim/anchor#self-hosting-with-docker
+# website: https://github.com/ZhFahim/anchor
+# categories: docs, productivity
+services:
+  anchor:
+    image: ghcr.io/zhfahim/anchor:latest
+    environment:
+      - SERVICE_FQDN_ANCHOR_3000
+      - APP_URL=${SERVICE_URL_ANCHOR}
+      - JWT_SECRET=${SERVICE_PASSWORD_64_ANCHORJWT}
+      - PG_PASSWORD=${SERVICE_PASSWORD_ANCHORDB}
+    volumes:
+      - anchor-data:/data

@@ -1,0 +1,54 @@
+# name: Mitra
+# about: A federated microblogging server that speaks ActivityPub, with a web client and a PostgreSQL database.
+# docs: https://codeberg.org/silverpill/mitra#installation
+# website: https://mitra.social/@mitra
+# categories: communication
+services:
+  mitra:
+    image: fjox/mitra:latest
+    environment:
+      - SERVICE_FQDN_MITRA_8383
+      - ADMIN_USER=${SERVICE_USER_ADMIN}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    command:
+      - sh
+      - -c
+      - /app/mitra create-account "$$ADMIN_USER" "$$ADMIN_PASSWORD" admin || true; exec /app/mitra server
+    configs:
+      - source: mitra-config
+        target: /app/config.yaml
+    volumes:
+      - mitra-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=mitra
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=mitra
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+configs:
+  mitra-config:
+    content: |
+      database_url: postgres://mitra:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/mitra
+      storage_dir: /app/data
+      web_client_dir: /app/www
+      http_host: '0.0.0.0'
+      http_port: 8383
+      instance_url: ${SERVICE_URL_MITRA}
+      instance_title: ${INSTANCE_TITLE:-Mitra}
+      instance_short_description: ${INSTANCE_SHORT_DESCRIPTION:-My instance}
+      instance_description: ${INSTANCE_DESCRIPTION:-Welcome!}
+      instance_staff_public: true
+      instance_timeline_public: false
+      registration:
+        type: ${REGISTRATION_TYPE:-invite}
+        default_role: user

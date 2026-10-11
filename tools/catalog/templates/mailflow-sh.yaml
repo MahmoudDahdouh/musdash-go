@@ -1,0 +1,73 @@
+# name: MailFlow
+# about: A self-hosted webmail client that merges several IMAP mailboxes into one inbox, with Postgres and Redis behind it.
+# docs: https://github.com/maathimself/mailflow#option-a--pre-built-images-recommended
+# website: https://mailflow.sh
+# categories: email, communication
+services:
+  frontend:
+    image: ghcr.io/maathimself/mailflow-frontend:latest
+    environment:
+      - SERVICE_FQDN_FRONTEND_80
+      - NGINX_TLS=off
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+  backend:
+    image: ghcr.io/maathimself/mailflow-backend:latest
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - SESSION_SECRET=${SERVICE_HEX_64_SESSION}
+      - ENCRYPTION_KEY=${SERVICE_HEX_64_ENCRYPTION}
+      - APP_URL=${SERVICE_URL_FRONTEND}
+      - FRONTEND_URL=${SERVICE_URL_FRONTEND}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=mailflow
+      - DB_USER=mailflow
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - REDIS_URL=redis://redis:6379
+      - TRUST_PROXY_HOPS=2
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=mailflow
+      - POSTGRES_USER=mailflow
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - mailflow-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - mailflow-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 30

@@ -1,0 +1,32 @@
+# name: Drop
+# about: A game distribution platform for DRM-free games, with a library, versions, a store page and a desktop client.
+# docs: https://droposs.org/docs/admin/quickstart
+# website: https://droposs.org/
+# categories: games, media
+services:
+  drop:
+    image: ghcr.io/drop-oss/drop:0.4.0-rc-5
+    init: true
+    environment:
+      - SERVICE_FQDN_DROP_3000
+      - DATABASE_URL=postgres://drop:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/drop
+      - EXTERNAL_URL=${SERVICE_URL_DROP}
+    volumes:
+      - drop-library:/library
+      - drop-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=drop
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=drop
+    volumes:
+      - drop-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

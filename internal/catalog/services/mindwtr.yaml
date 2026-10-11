@@ -1,0 +1,25 @@
+# name: Mindwtr
+# about: A getting-things-done task manager with a sync server, REST API and a web app for the browser.
+# docs: https://docs.mindwtr.app/data-sync/cloud-deployment
+# website: https://mindwtr.app
+# categories: productivity
+# source: musdash
+services:
+  mindwtr-cloud:
+    image: ghcr.io/dongdongbh/mindwtr-cloud:latest
+    environment:
+      - SERVICE_FQDN_MINDWTR_CLOUD_8787
+      - MINDWTR_CLOUD_AUTH_TOKENS=${SERVICE_PASSWORD_64_MINDWTR}
+      - MINDWTR_CLOUD_CORS_ORIGIN=${SERVICE_URL_MINDWTR_APP}
+    volumes:
+      - mindwtr-data:/app/cloud_data
+  mindwtr-app:
+    image: ghcr.io/dongdongbh/mindwtr-app:latest
+    environment:
+      - SERVICE_FQDN_MINDWTR_APP_5173
+      - MINDWTR_DEFAULT_CLOUD_URL=${SERVICE_URL_MINDWTR_CLOUD}
+    depends_on:
+      mindwtr-cloud:
+        condition: service_healthy
+volumes:
+  mindwtr-data:

@@ -1,0 +1,15 @@
+# name: Eigenfocus
+# about: A project management tool with boards, issues and time tracking, kept behind HTTP basic authentication.
+# docs: https://github.com/Eigenfocus/eigenfocus#installation
+# website: https://eigenfocus.com/
+# categories: productivity
+services:
+  eigenfocus:
+    image: eigenfocus/eigenfocus:1.5.1-free
+    environment:
+      - SERVICE_FQDN_EIGENFOCUS_3000
+      - DEFAULT_HOST_URL=${SERVICE_URL_EIGENFOCUS}
+      - HTTP_AUTH_USER=${SERVICE_USER_EIGENFOCUS}
+      - HTTP_AUTH_PASSWORD=${SERVICE_PASSWORD_EIGENFOCUS}
+    volumes:
+      - app-data:/eigenfocus-app/app-data

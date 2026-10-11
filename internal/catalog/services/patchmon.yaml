@@ -1,0 +1,70 @@
+# name: PatchMon
+# about: Monitors pending package updates and security patches across your Linux servers through a small agent on each host.
+# docs: https://patchmon.net/docs/patchmon-operator-guide
+# website: https://patchmon.net
+# categories: monitoring, devtools
+# source: musdash
+services:
+  server:
+    image: ghcr.io/patchmon/patchmon-server:latest
+    hostname: patchmon-server
+    environment:
+      - SERVICE_FQDN_SERVER_3000
+      - PORT=3000
+      - CORS_ORIGIN=${SERVICE_URL_SERVER}
+      - TRUST_PROXY=true
+      - TZ=${TZ:-UTC}
+      - JWT_SECRET=${SERVICE_HEX_64_JWT}
+      - SESSION_SECRET=${SERVICE_HEX_64_SESSION}
+      - AI_ENCRYPTION_KEY=${SERVICE_HEX_64_AI}
+      - POSTGRES_HOST=database
+      - POSTGRES_USER=patchmon_user
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=patchmon_db
+      - DATABASE_URL=postgresql://patchmon_user:${SERVICE_PASSWORD_POSTGRES}@database:5432/patchmon_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
+      - REDIS_DB=0
+      - GUACD_ADDRESS=guacd:4822
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      guacd:
+        condition: service_healthy
+  database:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=patchmon_user
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=patchmon_db
+    volumes:
+      - patchmon-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${SERVICE_PASSWORD_REDIS}
+    volumes:
+      - patchmon-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${SERVICE_PASSWORD_REDIS}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  guacd:
+    image: guacamole/guacd:1.6.0
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 4822 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+volumes:
+  patchmon-postgres:
+  patchmon-redis:

@@ -1,0 +1,24 @@
+# name: Marreta
+# about: A web tool that cleans up a link and fetches the article behind it through a headless browser, with an admin panel for the rules.
+# docs: https://github.com/manualdousuario/marreta#-instalando-em-docker
+# website: https://marreta.link/
+# categories: productivity, devtools
+services:
+  marreta:
+    image: ghcr.io/manualdousuario/marreta:latest
+    environment:
+      - SERVICE_FQDN_MARRETA_8080
+      - APP_NAME=${APP_NAME:-Marreta}
+      - APP_URL=${SERVICE_URL_MARRETA}
+      - APP_LOCALE=${APP_LOCALE:-en}
+      - APP_DEBUG=false
+      - BROWSER_WS_ENDPOINT=ws://browser:9222
+      - PROXY_URL=${PROXY_URL:-}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@marreta.local}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - marreta-storage:/var/www/html/storage/app
+    depends_on:
+      - browser
+  browser:
+    image: lightpanda/browser:nightly

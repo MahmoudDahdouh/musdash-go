@@ -1,0 +1,27 @@
+# name: Emoncms
+# about: Logs, processes and charts energy, temperature and other sensor data, with its database and MQTT broker built into one container.
+# docs: https://emoncms-docker.github.io/setup/
+# website: https://emoncms.org
+# categories: home, monitoring
+# source: musdash
+services:
+  emoncms:
+    image: alexjunk/emoncms:alpine3.20_emoncms11.17.1
+    environment:
+      - SERVICE_FQDN_EMONCMS_80
+      - TZ=${TZ:-UTC}
+      - MYSQL_DATABASE=emoncms
+      - MYSQL_USER=emoncms
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_MYSQL}
+      - MQTT_USER=emonpi
+      - MQTT_PASSWORD=${SERVICE_PASSWORD_MQTT}
+    volumes:
+      - emoncms-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+volumes:
+  emoncms-data:

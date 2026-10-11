@@ -1,0 +1,55 @@
+# name: Ideon
+# about: A visual workspace where notes, files, links and Git repositories sit together on one canvas for each project.
+# docs: https://github.com/3xpyth0n/ideon#getting-started
+# website: https://www.theideon.com
+# categories: productivity, docs
+# source: musdash
+services:
+  ideon-app:
+    image: ghcr.io/3xpyth0n/ideon:latest
+    environment:
+      - SERVICE_FQDN_IDEON_APP_3000
+      - APP_PORT=3000
+      - APP_URL=${SERVICE_URL_IDEON_APP}
+      - TIMEZONE=${TZ:-UTC}
+      - DB_HOST=ideon-db
+      - DB_PORT=5432
+      - DB_NAME=ideon
+      - DB_USER=${SERVICE_USER_IDEON}
+      - DB_PASS=${SERVICE_PASSWORD_IDEON}
+      - SECRET_KEY=${SERVICE_HEX_64_SECRET}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Ideon}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+    volumes:
+      - ideon-app-data:/app/storage
+    depends_on:
+      ideon-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+  ideon-db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_IDEON}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_IDEON}
+      - POSTGRES_DB=ideon
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - ideon-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  ideon-app-data:
+  ideon-db-data:

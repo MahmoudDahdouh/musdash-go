@@ -1,0 +1,14 @@
+# name: Papra
+# about: A document archive where files are uploaded, tagged and searched, with optional email and folder ingestion.
+# docs: https://docs.papra.app/self-hosting/using-docker/
+# website: https://papra.app/
+# categories: docs, storage
+services:
+  papra:
+    image: ghcr.io/papra-hq/papra:latest-root
+    environment:
+      - SERVICE_FQDN_PAPRA_1221
+      - APP_BASE_URL=${SERVICE_URL_PAPRA}
+      - AUTH_SECRET=${SERVICE_HEX_64_AUTH}
+    volumes:
+      - papra-data:/app/app-data

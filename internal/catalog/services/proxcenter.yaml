@@ -1,0 +1,47 @@
+# name: ProxCenter
+# about: A web console for monitoring and managing Proxmox clusters, with inventory, topology and guest operations in one place.
+# docs: https://docs.proxcenter.io/
+# website: https://proxcenter.io/
+# categories: monitoring, devtools
+# source: musdash
+services:
+  proxcenter:
+    image: ghcr.io/adminsyspro/proxcenter-frontend:latest
+    environment:
+      - SERVICE_FQDN_PROXCENTER_3000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://proxcenter:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/proxcenter?schema=public
+      - APP_SECRET=${SERVICE_PASSWORD_64_APP}
+      - NEXTAUTH_SECRET=${SERVICE_PASSWORD_64_NEXTAUTH}
+      - NEXTAUTH_URL=${SERVICE_URL_PROXCENTER}
+      - APP_URL=${SERVICE_URL_PROXCENTER}
+      - PROXCENTER_INSTANCE_ID=proxcenter-frontend
+    volumes:
+      - proxcenter-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=proxcenter
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=proxcenter
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+volumes:
+  postgres-data:
+  proxcenter-data:

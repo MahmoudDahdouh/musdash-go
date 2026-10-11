@@ -1,0 +1,18 @@
+# name: Open DroneLog
+# about: A web dashboard for analysing drone flight logs from DJI and Litchi, with maps and telemetry charts.
+# docs: https://github.com/arpanghosh8453/open-dronelog#docker-deployment-self-hosted-web
+# website: https://www.opendronelog.com
+# categories: home, analytics
+# source: musdash
+services:
+  open-dronelog:
+    image: ghcr.io/arpanghosh8453/open-dronelog:latest
+    environment:
+      - SERVICE_FQDN_OPEN_DRONELOG_80
+      - DATA_DIR=/data/drone-logbook
+      - DEFAULT_PROFILE_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - PROFILE_CREATION_PASS=${SERVICE_PASSWORD_PROFILES}
+    volumes:
+      - drone-data:/data/drone-logbook
+volumes:
+  drone-data:

@@ -1,0 +1,57 @@
+# name: Scholarsome
+# about: A flashcard app for making and studying sets with several study modes, sharing and import from other tools.
+# docs: https://scholarsome.com/docs/installation/installing
+# website: https://scholarsome.com/
+# categories: productivity, docs
+services:
+  scholarsome:
+    image: hwgilbert16/scholarsome:latest
+    environment:
+      - SERVICE_FQDN_SCHOLARSOME_8080
+      - NODE_ENV=production
+      - DATABASE_URL=mysql://scholarsome:${SERVICE_PASSWORD_MARIADB}@mariadb:3306/scholarsome
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - HTTP_PORT=8080
+      - HOST=${SERVICE_FQDN_SCHOLARSOME}
+      - STORAGE_TYPE=local
+      - STORAGE_LOCAL_DIR=/data
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
+    volumes:
+      - scholarsome-data:/data
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+  mariadb:
+    image: mariadb:11
+    environment:
+      - MARIADB_RANDOM_ROOT_PASSWORD=yes
+      - MARIADB_DATABASE=scholarsome
+      - MARIADB_USER=scholarsome
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_MARIADB}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 900 1 --appendonly yes --appendfilename appendonly.aof --dir /data --requirepass ${SERVICE_PASSWORD_REDIS}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${SERVICE_PASSWORD_REDIS} ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

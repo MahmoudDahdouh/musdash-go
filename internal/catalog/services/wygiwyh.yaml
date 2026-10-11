@@ -1,0 +1,45 @@
+# name: WYGIWYH
+# about: A finance tracker for personal budgets, with transactions, accounts, recurring entries and reports.
+# docs: https://github.com/eitchtee/WYGIWYH#how-to-use
+# website: https://github.com/eitchtee/WYGIWYH
+# categories: finance
+# source: musdash
+services:
+  wygiwyh:
+    image: eitchtee/wygiwyh:latest
+    environment:
+      - SERVICE_FQDN_WYGIWYH_8000
+      - URL=${SERVICE_URL_WYGIWYH}
+      - DJANGO_ALLOWED_HOSTS=${SERVICE_FQDN_WYGIWYH} 127.0.0.1
+      - HTTPS_ENABLED=true
+      - SECRET_KEY=${SERVICE_PASSWORD_64_WYGIWYH}
+      - TZ=${TZ:-UTC}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - SQL_DATABASE=wygiwyh
+      - SQL_USER=${SERVICE_USER_WYGIWYH}
+      - SQL_PASSWORD=${SERVICE_PASSWORD_DB}
+      - SQL_HOST=db
+      - SQL_PORT=5432
+      - WEB_CONCURRENCY=2
+    volumes:
+      - wygiwyh-attachments:/usr/src/app/attachments
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_WYGIWYH}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB}
+      - POSTGRES_DB=wygiwyh
+    volumes:
+      - wygiwyh-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+volumes:
+  wygiwyh-attachments:
+  wygiwyh-db:

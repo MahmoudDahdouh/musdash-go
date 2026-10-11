@@ -1,0 +1,47 @@
+# name: Kinto
+# about: A minimal JSON storage server with an HTTP API, permissions, and an admin web interface.
+# docs: https://docs.kinto-storage.org/en/latest/tutorials/install.html#using-docker-compose
+# website: https://github.com/Kinto/kinto
+# categories: backend, database
+services:
+  web:
+    image: kinto/kinto-server:latest
+    environment:
+      - SERVICE_FQDN_WEB_8888
+      - KINTO_CACHE_BACKEND=kinto.core.cache.memcached
+      - KINTO_CACHE_HOSTS=cache:11211
+      - KINTO_STORAGE_BACKEND=kinto.core.storage.postgresql
+      - KINTO_STORAGE_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@db/kinto
+      - KINTO_PERMISSION_BACKEND=kinto.core.permission.postgresql
+      - KINTO_PERMISSION_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@db/kinto
+      - KINTO_USERID_HMAC_SECRET=${SERVICE_PASSWORD_64_HMAC}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    command:
+      - sh
+      - -c
+      - sed 's/^host = .*/host = 0.0.0.0/' $$KINTO_INI > /tmp/kinto.ini && kinto migrate --ini /tmp/kinto.ini && kinto create-user --ini /tmp/kinto.ini -u admin -p "$$ADMIN_PASSWORD" && kinto start --ini /tmp/kinto.ini --port $$PORT
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/v1/', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=kinto
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  cache:
+    image: memcached:1

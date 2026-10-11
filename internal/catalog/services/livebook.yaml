@@ -1,0 +1,21 @@
+# name: Livebook
+# about: Interactive notebooks for Elixir code, with live collaboration, charts and apps made from a notebook.
+# docs: https://hexdocs.pm/livebook/docker.html
+# website: https://livebook.dev/
+# categories: devtools, docs
+# source: musdash
+services:
+  livebook:
+    image: ghcr.io/livebook-dev/livebook:latest
+    environment:
+      - SERVICE_FQDN_LIVEBOOK_8080
+      - LIVEBOOK_PORT=8080
+      - LIVEBOOK_PASSWORD=${SERVICE_PASSWORD_LIVEBOOK}
+      - LIVEBOOK_SECRET_KEY_BASE=${SERVICE_PASSWORD_64_SECRETKEYBASE}
+      - LIVEBOOK_DATA_PATH=/config
+    volumes:
+      - livebook-data:/data
+      - livebook-config:/config
+volumes:
+  livebook-config:
+  livebook-data:

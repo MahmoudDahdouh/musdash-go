@@ -1,0 +1,22 @@
+# name: YT Zero
+# about: A YouTube frontend with profiles, subscriptions and a built-in player, signed in with one shared password.
+# docs: https://github.com/Pelski/ytzero/wiki/Installation
+# website: https://ytzero.app
+# categories: media
+services:
+  ytzero:
+    image: ghcr.io/pelski/ytzero:latest
+    environment:
+      - SERVICE_FQDN_YTZERO_3001
+      - PORT=3001
+      - APP_URL=${SERVICE_URL_YTZERO}
+      - YTZERO_AUTH_METHOD=shared
+      - YTZERO_AUTH_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - IDLE_TIMEOUT_SECONDS=120
+      - REFRESH_INTERVAL_MINUTES=5
+      - FULL_SYNC_INTERVAL_MINUTES=15
+      - VIDEO_MAINTENANCE_MAX_AGE_DAYS=90
+      - DB_PATH=/data/db/ytzero.db
+      - IMG_CACHE_DIR=/data/imgcache
+    volumes:
+      - ytzero-data:/data

@@ -1,0 +1,42 @@
+# name: Scrob
+# about: A media tracker for watch history, ratings and lists that syncs with Jellyfin, Plex, Emby and Stremio.
+# docs: https://github.com/ellite/scrob#getting-started
+# website: https://scrob.app
+# categories: media
+# source: musdash
+services:
+  scrob:
+    image: ghcr.io/ellite/scrob:latest
+    environment:
+      - SERVICE_FQDN_SCROB_7330
+      - DATABASE_URL=postgresql+asyncpg://scrob:${SERVICE_PASSWORD_POSTGRES}@scrob-db:5432/scrob
+      - SECRET_KEY=${SERVICE_HEX_64_SECRET}
+      - ENABLE_REGISTRATIONS=${ENABLE_REGISTRATIONS:-false}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - scrob-data:/app/backend/data
+    depends_on:
+      scrob-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:7331/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  scrob-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=scrob
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=scrob
+    volumes:
+      - scrob-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  scrob-data:
+  scrob-db-data:

@@ -1,0 +1,25 @@
+# name: Swing Music
+# about: A music player and streaming server that scans a folder of audio files and serves it to browsers and a mobile app.
+# docs: https://swingmx.com/guide/introduction.html#installing-using-docker-compose
+# website: https://swingmx.com
+# categories: media
+# source: musdash
+services:
+  swingmusic:
+    image: ghcr.io/swingmx/swingmusic:latest
+    environment:
+      - SERVICE_FQDN_SWINGMUSIC_1970
+      - SWINGMUSIC_PORT=1970
+      - SWINGMUSIC_DEVICE_NAME=${SWINGMUSIC_DEVICE_NAME:-musdash}
+    volumes:
+      - swingmusic-music:/music
+      - swingmusic-config:/config
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 1970), 3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+volumes:
+  swingmusic-config:
+  swingmusic-music:

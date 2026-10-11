@@ -1,0 +1,43 @@
+# name: Piwigo
+# about: A photo gallery with albums, tags, users and permissions, and plugins and themes to extend it; the web installer finishes the setup.
+# docs: https://doc.piwigo.org/self-hosting-piwigo/install-guides/docker-install/
+# website: https://piwigo.org
+# categories: media
+# source: musdash
+services:
+  piwigo:
+    image: piwigo/piwigo:latest
+    environment:
+      - SERVICE_FQDN_PIWIGO_80
+      - TZ=${TZ:-UTC}
+      - PIWIGO_UID=${PIWIGO_UID:-1000}
+      - PIWIGO_GID=${PIWIGO_GID:-1000}
+    volumes:
+      - piwigo-data:/var/www/html/piwigo
+    depends_on:
+      piwigo-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsSL -o /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+  piwigo-db:
+    image: mariadb:11
+    environment:
+      - MARIADB_RANDOM_ROOT_PASSWORD=true
+      - MARIADB_USER=piwigodb_user
+      - MARIADB_DATABASE=piwigodb
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_DB}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - piwigo-mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+volumes:
+  piwigo-data:
+  piwigo-mysql:

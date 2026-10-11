@@ -1,0 +1,72 @@
+# name: RSSMonster
+# about: A self-hosted RSS reader with feed folders, a Fever-compatible API and optional local AI sorting of articles.
+# docs: https://pietheinstrengholt.github.io/rssmonster/getting-started.html
+# website: https://pietheinstrengholt.github.io/rssmonster/
+# categories: rss
+services:
+  rssmonster:
+    image: rssmonster/rssmonster:latest
+    init: true
+    environment:
+      - SERVICE_FQDN_RSSMONSTER_3000
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_DIALECT=sqlite
+      - DB_STORAGE=/app/data/rssmonster.sqlite
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - FEVER_CREDENTIAL_SECRET=${SERVICE_PASSWORD_64_FEVER}
+      - ENCRYPTION_KEY=${SERVICE_BASE64_ENCRYPTION}
+      - TRUST_PROXY=1
+      - CRAWL_WORKER_HEALTH_FILE=/app/worker-health/crawl-worker-health.json
+    volumes:
+      - rssmonster-data:/app/data
+      - rssmonster-worker-health:/app/worker-health:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+  rssmonster-worker:
+    image: rssmonster/rssmonster:latest
+    init: true
+    command: [npm, run, start:worker]
+    environment:
+      - NODE_ENV=production
+      - DB_DIALECT=sqlite
+      - DB_STORAGE=/app/data/rssmonster.sqlite
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - FEVER_CREDENTIAL_SECRET=${SERVICE_PASSWORD_64_FEVER}
+      - CRAWL_WORKER_HEALTH_FILE=/app/worker-health/crawl-worker-health.json
+      - CRAWL_WORKER_HEALTH_MAX_FAILURES=3
+      - CRAWL_WORKER_HEALTH_MAX_STALE_MS=900000
+    volumes:
+      - rssmonster-data:/app/data
+      - rssmonster-worker-health:/app/worker-health
+    depends_on:
+      rssmonster:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, src/workers/checkCrawlWorkerHealth.js]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 2m
+  rssmonster-webhook-worker:
+    image: rssmonster/rssmonster:latest
+    init: true
+    command: [npm, run, start:webhook-worker]
+    environment:
+      - NODE_ENV=production
+      - DB_DIALECT=sqlite
+      - DB_STORAGE=/app/data/rssmonster.sqlite
+      - ENCRYPTION_KEY=${SERVICE_BASE64_ENCRYPTION}
+    volumes:
+      - rssmonster-data:/app/data
+    depends_on:
+      rssmonster:
+        condition: service_healthy

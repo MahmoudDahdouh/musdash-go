@@ -1,0 +1,43 @@
+# name: Manage My Damn Life
+# about: A web front end for CalDAV tasks and calendars, with its own user accounts stored in MySQL.
+# docs: https://github.com/intri-in/manage-my-damn-life-nextjs/blob/main/docs/install/Docker/index.md
+# website: https://intri.in/manage-my-damn-life/
+# categories: productivity
+services:
+  mmdl:
+    image: intriin/mmdl:latest
+    environment:
+      - SERVICE_FQDN_MMDL_3000
+      - NEXT_BASE_URL=${SERVICE_URL_MMDL}/
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DIALECT=mysql
+      - DB_NAME=mmdl
+      - DB_USER=${SERVICE_USER_MMDL}
+      - DB_PASS=${SERVICE_PASSWORD_MMDL}
+      - DB_CHARSET=utf8mb4
+      - DB_COLLATE=utf8mb4_0900_ai_ci
+      - AES_PASSWORD=${SERVICE_PASSWORD_64_AES}
+      - DISABLE_USER_REGISTRATION=${DISABLE_USER_REGISTRATION:-false}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-25}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROMEMAIL=${SMTP_FROMEMAIL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: mysql:8.4
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=mmdl
+      - MYSQL_USER=${SERVICE_USER_MMDL}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_MMDL}
+    volumes:
+      - mmdl-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 40

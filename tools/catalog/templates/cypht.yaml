@@ -1,0 +1,43 @@
+# name: Cypht
+# about: A webmail client that reads several IMAP and POP3 mailboxes in one combined inbox.
+# docs: https://github.com/cypht-org/cypht/blob/master/docker/DOCKERHUB-README.md
+# website: https://cypht.org/
+# categories: email
+services:
+  cypht:
+    image: cypht/cypht:2.12.2
+    environment:
+      - SERVICE_FQDN_CYPHT_80
+      - AUTH_USERNAME=${SERVICE_USER_ADMIN}
+      - AUTH_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - DB_CONNECTION_TYPE=host
+      - DB_DRIVER=mysql
+      - DB_HOST=db
+      - DB_NAME=cypht
+      - DB_USER=${SERVICE_USER_CYPHT}
+      - DB_PASS=${SERVICE_PASSWORD_CYPHT}
+      - SESSION_TYPE=DB
+      - USER_CONFIG_TYPE=DB
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  db:
+    image: mariadb:11
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=cypht
+      - MYSQL_USER=${SERVICE_USER_CYPHT}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_CYPHT}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

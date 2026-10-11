@@ -1,0 +1,63 @@
+# name: ProjectSend
+# about: A file sharing server where an administrator uploads files for clients, who sign in to download them.
+# docs: https://github.com/projectsend/projectsend#getting-started
+# website: https://www.projectsend.org/
+# categories: storage
+services:
+  projectsend:
+    image: projectsend/projectsend:2
+    environment:
+      - SERVICE_FQDN_PROJECTSEND_80
+      - APP_URL=${SERVICE_URL_PROJECTSEND}
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - DB_CONNECTION=mysql
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=projectsend
+      - DB_USERNAME=${SERVICE_USER_PROJECTSEND}
+      - DB_PASSWORD=${SERVICE_PASSWORD_PROJECTSEND}
+      - REDIS_HOST=redis
+      - CACHE_STORE=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+      - TRUSTED_PROXIES=*
+      - ADMIN_NAME=${SERVICE_USER_ADMIN}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - MAIL_MAILER=${MAIL_MAILER:-log}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-files@example.com}
+    volumes:
+      - projectsend-storage:/var/www/html/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  db:
+    image: mysql:8.4
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=projectsend
+      - MYSQL_USER=${SERVICE_USER_PROJECTSEND}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_PROJECTSEND}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20

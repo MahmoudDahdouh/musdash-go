@@ -1,0 +1,65 @@
+# name: Sharry
+# about: A file sharing service where signed-in users upload files and hand out download links, with resumable uploads.
+# docs: https://eikek.github.io/sharry/doc/quickstart
+# website: https://eikek.github.io/sharry/
+# categories: storage
+services:
+  sharry:
+    image: eikek0/sharry:latest
+    command: /opt/sharry.conf
+    environment:
+      - SERVICE_FQDN_SHARRY_9090
+    configs:
+      - source: sharry-config
+        target: /opt/sharry.conf
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9090/api/v2/open/info/version || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=sharry
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_SHARRYDB}
+      - POSTGRES_DB=sharry
+    volumes:
+      - sharry-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+configs:
+  sharry-config:
+    content: |
+      sharry.restserver {
+        base-url = "${SERVICE_URL_SHARRY}"
+        bind {
+          address = "0.0.0.0"
+          port = 9090
+        }
+        backend {
+          auth {
+            fixed {
+              enabled = true
+              user = "${SERVICE_USER_ADMIN}"
+              password = "${SERVICE_PASSWORD_ADMIN}"
+            }
+          }
+          jdbc {
+            url = "jdbc:postgresql://db:5432/sharry"
+            user = "sharry"
+            password = "${SERVICE_PASSWORD_SHARRYDB}"
+          }
+          signup {
+            mode = "invite"
+            invite-time = "14 days"
+            invite-password = "${SERVICE_PASSWORD_SHARRYINVITE}"
+          }
+        }
+      }

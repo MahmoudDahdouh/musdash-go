@@ -1,0 +1,27 @@
+# name: Shared Moments
+# about: A private website where couples, families or friends keep photos, videos, music and memories together.
+# docs: https://github.com/tech-kev/SharedMoments/wiki/Installation
+# website: https://github.com/tech-kev/SharedMoments
+# categories: media, home
+services:
+  sharedmoments:
+    image: techkev/sharedmoments:latest
+    environment:
+      - SERVICE_FQDN_SHAREDMOMENTS_5001
+      - SECRET_KEY=${SERVICE_HEX_64_SECRET}
+      - TZ=${TZ:-UTC}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+    volumes:
+      - sm-database:/app/app/database
+      - sm-uploads:/app/app/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 30

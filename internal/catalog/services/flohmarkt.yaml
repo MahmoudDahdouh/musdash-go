@@ -1,0 +1,79 @@
+# name: Flohmarkt
+# about: A federated marketplace where people list items for sale and trade, with its own CouchDB database.
+# docs: https://codeberg.org/flohmarkt/flohmarkt/wiki#installation
+# website: https://codeberg.org/flohmarkt/flohmarkt
+# categories: ecommerce
+# source: musdash
+services:
+  database:
+    image: couchdb:3.3
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=${SERVICE_PASSWORD_COUCHDB}
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:5984"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  init:
+    image: codeberg.org/flohmarkt/flohmarkt:latest
+    command: initdb
+    restart: "no"
+    environment:
+      - LANG=en_US.UTF-8
+      - FLOHMARKT_INSTANCE_NAME=${FLOHMARKT_INSTANCE_NAME:-Flohmarkt}
+      - FLOHMARKT_EXTERNAL_URL=${SERVICE_URL_FLOHMARKT}
+      - FLOHMARKT_DB_HTTPS=0
+      - FLOHMARKT_DB_HOST=database
+      - FLOHMARKT_DB_PORT=5984
+      - FLOHMARKT_DB_NAME=flohmarkt
+      - FLOHMARKT_DB_USER=admin
+      - FLOHMARKT_DB_PASSWORD=${SERVICE_PASSWORD_COUCHDB}
+      - FLOHMARKT_MAIL_METHOD=smtp
+      - FLOHMARKT_MAIL_FROM=${FLOHMARKT_MAIL_FROM:-noreply@example.com}
+      - FLOHMARKT_SMTP_SERVER=${FLOHMARKT_SMTP_SERVER:-localhost}
+      - FLOHMARKT_SMTP_PORT=${FLOHMARKT_SMTP_PORT:-25}
+      - FLOHMARKT_SMTP_USER=${FLOHMARKT_SMTP_USER:-}
+      - FLOHMARKT_SMTP_PASSWORD=${FLOHMARKT_SMTP_PASSWORD:-}
+    volumes:
+      - flohmarkt-data:/var/lib/flohmarkt
+    depends_on:
+      database:
+        condition: service_healthy
+  flohmarkt:
+    image: codeberg.org/flohmarkt/flohmarkt:latest
+    command: web
+    environment:
+      - SERVICE_FQDN_FLOHMARKT_8000
+      - LANG=en_US.UTF-8
+      - FLOHMARKT_INSTANCE_NAME=${FLOHMARKT_INSTANCE_NAME:-Flohmarkt}
+      - FLOHMARKT_EXTERNAL_URL=${SERVICE_URL_FLOHMARKT}
+      - FLOHMARKT_DB_HTTPS=0
+      - FLOHMARKT_DB_HOST=database
+      - FLOHMARKT_DB_PORT=5984
+      - FLOHMARKT_DB_NAME=flohmarkt
+      - FLOHMARKT_DB_USER=admin
+      - FLOHMARKT_DB_PASSWORD=${SERVICE_PASSWORD_COUCHDB}
+      - FLOHMARKT_MAIL_METHOD=smtp
+      - FLOHMARKT_MAIL_FROM=${FLOHMARKT_MAIL_FROM:-noreply@example.com}
+      - FLOHMARKT_SMTP_SERVER=${FLOHMARKT_SMTP_SERVER:-localhost}
+      - FLOHMARKT_SMTP_PORT=${FLOHMARKT_SMTP_PORT:-25}
+      - FLOHMARKT_SMTP_USER=${FLOHMARKT_SMTP_USER:-}
+      - FLOHMARKT_SMTP_PASSWORD=${FLOHMARKT_SMTP_PASSWORD:-}
+    volumes:
+      - flohmarkt-data:/var/lib/flohmarkt
+    depends_on:
+      database:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://127.0.0.1:8000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  couchdb-data:
+  flohmarkt-data:

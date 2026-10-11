@@ -1,0 +1,18 @@
+# name: Databag
+# about: A small, self-hosted messenger with contacts, topics and optional end-to-end encryption.
+# docs: https://github.com/balzack/databag#installation
+# website: https://github.com/balzack/databag
+# categories: communication
+services:
+  databag:
+    image: balzack/databag:latest
+    environment:
+      - SERVICE_FQDN_DATABAG_7000
+      - ADMIN=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - databag-data:/var/lib/databag
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://127.0.0.1:7000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

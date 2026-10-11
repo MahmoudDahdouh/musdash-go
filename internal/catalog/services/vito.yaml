@@ -1,0 +1,29 @@
+# name: Vito
+# about: A web panel that sets up and manages Ubuntu servers over SSH, installing PHP, databases, sites and deployments on them.
+# docs: https://vitodeploy.com/docs/getting-started/installation
+# website: https://vitodeploy.com
+# categories: devtools, automation
+# source: musdash
+services:
+  vito:
+    image: vitodeploy/vito:latest
+    environment:
+      - SERVICE_FQDN_VITO_80
+      - APP_URL=${SERVICE_URL_VITO}
+      - APP_KEY=${SERVICE_PASSWORD_APPKEY}
+      - WS_BROADCAST_SECRET=${SERVICE_PASSWORD_64_WS}
+      - NAME=${SERVICE_USER_ADMIN}
+      - EMAIL=${VITO_ADMIN_EMAIL:-admin@example.com}
+      - PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - vito-storage:/var/www/html/storage
+      - vito-plugins:/var/www/html/app/Vito/Plugins
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+volumes:
+  vito-plugins:
+  vito-storage:

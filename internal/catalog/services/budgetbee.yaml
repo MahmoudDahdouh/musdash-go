@@ -1,0 +1,49 @@
+# name: BudgetBee
+# about: A personal finance manager for budgets, accounts and spending reports, with imports and a MySQL database.
+# docs: https://github.com/budgetbee/budgetbee#installation
+# website: https://budgetbee.github.io/budgetbee/
+# categories: finance
+# source: musdash
+services:
+  nginx:
+    image: ghcr.io/budgetbee/budgetbee/proxy:latest
+    command: nginx -g "daemon off;"
+    environment:
+      - SERVICE_FQDN_NGINX_80
+    depends_on:
+      - webserver
+      - web
+  webserver:
+    image: ghcr.io/budgetbee/budgetbee/api:latest
+    working_dir: /var/www/html
+    command: sh entrypoint.sh
+    environment:
+      - DB_HOST=db
+      - DB_DATABASE=budgetbee
+      - DB_USERNAME=${SERVICE_USER_BUDGETBEE}
+      - DB_PASSWORD=${SERVICE_PASSWORD_BUDGETBEE}
+    volumes:
+      - budgetbee-config:/config
+    depends_on:
+      db:
+        condition: service_healthy
+  web:
+    image: ghcr.io/budgetbee/budgetbee/web:latest
+  db:
+    image: mysql:8.2.0
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=budgetbee
+      - MYSQL_USER=${SERVICE_USER_BUDGETBEE}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_BUDGETBEE}
+    volumes:
+      - budgetbee-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+volumes:
+  budgetbee-config:
+  budgetbee-db:

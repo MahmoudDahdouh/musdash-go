@@ -1,0 +1,33 @@
+# name: tirreno
+# about: Watches the events your product sends it for fraud, account takeover and abuse, with risk scores and a review queue.
+# docs: https://github.com/tirrenotechnologies/ADMIN.md#docker-installation
+# website: https://www.tirreno.com
+# categories: security, analytics
+services:
+  tirreno-app:
+    image: tirreno/tirreno:latest
+    environment:
+      - SERVICE_FQDN_TIRRENO_APP_80
+      - DATABASE_URL=postgres://tirreno:${SERVICE_PASSWORD_POSTGRES}@tirreno-db:5432/tirreno
+      - SITE=${SERVICE_FQDN_TIRRENO_APP}
+      - PEPPER=${SERVICE_PASSWORD_64_PEPPER}
+      - FORCE_HTTPS=false
+    volumes:
+      - tirreno-config:/var/www/html/config/local
+      - tirreno-logs:/var/www/html/assets/logs
+    depends_on:
+      tirreno-db:
+        condition: service_healthy
+  tirreno-db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=tirreno
+      - POSTGRES_USER=tirreno
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - tirreno-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

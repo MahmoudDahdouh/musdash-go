@@ -1,0 +1,40 @@
+# name: Borg UI
+# about: A web interface for BorgBackup to manage repositories, schedule backups and browse archives.
+# docs: https://docs.borgui.com/installation
+# website: https://borgui.com/
+# categories: storage, monitoring
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    environment:
+      - SERVICE_FQDN_BORG_UI_8081
+      - PORT=8081
+      - PUID=${PUID:-1001}
+      - PGID=${PGID:-1001}
+      - TZ=${TZ:-UTC}
+      - INITIAL_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRET}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+    volumes:
+      - borg-data:/data
+      - borg-cache:/home/borg/.cache/borg
+      - borg-local:/local
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:8081/ > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 40s
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

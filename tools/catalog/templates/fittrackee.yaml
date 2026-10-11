@@ -1,0 +1,55 @@
+# name: FitTrackee
+# about: An outdoor activity tracker that keeps workouts, routes and statistics on your own server.
+# docs: https://docs.fittrackee.org/en/installation/installation.html#docker
+# website: https://docs.fittrackee.org/
+# categories: home
+services:
+  fittrackee:
+    image: fittrackee/fittrackee:v1.3.5
+    command: sh docker-entrypoint.sh
+    environment:
+      - SERVICE_FQDN_FITTRACKEE_5000
+      - FLASK_APP=fittrackee
+      - FLASK_SKIP_DOTENV=1
+      - APP_SECRET_KEY=${SERVICE_PASSWORD_64_SECRET}
+      - UPLOAD_FOLDER=/usr/src/app/uploads
+      - STATICMAP_CACHE_DIR=/usr/src/app/.staticmap_cache
+      - GUNICORN_LOG=-
+      - UI_URL=${SERVICE_URL_FITTRACKEE}
+      - DATABASE_URL=postgresql://fittrackee:${SERVICE_PASSWORD_POSTGRES}@fittrackee-db:5432/fittrackee
+      - EMAIL_URL=${EMAIL_URL:-}
+      - SENDER_EMAIL=${SENDER_EMAIL:-}
+    volumes:
+      - fittrackee-uploads:/usr/src/app/uploads
+      - fittrackee-staticmap:/usr/src/app/.staticmap_cache
+    depends_on:
+      fittrackee-db:
+        condition: service_healthy
+      fittrackee-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider http://127.0.0.1:5000/api/check-db || exit 1"]
+      interval: 10s
+      timeout: 15s
+      retries: 30
+  fittrackee-init:
+    image: fittrackee/fittrackee:v1.3.5
+    user: root
+    restart: "no"
+    command: chown -R fittrackee:fittrackee /usr/src/app/uploads /usr/src/app/.staticmap_cache
+    volumes:
+      - fittrackee-uploads:/usr/src/app/uploads
+      - fittrackee-staticmap:/usr/src/app/.staticmap_cache
+  fittrackee-db:
+    image: postgis/postgis:18-3.6-alpine
+    environment:
+      - POSTGRES_USER=fittrackee
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=fittrackee
+    volumes:
+      - fittrackee-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 15s
+      retries: 30

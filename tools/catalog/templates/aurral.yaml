@@ -1,0 +1,15 @@
+# name: Aurral
+# about: A request and discovery app for music that sends artists to Lidarr or downloads to its own folder.
+# docs: https://docs.aurral.org/getting-started/docker/
+# website: https://aurral.org/
+# categories: media
+services:
+  aurral:
+    image: ghcr.io/lklynet/aurral:latest
+    environment:
+      - SERVICE_FQDN_AURRAL_3001
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - aurral-config:/config
+      - aurral-data:/data

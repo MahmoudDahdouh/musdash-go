@@ -1,0 +1,14 @@
+# name: Hammer
+# about: The sync server for the Hammer novel-writing apps, with accounts and an embedded PostgreSQL database.
+# docs: https://github.com/Darkrock-Studios/hammer-editor/blob/develop/docs/HOW-TO-RUN-A-SERVER-DOCKER.md
+# website: https://github.com/Darkrock-Studios/hammer-editor
+# categories: productivity, docs
+services:
+  hammer:
+    image: ghcr.io/darkrock-studios/hammer-editor/server:latest
+    init: true
+    environment:
+      - SERVICE_FQDN_HAMMER_8080
+      - TZ=${TZ:-UTC}
+    volumes:
+      - hammer-data:/data

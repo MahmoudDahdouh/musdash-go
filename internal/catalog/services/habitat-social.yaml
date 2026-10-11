@@ -1,0 +1,59 @@
+# name: Habitat
+# about: A social platform for a local community, with posts, map locations, categories and moderation tools.
+# docs: https://github.com/carlnewton/habitat#docker-compose
+# website: https://gethabitat.org/
+# categories: communication
+# source: musdash
+services:
+  habitat-app:
+    image: carlnewton/habitat:latest
+    environment:
+      - SERVICE_FQDN_HABITAT_APP_80
+      - SERVER_NAME=:80
+      - APP_SECRET=${SERVICE_PASSWORD_APPSECRET}
+      - ENCRYPTION_KEY=${SERVICE_PASSWORD_ENCRYPTIONKEY}
+      - MERCURE_PUBLISHER_JWT_KEY=${SERVICE_PASSWORD_64_MERCURE}
+      - MERCURE_SUBSCRIBER_JWT_KEY=${SERVICE_PASSWORD_64_MERCURE}
+      - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@habitat-database:5432/habitat?serverVersion=16&charset=utf8
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+      - habitat-uploads:/uploads
+    depends_on:
+      habitat-database:
+        condition: service_healthy
+  habitat-worker:
+    image: carlnewton/habitat:latest
+    command: ["bin/console", "messenger:consume", "-vv", "--time-limit=600", "--limit=10", "--memory-limit=128M"]
+    environment:
+      - RUN_MIGRATIONS=false
+      - SERVER_NAME=:80
+      - APP_SECRET=${SERVICE_PASSWORD_APPSECRET}
+      - ENCRYPTION_KEY=${SERVICE_PASSWORD_ENCRYPTIONKEY}
+      - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@habitat-database:5432/habitat?serverVersion=16&charset=utf8
+    healthcheck:
+      disable: true
+    volumes:
+      - habitat-uploads:/uploads
+    depends_on:
+      habitat-app:
+        condition: service_healthy
+  habitat-database:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=habitat
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - database-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+volumes:
+  caddy-config:
+  caddy-data:
+  database-data:
+  habitat-uploads:

@@ -1,0 +1,44 @@
+# name: Jellystat
+# about: Statistics and play history for Jellyfin servers, with charts of users, libraries and what gets watched.
+# docs: https://hub.docker.com/r/cyfershepard/jellystat
+# website: https://github.com/CyferShepard/Jellystat
+# categories: analytics, media
+# source: musdash
+services:
+  jellystat:
+    image: cyfershepard/jellystat:latest
+    environment:
+      - SERVICE_FQDN_JELLYSTAT_3000
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_IP=jellystat-db
+      - POSTGRES_PORT=5432
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - jellystat-backup-data:/app/backend/backup-data
+    depends_on:
+      jellystat-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/auth/isconfigured || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+  jellystat-db:
+    image: postgres:17-alpine
+    shm_size: "1gb"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - jellystat-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+volumes:
+  jellystat-backup-data:
+  jellystat-db-data:

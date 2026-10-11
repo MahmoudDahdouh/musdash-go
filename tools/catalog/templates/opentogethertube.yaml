@@ -1,0 +1,56 @@
+# name: OpenTogetherTube
+# about: Watch YouTube and other online videos in sync with friends in a shared room.
+# docs: https://github.com/dyc3/opentogethertube/blob/master/docs/how-to-deploy.md
+# website: https://opentogethertube.com
+# categories: media, communication
+services:
+  opentogethertube:
+    image: dyc3/opentogethertube:latest
+    environment:
+      - SERVICE_FQDN_OPENTOGETHERTUBE_8080
+      - PORT=8080
+      - DOCKER=1
+      - OTT_HOSTNAME=${SERVICE_FQDN_OPENTOGETHERTUBE}
+      - SESSION_SECRET=${SERVICE_PASSWORD_64_SESSIONA}${SERVICE_PASSWORD_SESSIONB}
+      - DB_MODE=postgres
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=opentogethertube
+      - POSTGRES_DB=opentogethertube
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - FFPROBE_PATH=/usr/bin/ffprobe
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/api/status || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=opentogethertube
+      - POSTGRES_USER=opentogethertube
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

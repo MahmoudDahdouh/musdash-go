@@ -1,0 +1,23 @@
+# name: Dashwise
+# about: A homelab dashboard with link groups, widgets, news feeds and integrations, with built-in sign-in and an embedded PocketBase.
+# docs: https://github.com/andreasmolnardev/dashwise#installation
+# website: https://dashwise-next.vercel.app/
+# categories: home, productivity
+# source: musdash
+services:
+  dashwise:
+    image: andreasmolnardev/dashwise:aio-preview
+    environment:
+      - SERVICE_FQDN_DASHWISE_3000
+      - ENVIRONMENT=production
+      - PB_ADMIN_EMAIL=${DASHWISE_ADMIN_EMAIL:-admin@dashwise.local}
+      - PB_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - PB_URL=http://127.0.0.1:8090
+      - NEXT_PUBLIC_PB_URL=http://127.0.0.1:8090
+      - START_POCKETBASE=true
+      - PB_BINARY_PATH=/usr/local/bin/pocketbase
+      - NEXT_PUBLIC_APP_URL=${SERVICE_URL_DASHWISE}
+    volumes:
+      - dashwise-pb-data:/app/pocketbase/pb_data
+volumes:
+  dashwise-pb-data:

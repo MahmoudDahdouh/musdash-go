@@ -1,0 +1,26 @@
+# name: NutriTrace
+# about: A personal nutrition tracker with a food diary, recipes, goals, barcode lookups and optional wearable and AI integrations.
+# docs: https://traceapps.github.io/docs/getting-started/compose/
+# website: https://github.com/TraceApps/nutritrace
+# categories: home
+# source: musdash
+services:
+  nutritrace:
+    image: ghcr.io/traceapps/nutritrace:latest
+    environment:
+      - SERVICE_FQDN_NUTRITRACE_3001
+      - DB_PATH=/data/db/nutritrace.db
+      - UPLOADS_PATH=/data/uploads
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+    volumes:
+      - nutritrace-db:/data/db
+      - nutritrace-uploads:/data/uploads
+volumes:
+  nutritrace-db:
+  nutritrace-uploads:

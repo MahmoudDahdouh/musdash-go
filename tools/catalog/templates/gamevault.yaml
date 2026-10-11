@@ -1,0 +1,45 @@
+# name: GameVault
+# about: A server for your DRM-free game library, with a web interface, metadata, accounts and downloads for friends and family.
+# docs: https://gamevau.lt/docs/server-docs/setup/docker-compose
+# website: https://gamevau.lt/
+# categories: games, media
+services:
+  gamevault:
+    image: phalcode/gamevault-backend:latest
+    environment:
+      - SERVICE_FQDN_GAMEVAULT_8080
+      - DB_HOST=db
+      - DB_USERNAME=${SERVICE_USER_POSTGRES}
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - DB_DATABASE=gamevault
+      - SERVER_REGISTRATION_DISABLED=${SERVER_REGISTRATION_DISABLED:-false}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - gamevault-files:/files
+      - gamevault-media:/media
+      - gamevault-savefiles:/savefiles
+      - gamevault-config:/config
+      - gamevault-logs:/logs
+      - gamevault-plugins:/plugins
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/api/status || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=gamevault
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

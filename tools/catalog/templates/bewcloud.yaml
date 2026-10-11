@@ -1,0 +1,86 @@
+# name: bewCloud
+# about: A small personal cloud with file storage, notes, photos, news feeds and expense tracking, built on Deno and PostgreSQL.
+# docs: https://github.com/bewcloud/bewcloud#self-host-it
+# website: https://bewcloud.com/
+# categories: storage, productivity
+services:
+  website:
+    image: ghcr.io/bewcloud/bewcloud:v4.16.0
+    environment:
+      - SERVICE_FQDN_WEBSITE_8000
+      - PORT=8000
+      - POSTGRESQL_HOST=postgresql
+      - POSTGRESQL_USER=bewcloud
+      - POSTGRESQL_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRESQL_DBNAME=bewcloud
+      - POSTGRESQL_PORT=5432
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - PASSWORD_SALT=${SERVICE_PASSWORD_64_SALT}
+    volumes:
+      - bewcloud-files:/app/data-files
+    configs:
+      - source: bewcloud-config
+        target: /app/bewcloud.config.ts
+    depends_on:
+      permissions:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+  permissions:
+    image: ghcr.io/bewcloud/bewcloud:v4.16.0
+    user: root
+    entrypoint: ["chown", "-R", "1993:1993", "/app/data-files"]
+    restart: "no"
+    volumes:
+      - bewcloud-files:/app/data-files
+  migrate:
+    image: ghcr.io/bewcloud/bewcloud:v4.16.0
+    command: ["task", "migrate-db"]
+    restart: "no"
+    environment:
+      - POSTGRESQL_HOST=postgresql
+      - POSTGRESQL_USER=bewcloud
+      - POSTGRESQL_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRESQL_DBNAME=bewcloud
+      - POSTGRESQL_PORT=5432
+    depends_on:
+      postgresql:
+        condition: service_healthy
+  postgresql:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=bewcloud
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=bewcloud
+    volumes:
+      - bewcloud-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+configs:
+  bewcloud-config:
+    content: |
+      import { Config, PartialDeep } from './lib/types.ts';
+
+      const config: PartialDeep<Config> = {
+        auth: {
+          baseUrl: '${SERVICE_URL_WEBSITE}',
+          allowSignups: false,
+          enableEmailVerification: false,
+          enableForeverSignup: true,
+          enableMultiFactor: false,
+        },
+        core: {
+          enabledApps: ['dashboard', 'files', 'news', 'notes', 'photos', 'expenses'],
+        },
+        contacts: {
+          enableCardDavServer: false,
+        },
+        calendar: {
+          enableCalDavServer: false,
+        },
+      };
+
+      export default config;

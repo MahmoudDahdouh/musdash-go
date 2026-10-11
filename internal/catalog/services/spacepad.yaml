@@ -1,0 +1,56 @@
+# name: Spacepad
+# about: A meeting room display that shows a room's occupancy and bookings from Google Calendar or Microsoft 365.
+# docs: https://github.com/magweter/spacepad/blob/main/docs/SETUP.md
+# website: https://spacepad.io
+# categories: productivity
+# source: musdash
+services:
+  app:
+    image: ghcr.io/magweter/spacepad:latest
+    environment:
+      - SERVICE_FQDN_APP_8080
+      - APP_URL=${SERVICE_URL_APP}
+      - APP_KEY=base64:${SERVICE_BASE64_APPKEY}
+      - PHP_OPCACHE_ENABLE=1
+      - AUTORUN_ENABLED=true
+      - AUTORUN_LARAVEL_MIGRATION=true
+      - MAIL_MAILER=${MAIL_MAILER:-log}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-hello@example.com}
+      - ALLOWED_LOGINS=${ALLOWED_LOGINS:-}
+      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-}
+      - AZURE_AD_CLIENT_SECRET=${AZURE_AD_CLIENT_SECRET:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      - spacepad-storage:/var/www/html/storage
+  scheduler:
+    image: ghcr.io/magweter/spacepad:latest
+    command: ["php", "/var/www/html/artisan", "schedule:work"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      - APP_URL=${SERVICE_URL_APP}
+      - APP_KEY=base64:${SERVICE_BASE64_APPKEY}
+      - PHP_OPCACHE_ENABLE=1
+      - MAIL_MAILER=${MAIL_MAILER:-log}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-hello@example.com}
+      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-}
+      - AZURE_AD_CLIENT_SECRET=${AZURE_AD_CLIENT_SECRET:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      - spacepad-storage:/var/www/html/storage
+    healthcheck:
+      test: ["CMD", "healthcheck-schedule"]
+      start_period: 10s
+volumes:
+  spacepad-storage:

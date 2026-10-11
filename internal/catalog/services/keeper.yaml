@@ -1,0 +1,23 @@
+# name: Keeper
+# about: A calendar sync service that mirrors events between Google, Outlook, CalDAV and ICS calendars.
+# docs: https://github.com/ridafkih/keeper.sh#self-hosted
+# website: https://www.keeper.sh/
+# categories: productivity
+# source: musdash
+services:
+  keeper:
+    image: ghcr.io/ridafkih/keeper-standalone:2
+    environment:
+      - SERVICE_FQDN_KEEPER_80
+      - BETTER_AUTH_URL=${SERVICE_URL_KEEPER}
+      - BETTER_AUTH_SECRET=${SERVICE_BASE64_KEEPERAUTH}
+      - ENCRYPTION_KEY=${SERVICE_BASE64_KEEPERCRYPT}
+      - TRUSTED_ORIGINS=${SERVICE_URL_KEEPER}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID:-}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET:-}
+    volumes:
+      - keeper-data:/var/lib/postgresql/data
+volumes:
+  keeper-data:

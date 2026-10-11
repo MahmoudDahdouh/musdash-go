@@ -1,0 +1,130 @@
+# name: Review Board
+# about: A web-based tool for reviewing source code, documentation and other files, with a nginx front end serving its static media.
+# docs: https://www.reviewboard.org/docs/manual/latest/admin/installation/docker/
+# website: https://www.reviewboard.org/
+# categories: devtools, git
+services:
+  reviewboard:
+    image: beanbag/reviewboard:latest
+    environment:
+      - DATABASE_TYPE=postgresql
+      - DATABASE_SERVER=db
+      - DATABASE_NAME=reviewboard
+      - DATABASE_USERNAME=reviewboard
+      - DATABASE_PASSWORD=${SERVICE_PASSWORD_DB}
+      - MEMCACHED_SERVER=memcached:11211
+      - DOMAIN=${SERVICE_FQDN_WEB}
+      - COMPANY=${REVIEWBOARD_COMPANY:-My Company}
+      - RB_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    command:
+      - /bin/bash
+      - -c
+      - |
+        (
+          until curl -fs http://127.0.0.1:8080/health/ >/dev/null; do sleep 5; done
+          rb-site manage /site shell -- -c "import os; from django.contrib.auth.models import User; u = User.objects.filter(username='admin').first(); (u and u.check_password('admin')) and (u.set_password(os.environ['RB_ADMIN_PASSWORD']), u.save())"
+        ) &
+        exec /serve.sh
+    volumes:
+      - reviewboard-site:/site
+    depends_on:
+      db:
+        condition: service_healthy
+      memcached:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/health/ || exit 1"]
+      interval: 10s
+      timeout: 10s
+      start_period: 60s
+      retries: 40
+  web:
+    image: nginx:alpine
+    environment:
+      - SERVICE_FQDN_WEB_80
+    configs:
+      - source: reviewboard-nginx
+        target: /etc/nginx/conf.d/default.conf
+    volumes:
+      - reviewboard-site:/var/www/reviewboard:ro
+    depends_on:
+      reviewboard:
+        condition: service_healthy
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=reviewboard
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB}
+      - POSTGRES_DB=reviewboard
+    volumes:
+      - reviewboard-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  memcached:
+    image: memcached:alpine
+    command: ["memcached", "-m", "128"]
+configs:
+  reviewboard-nginx:
+    content: |
+      map $$http_x_forwarded_proto $$rb_ssl {
+          default off;
+          https on;
+      }
+
+      upstream reviewboard {
+          server reviewboard:8080;
+      }
+
+      server {
+          listen 80;
+          server_name _;
+
+          root /var/www/reviewboard/htdocs;
+
+          location / {
+              proxy_pass http://reviewboard;
+              proxy_redirect off;
+
+              proxy_set_header Host $$host;
+              proxy_set_header X-Real-IP $$remote_addr;
+              proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $$http_x_forwarded_proto;
+              proxy_set_header X-Forwarded-Ssl $$rb_ssl;
+
+              client_max_body_size        10m;
+              client_body_buffer_size     128k;
+              proxy_connect_timeout       90;
+              proxy_send_timeout          90;
+              proxy_read_timeout          90;
+              proxy_headers_hash_max_size 512;
+              proxy_buffer_size           4k;
+              proxy_buffers               4 32k;
+              proxy_busy_buffers_size     64k;
+              proxy_temp_file_write_size  64k;
+          }
+
+          location /media/ {
+              alias /var/www/reviewboard/htdocs/media/;
+              expires max;
+              add_header Cache-Control public;
+          }
+
+          location /static/ {
+              alias /var/www/reviewboard/htdocs/static/;
+              expires max;
+              add_header Cache-Control public;
+          }
+
+          location /errordocs/ {
+              alias /var/www/reviewboard/htdocs/errordocs/;
+              expires 5d;
+          }
+
+          location /robots.txt {
+              alias /var/www/reviewboard/htdocs/robots.txt;
+              expires 5d;
+          }
+      }

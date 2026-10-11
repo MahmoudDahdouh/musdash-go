@@ -1,0 +1,29 @@
+# name: SolidInvoice
+# about: An invoicing and quoting application for small businesses and freelancers, set up through a web installer.
+# docs: https://solidinvoice.co/docs/installation-guide/docker
+# website: https://solidinvoice.co/
+# categories: finance, business
+services:
+  solidinvoice:
+    image: solidinvoice/solidinvoice:latest
+    environment:
+      - SERVICE_FQDN_SOLIDINVOICE_8765
+    volumes:
+      - app-data:/etc/solidinvoice
+    depends_on:
+      mysql:
+        condition: service_healthy
+  mysql:
+    image: mysql:8.4
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=solidinvoice
+      - MYSQL_USER=${SERVICE_USER_MYSQL}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_MYSQL}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 40

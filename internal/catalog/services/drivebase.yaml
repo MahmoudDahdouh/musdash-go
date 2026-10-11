@@ -1,0 +1,79 @@
+# name: Drivebase
+# about: A file manager in the browser that joins Google Drive, S3 and local storage in one place.
+# docs: https://github.com/drivebase/drivebase#quick-install
+# website: https://drivebase.io
+# categories: storage
+# source: musdash
+services:
+  drivebase:
+    image: ghcr.io/drivebase/drivebase:v4.0.0
+    environment:
+      - SERVICE_FQDN_DRIVEBASE_3000
+    configs:
+      - source: drivebase-config
+        target: /app/config.toml
+    volumes:
+      - drivebase-data:/app/data
+      - drivebase-logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      - POSTGRES_USER=drivebase
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=drivebase
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  drivebase-data:
+  drivebase-logs:
+  postgres-data:
+  redis-data:
+configs:
+  drivebase-config:
+    content: |
+      [server]
+      env = "prod"
+      port = 4000
+      host = "0.0.0.0"
+
+      [db]
+      url = "postgres://drivebase:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/drivebase?sslmode=disable"
+
+      [redis]
+      url = "redis://redis:6379/0"
+
+      [crypto]
+      masterKeyBase64 = "${SERVICE_BASE64_MASTERKEY}"
+
+      [auth]
+      betterAuthSecret = "${SERVICE_HEX_64_AUTH}"
+      baseUrl = "${SERVICE_URL_DRIVEBASE}"
+      trustedOrigins = []
+
+      [log]
+      level = "info"

@@ -1,0 +1,54 @@
+# name: TradeTally
+# about: A trading journal that imports trades from brokers and shows performance analytics.
+# docs: https://docs.tradetally.io/deployment/docker/
+# website: https://tradetally.io
+# categories: finance
+services:
+  tradetally:
+    image: potentialmidas/tradetally:latest
+    environment:
+      - SERVICE_FQDN_TRADETALLY_80
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${SERVICE_USER_POSTGRES}
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - DB_NAME=tradetally
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - FRONTEND_URL=${SERVICE_URL_TRADETALLY}
+      - CORS_ORIGINS=${SERVICE_URL_TRADETALLY}
+      - INSTANCE_URL=${SERVICE_URL_TRADETALLY}
+      - REGISTRATION_MODE=${TRADETALLY_REGISTRATION_MODE:-open}
+      - EMAIL_HOST=${TRADETALLY_EMAIL_HOST:-}
+      - EMAIL_PORT=${TRADETALLY_EMAIL_PORT:-587}
+      - EMAIL_USER=${TRADETALLY_EMAIL_USER:-}
+      - EMAIL_PASS=${TRADETALLY_EMAIL_PASS:-}
+      - EMAIL_FROM=${TRADETALLY_EMAIL_FROM:-}
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY:-}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - tradetally-logs:/app/backend/src/logs
+      - tradetally-data:/app/backend/src/data
+      - tradetally-uploads:/app/backend/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=tradetally
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

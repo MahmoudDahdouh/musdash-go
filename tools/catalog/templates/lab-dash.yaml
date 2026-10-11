@@ -1,0 +1,14 @@
+# name: Lab Dash
+# about: A homepage for a server with shortcuts, service health checks and widgets on a grid you arrange, edited by administrator accounts.
+# docs: https://github.com/AnthonyGress/lab-dash#installation
+# website: https://github.com/AnthonyGress/lab-dash
+# categories: home, monitoring
+services:
+  lab-dash:
+    image: ghcr.io/anthonygress/lab-dash:latest
+    environment:
+      - SERVICE_FQDN_LAB_DASH_2022
+      - SECRET=${SERVICE_BASE64_SECRET}
+    volumes:
+      - lab-dash-config:/config
+      - lab-dash-uploads:/app/public/uploads

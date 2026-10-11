@@ -1,0 +1,88 @@
+# name: Operately
+# about: A company platform for goals, projects, check-ins and team processes, with its own PostgreSQL database.
+# docs: https://operately.com/install
+# website: https://operately.com
+# categories: productivity, business
+services:
+  app:
+    image: operately/operately:1.9.0
+    environment:
+      - SERVICE_FQDN_APP_4000
+      - MIX_ENV=prod
+      - DB_HOST=db
+      - CERT_DB_DIR=/certs
+      - CERT_AUTO_RENEW=no
+      - CERT_DOMAIN=
+      - CERT_EMAILS=
+      - OPERATELY_VERSION=1.9.0
+      - OPERATELY_HOST=${SERVICE_FQDN_APP}
+      - OPERATELY_URL_SCHEME=https
+      - OPERATELY_BLOB_TOKEN_SECRET_KEY=${SERVICE_BASE64_BLOB}
+      - OPERATELY_INSTALLATION_ID=${SERVICE_HEX_INSTALLATION}
+      - SECRET_KEY_BASE=${SERVICE_HEX_64_SECRETKEYBASE}
+      - SYSTEM_SETTINGS_ENCRYPTION_KEYS=${SERVICE_HEX_64_SETTINGS}
+      - DB_USERNAME=operately
+      - POSTGRES_USER=operately
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - DATABASE_URL=ecto://operately:${SERVICE_PASSWORD_POSTGRES}@db/operately
+      - ALLOW_LOGIN_WITH_EMAIL=yes
+      - ALLOW_SIGNUP_WITH_EMAIL=yes
+      - OPERATELY_BEACON_ENABLED=false
+    volumes:
+      - media:/media
+      - certs:/certs
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:4000/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+  migrate:
+    image: operately/operately:1.9.0
+    command: sh -c "/opt/operately/bin/create_db && /opt/operately/bin/migrate"
+    restart: "no"
+    environment:
+      - MIX_ENV=prod
+      - DB_HOST=db
+      - CERT_DB_DIR=/certs
+      - CERT_AUTO_RENEW=no
+      - OPERATELY_VERSION=1.9.0
+      - OPERATELY_HOST=${SERVICE_FQDN_APP}
+      - OPERATELY_URL_SCHEME=https
+      - OPERATELY_BLOB_TOKEN_SECRET_KEY=${SERVICE_BASE64_BLOB}
+      - SECRET_KEY_BASE=${SERVICE_HEX_64_SECRETKEYBASE}
+      - SYSTEM_SETTINGS_ENCRYPTION_KEYS=${SERVICE_HEX_64_SETTINGS}
+      - DB_USERNAME=operately
+      - POSTGRES_USER=operately
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - DATABASE_URL=ecto://operately:${SERVICE_PASSWORD_POSTGRES}@db/operately
+    depends_on:
+      db:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+  setup:
+    image: operately/operately:1.9.0
+    user: root
+    command: sh -c "chown -R nobody:root /certs /media && chmod u=rwx /media"
+    restart: "no"
+    volumes:
+      - media:/media
+      - certs:/certs
+  db:
+    image: postgres:14.5
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_DB=operately-prod
+      - POSTGRES_USER=operately
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

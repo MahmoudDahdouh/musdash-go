@@ -1,0 +1,29 @@
+# name: MeshCentral
+# about: A web site for remote control and management of computers that run its agent.
+# docs: https://github.com/Ylianst/MeshCentral/tree/master/docker
+# website: https://meshcentral.com/
+# categories: networking, monitoring
+services:
+  meshcentral:
+    image: ghcr.io/ylianst/meshcentral:latest
+    environment:
+      - SERVICE_FQDN_MESHCENTRAL_443
+      - DYNAMIC_CONFIG=true
+      - HOSTNAME=${SERVICE_FQDN_MESHCENTRAL}
+      - PORT=443
+      - REDIR_PORT=80
+      - TLS_OFFLOAD=127.0.0.1
+      - TRUSTED_PROXY=all
+      - REVERSE_PROXY=${SERVICE_FQDN_MESHCENTRAL}
+      - REVERSE_PROXY_TLS_PORT=443
+      - ALLOW_NEW_ACCOUNTS=${ALLOW_NEW_ACCOUNTS:-false}
+    volumes:
+      - meshcentral-data:/opt/meshcentral/meshcentral-data
+      - meshcentral-files:/opt/meshcentral/meshcentral-files
+      - meshcentral-web:/opt/meshcentral/meshcentral-web
+      - meshcentral-backups:/opt/meshcentral/meshcentral-backups
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:443/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
