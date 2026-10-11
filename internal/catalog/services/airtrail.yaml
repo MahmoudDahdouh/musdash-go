@@ -1,0 +1,37 @@
+# name: AirTrail
+# about: A personal flight log that records your flights on a map and keeps statistics of where you have been.
+# docs: https://airtrail.johan.ohly.dk/docs/install/docker-compose
+# website: https://airtrail.johan.ohly.dk/
+# categories: home, productivity
+# source: musdash
+services:
+  airtrail:
+    image: johly/airtrail:latest
+    environment:
+      - SERVICE_FQDN_AIRTRAIL_3000
+      - ORIGIN=${SERVICE_URL_AIRTRAIL}
+      - ADDRESS_HEADER=X-Forwarded-For
+      - DB_URL=postgres://airtrail:${SERVICE_PASSWORD_POSTGRES}@db:5432/airtrail
+      - UPLOAD_LOCATION=/app/uploads
+      - BODY_SIZE_LIMIT=20M
+    volumes:
+      - airtrail-uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=airtrail
+      - POSTGRES_USER=airtrail
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - airtrail-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  airtrail-db:
+  airtrail-uploads:

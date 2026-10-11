@@ -1,0 +1,38 @@
+# name: Your Spotify
+# about: A dashboard of your own Spotify listening history, with statistics by artist, album and time.
+# docs: https://github.com/Yooooomi/your_spotify#installation
+# website: https://github.com/Yooooomi/your_spotify
+# categories: media, analytics
+# source: musdash
+services:
+  server:
+    image: yooooomi/your_spotify_server:latest
+    environment:
+      - SERVICE_FQDN_SERVER_8080
+      - API_ENDPOINT=${SERVICE_URL_SERVER}
+      - CLIENT_ENDPOINT=${SERVICE_URL_WEB}
+      - SPOTIFY_PUBLIC=${SPOTIFY_PUBLIC:?}
+      - SPOTIFY_SECRET=${SPOTIFY_SECRET:?}
+      - TIMEZONE=${TZ:-UTC}
+      - MONGO_ENDPOINT=mongodb://mongo:27017/your_spotify
+    depends_on:
+      mongo:
+        condition: service_healthy
+  web:
+    image: yooooomi/your_spotify_client:latest
+    environment:
+      - SERVICE_FQDN_WEB_3000
+      - API_ENDPOINT=${SERVICE_URL_SERVER}
+    depends_on:
+      - server
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+volumes:
+  mongo-data:

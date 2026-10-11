@@ -1,0 +1,81 @@
+# name: GeoPulse
+# about: A self-hosted location history tracker that turns GPS data into a timeline of stays, trips and statistics.
+# docs: https://geopulse.cc/docs/getting-started/deployment/docker-compose
+# website: https://geopulse.cc
+# categories: home, analytics
+services:
+  ui:
+    image: ghcr.io/tess1o/geopulse-ui:1.39.0
+    environment:
+      - SERVICE_FQDN_UI_80
+      - GEOPULSE_BACKEND_URL=http://backend:8080
+      - CLIENT_MAX_BODY_SIZE=1000M
+    depends_on:
+      backend:
+        condition: service_healthy
+  backend:
+    image: ghcr.io/tess1o/geopulse-backend:1.39.0-native
+    init: true
+    environment:
+      - GEOPULSE_UI_URL=${SERVICE_URL_UI}
+      - GEOPULSE_PUBLIC_BASE_URL=${SERVICE_URL_UI}
+      - GEOPULSE_CORS_ENABLED=false
+      - GEOPULSE_AUTH_SECURE_COOKIES=true
+      - GEOPULSE_ADMIN_EMAIL=${GEOPULSE_ADMIN_EMAIL:-}
+      - GEOPULSE_POSTGRES_HOST=postgres
+      - GEOPULSE_POSTGRES_PORT=5432
+      - GEOPULSE_POSTGRES_DB=geopulse
+      - GEOPULSE_POSTGRES_USERNAME=${SERVICE_USER_POSTGRES}
+      - GEOPULSE_POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - GEOPULSE_POSTGRES_URL=jdbc:postgresql://postgres:5432/geopulse
+    volumes:
+      - geopulse-keys:/app/keys
+      - geopulse-import:/data/geopulse-import
+      - geopulse-backups:/data/geopulse-backups
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+  keygen:
+    image: alpine:3.21
+    restart: "no"
+    volumes:
+      - geopulse-keys:/keys
+    command:
+      - sh
+      - -ec
+      - |
+        mkdir -p /keys
+        if [ ! -f /keys/jwt-private-key.pem ] || [ ! -f /keys/jwt-public-key.pem ]; then
+          command -v openssl >/dev/null 2>&1 || apk add --no-cache openssl
+          openssl genpkey -algorithm RSA -out /keys/jwt-private-key.pem
+          openssl rsa -pubout -in /keys/jwt-private-key.pem -out /keys/jwt-public-key.pem
+          chmod 644 /keys/jwt-private-key.pem /keys/jwt-public-key.pem
+        fi
+        if [ ! -f /keys/ai-encryption-key.txt ]; then
+          command -v openssl >/dev/null 2>&1 || apk add --no-cache openssl
+          openssl rand -base64 32 > /keys/ai-encryption-key.txt
+          chmod 644 /keys/ai-encryption-key.txt
+        fi
+  postgres:
+    image: postgis/postgis:18-3.6
+    shm_size: 256mb
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=geopulse
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    command: postgres -c timezone=UTC
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

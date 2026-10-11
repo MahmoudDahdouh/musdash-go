@@ -1,0 +1,23 @@
+# name: nodecast-tv
+# about: A web player for IPTV playlists and Xtream Codes sources, with live TV, a guide and optional transcoding.
+# docs: https://github.com/technomancer702/nodecast-tv#docker-deployment
+# website: https://github.com/technomancer702/nodecast-tv
+# categories: media
+# source: musdash
+services:
+  nodecast-tv:
+    image: ghcr.io/technomancer702/nodecast-tv:latest
+    environment:
+      - SERVICE_FQDN_NODECAST_TV_3000
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+    volumes:
+      - nodecast-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/login.html"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  nodecast-data:

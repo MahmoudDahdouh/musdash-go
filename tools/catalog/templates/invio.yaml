@@ -1,0 +1,30 @@
+# name: Invio
+# about: A small invoicing app for creating invoices and clients, sharing a link to each invoice and exporting PDFs.
+# docs: https://github.com/kittendevv/Invio/wiki/Quick-Start
+# website: https://github.com/kittendevv/Invio
+# categories: finance, business
+services:
+  invio:
+    image: ghcr.io/kittendevv/invio:latest
+    environment:
+      - SERVICE_FQDN_INVIO_8000
+      - ADMIN_USER=${SERVICE_USER_ADMIN}
+      - ADMIN_PASS=${SERVICE_PASSWORD_ADMIN}
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - ORIGIN=${SERVICE_URL_INVIO}
+      - DATABASE_PATH=/app/data/invio.db
+      - BACKEND_URL=http://localhost:3000
+      - RATE_LIMIT_TRUST_PROXY=true
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-}
+    volumes:
+      - invio-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -o /dev/null http://127.0.0.1:8000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

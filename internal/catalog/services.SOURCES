@@ -20,6 +20,7 @@ affinepro dokploy selfhst:affine.svg
 agent-zero dokploy selfhst:agent-zero.svg
 agentdvr dokploy selfhst:agent-dvr.svg
 airpipe musdash selfhst:airpipe.svg
+airtrail musdash selfhst:airtrail.svg
 akaunting dokploy selfhst:akaunting.svg
 alarik dokploy dokploy:alarik.png
 alexandrie coolify selfhst:alexandrie.svg
@@ -307,6 +308,7 @@ garage coolify selfhst:garage.svg
 garage-with-ui dokploy selfhst:garage.svg
 gathio musdash selfhst:gathio.svg
 gatus dokploy selfhst:gatus.svg
+geopulse musdash selfhst:geopulse.svg
 geoserver dokploy dokploy:logo.png
 getoutline coolify selfhst:outline.svg
 ghostfolio musdash selfhst:ghostfolio.svg
@@ -394,6 +396,7 @@ instantdb dokploy dokploy:instant.svg
 instatic dokploy dokploy:instatic.svg
 investbrain musdash selfhst:investbrain.svg
 invidious musdash selfhst:invidious.svg
+invio musdash selfhst:invio.svg
 invoice-ninja coolify selfhst:invoice-ninja.svg
 invoiceshelf dokploy selfhst:invoiceshelf.svg
 ipfs dokploy selfhst:ipfs.svg
@@ -570,6 +573,7 @@ nocobase coolify selfhst:nocobase.svg
 nocodb coolify selfhst:nocodb.svg
 node-red musdash selfhst:node-red.svg
 nodebb coolify selfhst:nodebb.svg
+nodecast-tv musdash selfhst:nodecast-tv.svg
 nodelink dokploy dokploy:nodelink.svg
 note-mark musdash selfhst:note-mark.svg
 notediscovery musdash selfhst:notediscovery.svg
@@ -735,6 +739,7 @@ redmine coolify selfhst:redmine.svg
 reef-dev-cluster dokploy dokploy:reef.svg
 reef-keygen dokploy dokploy:reef.svg
 reiverr musdash -
+relaticle musdash selfhst:relaticle.svg
 restreamer musdash selfhst:restreamer-dark.svg
 retroassembly musdash selfhst:retroassembly.svg
 review-board musdash selfhst:review-board.svg
@@ -950,6 +955,7 @@ wygiwyh musdash selfhst:wygiwyh.svg
 yamtrack coolify selfhst:yamtrack.svg
 yamtrack-with-postgresql coolify selfhst:yamtrack.svg
 yarr musdash selfhst:yarr.svg
+your-spotify musdash selfhst:your-spotify.svg
 yourls dokploy selfhst:yourls.svg
 youtarr musdash selfhst:youtarr.webp
 youtubedl-material musdash selfhst:youtube-dl.svg
