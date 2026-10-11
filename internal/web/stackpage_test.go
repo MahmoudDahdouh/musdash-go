@@ -63,7 +63,7 @@ func TestRestartOneContainerOfAStack(t *testing.T) {
 		_, page := a.get(base)
 		return html.UnescapeString(page)
 	}
-	if page := restart(front); !strings.Contains(page, "front-1 was restarted.") || len(restarts) != 1 || !strings.HasSuffix(restarts[0], " "+front) {
+	if page := restart(front); !strings.Contains(page, "front-1 was restarted.") || len(restarts) != 1 || restarts[0] != "docker restart "+front {
 		t.Fatalf("the restart ran %v", restarts)
 	}
 	// Names that are not the stack's own: another container, an option.

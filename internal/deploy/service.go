@@ -945,7 +945,9 @@ func (d *Deployer) RestartServiceContainer(ctx context.Context, id, container st
 		return ErrBusy
 	}
 	defer mu.Unlock()
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), d.dbStopGrace+time.Minute)
+	// Long enough for a container whose file gives it minutes to stop;
+	// most are given Docker's ten seconds.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 	defer cancel()
 	s, err := d.DB.ServiceByID(ctx, id)
 	if err != nil {
@@ -978,7 +980,7 @@ func (d *Deployer) RestartServiceContainer(ctx context.Context, id, container st
 		if c.State == "exited" && strings.HasPrefix(c.Status, "Exited (0)") {
 			return ErrFinished
 		}
-		return dk.Restart(ctx, container, d.dbStopGrace)
+		return dk.Restart(ctx, container)
 	}
 	return ErrNoSuchContainer
 }

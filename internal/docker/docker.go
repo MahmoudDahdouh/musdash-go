@@ -152,10 +152,11 @@ func (c Client) Stop(ctx context.Context, container string, grace time.Duration)
 	return ignoreMissing(err)
 }
 
-// Restart stops a container, killing it after the grace period, and starts
-// it again as it was made.
-func (c Client) Restart(ctx context.Context, container string, grace time.Duration) error {
-	_, err := c.R.Output(ctx, cmd("restart", "--time", strconv.Itoa(int(grace.Seconds())), container))
+// Restart stops a container and starts it again as it was made. How long
+// it is given to stop is the container's own setting: what its Compose
+// file says (stop_grace_period), or Docker's ten seconds.
+func (c Client) Restart(ctx context.Context, container string) error {
+	_, err := c.R.Output(ctx, cmd("restart", container))
 	return err
 }
 
