@@ -22,7 +22,7 @@ curl -fsSL https://github.com/MahmoudDahdouh/musdash-go/releases/latest/download
 The installer shows each step as it runs:
 
 1. **Checking this server**: that it is Linux with systemd, on a supported architecture.
-2. **Installing Docker and git**: only what is missing. Docker comes from Docker's own install script.
+2. **Installing Docker and git**: only what is missing. Docker comes from Docker's own install script. Where that script fails after it added Docker's repository (Ubuntu 20.04, whose repository lacks a plugin the script asks for), the engine, Compose and Buildx are installed from that repository.
 3. **Downloading musdash**: the binary for the server's architecture, checked against the release's checksums before it is used.
 4. **Creating the musdash user**: a system user that runs both services and is a member of the `docker` group.
 5. **Installing the services**: the binary at `/usr/local/bin/musdash` and two systemd services, `musdash-server` and `musdash-proxy`.

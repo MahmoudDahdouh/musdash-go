@@ -645,7 +645,15 @@ func TestInstallWithoutDocker(t *testing.T) {
 	}
 	e.write("get-docker.sh", "#!/bin/sh\necho \"Docker's script ran\" >/tmp/get-docker.ran\ncp /t/standin-docker /usr/local/bin/docker\ngroupadd docker\n")
 	e.write("standin-docker", standInDocker)
-	e.write("nodocker/curl", `#!/bin/sh
+	e.write("nodocker/curl", answersForDocker)
+	out := e.run(`export PATH=/t/nodocker:$PATH
+MUSDASH_RELEASE_URL=file:///t/v0.0.1 sh /install.sh; echo "rc=$?"
+echo "docker script:$(cat /tmp/get-docker.ran 2>&1)"` + facts)
+	has(t, out, "rc=0", "docker script: Docker's script ran", "[2/7] done: Docker 0.0.0, git 0.0.0", "health: ok", "(docker)")
+}
+
+// answersForDocker is a curl that gives /t/get-docker.sh for Docker's script.
+const answersForDocker = `#!/bin/sh
 for a in "$@"; do
   if [ "$a" = https://get.docker.com ]; then
     while [ $# -gt 0 ]; do
@@ -655,11 +663,47 @@ for a in "$@"; do
   fi
 done
 exec /usr/bin/curl "$@"
+`
+
+// Docker's script fails as a whole on a release whose repository lacks one
+// plugin (Ubuntu 20.04, docker-model-plugin). What musdash needs is then
+// installed from the repository that script added.
+func TestInstallWhenDockersScriptFails(t *testing.T) {
+	e := newInstallEnv(t, "v0.0.1")
+	if err := os.Remove(filepath.Join(e.dir, "stubs", "docker")); err != nil {
+		t.Fatal(err)
+	}
+	e.write("get-docker.sh", "#!/bin/sh\nmkdir -p /etc/apt/sources.list.d\necho deb >/etc/apt/sources.list.d/docker.list\necho 'E: Unable to locate package docker-model-plugin'\nexit 100\n")
+	e.write("standin-docker", standInDocker)
+	e.write("nodocker/curl", answersForDocker)
+	e.write("nodocker/apt-get", `#!/bin/sh
+echo "$*" >>/tmp/apt.log
+case "$*" in *docker-ce*) cp /t/standin-docker /usr/local/bin/docker; groupadd docker ;; esac
 `)
 	out := e.run(`export PATH=/t/nodocker:$PATH
 MUSDASH_RELEASE_URL=file:///t/v0.0.1 sh /install.sh; echo "rc=$?"
-echo "docker script: $(cat /tmp/get-docker.ran 2>&1)"` + facts)
-	has(t, out, "rc=0", "docker script: Docker's script ran", "[2/7] done: Docker 0.0.0, git 0.0.0", "health: ok", "(docker)")
+echo "apt: $(cat /tmp/apt.log 2>&1)"` + facts)
+	has(t, out, "rc=0", "[2/7] done: Docker 0.0.0, git 0.0.0", "health: ok",
+		"install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin\n")
+}
+
+// Without the repository Docker's script adds, nothing else is tried: the
+// distribution's own packages are not what musdash was tested with.
+func TestInstallWhenDockersScriptFailsEarly(t *testing.T) {
+	e := newInstallEnv(t, "v0.0.1")
+	if err := os.Remove(filepath.Join(e.dir, "stubs", "docker")); err != nil {
+		t.Fatal(err)
+	}
+	e.write("get-docker.sh", "#!/bin/sh\nexit 1\n")
+	e.write("nodocker/curl", answersForDocker)
+	e.write("nodocker/apt-get", "#!/bin/sh\necho \"$*\" >>/tmp/apt.log\n")
+	out := e.run(`export PATH=/t/nodocker:$PATH
+MUSDASH_RELEASE_URL=file:///t/v0.0.1 sh /install.sh; echo "rc=$?"
+echo "apt: $(cat /tmp/apt.log 2>&1)"`)
+	has(t, out, "rc=1", "[2/7] failed", "Install Docker by hand")
+	if strings.Contains(out, "docker-ce") {
+		t.Errorf("packages were installed without Docker's repository:\n%s", out)
+	}
 }
 
 func TestInstallLocalBinary(t *testing.T) {

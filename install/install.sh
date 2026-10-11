@@ -593,6 +593,28 @@ install_git() {
   fi
 }
 
+# Docker's script installs in one command the engine and every plugin it
+# knows, and fails as a whole when the repository of an older release (Ubuntu
+# 20.04) has not one of them (docker-model-plugin). By then it has added its
+# repository, which is what this asks for: the engine, and the two plugins
+# musdash runs. Without that repository nothing is tried, since the
+# distribution's own packages have other names and no Compose.
+docker_core() {
+  dc_pkgs="docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin"
+  if command -v apt-get >/dev/null 2>&1 && [ -f /etc/apt/sources.list.d/docker.list ]; then
+    # shellcheck disable=SC2086
+    DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -y $dc_pkgs
+  elif command -v dnf >/dev/null 2>&1 && [ -f /etc/yum.repos.d/docker-ce.repo ]; then
+    # shellcheck disable=SC2086
+    dnf install -y $dc_pkgs
+  elif command -v yum >/dev/null 2>&1 && [ -f /etc/yum.repos.d/docker-ce.repo ]; then
+    # shellcheck disable=SC2086
+    yum install -y $dc_pkgs
+  else
+    return 1
+  fi
+}
+
 step_docker() {
   if ! command -v docker >/dev/null 2>&1; then
     echo "Docker is not installed: running Docker's own install script (https://get.docker.com)."
@@ -601,9 +623,12 @@ step_docker() {
       return 1
     }
     sh "$TMP/get-docker.sh" || {
-      echo "Docker's install script failed. Install Docker by hand"
-      echo "(https://docs.docker.com/engine/install/) and run this again."
-      return 1
+      echo "Docker's install script failed: installing only the engine, Compose and Buildx from Docker's repository."
+      docker_core || {
+        echo "Docker's install script failed. Install Docker by hand"
+        echo "(https://docs.docker.com/engine/install/) and run this again."
+        return 1
+      }
     }
     command -v docker >/dev/null 2>&1 || {
       echo "Docker's install script ended, and there is still no docker command."
