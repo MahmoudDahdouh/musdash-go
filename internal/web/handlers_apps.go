@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,10 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+// An app's, database's or service's name is its address on the environment's
+// Docker network, so it is restricted to a DNS-label-safe form.
+var appNameRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
 
 const appNameRule = "Use lowercase letters, numbers and hyphens, up to 32 characters."
 
@@ -311,7 +316,7 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 	f.Set("port", r.PostFormValue("port"))
 	f.Set("domain", rawDomain)
 
-	if !envNameRE.MatchString(newApp.Name) {
+	if !appNameRE.MatchString(newApp.Name) {
 		f.Fail("name", appNameRule)
 	}
 	if src == db.SourceGit {
@@ -884,7 +889,7 @@ func (s *Server) appSettingsSave(w http.ResponseWriter, r *http.Request) {
 	}
 	app := v.App
 	app.Name = strings.ToLower(form("name"))
-	if !envNameRE.MatchString(app.Name) {
+	if !appNameRE.MatchString(app.Name) {
 		f.Fail("name", appNameRule)
 	}
 	// A Git app's image is whatever its last build produced.

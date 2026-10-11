@@ -424,7 +424,7 @@ func ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, f ui.Form) tem
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens.", ui.InputProps{ID: "env-name", Name: "name", Placeholder: "staging", Mono: true, Required: true, Attrs: templ.Attributes{"maxlength": "32"}}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.TextField(f, "Name", "", ui.InputProps{ID: "env-name", Name: "name", Placeholder: "Staging", Required: true, Attrs: templ.Attributes{"maxlength": "60"}}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -705,7 +705,7 @@ func EnvironmentSettings(s ui.Shell, p db.Project, env db.Environment, only bool
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = ui.KeyValue([]ui.KVItem{{Key: "Name", Value: env.Name, Mono: true}}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.KeyValue([]ui.KVItem{{Key: "Name", Value: env.Name}}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -725,7 +725,7 @@ func EnvironmentSettings(s ui.Shell, p db.Project, env db.Environment, only bool
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens.", ui.InputProps{ID: "env-name", Name: "name", Value: env.Name, Mono: true, Required: true, Attrs: templ.Attributes{"maxlength": "32"}}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.TextField(f, "Name", "", ui.InputProps{ID: "env-name", Name: "name", Value: env.Name, Required: true, Attrs: templ.Attributes{"maxlength": "60"}}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -761,20 +761,20 @@ func EnvironmentSettings(s ui.Shell, p db.Project, env db.Environment, only bool
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\"><span class=\"min-w-0 flex-1\">Variables of <span class=\"fact\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\"><span class=\"min-w-0 flex-1\">Variables of ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(env.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/projects.templ`, Line: 159, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/projects.templ`, Line: 159, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</span></span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

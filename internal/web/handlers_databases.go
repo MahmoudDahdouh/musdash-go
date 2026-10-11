@@ -118,7 +118,7 @@ func (s *Server) databaseCreate(w http.ResponseWriter, r *http.Request) {
 	f.Set("name", m.Name)
 	f.Set("image", m.Image)
 	f.Set("public", r.PostFormValue("public"))
-	if !envNameRE.MatchString(m.Name) {
+	if !appNameRE.MatchString(m.Name) {
 		f.Fail("name", appNameRule)
 	}
 	if !docker.ValidImage(m.Image) {

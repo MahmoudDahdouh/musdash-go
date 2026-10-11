@@ -175,7 +175,7 @@ func TestSuggestedAppName(t *testing.T) {
 		if got != want {
 			t.Errorf("SuggestName(%q) = %q, want %q", full, got, want)
 		}
-		if got != "" && !envNameRE.MatchString(got) {
+		if got != "" && !appNameRE.MatchString(got) {
 			t.Errorf("SuggestName(%q) = %q, which no app may be called", full, got)
 		}
 	}

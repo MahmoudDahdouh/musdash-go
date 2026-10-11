@@ -92,7 +92,7 @@ templ ProjectShow(s ui.Shell, p db.Project, envs []db.Environment, f ui.Form) {
 			}
 		}
 		@ui.FormDialog(ui.DialogProps{ID: "new-environment", Title: "Add environment", Description: "It starts empty, with a network of its own: what runs in it does not see the other environments.", Action: "/projects/" + p.ID + "/environments", CSRF: s.CSRF, Submit: "Add environment", Open: !f.OK()}) {
-			@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens.", ui.InputProps{ID: "env-name", Name: "name", Placeholder: "staging", Mono: true, Required: true, Attrs: templ.Attributes{"maxlength": "32"}})
+			@ui.TextField(f, "Name", "", ui.InputProps{ID: "env-name", Name: "name", Placeholder: "Staging", Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
 		}
 	}
 }
@@ -141,11 +141,11 @@ templ EnvironmentSettings(s ui.Shell, p db.Project, env db.Environment, only boo
 					}
 				</div>
 				<div class="card-body">
-					@ui.KeyValue([]ui.KVItem{{Key: "Name", Value: env.Name, Mono: true}})
+					@ui.KeyValue([]ui.KVItem{{Key: "Name", Value: env.Name}})
 				</div>
 			</section>
 			@ui.FormDialog(ui.DialogProps{ID: "rename-environment", Title: "Rename environment", Description: "Only the name changes. What runs in the environment is not touched, and keeps its addresses.", Action: EnvPath(p.ID, env.ID) + "/settings", CSRF: s.CSRF, Submit: "Rename", Open: !f.OK()}) {
-				@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens.", ui.InputProps{ID: "env-name", Name: "name", Value: env.Name, Mono: true, Required: true, Attrs: templ.Attributes{"maxlength": "32"}})
+				@ui.TextField(f, "Name", "", ui.InputProps{ID: "env-name", Name: "name", Value: env.Name, Required: true, Attrs: templ.Attributes{"maxlength": "60"}})
 			}
 			<section class="card" id="variables">
 				<div class="card-head">
@@ -156,7 +156,7 @@ templ EnvironmentSettings(s ui.Shell, p db.Project, env db.Environment, only boo
 				</div>
 				<div class="rows">
 					<a class="row" href={ templ.SafeURL(EnvPath(p.ID, env.ID) + "/variables") }>
-						<span class="min-w-0 flex-1">Variables of <span class="fact">{ env.Name }</span></span>
+						<span class="min-w-0 flex-1">Variables of { env.Name }</span>
 						@ui.Icon("chevron-right", "text-ink-mute")
 					</a>
 				</div>

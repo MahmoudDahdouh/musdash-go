@@ -587,19 +587,21 @@ func TestProjectsAndEnvironments(t *testing.T) {
 	wantRedirect(t, res, settings)
 
 	// Refused, Add environment comes back open on the project's page.
-	res, body = a.post(path, path+"/environments", url.Values{"name": {"Not Valid!"}})
+	res, body = a.post(path, path+"/environments", url.Values{"name": {strings.Repeat("é", 61)}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
 	if strings.Count(body, envNameRule) != 1 || !regexp.MustCompile(`id="new-environment"[^>]*data-autoopen`).MatchString(body) || !strings.Contains(body, production) {
 		t.Fatal("a bad environment name: not one error, no open dialog, or not the project's page")
 	}
-	// A new environment is where the browser goes next.
-	res, _ = a.post(path, path+"/environments", url.Values{"name": {"Staging"}})
+	// A new environment is where the browser goes next. Its name is free
+	// text, kept as it was typed.
+	res, _ = a.post(path, path+"/environments", url.Values{"name": {" Staging EU! "}})
 	if to := res.Header.Get("Location"); res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(to, path+"/env/") || to == production {
 		t.Fatalf("got %d → %q, want 303 into the new environment", res.StatusCode, to)
 	}
-	res, body = a.post(path, path+"/environments", url.Values{"name": {"staging"}})
+	// Capitals do not make another name.
+	res, body = a.post(path, path+"/environments", url.Values{"name": {"staging eu!"}})
 	wantStatus(t, res, http.StatusUnprocessableEntity)
-	if !strings.Contains(body, "already has an environment called staging") {
+	if !strings.Contains(body, envNameTaken) {
 		t.Fatal("no error for a duplicate environment")
 	}
 
@@ -610,7 +612,7 @@ func TestProjectsAndEnvironments(t *testing.T) {
 		t.Fatalf("%d environments, want 2", len(envs))
 	}
 	// Creation order is kept even for rows made within the same second.
-	if envs[0].Name != "production" || envs[1].Name != "staging" {
+	if envs[0].Name != "production" || envs[1].Name != "Staging EU!" {
 		t.Fatalf("environment order: %s, %s", envs[0].Name, envs[1].Name)
 	}
 	staging := path + "/env/" + envs[1].ID
@@ -634,18 +636,22 @@ func TestProjectsAndEnvironments(t *testing.T) {
 		}
 	}
 	// Renaming holds a name to the rule a new one is held to.
-	for name, want := range map[string]string{"Not Valid!": envNameRule, "production": "already has an environment called production"} {
+	for name, want := range map[string]string{"": envNameRule, "two\nlines": notShown, "Production": envNameTaken} {
 		res, body = a.post(staging+"/settings", staging+"/settings", url.Values{"name": {name}})
 		wantStatus(t, res, http.StatusUnprocessableEntity)
 		if !strings.Contains(body, want) || !strings.Contains(body, "data-autoopen") {
 			t.Errorf("renaming to %q: no %q in an open dialog", name, want)
 		}
 	}
-	res, _ = a.post(staging+"/settings", staging+"/settings", url.Values{"name": {" Preview "}})
-	wantRedirect(t, res, staging+"/settings")
-	if env, _ := a.db.Environment(ctx, firstTeam(t, a), envs[1].ID); env.Name != "preview" {
-		t.Fatalf("the environment is called %q after renaming", env.Name)
+	for _, name := range []string{" Preview ", "preview", strings.Repeat("ب", 60)} {
+		res, _ = a.post(staging+"/settings", staging+"/settings", url.Values{"name": {name}})
+		wantRedirect(t, res, staging+"/settings")
+		if env, _ := a.db.Environment(ctx, firstTeam(t, a), envs[1].ID); env.Name != strings.TrimSpace(name) {
+			t.Fatalf("the environment is called %q after renaming to %q", env.Name, name)
+		}
 	}
+	res, _ = a.post(staging+"/settings", staging+"/settings", url.Values{"name": {"Preview"}})
+	wantRedirect(t, res, staging+"/settings")
 	// An environment of another project is not renamed through this one.
 	other, otherEnv := a.project("Blog")
 	res, _ = a.post(staging+"/settings", "/projects/"+other+"/env/"+envs[1].ID+"/settings", url.Values{"name": {"mine"}})
@@ -659,7 +665,7 @@ func TestProjectsAndEnvironments(t *testing.T) {
 		t.Fatal("environment deleted without confirmation")
 	}
 	// Deleted, the person is on the project, which has an environment left.
-	res, _ = a.post(staging+"/settings", staging+"/delete", url.Values{"confirm": {"preview"}})
+	res, _ = a.post(staging+"/settings", staging+"/delete", url.Values{"confirm": {"Preview"}})
 	wantRedirect(t, res, path)
 	if envs, _ := a.db.ListEnvironments(ctx, projectID); len(envs) != 1 {
 		t.Fatal("environment not deleted")

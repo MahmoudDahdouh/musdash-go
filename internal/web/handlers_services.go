@@ -287,7 +287,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 	f.Set("name", svc.Name)
 	f.Set("connect_env", r.PostFormValue("connect_env"))
 	f.Set("deploy", r.PostFormValue("deploy"))
-	if !envNameRE.MatchString(svc.Name) {
+	if !appNameRE.MatchString(svc.Name) {
 		f.Fail("name", appNameRule)
 	}
 	vars := map[string]string{}
@@ -402,7 +402,7 @@ func (s *Server) stackFromGitForm(w http.ResponseWriter, r *http.Request, p db.P
 	f.Set("name", svc.Name)
 	f.Set("build_pack", pages.PackCompose)
 	f.Set("connect_env", r.PostFormValue("connect_env"))
-	if !envNameRE.MatchString(svc.Name) {
+	if !appNameRE.MatchString(svc.Name) {
 		f.Fail("name", appNameRule)
 	}
 	var repo db.App

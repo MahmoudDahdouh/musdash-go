@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/secret"
 )
@@ -133,23 +134,66 @@ func (d *DB) Environment(ctx context.Context, teamID, id string) (Environment, e
 	return e, notFound(err)
 }
 
+// ErrEnvironmentExists is returned when a project already has an
+// environment of the name, whatever its capitals.
+var ErrEnvironmentExists = errors.New("the project already has an environment with this name")
+
+// environmentNameFree fails with ErrEnvironmentExists when an environment
+// of the project other than except has the name. A name is free text, and
+// two that differ only in their capitals could not be told apart in a
+// list. They are compared here, since SQLite folds ASCII only and the
+// table's own rule is for the exact text.
+func environmentNameFree(ctx context.Context, tx *sql.Tx, projectID, name, except string) error {
+	rows, err := tx.QueryContext(ctx, `SELECT name FROM environments WHERE project_id = ? AND id <> ?`, projectID, except)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var has string
+		if err := rows.Scan(&has); err != nil {
+			return err
+		}
+		if strings.EqualFold(has, name) {
+			return ErrEnvironmentExists
+		}
+	}
+	return rows.Err()
+}
+
 // CreateEnvironment adds an environment to a project the team owns.
 func (d *DB) CreateEnvironment(ctx context.Context, teamID, projectID, name string) (Environment, error) {
 	if _, err := d.Project(ctx, teamID, projectID); err != nil {
 		return Environment{}, err
 	}
 	e := Environment{ID: secret.RandomID(), ProjectID: projectID, Name: name, CreatedAt: now()}
-	_, err := d.ExecContext(ctx, `INSERT INTO environments (id, project_id, name, created_at) VALUES (?, ?, ?, ?)`,
-		e.ID, e.ProjectID, e.Name, e.CreatedAt)
+	err := d.Tx(ctx, func(tx *sql.Tx) error {
+		if err := environmentNameFree(ctx, tx, projectID, name, ""); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO environments (id, project_id, name, created_at) VALUES (?, ?, ?, ?)`,
+			e.ID, e.ProjectID, e.Name, e.CreatedAt)
+		return err
+	})
 	return e, err
 }
 
 // RenameEnvironment gives an environment another name. The name is a
 // label: its network and everything of it on a server are named by its id.
-// A name another environment of the project has is refused by the table.
+// A name another environment of the project has is refused.
 func (d *DB) RenameEnvironment(ctx context.Context, teamID, id, name string) error {
-	return affected(d.ExecContext(ctx, `UPDATE environments SET name = ? WHERE id = ?
-		AND project_id IN (SELECT id FROM projects WHERE team_id = ?)`, name, id, teamID))
+	return d.Tx(ctx, func(tx *sql.Tx) error {
+		var projectID string
+		err := tx.QueryRowContext(ctx, `SELECT e.project_id FROM environments e JOIN projects p ON p.id = e.project_id
+			WHERE e.id = ? AND p.team_id = ?`, id, teamID).Scan(&projectID)
+		if err != nil {
+			return notFound(err)
+		}
+		if err := environmentNameFree(ctx, tx, projectID, name, id); err != nil {
+			return err
+		}
+		return affected(tx.ExecContext(ctx, `UPDATE environments SET name = ? WHERE id = ?`, name, id))
+	})
 }
 
 // EnvironmentUsesServer reports whether an app, a database or a service of

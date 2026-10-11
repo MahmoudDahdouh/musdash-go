@@ -220,8 +220,30 @@ func TestEnvironmentRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.CreateEnvironment(ctx, team, p.ID, "staging"); !IsUnique(err) {
-		t.Fatalf("duplicate name: want unique violation, got %v", err)
+	// A name is taken whatever its capitals, in ASCII or not.
+	for _, name := range []string{"staging", "Staging", "PRODUCTION"} {
+		if _, err := d.CreateEnvironment(ctx, team, p.ID, name); !errors.Is(err, ErrEnvironmentExists) {
+			t.Fatalf("a second %q: want ErrEnvironmentExists, got %v", name, err)
+		}
+	}
+	if err := d.RenameEnvironment(ctx, team, staging.ID, "Production"); !errors.Is(err, ErrEnvironmentExists) {
+		t.Fatalf("renaming to another's name: want ErrEnvironmentExists, got %v", err)
+	}
+	// Free text is kept as it is, and an environment may take its own name
+	// with other capitals.
+	for _, name := range []string{"Staging", "تجربة", "Élan 2", "élan 2"} {
+		if err := d.RenameEnvironment(ctx, team, staging.ID, name); err != nil {
+			t.Fatalf("renaming to %q: %v", name, err)
+		}
+		if got, _ := d.Environment(ctx, team, staging.ID); got.Name != name {
+			t.Fatalf("the environment is called %q, want %q", got.Name, name)
+		}
+	}
+	if _, err := d.CreateEnvironment(ctx, team, p.ID, "ÉLAN 2"); !errors.Is(err, ErrEnvironmentExists) {
+		t.Fatalf("a name in other capitals: want ErrEnvironmentExists, got %v", err)
+	}
+	if err := d.RenameEnvironment(ctx, "teamb", staging.ID, "theirs"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("another team renaming: want ErrNotFound, got %v", err)
 	}
 	if err := d.DeleteEnvironment(ctx, team, staging.ID); err != nil {
 		t.Fatal(err)

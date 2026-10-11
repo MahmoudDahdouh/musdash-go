@@ -3,19 +3,29 @@ package web
 import (
 	"errors"
 	"net/http"
-	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/pages"
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
 
-// Environment names end up in container names and generated domains, so
-// they are restricted to a DNS-label-safe form.
-var envNameRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
+const envNameRule = "Enter a name, up to 60 characters."
 
-const envNameRule = "Use lowercase letters, numbers and hyphens, up to 32 characters."
+const envNameTaken = "This project already has an environment with this name."
+
+// environmentName reads the name of an environment from a form. It is a
+// label and nothing else: the environment's network and everything of it on
+// a server are named by its id, so the name is kept as it was typed.
+func environmentName(r *http.Request) (name string, f ui.Form) {
+	name = strings.TrimSpace(r.PostFormValue("name"))
+	f.Set("name", name)
+	if name == "" || utf8.RuneCountInString(name) > 60 || !plainText(name) {
+		f.Fail("name", labelProblem(name, envNameRule))
+	}
+	return name, f
+}
 
 // projectForm reads and validates the name and description fields.
 func projectForm(r *http.Request) (name, description string, f ui.Form) {
@@ -174,17 +184,13 @@ func (s *Server) environmentCreate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var f ui.Form
-	name := strings.ToLower(strings.TrimSpace(r.PostFormValue("name")))
-	f.Set("name", name)
+	name, f := environmentName(r)
 	var env db.Environment
-	if !envNameRE.MatchString(name) {
-		f.Fail("name", envNameRule)
-	} else {
+	if f.OK() {
 		var err error
 		env, err = s.DB.CreateEnvironment(r.Context(), p.TeamID, p.ID, name)
-		if db.IsUnique(err) {
-			f.Fail("name", "This project already has an environment called "+name+".")
+		if errors.Is(err, db.ErrEnvironmentExists) || db.IsUnique(err) {
+			f.Fail("name", envNameTaken)
 		} else if err != nil {
 			s.fail(w, r, err)
 			return
@@ -254,21 +260,18 @@ func (s *Server) environmentRename(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var f ui.Form
-	name := strings.ToLower(strings.TrimSpace(r.PostFormValue("name")))
-	f.Set("name", name)
+	name, f := environmentName(r)
 	back := pages.EnvPath(p.ID, env.ID) + "/settings"
 	switch {
-	case !envNameRE.MatchString(name):
-		f.Fail("name", envNameRule)
+	case !f.OK():
 	case name == env.Name:
 		setFlash(w, r, ui.ToneOK, "Nothing changed.")
 		redirect(w, r, back)
 		return
 	default:
 		err := s.DB.RenameEnvironment(r.Context(), p.TeamID, env.ID, name)
-		if db.IsUnique(err) {
-			f.Fail("name", "This project already has an environment called "+name+".")
+		if errors.Is(err, db.ErrEnvironmentExists) || db.IsUnique(err) {
+			f.Fail("name", envNameTaken)
 		} else if err != nil {
 			s.fail(w, r, err)
 			return
