@@ -925,11 +925,11 @@ func TestPullRequestsThroughAGitHubApp(t *testing.T) {
 
 	// A preview has no settings of its own to change.
 	token := a.appPath(child.ID)
-	for _, post := range []string{"/environment", "/settings", "/domains", "/storage", "/source", "/webhook-secret", "/deploy-token", "/tasks", "/build-server"} {
+	for _, post := range []string{"/environment", "/environment/vars", "/environment/vars/X", "/environment/vars/X/delete", "/settings", "/domains", "/storage", "/source", "/webhook-secret", "/deploy-token", "/tasks", "/build-server"} {
 		res, _ := a.post(token, a.appPath(child.ID)+post, url.Values{"vars": {"X=1"}, "host": {"x.example.com"}, "name": {"renamed"}})
 		wantRedirect(t, res, a.appPath(child.ID))
 	}
-	for _, get := range []string{"/environment", "/environment/values", "/environment/edit", "/storage", "/tasks", "/webhook-secret"} {
+	for _, get := range []string{"/environment", "/environment/values", "/environment/edit", "/environment/vars/X", "/environment/vars/X/edit", "/storage", "/tasks", "/webhook-secret"} {
 		if res, _ := a.get(a.appPath(child.ID) + get); res.StatusCode != http.StatusSeeOther {
 			t.Errorf("GET %s on a preview: %d", get, res.StatusCode)
 		}

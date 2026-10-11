@@ -25,10 +25,28 @@
     if (e.target instanceof HTMLDialogElement && e.target.open) e.target.close();
   });
   // A dialog marked data-autoopen is one the server sent back open: its form
-  // was refused, and the person is put at the first field that is wrong.
-  document.querySelectorAll("dialog[data-autoopen]").forEach((dialog) => {
-    dialog.showModal();
-    dialog.querySelector("[aria-invalid=true]")?.focus();
+  // was refused, and the person is put at the first field that is wrong. Or
+  // the page asked for it (the editor of one variable, which holds a value
+  // the page does not) and it arrived in an element marked data-fetched.
+  // Such a dialog leaves the page when it closes: what it held is not kept
+  // behind the page.
+  const openSent = (root) =>
+    root.querySelectorAll?.("dialog[data-autoopen]").forEach((dialog) => {
+      if (dialog.open) return;
+      dialog.showModal();
+      dialog.querySelector("[aria-invalid=true]")?.focus();
+      if (dialog.closest("[data-fetched]")) dialog.addEventListener("close", () => dialog.remove());
+    });
+  openSent(document);
+  document.addEventListener("htmx:afterSettle", (e) => openSent(e.target));
+
+  // A list of variables (.vars) has Show all and Hide all, and the card
+  // replaces itself when one is pressed. The button that was pressed is
+  // gone with the old card, and of the two in the new one only the other
+  // may be left to see: the focus goes to the first that is.
+  document.addEventListener("htmx:afterSettle", (e) => {
+    if (!e.target.matches?.(".vars") || document.activeElement !== document.body) return;
+    [...e.target.querySelectorAll(".vars-show .btn, .vars-hide .btn")].find((b) => b.offsetParent)?.focus();
   });
 
   // A page that answers a POST and shows what it made (a token, a key) says

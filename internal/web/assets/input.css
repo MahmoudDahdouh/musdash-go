@@ -1078,6 +1078,43 @@
   .table tbody tr:hover {
     background: var(--color-sunk);
   }
+  /* A list of variables (.vars) shows and hides a value a row at a time,
+     so only its rows know what there is to do: Show all while one of them
+     is hidden, Hide all while one is shown. Both buttons are in the card. */
+  .vars:not(:has([data-var]:not([data-shown]))) .vars-show,
+  .vars:not(:has([data-var][data-shown])) .vars-hide {
+    display: none;
+  }
+  /* A value can be long and its row several lines: the name and the
+     buttons stay at the first. The text cells get the padding that puts
+     their first line level with the row's buttons, which are taller under
+     a finger. */
+  .vars {
+    --var-control: var(--size-control-sm);
+  }
+  @media (pointer: coarse) {
+    .vars {
+      --var-control: 2.75rem;
+    }
+  }
+  .vars .table td {
+    vertical-align: top;
+  }
+  .vars .var-name,
+  .vars .var-value {
+    padding-block: calc(10px + (var(--var-control) - 1lh) / 2);
+  }
+  .vars .var-value {
+    width: 100%;
+  }
+  /* A card can hold two lists (an app from Git's). Names of the usual
+     length then leave their values at one edge in both. */
+  .vars .var-name {
+    min-width: 12rem;
+  }
+  .vars .var-actions {
+    white-space: nowrap;
+  }
   /* A row that holds what was found out about the row above it (a check's
      answer), over the whole width. Empty, it is the line between two rows
      and nothing else; the row above gives its own line up to it. */

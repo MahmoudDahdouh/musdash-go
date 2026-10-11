@@ -107,3 +107,51 @@ func (d *DB) ReplaceSharedVars(ctx context.Context, teamID, scope, scopeID strin
 		return nil
 	})
 }
+
+// SharedVar returns one variable of a scope, its value still sealed. Like
+// every query here it filters on the team: a scope id of another team's
+// project, environment or server finds nothing.
+func (d *DB) SharedVar(ctx context.Context, teamID, scope, scopeID, key string) (EnvVar, error) {
+	v := EnvVar{Key: key}
+	err := d.QueryRowContext(ctx, `SELECT value FROM shared_vars WHERE team_id = ? AND scope = ? AND scope_id = ? AND key = ?`,
+		teamID, scope, scopeID, key).Scan(&v.Value)
+	return v, notFound(err)
+}
+
+// AddSharedVar gives a scope one more variable, unless it has limit of
+// them already; the count and the insert are one transaction. The value
+// must already be sealed. Call it with a scope id a loader returned for
+// the team: the row is written under both.
+func (d *DB) AddSharedVar(ctx context.Context, teamID, scope, scopeID string, v EnvVar, limit int) error {
+	return d.Tx(ctx, func(tx *sql.Tx) error {
+		var n int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM shared_vars WHERE team_id = ? AND scope = ? AND scope_id = ?`, teamID, scope, scopeID).Scan(&n); err != nil {
+			return err
+		}
+		if n >= limit {
+			return ErrTooManyVars
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO shared_vars (id, team_id, scope, scope_id, key, value) VALUES (?, ?, ?, ?, ?, ?)`,
+			secret.RandomID(), teamID, scope, scopeID, v.Key, v.Value)
+		if IsUnique(err) {
+			return ErrVarExists
+		}
+		return err
+	})
+}
+
+// UpdateSharedVar changes the variable a scope has under key into v, which
+// may give it another name. The value must already be sealed.
+func (d *DB) UpdateSharedVar(ctx context.Context, teamID, scope, scopeID, key string, v EnvVar) error {
+	res, err := d.ExecContext(ctx, `UPDATE shared_vars SET key = ?, value = ? WHERE team_id = ? AND scope = ? AND scope_id = ? AND key = ?`,
+		v.Key, v.Value, teamID, scope, scopeID, key)
+	if IsUnique(err) {
+		return ErrVarExists
+	}
+	return affected(res, err)
+}
+
+// DeleteSharedVar removes one variable of a scope.
+func (d *DB) DeleteSharedVar(ctx context.Context, teamID, scope, scopeID, key string) error {
+	return affected(d.ExecContext(ctx, `DELETE FROM shared_vars WHERE team_id = ? AND scope = ? AND scope_id = ? AND key = ?`, teamID, scope, scopeID, key))
+}

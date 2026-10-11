@@ -53,6 +53,7 @@ DATABASE_URL={{environment.DATABASE_URL}}
 MAIL_URL=smtp://{{team.SMTP_HOST}}:587
 ```
 
+- Each of the four pages lists its variables by name. A value is stored encrypted and shown when you ask for it, a row at a time or all of them; one variable is added, changed or deleted on its own, and the developer view has them all as `NAME=value` lines.
 - Nothing reaches a container that did not name it.
 - Team and server variables are changed by Admins, and their values are shown only to Admins. That is not secrecy from Members: a Member can name one in an app they deploy, and the app then reads it. Keep there what the whole team may use.
 - The name is replaced at each deployment with the value stored then, so a changed value takes effect at the next deploy. A preview resolves the names as its app does.

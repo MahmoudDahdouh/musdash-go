@@ -193,6 +193,12 @@ type MenuItemProps struct {
 	// Opens makes the item a button that opens the dialog with this id, and
 	// sends nothing.
 	Opens string
+	// Fetches makes the item a button that asks the server for this address
+	// and puts the answer into the element with the id Into, and sends
+	// nothing: a dialog that holds what its page does not, which is made
+	// when it is asked for and opens when it arrives (data-autoopen).
+	Fetches string
+	Into    string
 	// Danger is for what ends or removes something. It is red in its text
 	// and a pale red under the pointer, never a red block: a menu is read
 	// before it is pressed.
@@ -220,6 +226,10 @@ templ MenuItem(p MenuItemProps) {
 		</a>
 	} else if p.Opens != "" {
 		<button type="button" class={ "menu-item", templ.KV("menu-item-danger", p.Danger) } role="option" aria-selected="false" tabindex="-1" data-open={ p.Opens } { p.Attrs... }>
+			@menuItemBody(p)
+		</button>
+	} else if p.Fetches != "" {
+		<button type="button" class={ "menu-item", templ.KV("menu-item-danger", p.Danger) } role="option" aria-selected="false" tabindex="-1" hx-get={ p.Fetches } hx-target={ "#" + p.Into } hx-swap="innerHTML" { p.Attrs... }>
 			@menuItemBody(p)
 		</button>
 	} else {

@@ -109,10 +109,26 @@ func (s *Server) sharedVars(r *http.Request, t sharedTarget, shown bool) ([]db.E
 	return out, nil
 }
 
-func sharedCard(t sharedTarget, vars []db.EnvVar, shown bool) pages.VarsCard {
-	return pages.VarsCard{ID: "shared-vars", Title: "Variables", Shown: shown,
-		Intro:  "Stored encrypted. A resource gets the value that is here when it is deployed.",
-		Values: t.view.Action + "/values", Edit: t.view.Action + "/edit", Groups: []pages.VarGroup{{Vars: vars}}}
+// sharedRows are a scope's variables as a list's rows: with their values
+// when they were asked for by a reader who may change them.
+func (s *Server) sharedRows(r *http.Request, t sharedTarget, shown bool) ([]pages.VarRow, error) {
+	shown = shown && t.view.CanEdit
+	vars, err := s.sharedVars(r, t, shown)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]pages.VarRow, 0, len(vars))
+	for _, v := range vars {
+		rows = append(rows, pages.VarRow{Key: v.Key, Value: v.Value, Shown: shown})
+	}
+	return rows, nil
+}
+
+func sharedCard(r *http.Request, t sharedTarget, rows []pages.VarRow, shown bool) pages.VarsCard {
+	c := sharedFrame(r, t)
+	c.Shown = shown
+	c.Groups = []pages.VarGroup{{Vars: rows}}
+	return c
 }
 
 // sharedShow is the page of one scope's shared variables: their names. A
@@ -126,23 +142,13 @@ func sharedCard(t sharedTarget, vars []db.EnvVar, shown bool) pages.VarsCard {
 // away from the people who deploy; the page tells the Admin instead.
 func (s *Server) sharedShow(load sharedLoader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		t, ok := load(w, r)
-		if !ok {
-			return
+		if t, ok := load(w, r); ok {
+			s.renderShared(w, r, http.StatusOK, t, pages.VarForms{})
 		}
-		vars, err := s.sharedVars(r, t, false)
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		for _, v := range vars {
-			t.view.Names = append(t.view.Names, v.Key)
-		}
-		s.render(w, r, http.StatusOK, pages.SharedVariables(s.shell(w, r, t.view.Title, t.active, t.crumbs...), t.view, sharedCard(t, vars, false)))
 	}
 }
 
-// sharedValues answers Show values and Hide values. Its route asks for the
+// sharedValues answers Show all and Hide all. Its route asks for the
 // role that may change the scope's variables.
 func (s *Server) sharedValues(load sharedLoader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -150,17 +156,17 @@ func (s *Server) sharedValues(load sharedLoader) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		shown := r.URL.Query().Get("hide") == ""
-		vars, err := s.sharedVars(r, t, shown)
+		shown := r.URL.Query().Get("hide") == "" && t.view.CanEdit
+		rows, err := s.sharedRows(r, t, shown)
 		if err != nil {
 			s.fail(w, r, err)
 			return
 		}
-		s.render(w, r, http.StatusOK, pages.Variables(sharedCard(t, vars, shown && t.view.CanEdit)))
+		s.render(w, r, http.StatusOK, pages.Variables(sharedCard(r, t, rows, shown)))
 	}
 }
 
-// renderSharedEdit draws a scope's editor, which holds the values.
+// renderSharedEdit draws a scope's developer view, which holds the values.
 func (s *Server) renderSharedEdit(w http.ResponseWriter, r *http.Request, status int, t sharedTarget, f ui.Form) {
 	if _, typed := f.Values["vars"]; !typed {
 		vars, err := s.sharedVars(r, t, true)

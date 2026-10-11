@@ -33,7 +33,8 @@ func TeamTabs() []ui.Tab {
 	}
 }
 
-// SharedVariablesEdit is the editor of one scope's shared variables.
+// SharedVariablesEdit is the developer view of one scope's shared
+// variables: all of them as text.
 templ SharedVariablesEdit(s ui.Shell, v SharedView, f ui.Form) {
 	@ui.Layout(s) {
 		@ui.PageHeader(v.Title, v.Intro)
@@ -41,13 +42,16 @@ templ SharedVariablesEdit(s ui.Shell, v SharedView, f ui.Form) {
 			<form class="card" method="post" action={ templ.SafeURL(v.Action) }>
 				@ui.CSRF(s.CSRF)
 				<div class="card-head">
-					<div>
-						<h2 class="card-title">Edit variables</h2>
-						<p class="muted text-sm">Stored encrypted. A resource gets the value that is here when it is deployed.</p>
+					<div class="min-w-0">
+						<h2 class="card-title">Developer view</h2>
+						<p class="muted text-sm">Every variable as text, as in a .env file. Stored encrypted. A resource gets the value that is here when it is deployed.</p>
 					</div>
+					@ui.LinkButton(v.Action, ui.ButtonProps{Small: true}) {
+						List view
+					}
 				</div>
 				<div class="card-body grid gap-4">
-					@ui.Field(ui.FieldProps{Label: "Variables", For: "vars", Hint: "One NAME=value per line. Lines starting with # are ignored.", Error: f.E("vars")}) {
+					@ui.Field(ui.FieldProps{Label: "Variables", For: "vars", Hint: "One NAME=value per line. Lines starting with # are ignored, and a line that is not here when you save is deleted.", Error: f.E("vars")}) {
 						@ui.Textarea(ui.InputProps{ID: "vars", Mono: true, Rows: 10, Value: f.V("vars"), Invalid: f.E("vars") != "", Described: true, Placeholder: "SMTP_HOST=mail.example.com\nSENTRY_DSN=https://…"})
 					}
 				</div>
@@ -64,7 +68,7 @@ templ SharedVariablesEdit(s ui.Shell, v SharedView, f ui.Form) {
 	}
 }
 
-templ SharedVariables(s ui.Shell, v SharedView, c VarsCard) {
+templ SharedVariables(s ui.Shell, v SharedView, c VarsCard, f VarForms) {
 	@ui.Layout(s) {
 		@ui.PageHeader(v.Title, v.Intro)
 		if len(v.Tabs) > 0 {
@@ -116,5 +120,8 @@ templ SharedVariables(s ui.Shell, v SharedView, c VarsCard) {
 				</div>
 			</section>
 		</div>
+		if v.CanEdit {
+			@VariableDialogs(f)
+		}
 	}
 }

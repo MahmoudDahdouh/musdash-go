@@ -198,6 +198,60 @@ func (d *DB) ReplaceEnvVars(ctx context.Context, kind, id string, vars []EnvVar)
 	})
 }
 
+// ErrVarExists is returned when a variable is added, or renamed, under a
+// name that the resource or the scope already has.
+var ErrVarExists = errors.New("a variable of that name exists already")
+
+// ErrTooManyVars is returned when a resource or a scope has as many
+// variables as it may.
+var ErrTooManyVars = errors.New("too many variables")
+
+// EnvVarByKey returns one of a resource's variables, its value still sealed.
+func (d *DB) EnvVarByKey(ctx context.Context, kind, id, key string) (EnvVar, error) {
+	v := EnvVar{Key: key}
+	err := d.QueryRowContext(ctx, `SELECT value, build_time FROM env_vars
+		WHERE resource_kind = ? AND resource_id = ? AND key = ?`, kind, id, key).Scan(&v.Value, &v.BuildTime)
+	return v, notFound(err)
+}
+
+// AddEnvVar gives a resource one more variable, unless it has limit of
+// them already; the count and the insert are one transaction. The value
+// must already be sealed. A name the resource has is ErrVarExists: adding
+// never replaces.
+func (d *DB) AddEnvVar(ctx context.Context, kind, id string, v EnvVar, limit int) error {
+	return d.Tx(ctx, func(tx *sql.Tx) error {
+		var n int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM env_vars WHERE resource_kind = ? AND resource_id = ?`, kind, id).Scan(&n); err != nil {
+			return err
+		}
+		if n >= limit {
+			return ErrTooManyVars
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO env_vars (id, resource_kind, resource_id, key, value, build_time)
+			VALUES (?, ?, ?, ?, ?, ?)`, secret.RandomID(), kind, id, v.Key, v.Value, v.BuildTime)
+		if IsUnique(err) {
+			return ErrVarExists
+		}
+		return err
+	})
+}
+
+// UpdateEnvVar changes the variable a resource has under key into v, which
+// may give it another name. The value must already be sealed.
+func (d *DB) UpdateEnvVar(ctx context.Context, kind, id, key string, v EnvVar) error {
+	res, err := d.ExecContext(ctx, `UPDATE env_vars SET key = ?, value = ?, build_time = ?
+		WHERE resource_kind = ? AND resource_id = ? AND key = ?`, v.Key, v.Value, v.BuildTime, kind, id, key)
+	if IsUnique(err) {
+		return ErrVarExists
+	}
+	return affected(res, err)
+}
+
+// DeleteEnvVar removes one of a resource's variables.
+func (d *DB) DeleteEnvVar(ctx context.Context, kind, id, key string) error {
+	return affected(d.ExecContext(ctx, `DELETE FROM env_vars WHERE resource_kind = ? AND resource_id = ? AND key = ?`, kind, id, key))
+}
+
 // Storage kinds.
 const (
 	StorageVolume = "volume" // a Docker-managed volume

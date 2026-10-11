@@ -149,7 +149,7 @@ func TestTeamOwnedRoutesNeedAnAdmin(t *testing.T) {
 			want = admin
 		case under("/servers") && changes, under("/team") && changes:
 			want = admin
-		case strings.HasSuffix(path, "/variables/values"), strings.HasSuffix(path, "/variables/edit"):
+		case strings.HasSuffix(path, "/variables/values"), strings.HasSuffix(path, "/variables/edit"), strings.Contains(path, "/variables/vars"):
 			// Reading a value is as much as changing it. A project's and
 			// an environment's are a Member's to change.
 			if !under("/servers") && !under("/team") {
@@ -166,7 +166,7 @@ func TestTeamOwnedRoutesNeedAnAdmin(t *testing.T) {
 			t.Errorf("%s is open to a role below Admin", route.pattern)
 		}
 	}
-	if seen < 25 {
+	if seen < 29 {
 		t.Fatalf("only %d team-owned routes found: were they renamed?", seen)
 	}
 }

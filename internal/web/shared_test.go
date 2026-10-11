@@ -193,11 +193,24 @@ func TestAnotherTeamsScopesHaveNoVariablePages(t *testing.T) {
 		}
 		res, _ = a.postRaw(a.client, page, url.Values{"_csrf": {token}, "vars": {"THEIRS=mine"}}, nil)
 		wantStatus(t, res, http.StatusNotFound)
+		// Nor one variable of theirs, by its name.
+		for _, get := range []string{"/values", "/edit", "/vars/THEIRS", "/vars/THEIRS/edit"} {
+			res, body := a.get(page + get)
+			if res.StatusCode != http.StatusNotFound || strings.Contains(body, "their-secret") {
+				t.Errorf("GET %s%s: %d", page, get, res.StatusCode)
+			}
+		}
+		for _, post := range []string{"/vars", "/vars/THEIRS", "/vars/THEIRS/delete"} {
+			res, _ := a.postRaw(a.client, page+post, url.Values{"_csrf": {token}, "key": {"THEIRS"}, "value": {"mine"}}, nil)
+			if res.StatusCode != http.StatusNotFound {
+				t.Errorf("POST %s%s: %d, want 404", page, post, res.StatusCode)
+			}
+		}
 	}
 	var n int
-	a.db.QueryRow(`SELECT count(*) FROM shared_vars WHERE team_id = 'otherteam'`).Scan(&n)
+	a.db.QueryRow(`SELECT count(*) FROM shared_vars WHERE team_id = 'otherteam' AND key = 'THEIRS' AND value = ?`, sealed).Scan(&n)
 	if n != 3 {
-		t.Fatalf("the other team's variables were changed: %d left", n)
+		t.Fatalf("the other team's variables were changed: %d left as they were", n)
 	}
 }
 

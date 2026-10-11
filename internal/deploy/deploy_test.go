@@ -602,6 +602,36 @@ func TestParseEnv(t *testing.T) {
 	}
 }
 
+// A value is stored as it was typed into its own field, so the text of the
+// developer view must read back to the same value: a line whose value the
+// reader would trim or take the quotes off is written in quotes.
+func TestFormatEnvReadsBackTheSame(t *testing.T) {
+	values := []string{"", "plain", "two words", " leading", "trailing ", `"quoted"`, `'single'`, `"`, `""`, `it's "mixed"`, `"it's"`, "a=b#c", `{"json": "value"}`, "\ttab"}
+	var vars []db.EnvVar
+	for i, v := range values {
+		vars = append(vars, db.EnvVar{Key: "V" + string(rune('A'+i)), Value: v})
+	}
+	text := FormatEnv(vars)
+	got, err := ParseEnv(text)
+	if err != nil || len(got) != len(vars) {
+		t.Fatalf("%q: %v, %d variables", text, err, len(got))
+	}
+	for i, v := range got {
+		if v != vars[i] {
+			t.Errorf("%s: %q read back as %q", v.Key, vars[i].Value, v.Value)
+		}
+	}
+	// What needs no quotes gets none: the text stays what a person wrote.
+	if !strings.Contains(text, "VB=plain\n") || !strings.Contains(text, "VC=two words\n") || !strings.Contains(text, `VM={"json": "value"}`+"\n") {
+		t.Errorf("quoted without need: %q", text)
+	}
+	for name, ok := range map[string]bool{"A": true, "_a1": true, "DATABASE_URL": true, "": false, "1A": false, "A-B": false, "A B": false, "A=B": false, "É": false} {
+		if ValidEnvName(name) != ok {
+			t.Errorf("ValidEnvName(%q) = %v", name, !ok)
+		}
+	}
+}
+
 func TestBuildRoutes(t *testing.T) {
 	rows := []db.RouteRow{
 		{Host: "example.com", TLS: true, RedirectWWW: true, HostPort: 20001},

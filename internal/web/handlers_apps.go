@@ -645,31 +645,31 @@ func (s *Server) appVars(r *http.Request, v pages.AppView, shown bool) (runtime,
 // appVarsCard is the list on the Environment tab, with values or without.
 func (s *Server) appVarsCard(r *http.Request, v pages.AppView, shown bool) (pages.VarsCard, error) {
 	runtime, build, err := s.appVars(r, v, shown)
-	c := pages.VarsCard{ID: "app-vars", Title: "Environment variables", Shown: shown,
-		Values: v.Path() + "/environment/values", Edit: v.Path() + "/environment/edit",
-		Groups: []pages.VarGroup{{Vars: runtime}}}
+	rows := func(list []db.EnvVar) []pages.VarRow {
+		out := make([]pages.VarRow, 0, len(list))
+		for _, ev := range list {
+			out = append(out, pages.VarRow{Key: ev.Key, Value: ev.Value, Shown: shown})
+		}
+		return out
+	}
+	c := appVarsFrame(r, v)
+	c.Shown = shown
+	c.Groups = []pages.VarGroup{{Vars: rows(runtime)}}
 	if v.App.Source == db.SourceGit {
-		c.Groups = []pages.VarGroup{{Title: "Given to the running app", Vars: runtime}, {Title: "Given to the build", Vars: build}}
+		c.Groups = []pages.VarGroup{{Title: "Given to the running app", Vars: rows(runtime)}, {Title: "Given to the build", Vars: rows(build)}}
 	}
 	return c, err
 }
 
 // appEnvironment is the Environment tab: names, and no value.
 func (s *Server) appEnvironment(w http.ResponseWriter, r *http.Request) {
-	v, ok := s.loadApp(w, r)
-	if !ok {
-		return
+	if v, ok := s.loadApp(w, r); ok {
+		s.renderAppEnvironment(w, r, http.StatusOK, v, pages.VarForms{})
 	}
-	c, err := s.appVarsCard(r, v, false)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	s.render(w, r, http.StatusOK, pages.AppEnvironment(s.appShell(w, r, v), v, c))
 }
 
-// appEnvironmentValues answers Show values and Hide values: the list again,
-// with the values when they were asked for.
+// appEnvironmentValues answers Show all and Hide all: the list again, with
+// the values when they were asked for.
 func (s *Server) appEnvironmentValues(w http.ResponseWriter, r *http.Request) {
 	v, ok := s.loadApp(w, r)
 	if !ok {
@@ -683,7 +683,7 @@ func (s *Server) appEnvironmentValues(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, pages.Variables(c))
 }
 
-// appEnvironmentEdit is the editor, which holds the values.
+// appEnvironmentEdit is the developer view, which holds every value.
 func (s *Server) appEnvironmentEdit(w http.ResponseWriter, r *http.Request) {
 	v, ok := s.loadApp(w, r)
 	if !ok {
@@ -746,6 +746,11 @@ func (s *Server) appEnvironmentSave(w http.ResponseWriter, r *http.Request) {
 		buildVars[i].BuildTime = true
 	}
 	all := append(vars, buildVars...)
+	if len(all) > maxAppVars {
+		f.Fail("vars", "Keep to "+itoa(maxAppVars)+" variables for one app.")
+		s.render(w, r, http.StatusUnprocessableEntity, pages.AppEnvironmentEdit(s.appShell(w, r, v), v, f))
+		return
+	}
 	values := make([]string, 0, len(all))
 	for i := range all {
 		values = append(values, all[i].Value)

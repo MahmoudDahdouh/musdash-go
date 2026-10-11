@@ -12,6 +12,22 @@ import (
 
 var envKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
+// ValidEnvName reports whether name can be a variable's: letters, numbers
+// and underscores, not starting with a number. Such a name is also safe as
+// a segment of an address and inside an element's id, which the pages that
+// show one variable at a time rely on.
+func ValidEnvName(name string) bool { return envKeyRE.MatchString(name) }
+
+// envValue is what a line's value is read as: the space around it dropped,
+// and one pair of matching quotes around it.
+func envValue(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) >= 2 && (value[0] == '"' || value[0] == '\'') && value[len(value)-1] == value[0] {
+		value = value[1 : len(value)-1]
+	}
+	return value
+}
+
 // ParseEnv reads a block of KEY=value lines, as pasted from a .env file.
 // Blank lines and lines starting with # are skipped. A value may be wrapped
 // in matching single or double quotes, which are removed. Later lines win
@@ -34,11 +50,7 @@ func ParseEnv(text string) ([]db.EnvVar, error) {
 		if !ok || !envKeyRE.MatchString(key) {
 			return nil, fmt.Errorf("line %d: write each variable as NAME=value, where NAME uses letters, numbers and underscores", n)
 		}
-		value = strings.TrimSpace(value)
-		if len(value) >= 2 && (value[0] == '"' || value[0] == '\'') && value[len(value)-1] == value[0] {
-			value = value[1 : len(value)-1]
-		}
-		byKey[key] = value
+		byKey[key] = envValue(value)
 	}
 	if err := sc.Err(); err != nil {
 		return nil, fmt.Errorf("a line is longer than 1 MB")
@@ -51,13 +63,23 @@ func ParseEnv(text string) ([]db.EnvVar, error) {
 	return vars, nil
 }
 
-// FormatEnv renders variables back into the editable KEY=value block.
+// FormatEnv renders variables back into the editable KEY=value block. A
+// value that ParseEnv would read differently (space at an end, quotes
+// around it) is written in quotes: ParseEnv takes one pair off whatever is
+// inside, so the value comes back as it is stored. One variable can be
+// saved on its own, as typed, and must survive the next save of the block.
 func FormatEnv(vars []db.EnvVar) string {
 	var b strings.Builder
 	for _, v := range vars {
 		b.WriteString(v.Key)
 		b.WriteByte('=')
-		b.WriteString(v.Value)
+		if envValue(v.Value) != v.Value {
+			b.WriteByte('"')
+			b.WriteString(v.Value)
+			b.WriteByte('"')
+		} else {
+			b.WriteString(v.Value)
+		}
 		b.WriteByte('\n')
 	}
 	return b.String()

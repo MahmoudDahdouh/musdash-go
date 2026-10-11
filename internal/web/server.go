@@ -182,7 +182,21 @@ func (s *Server) Handler() http.Handler {
 	handle("GET "+inEnv+"/settings", member, s.environmentSettings)
 	handle("POST "+inEnv+"/settings", member, s.environmentRename)
 	handle("POST "+inEnv+"/delete", member, s.environmentDelete)
+	// One variable of a scope, by its name: its value, the dialog that
+	// changes it, and the three writes. All five ask for the role that may
+	// change the scope's variables, since reading a value is as much.
+	sharedVar := func(base string, who access, load sharedLoader) {
+		handle("GET "+base+"/vars/{name}", who, s.sharedVar(load))
+		handle("GET "+base+"/vars/{name}/edit", who, s.sharedVarEdit(load))
+		handle("POST "+base+"/vars", who, s.sharedVarAdd(load))
+		handle("POST "+base+"/vars/{name}", who, s.sharedVarSave(load))
+		handle("POST "+base+"/vars/{name}/delete", who, s.sharedVarDelete(load))
+	}
 	handle("GET /projects/{id}/variables", member, s.sharedShow(s.sharedProject))
+	sharedVar("/projects/{id}/variables", member, s.sharedProject)
+	sharedVar(inEnv+"/variables", member, s.sharedEnvironment)
+	sharedVar("/servers/{id}/variables", admin, s.sharedServer)
+	sharedVar("/team/variables", admin, s.sharedTeam)
 	handle("GET /projects/{id}/variables/values", member, s.sharedValues(s.sharedProject))
 	handle("GET /projects/{id}/variables/edit", member, s.sharedEdit(s.sharedProject))
 	handle("POST /projects/{id}/variables", member, s.sharedSave(s.sharedProject))
@@ -227,6 +241,11 @@ func (s *Server) Handler() http.Handler {
 	app("GET", "/environment/values", member, s.ownSettings(s.appEnvironmentValues))
 	app("GET", "/environment/edit", member, s.ownSettings(s.appEnvironmentEdit))
 	app("POST", "/environment", member, s.ownSettings(s.appEnvironmentSave))
+	app("GET", "/environment/vars/{name}", member, s.ownSettings(s.appVar))
+	app("GET", "/environment/vars/{name}/edit", member, s.ownSettings(s.appVarEdit))
+	app("POST", "/environment/vars", member, s.ownSettings(s.appVarAdd))
+	app("POST", "/environment/vars/{name}", member, s.ownSettings(s.appVarSave))
+	app("POST", "/environment/vars/{name}/delete", member, s.ownSettings(s.appVarDelete))
 	app("GET", "/storage", member, s.ownSettings(s.appStorage))
 	app("POST", "/storage", member, s.ownSettings(s.appStorageAdd))
 	app("POST", "/storage/{sid}/delete", member, s.ownSettings(s.appStorageDelete))

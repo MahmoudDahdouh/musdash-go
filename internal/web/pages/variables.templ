@@ -7,26 +7,41 @@ import (
 	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
 )
 
+// VarRow is one variable in a list. Value is its plain text only while
+// Shown: a row that is not shown holds no value at all, and an empty Value
+// in a shown row is a variable that is set to nothing.
+type VarRow struct {
+	Key   string
+	Value string
+	Shown bool
+}
+
 // VarGroup is one list of variables on a VarsCard, under its own heading
 // when the card has more than one.
 type VarGroup struct {
 	Title string
-	Vars  []db.EnvVar
+	Vars  []VarRow
 }
 
 // VarsCard is a list of variables that keeps their values to itself. The
-// page it is first drawn on holds names only: Vars carry no values then,
-// and Shown is false. "Show values" fetches the card again from Values,
-// with the values; "Hide values" fetches it without. Editing is a page of
-// its own (Edit), because an editor has to hold the values.
+// page it is first drawn on holds names only. A row's eye asks for that
+// row with its value (Base/vars/NAME) and for it again without; "Show all"
+// and "Hide all" fetch the whole card (Base/values). The developer view is
+// a page of its own (Base/edit), because it holds every value, and the
+// dialog that changes one variable is fetched for the same reason.
 type VarsCard struct {
 	ID     string // element id, unique on the page
 	Title  string
 	Intro  string
 	Groups []VarGroup
-	Shown  bool
-	Values string // answers with this card; "?hide=1" for names only
-	Edit   string
+	// Shown says the card was drawn with every value.
+	Shown bool
+	// Base is the address the variables are at: an app's /environment, a
+	// scope's /variables.
+	Base string
+	CSRF string
+	// Gone is the question a deletion asks: what it does, in a sentence.
+	Gone string
 }
 
 func (c VarsCard) count() int {
@@ -38,9 +53,37 @@ func (c VarsCard) count() int {
 }
 
 // bare says that the card is one list with nothing in it. Its empty state
-// then has the way to the editor, which the head has otherwise.
+// then has the ways to add, which the head has otherwise.
 func (c VarsCard) bare() bool {
 	return len(c.Groups) == 1 && len(c.Groups[0].Vars) == 0
+}
+
+// at is the address of one variable.
+func (c VarsCard) at(key string) string { return c.Base + "/vars/" + key }
+
+// all are the attributes of "Show all" or "Hide all". Both buttons are in
+// the card and the stylesheet shows each while it has something to do,
+// since rows are shown and hidden one at a time too. The card replaces
+// itself, and the script puts the focus on the one of the two that is left
+// to see (static/app.js).
+func (c VarsCard) all(hide bool) templ.Attributes {
+	a := templ.Attributes{"hx-get": c.Base + "/values", "hx-target": "#" + c.ID, "hx-swap": "outerHTML"}
+	if hide {
+		a["hx-get"] = c.Base + "/values?hide=1"
+	}
+	return a
+}
+
+// eye are the attributes of a row's button that shows or hides its value.
+// It has one id in both states, so the focus stays on it when the row is
+// replaced. It is not disabled while it asks (hx-disabled-elt): a disabled
+// button gives the focus up, and there would be none to put back.
+func (c VarsCard) eye(v VarRow) templ.Attributes {
+	a := templ.Attributes{"id": "var-" + v.Key + "-eye", "hx-get": c.at(v.Key), "hx-target": "closest tr", "hx-swap": "outerHTML"}
+	if v.Shown {
+		a["hx-get"] = c.at(v.Key) + "?hide=1"
+	}
+	return a
 }
 
 func varCount(n int) string {
@@ -50,64 +93,170 @@ func varCount(n int) string {
 	return strconv.Itoa(n) + " set"
 }
 
+// The dialogs of a list of variables. Their ids do not start as a row's
+// do ("var-NAME-…"), so no name a variable can have collides with them.
+const (
+	NewVarDialog  = "new-var"
+	EditVarDialog = "change-var"
+	// EditVarHolder is where the dialog that changes one variable is put
+	// when it is fetched.
+	EditVarHolder = "change-var-holder"
+)
+
+// VarDialog is the form that adds one variable or changes one.
+type VarDialog struct {
+	ID     string
+	Title  string
+	Submit string
+	Action string
+	CSRF   string
+	F      ui.Form // key, value, build
+	// Build offers the build-time box: the variables of an app from Git.
+	Build bool
+	// Edits is true for the dialog that changes a variable: the person is
+	// put at its value, not its name.
+	Edits     bool
+	ValueHint string
+	Open      bool
+}
+
+// VarForms are the dialogs of one page of variables: the one that adds,
+// always there, and the one that changes a variable only when its form
+// came back refused. Otherwise that one is fetched when asked for.
+type VarForms struct {
+	Add  VarDialog
+	Edit *VarDialog
+}
+
 templ Variables(c VarsCard) {
-	<section class="card" id={ c.ID }>
-		<div class="card-head">
-			<div>
+	<section class="card vars" id={ c.ID }>
+		<div class="card-head flex-wrap">
+			<div class="min-w-0">
 				<h2 class="card-title">{ c.Title }</h2>
 				if c.Intro != "" {
 					<p class="muted text-sm">{ c.Intro }</p>
 				}
 			</div>
-			<div class="flex flex-none items-center gap-2">
-				if c.count() > 0 {
-					if c.Shown {
-						<button type="button" class="btn btn-secondary btn-sm" hx-get={ c.Values + "?hide=1" } hx-target={ "#" + c.ID } hx-swap="outerHTML">
-							@ui.Icon("eye-off")
-							Hide values
-						</button>
-					} else {
-						<button type="button" class="btn btn-secondary btn-sm" hx-get={ c.Values } hx-target={ "#" + c.ID } hx-swap="outerHTML">
-							@ui.Icon("eye")
-							Show values
-						</button>
+			if !c.bare() {
+				<div class="flex flex-wrap items-center gap-2">
+					if c.count() > 0 {
+						<span class="vars-show">
+							@ui.Button(ui.ButtonProps{Small: true, Icon: "eye", Attrs: c.all(false)}) {
+								Show all
+							}
+						</span>
+						<span class="vars-hide">
+							@ui.Button(ui.ButtonProps{Small: true, Icon: "eye-off", Attrs: c.all(true)}) {
+								Hide all
+							}
+						</span>
 					}
-				}
-				if !c.bare() {
-					@ui.LinkButton(c.Edit, ui.ButtonProps{Small: true, Icon: "pencil"}) {
-						Edit
+					@ui.LinkButton(c.Base+"/edit", ui.ButtonProps{Small: true, Icon: "code"}) {
+						Developer view
 					}
-				}
-			</div>
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: NewVarDialog}) {
+						Add variable
+					}
+				</div>
+			}
 		</div>
 		for i, g := range c.Groups {
 			if g.Title != "" {
 				<h3 class={ "px-4 pt-3 font-semibold", templ.KV("border-t border-line", i > 0) }>{ g.Title } <span class="muted font-normal">· { varCount(len(g.Vars)) }</span></h3>
 			}
 			if c.bare() {
-				@ui.EmptyState(ui.EmptyProps{Icon: "variable", Title: "No variables yet", Text: "Add them as lines of NAME=value.", Size: ui.EmptySmall}) {
-					@ui.LinkButton(c.Edit, ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus"}) {
-						Add variables
+				@ui.EmptyState(ui.EmptyProps{Icon: "variable", Title: "No variables yet", Text: "Add them one at a time, or paste a whole .env file in the developer view.", Size: ui.EmptySmall, Link: "Developer view", LinkHref: c.Base + "/edit"}) {
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Small: true, Icon: "plus", Opens: NewVarDialog}) {
+						Add variable
 					}
 				}
 			} else if len(g.Vars) == 0 {
 				@ui.EmptyState(ui.EmptyProps{Icon: "variable", Title: "None yet", Size: ui.EmptySmall, Plain: true})
 			} else {
-				@ui.Table("Name", "Value") {
+				@ui.Table("Name", "Value", "") {
 					for _, v := range g.Vars {
-						<tr>
-							<td class="fact whitespace-nowrap">{ v.Key }</td>
-							if c.Shown {
-								<td class="fact break-all whitespace-pre-wrap">{ v.Value }</td>
-							} else {
-								<td class="fact text-ink-mute">{ ui.Masked }</td>
-							}
-						</tr>
+						@VariableRow(c, v)
 					}
 				}
 			}
 		}
 	</section>
+}
+
+// VariableRow is one variable of a list: its name, its value or the mask
+// that stands for it, and what can be done with it. It is also what a
+// row's eye is answered with, so everything it needs is in the card.
+templ VariableRow(c VarsCard, v VarRow) {
+	<tr data-var data-shown?={ v.Shown }>
+		<td class="var-name fact whitespace-nowrap">{ v.Key }</td>
+		<td class="var-value">
+			if !v.Shown {
+				// Eight bullets are read aloud as eight bullets.
+				<span class="fact text-ink-mute" aria-hidden="true">{ ui.Masked }</span>
+				<span class="sr-only">Hidden</span>
+			} else if v.Value == "" {
+				<span class="muted">Empty</span>
+			} else {
+				<span class="fact break-all whitespace-pre-wrap">{ v.Value }</span>
+			}
+		</td>
+		<td class="var-actions">
+			<div class="flex items-center justify-end gap-1">
+				if v.Shown && v.Value != "" {
+					<button type="button" class="btn btn-ghost btn-sm" data-copy={ v.Value }>
+						@ui.Icon("copy")
+						<span data-copy-label>Copy</span>
+					</button>
+				}
+				if v.Shown {
+					@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, IconOnly: true, Icon: "eye-off", Label: "Hide value of " + v.Key, Attrs: c.eye(v)})
+				} else {
+					@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, IconOnly: true, Icon: "eye", Label: "Show value of " + v.Key, Attrs: c.eye(v)})
+				}
+				// The menu is in the form its Delete sends. Edit fetches the
+				// dialog, which holds the value.
+				<form class="inline-block" method="post" action={ templ.SafeURL(c.at(v.Key) + "/delete") }>
+					@ui.CSRF(c.CSRF)
+					@ui.Menu(ui.MenuProps{ID: "var-" + v.Key + "-actions", Label: "Actions for " + v.Key, Class: "btn btn-ghost btn-sm btn-icon", End: true, Button: ui.Icon("more")}) {
+						@ui.MenuItem(ui.MenuItemProps{Icon: "pencil", Label: "Edit", Fetches: c.at(v.Key) + "/edit", Into: EditVarHolder})
+						@ui.MenuSep()
+						@ui.MenuItem(ui.MenuItemProps{Icon: "trash", Label: "Delete", Danger: true, Attrs: ui.Ask("Delete "+v.Key+"?", c.Gone, "Delete variable", true)})
+					}
+				</form>
+			</div>
+		</td>
+	</tr>
+}
+
+// VariableDialog adds one variable or changes one. The one that changes is
+// fetched (EditVarHolder) and holds the variable's value; the page does not.
+templ VariableDialog(d VarDialog) {
+	@ui.FormDialog(ui.DialogProps{ID: d.ID, Title: d.Title, Action: d.Action, CSRF: d.CSRF, Submit: d.Submit, Open: d.Open}) {
+		@ui.TextField(d.F, "Name", "Letters, numbers and underscores, not starting with a number.", ui.InputProps{ID: d.ID + "-key", Name: "key", Mono: true, Required: true, Autocomplete: "off", Autofocus: !d.Edits, Placeholder: "DATABASE_URL", Attrs: templ.Attributes{"autocapitalize": "off", "spellcheck": "false"}})
+		@ui.Field(ui.FieldProps{Label: "Value", For: d.ID + "-value", Hint: d.ValueHint, Error: d.F.E("value")}) {
+			@ui.Textarea(ui.InputProps{ID: d.ID + "-value", Name: "value", Mono: true, Rows: 3, Value: d.F.V("value"), Invalid: d.F.E("value") != "", Described: d.ValueHint != "", Attrs: templ.Attributes{"autofocus": d.Edits, "autocapitalize": "off", "autocomplete": "off"}})
+		}
+		if d.Build {
+			<div class="field">
+				@ui.CheckboxNamed(d.ID+"-build", "build", d.F.V("build") != "", templ.Attributes{"aria-describedby": d.ID + "-build-hint"}) {
+					Build-time variable
+				}
+				<p class="field-hint" id={ d.ID + "-build-hint" }>Given to the image build as a build argument, where a Dockerfile reads it with ARG, and not to the running app. Nixpacks and Railpack take their settings this way.</p>
+			</div>
+		}
+	}
+}
+
+// VariableDialogs are the dialogs of a page of variables, and the place the
+// fetched one is put. data-fetched: a dialog in there leaves the page when
+// it closes (static/app.js), with the value it held.
+templ VariableDialogs(f VarForms) {
+	@VariableDialog(f.Add)
+	<div id={ EditVarHolder } data-fetched>
+		if f.Edit != nil {
+			@VariableDialog(*f.Edit)
+		}
+	</div>
 }
 
 // sharedHowTo is the paragraph the variable editors share about taking a
@@ -123,30 +272,35 @@ templ sharedHowTo(projectID string) {
 
 // AppEnvironment is an app's Environment tab: its variables by name, their
 // values not shown until asked for.
-templ AppEnvironment(s ui.Shell, v AppView, c VarsCard) {
+templ AppEnvironment(s ui.Shell, v AppView, c VarsCard, f VarForms) {
 	@appFrame(s, v, "environment") {
 		<div class="grid max-w-3xl gap-4">
 			@Variables(c)
 			<p class="muted text-sm">Values are stored encrypted and are not sent to this page until you ask for them. Changes apply on the next deploy.</p>
 		</div>
+		@VariableDialogs(f)
 	}
 }
 
-// AppEnvironmentEdit is the editor of an app's variables. It holds their
-// values, which is why it is a page a person goes to and not the tab itself.
+// AppEnvironmentEdit is the developer view of an app's variables: all of
+// them as text. It holds their values, which is why it is a page a person
+// goes to and not the tab itself.
 templ AppEnvironmentEdit(s ui.Shell, v AppView, f ui.Form) {
 	@appFrame(s, v, "environment") {
 		<div class="max-w-3xl">
 			<form class="card" method="post" action={ templ.SafeURL(v.Path() + "/environment") }>
 				@ui.CSRF(s.CSRF)
 				<div class="card-head">
-					<div>
-						<h2 class="card-title">Edit environment variables</h2>
-						<p class="muted text-sm">Stored encrypted. Changes apply on the next deploy.</p>
+					<div class="min-w-0">
+						<h2 class="card-title">Developer view</h2>
+						<p class="muted text-sm">Every variable as text, as in a .env file. Stored encrypted. Changes apply on the next deploy.</p>
 					</div>
+					@ui.LinkButton(v.Path()+"/environment", ui.ButtonProps{Small: true}) {
+						List view
+					}
 				</div>
 				<div class="card-body grid gap-4">
-					@ui.Field(ui.FieldProps{Label: "Variables", For: "vars", Hint: "Given to the running app. One NAME=value per line. Lines starting with # are ignored.", Error: f.E("vars")}) {
+					@ui.Field(ui.FieldProps{Label: "Variables", For: "vars", Hint: "Given to the running app. One NAME=value per line. Lines starting with # are ignored, and a line that is not here when you save is deleted.", Error: f.E("vars")}) {
 						@ui.Textarea(ui.InputProps{ID: "vars", Mono: true, Rows: 12, Value: f.V("vars"), Invalid: f.E("vars") != "", Described: true, Placeholder: "DATABASE_URL=postgres://…\nNODE_ENV=production"})
 					}
 					if v.App.Source == db.SourceGit {
