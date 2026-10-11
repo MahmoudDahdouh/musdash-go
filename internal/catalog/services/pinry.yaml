@@ -1,0 +1,15 @@
+# name: Pinry
+# about: A tiling image board for saving and sharing pictures and web pages as pins, with tags and boards.
+# docs: https://pinry.github.io/pinry/install-with-docker/
+# website: https://pinry.github.io/pinry/
+# categories: media, productivity
+# source: musdash
+services:
+  pinry:
+    image: getpinry/pinry:latest
+    environment:
+      - SERVICE_FQDN_PINRY_80
+    volumes:
+      - pinry-data:/data
+volumes:
+  pinry-data:

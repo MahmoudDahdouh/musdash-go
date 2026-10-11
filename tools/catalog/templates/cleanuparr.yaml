@@ -1,0 +1,18 @@
+# name: Cleanuparr
+# about: Removes stalled, blocked and unwanted downloads from qBittorrent and similar clients, working alongside Sonarr and Radarr.
+# docs: https://cleanuparr.github.io/docs/installation/quick_start
+# website: https://cleanuparr.github.io/
+# categories: media, automation
+services:
+  cleanuparr:
+    image: ghcr.io/cleanuparr/cleanuparr:latest
+    environment:
+      - SERVICE_FQDN_CLEANUPARR_11011
+      - PORT=11011
+      - BASE_PATH=
+      - PUID=1000
+      - PGID=1000
+      - UMASK=022
+      - TZ=${TZ:-UTC}
+    volumes:
+      - cleanuparr-config:/config

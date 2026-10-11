@@ -1,0 +1,16 @@
+# name: Gancio
+# about: A shared agenda for local communities, where people publish events and visitors follow them, also over ActivityPub.
+# docs: https://gancio.org/install/docker
+# website: https://gancio.org/
+# categories: productivity, communication
+services:
+  gancio:
+    image: cisti/gancio:1.28.2
+    environment:
+      - SERVICE_FQDN_GANCIO_13120
+      - GANCIO_DATA=/home/node/data
+      - NODE_ENV=production
+      - GANCIO_DB_DIALECT=sqlite
+      - GANCIO_DB_STORAGE=./gancio.sqlite
+    volumes:
+      - gancio-data:/home/node/data

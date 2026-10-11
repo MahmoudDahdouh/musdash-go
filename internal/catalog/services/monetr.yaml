@@ -1,0 +1,61 @@
+# name: monetr
+# about: A budgeting app built around recurring expenses, with manual accounts or bank links through Plaid.
+# docs: https://monetr.app/documentation/install/docker/
+# website: https://monetr.app/
+# categories: finance
+# source: musdash
+services:
+  monetr:
+    image: ghcr.io/monetr/monetr:1.18.0
+    command:
+      - serve
+      - --migrate
+      - --generate-certificates
+    environment:
+      - SERVICE_FQDN_MONETR_4000
+      - MONETR_SERVER_EXTERNAL_URL=${SERVICE_URL_MONETR}
+      - MONETR_ALLOW_SIGN_UP=${MONETR_ALLOW_SIGN_UP:-true}
+      - MONETR_PG_USERNAME=${SERVICE_USER_POSTGRES}
+      - MONETR_PG_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - MONETR_PG_DATABASE=monetr
+      - MONETR_PG_ADDRESS=postgres
+      - MONETR_REDIS_ENABLED=true
+      - MONETR_REDIS_ADDRESS=valkey
+      - MONETR_STORAGE_ENABLED=true
+      - MONETR_STORAGE_PROVIDER=filesystem
+    volumes:
+      - monetr-data:/etc/monetr
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/bin/monetr", "status"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=monetr
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  valkey:
+    image: valkey/valkey:8-alpine
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  monetr-data:
+  postgres-data:

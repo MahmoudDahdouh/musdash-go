@@ -1,0 +1,21 @@
+# name: tududi
+# about: A self-hosted task and project manager with areas, notes, recurring tasks and a calendar view.
+# docs: https://docs.tududi.com/getting-started/installation
+# website: https://tududi.com/
+# categories: productivity
+services:
+  tududi:
+    image: chrisvel/tududi:latest
+    environment:
+      - SERVICE_FQDN_TUDUDI_3002
+      - BASE_URL=${SERVICE_URL_TUDUDI}
+      - TUDUDI_ALLOWED_ORIGINS=${SERVICE_URL_TUDUDI}
+      - TUDUDI_TRUST_PROXY=true
+      - TUDUDI_USER_EMAIL=${TUDUDI_ADMIN_EMAIL:-admin@example.com}
+      - TUDUDI_USER_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - TUDUDI_SESSION_SECRET=${SERVICE_HEX_64_SESSION}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - tududi-db:/app/db
+      - tududi-uploads:/app/uploads
+      - tududi-backups:/app/backups

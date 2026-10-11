@@ -1,0 +1,36 @@
+# name: Ties
+# about: A bookmark and link sharing app that federates over ActivityPub, with lists of links and a single admin.
+# docs: https://github.com/raffomania/ties#-installation-and-configuration
+# website: https://github.com/raffomania/ties
+# categories: productivity, rss
+# source: musdash
+services:
+  ties:
+    image: ghcr.io/raffomania/ties:0.3.0
+    environment:
+      - SERVICE_FQDN_TIES_3000
+      - LISTEN=0.0.0.0:3000
+      - DATABASE_URL=postgres://ties:${SERVICE_PASSWORD_POSTGRES}@postgres/ties
+      - RUST_LOG=info
+      - BASE_URL=${SERVICE_URL_TIES}
+      - ADMIN_USERNAME=${SERVICE_USER_ADMIN}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=ties
+      - POSTGRES_USER=ties
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    command: ["-c", "shared_buffers=16MB", "-c", "work_mem=1MB", "-c", "max_connections=10", "-c", "maintenance_work_mem=4MB", "-c", "effective_cache_size=32MB"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  postgres-data:

@@ -1,0 +1,92 @@
+# name: Safebucket
+# about: A file sharing platform with buckets, share links and access control, where uploads go straight to S3-compatible storage.
+# docs: https://docs.safebucket.io/
+# website: https://github.com/safebucket/safebucket
+# categories: storage
+# source: musdash
+services:
+  safebucket:
+    image: ghcr.io/safebucket/safebucket:latest
+    environment:
+      - SERVICE_FQDN_SAFEBUCKET_8080
+      - APP__LOG_LEVEL=info
+      - APP__PROFILE=default
+      - APP__API_URL=${SERVICE_URL_SAFEBUCKET}
+      - APP__WEB_URL=${SERVICE_URL_SAFEBUCKET}
+      - APP__PORT=8080
+      - APP__TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - APP__STATIC_FILES__ENABLED=true
+      - APP__TOKEN_SECRET=${SERVICE_BASE64_TOKEN}
+      - APP__ADMIN_EMAIL=${ADMIN_EMAIL:-admin@safebucket.io}
+      - APP__ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - APP__ALLOWED_ORIGINS=${SERVICE_URL_SAFEBUCKET}
+      - APP__TRASH_RETENTION_DAYS=7
+      - APP__MFA_ENCRYPTION_KEY=${SERVICE_PASSWORD_MFA}
+      - APP__MFA_REQUIRED=false
+      - APP__MAX_UPLOAD_SIZE=53687091200
+      - DATABASE__TYPE=sqlite
+      - DATABASE__SQLITE__PATH=/app/data/safebucket.db
+      - CACHE__TYPE=memory
+      - STORAGE__TYPE=rustfs
+      - STORAGE__RUSTFS__BUCKET_NAME=safebucket
+      - STORAGE__RUSTFS__ENDPOINT=bucket:9000
+      - STORAGE__RUSTFS__EXTERNAL_ENDPOINT=${SERVICE_URL_BUCKET}
+      - STORAGE__RUSTFS__ACCESS_KEY=${SERVICE_USER_RUSTFS}
+      - STORAGE__RUSTFS__SECRET_KEY=${SERVICE_PASSWORD_RUSTFS}
+      - EVENTS__TYPE=memory
+      - EVENTS__QUEUES__NOTIFICATIONS__NAME=safebucket-notifications
+      - EVENTS__QUEUES__BUCKET_EVENTS__NAME=safebucket-bucket-events
+      - EVENTS__QUEUES__OBJECT_DELETION__NAME=safebucket-object-deletion
+      - NOTIFIER__TYPE=filesystem
+      - NOTIFIER__FILESYSTEM__DIRECTORY=/app/data/notifications
+      - ACTIVITY__TYPE=filesystem
+      - ACTIVITY__FILESYSTEM__DIRECTORY=/app/data/activity
+      - AUTH__PROVIDERS__KEYS=local
+      - AUTH__PROVIDERS__LOCAL__NAME=local
+      - AUTH__PROVIDERS__LOCAL__TYPE=local
+      - AUTH__PROVIDERS__LOCAL__SHARING__ALLOWED=true
+      - GOGC=50
+    volumes:
+      - safebucket-data:/app/data
+    depends_on:
+      bucket-init:
+        condition: service_completed_successfully
+  bucket:
+    image: rustfs/rustfs:1.0.0-alpha.84
+    environment:
+      - SERVICE_FQDN_BUCKET_9000
+      - RUSTFS_ACCESS_KEY=${SERVICE_USER_RUSTFS}
+      - RUSTFS_SECRET_KEY=${SERVICE_PASSWORD_RUSTFS}
+    volumes:
+      - rustfs-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:9000/health && curl -f http://127.0.0.1:9001/rustfs/console/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+  bucket-init:
+    image: amazon/aws-cli:latest
+    restart: "no"
+    environment:
+      - AWS_ACCESS_KEY_ID=${SERVICE_USER_RUSTFS}
+      - AWS_SECRET_ACCESS_KEY=${SERVICE_PASSWORD_RUSTFS}
+      - AWS_RETRY_MODE=standard
+      - AWS_MAX_ATTEMPTS=5
+      - AWS_REGION=us-east-1
+      - BUCKET_NAME=safebucket
+      - ENDPOINT_URL=http://bucket:9000
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while ! aws s3api head-bucket --bucket $${BUCKET_NAME} --endpoint-url $${ENDPOINT_URL} 2>/dev/null; do
+          aws s3api create-bucket --bucket $${BUCKET_NAME} --endpoint-url $${ENDPOINT_URL} 2>/dev/null || true
+          sleep 2
+        done
+        aws s3api put-bucket-cors --bucket $${BUCKET_NAME} --endpoint-url $${ENDPOINT_URL} --cors-configuration '{"CORSRules":[{"AllowedHeaders":["*"],"AllowedMethods":["GET","PUT","POST","DELETE","HEAD"],"AllowedOrigins":["*"],"ExposeHeaders":["ETag"]}]}'
+    depends_on:
+      bucket:
+        condition: service_healthy
+volumes:
+  rustfs-data:
+  safebucket-data:

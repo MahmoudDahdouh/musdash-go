@@ -1,0 +1,25 @@
+# name: Comic Library Utilities
+# about: A web app for converting, renaming, tagging and reading a digital comic library, with a built-in reader and OPDS feeds.
+# docs: https://clucomics.org/getting-started/quickstart/
+# website: https://clucomics.org
+# categories: media
+# source: musdash
+services:
+  comic-utils:
+    image: allaboutduncan/comic-utils-web:latest
+    environment:
+      - SERVICE_FQDN_COMIC_UTILS_5577
+      - FLASK_ENV=production
+      - MONITOR=no
+      - CLU_USERNAME=${SERVICE_USER_CLU}
+      - CLU_PASSWORD=${SERVICE_PASSWORD_CLU}
+    volumes:
+      - clu-config:/config
+      - clu-cache:/cache
+      - clu-data:/data
+      - clu-downloads:/downloads
+volumes:
+  clu-cache:
+  clu-config:
+  clu-data:
+  clu-downloads:

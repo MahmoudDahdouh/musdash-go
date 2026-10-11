@@ -1,0 +1,34 @@
+# name: Mail Archiver
+# about: Archives mail from IMAP and other accounts into PostgreSQL, with search, export and restore.
+# docs: https://github.com/s1t5/mail-archiver/blob/main/doc/Setup.md
+# website: https://github.com/s1t5/mail-archiver
+# categories: email, storage
+services:
+  mail-archiver:
+    image: s1t5/mailarchiver:latest
+    environment:
+      - SERVICE_FQDN_MAIL_ARCHIVER_5000
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=MailArchiver;Username=${SERVICE_USER_POSTGRES};Password=${SERVICE_PASSWORD_POSTGRES};
+      - Authentication__Username=${SERVICE_USER_ADMIN}
+      - Authentication__Password=${SERVICE_PASSWORD_ADMIN}
+      - Authentication__CookieSameSite=Lax
+      - TimeZone__DisplayTimeZoneId=${TIMEZONE:-Etc/UCT}
+    volumes:
+      - mail-archiver-keys:/app/DataProtection-Keys
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=MailArchiver
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - mail-archiver-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s

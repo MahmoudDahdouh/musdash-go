@@ -1,0 +1,27 @@
+# name: NextExplorer
+# about: A web file explorer with thumbnails, search, sharing and per-user home folders.
+# docs: https://explorer.nxz.ai/installation/deployment
+# website: https://explorer.nxz.ai/
+# categories: storage
+services:
+  nextexplorer:
+    image: nxzai/explorer:latest
+    environment:
+      - SERVICE_FQDN_NEXTEXPLORER_3000
+      - NODE_ENV=production
+      - PUBLIC_URL=${SERVICE_URL_NEXTEXPLORER}
+      - SESSION_SECRET=${SERVICE_PASSWORD_64_SESSION}
+      - AUTH_MODE=local
+      - AUTH_ADMIN_EMAIL=${NEXTEXPLORER_ADMIN_EMAIL:-admin@example.com}
+      - AUTH_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - nextexplorer-config:/config
+      - nextexplorer-cache:/cache
+      - nextexplorer-files:/mnt/Files
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

@@ -1,0 +1,18 @@
+# name: Faved
+# about: A bookmark manager with nested tags, automatic page titles and previews, and imports from browsers and other tools.
+# docs: https://faved.to/docs/getting-started/installation
+# website: https://faved.to
+# categories: productivity, rss
+services:
+  faved:
+    image: denho/faved:latest
+    environment:
+      - SERVICE_FQDN_FAVED_80
+    volumes:
+      - faved-storage:/var/www/html/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -o /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s

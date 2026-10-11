@@ -1,0 +1,33 @@
+# name: DroppedNeedle
+# about: A music request and discovery app that searches MusicBrainz and downloads through your own slskd or SABnzbd.
+# docs: https://github.com/DroppedNeedle/DroppedNeedle#setup
+# website: https://droppedneedle.com/
+# categories: media
+# source: musdash
+services:
+  droppedneedle:
+    image: droppedneedle/droppedneedle:latest
+    environment:
+      - SERVICE_FQDN_DROPPEDNEEDLE_8688
+      - PUID=1000
+      - PGID=1000
+      - UMASK=027
+      - PORT=8688
+      - TZ=${TZ:-UTC}
+      - SLSKD_DOWNLOADS_PATH=/data/slskd/complete
+    volumes:
+      - droppedneedle-config:/app/config
+      - droppedneedle-cache:/app/cache
+      - droppedneedle-plugins:/app/plugins
+      - droppedneedle-media:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8688/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5m
+      retries: 10
+volumes:
+  droppedneedle-cache:
+  droppedneedle-config:
+  droppedneedle-media:
+  droppedneedle-plugins:

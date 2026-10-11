@@ -1,0 +1,16 @@
+# name: GitSave
+# about: Backs up Git repositories from GitHub, GitLab and other hosts on a schedule, with a web page to manage the schedules and history.
+# docs: https://github.com/TimWitzdam/GitSave#-deploy-gitsave-for-yourself
+# website: https://github.com/TimWitzdam/GitSave
+# categories: git, storage
+services:
+  gitsave:
+    image: timwitzdam/gitsave:latest
+    environment:
+      - SERVICE_FQDN_GITSAVE_3000
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - ENCRYPTION_SECRET=${SERVICE_PASSWORD_ENCRYPTION}
+      - DISABLE_AUTH=false
+    volumes:
+      - gitsave-data:/app/data
+      - gitsave-backups:/app/backups

@@ -1,0 +1,20 @@
+# name: PlanarAlly
+# about: A virtual tabletop for tabletop role-playing games with maps, tokens, fog of war and shared campaigns.
+# docs: https://www.planarally.io/server/setup/self-hosting/
+# website: https://www.planarally.io/
+# categories: games
+services:
+  planarally:
+    image: kruptein/planarally:latest
+    environment:
+      - SERVICE_FQDN_PLANARALLY_8000
+    volumes:
+      - planarally-data:/planarally/data
+      - planarally-assets:/planarally/static/assets
+      - planarally-mods:/planarally/static/mods
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:8000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

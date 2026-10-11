@@ -1,0 +1,28 @@
+# name: Slink
+# about: An image sharing service with albums, share links and user accounts that stores uploads on local disk.
+# docs: https://docs.slinkapp.io/getting-started/02-quick-start/
+# website: https://slinkapp.io/
+# categories: media, storage
+services:
+  slink:
+    image: anirdev/slink:latest
+    environment:
+      - SERVICE_FQDN_SLINK_3000
+      - ORIGIN=${SERVICE_URL_SLINK}
+      - TZ=${TZ:-UTC}
+      - STORAGE_PROVIDER=local
+      - IMAGE_MAX_SIZE=${IMAGE_MAX_SIZE:-15M}
+      - USER_ALLOW_REGISTRATION=${USER_ALLOW_REGISTRATION:-false}
+      - USER_APPROVAL_REQUIRED=${USER_APPROVAL_REQUIRED:-true}
+      - ADMIN_USERNAME=${SERVICE_USER_ADMIN}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - slink-data:/app/var/data
+      - slink-images:/app/slink/images
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/api/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s

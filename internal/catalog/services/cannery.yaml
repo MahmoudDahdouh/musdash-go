@@ -1,0 +1,39 @@
+# name: Cannery
+# about: A tracker for ammunition and firearms: containers, ammo types, packs and range-day usage records.
+# docs: https://gitlab.com/shibaobun/cannery#installation
+# website: https://cannery.app/
+# categories: home
+# source: musdash
+services:
+  cannery:
+    image: shibaobun/cannery:latest
+    environment:
+      - SERVICE_FQDN_CANNERY_4000
+      - HOST=${SERVICE_FQDN_CANNERY}
+      - DATABASE_URL=ecto://cannery:${SERVICE_PASSWORD_POSTGRES}@cannery-db/cannery
+      - SECRET_KEY_BASE=${SERVICE_PASSWORD_64_SECRET}
+      - CLOAK_KEY=${SERVICE_BASE64_CLOAK}
+      - REGISTRATION=${REGISTRATION:-invite}
+      - DISABLE_EMAIL=${DISABLE_EMAIL:-true}
+      - LOCALE=${LOCALE:-en_US}
+    volumes:
+      - cannery-uploads:/var/cannery/uploads
+    depends_on:
+      cannery-db:
+        condition: service_healthy
+  cannery-db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=cannery
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=cannery
+    volumes:
+      - cannery-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+volumes:
+  cannery-db-data:
+  cannery-uploads:

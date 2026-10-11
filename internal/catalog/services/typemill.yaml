@@ -1,0 +1,28 @@
+# name: Typemill
+# about: A flat-file CMS for documentation sites and handbooks, written in Markdown with a visual editor and no database.
+# docs: https://docs.typemill.net/getting-started/installation/docker
+# website: https://typemill.net
+# categories: cms, docs
+# source: musdash
+services:
+  typemill:
+    image: kixote/typemill:latest
+    environment:
+      - SERVICE_FQDN_TYPEMILL_80
+      - TYPEMILL_PROXY_DETECTION=true
+    volumes:
+      - typemill-settings:/var/www/html/settings
+      - typemill-media:/var/www/html/media
+      - typemill-data:/var/www/html/data
+      - typemill-cache:/var/www/html/cache
+      - typemill-plugins:/var/www/html/plugins
+      - typemill-content:/var/www/html/content
+      - typemill-themes:/var/www/html/themes
+volumes:
+  typemill-cache:
+  typemill-content:
+  typemill-data:
+  typemill-media:
+  typemill-plugins:
+  typemill-settings:
+  typemill-themes:

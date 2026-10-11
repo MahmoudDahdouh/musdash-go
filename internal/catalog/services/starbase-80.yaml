@@ -1,0 +1,39 @@
+# name: Starbase 80
+# about: A start page of icons and links for the services on a server, set up with a JSON file.
+# docs: https://github.com/notclickable-jordan/starbase-80#docker
+# website: https://notclickable-jordan.github.io/starbase-80/
+# categories: productivity, home
+# source: musdash
+services:
+  starbase80:
+    image: jordanroher/starbase-80:latest
+    environment:
+      - SERVICE_FQDN_STARBASE80_4173
+      - TITLE=${TITLE:-Starbase 80}
+      - THEME=${THEME:-auto}
+    configs:
+      - source: starbase-config
+        target: /app/src/config/config.json
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:4173/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
+configs:
+  starbase-config:
+    content: |
+      [
+        {
+          "category": "Services",
+          "services": [
+            {
+              "name": "Starbase 80",
+              "uri": "https://github.com/notclickable-jordan/starbase-80",
+              "description": "Edit this list in the service's Configs",
+              "icon": "mdi-home",
+              "iconColor": "black"
+            }
+          ]
+        }
+      ]

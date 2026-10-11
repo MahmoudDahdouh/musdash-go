@@ -1,0 +1,24 @@
+# name: Listenarr
+# about: An audiobook manager that finds, downloads and organizes audiobooks, in the style of Sonarr and Radarr.
+# docs: https://github.com/Listenarrs/Listenarr#setup
+# website: https://getlistenarr.com
+# categories: media
+# source: musdash
+services:
+  listenarr:
+    image: ghcr.io/listenarrs/listenarr:canary
+    environment:
+      - SERVICE_FQDN_LISTENARR_4545
+      - PUID=1000
+      - PGID=1000
+      - UMASK=022
+      - LISTENARR_LOG_LEVEL=${LISTENARR_LOG_LEVEL:-Information}
+      - LISTENARR_PUBLIC_URL=${SERVICE_URL_LISTENARR}
+    volumes:
+      - listenarr-config:/app/config
+      - listenarr-audiobooks:/audiobooks
+      - listenarr-downloads:/downloads
+volumes:
+  listenarr-audiobooks:
+  listenarr-config:
+  listenarr-downloads:

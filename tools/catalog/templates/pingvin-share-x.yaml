@@ -1,0 +1,20 @@
+# name: Pingvin Share X
+# about: A self-hosted file sharing service with expiring links, reverse shares and a WeTransfer-like upload page.
+# docs: https://smp46.github.io/pingvin-share-x/setup/installation
+# website: https://smp46.github.io/pingvin-share-x/
+# categories: storage, productivity
+services:
+  pingvin-share-x:
+    image: ghcr.io/smp46/pingvin-share-x:latest
+    environment:
+      - SERVICE_FQDN_PINGVIN_SHARE_X_3000
+      - TRUST_PROXY=true
+    volumes:
+      - pingvin-data:/opt/app/backend/data
+      - pingvin-images:/opt/app/frontend/public/img
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s

@@ -1,0 +1,50 @@
+# name: Calagopus
+# about: A control panel for game servers, written in Rust, that manages Wings nodes and reuses Pterodactyl eggs.
+# docs: https://calagopus.com/docs/panel/installation/docker
+# website: https://calagopus.com/
+# categories: games, devtools
+services:
+  calagopus:
+    image: ghcr.io/calagopus/panel:latest
+    environment:
+      - SERVICE_FQDN_CALAGOPUS_8000
+      - TZ=${TZ:-UTC}
+      - REDIS_URL=redis://cache
+      - DATABASE_URL=postgresql://panel:${SERVICE_PASSWORD_POSTGRES}@db/panel
+      - DATABASE_MIGRATE=true
+      - PORT=8000
+      - APP_DEBUG=false
+      - APP_LOG_DIRECTORY=/var/log/calagopus
+      - APP_PRIMARY=true
+      - APP_ENCRYPTION_KEY=${SERVICE_PASSWORD_ENCRYPTION}
+      - APP_USE_INTERNAL_CACHE=true
+    volumes:
+      - calagopus-data:/var/lib/calagopus
+      - calagopus-logs:/var/log/calagopus
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=panel
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=panel
+    volumes:
+      - calagopus-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  cache:
+    image: valkey/valkey:8-alpine
+    volumes:
+      - calagopus-cache:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

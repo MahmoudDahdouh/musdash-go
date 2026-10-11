@@ -1,0 +1,16 @@
+# name: Convert to it!
+# about: A web page that converts files between many formats in the browser, served as static files by nginx.
+# docs: https://github.com/p2r3/convert#docker-prebuilt-image
+# website: https://github.com/p2r3/convert
+# categories: productivity
+# source: musdash
+services:
+  convert:
+    image: ghcr.io/p2r3/convert:latest
+    environment:
+      - SERVICE_FQDN_CONVERT_80
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/convert/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

@@ -1,0 +1,43 @@
+# name: Kuvasz
+# about: An uptime and SSL certificate monitor with status pages, maintenance windows and notifications, backed by PostgreSQL.
+# docs: https://kuvasz-uptime.dev/setup/installation/
+# website: https://kuvasz-uptime.dev/
+# categories: monitoring
+# source: musdash
+services:
+  kuvasz:
+    image: kuvaszmonitoring/kuvasz:latest
+    environment:
+      - SERVICE_FQDN_KUVASZ_8080
+      - TZ=${TZ:-UTC}
+      - DATABASE_HOST=kuvasz-db
+      - DATABASE_NAME=kuvasz
+      - DATABASE_USER=${SERVICE_USER_POSTGRES}
+      - DATABASE_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - ADMIN_USER=${SERVICE_USER_ADMIN}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:8080/api/v2/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    depends_on:
+      kuvasz-db:
+        condition: service_healthy
+  kuvasz-db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=kuvasz
+      - TZ=${TZ:-UTC}
+    volumes:
+      - kuvasz-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+volumes:
+  kuvasz-db-data:

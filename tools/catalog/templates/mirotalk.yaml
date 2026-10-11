@@ -1,0 +1,22 @@
+# name: MiroTalk P2P
+# about: A browser video conferencing server with direct peer-to-peer calls, screen sharing, chat and a whiteboard.
+# docs: https://docs.mirotalk.com/mirotalk-p2p/self-hosting/
+# website: https://p2p.mirotalk.com
+# categories: communication
+services:
+  mirotalk:
+    image: mirotalk/p2p:latest
+    environment:
+      - SERVICE_FQDN_MIROTALK_3000
+      - HOST=${SERVICE_URL_MIROTALK}
+      - TRUST_PROXY=true
+      - JWT_KEY=${SERVICE_HEX_64_JWT}
+      - API_KEY_SECRET=${SERVICE_PASSWORD_API}
+      - STATS_ENABLED=false
+      - SURVEY_ENABLED=false
+      - TZ=${TZ:-UTC}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

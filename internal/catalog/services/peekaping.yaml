@@ -1,0 +1,23 @@
+# name: Peekaping
+# about: An uptime monitor that checks HTTP, TCP, DNS and other services on a schedule, with status pages and notifications.
+# docs: https://docs.peekaping.com/self-hosting/docker-with-sqlite
+# website: https://peekaping.com/
+# categories: monitoring
+# source: musdash
+services:
+  peekaping:
+    image: 0xfurai/peekaping-bundle-sqlite:latest
+    environment:
+      - SERVICE_FQDN_PEEKAPING_8383
+      - DB_NAME=/app/data/peekaping.db
+      - TZ=${TZ:-UTC}
+    volumes:
+      - peekaping-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8383/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+volumes:
+  peekaping-data:

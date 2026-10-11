@@ -1,0 +1,52 @@
+# name: OpenBudgeteer
+# about: A budgeting app built on the bucket principle, where income is divided into buckets for bills and savings.
+# docs: https://theaxelander.github.io/latest/quick-start/
+# website: https://github.com/TheAxelander/OpenBudgeteer
+# categories: finance
+# source: musdash
+services:
+  openbudgeteer:
+    image: axelander/openbudgeteer:latest
+    environment:
+      - SERVICE_FQDN_OPENBUDGETEER_8080
+      - CONNECTION_PROVIDER=mariadb
+      - CONNECTION_SERVER=mariadb
+      - CONNECTION_PORT=3306
+      - CONNECTION_DATABASE=openbudgeteer
+      - CONNECTION_USER=${SERVICE_USER_MARIADB}
+      - CONNECTION_PASSWORD=${SERVICE_PASSWORD_MARIADB}
+      - CONNECTION_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - CONNECTION_REDIS_SERVER=redis
+      - CONNECTION_REDIS_PORT=6379
+      - APPSETTINGS_CULTURE=${APPSETTINGS_CULTURE:-en-US}
+      - APPSETTINGS_AUTH_ENABLED=true
+      - APPSETTINGS_AUTH_USERNAME=${SERVICE_USER_ADMIN}
+      - APPSETTINGS_AUTH_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  mariadb:
+    image: mariadb:11
+    environment:
+      - MARIADB_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+volumes:
+  mariadb-data:
+  redis-data:

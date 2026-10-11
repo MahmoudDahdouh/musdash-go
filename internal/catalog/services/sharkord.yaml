@@ -1,0 +1,24 @@
+# name: Sharkord
+# about: A chat server with text channels, voice, webcam and screen sharing, in a single program.
+# docs: https://sharkord.com/docs/introduction/installation/docker
+# website: https://sharkord.com
+# categories: communication
+# source: musdash
+services:
+  sharkord:
+    image: sharkord/sharkord:latest
+    environment:
+      - SERVICE_FQDN_SHARKORD_4991
+      - SHARKORD_WEBRTC_ANNOUNCED_ADDRESS=${SERVICE_FQDN_SHARKORD}
+    volumes:
+      - sharkord-data:/home/bun/.config/sharkord
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:4991/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    ports:
+      - "40000:40000"
+      - "40000:40000/udp"
+volumes:
+  sharkord-data:

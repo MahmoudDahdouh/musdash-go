@@ -1,0 +1,30 @@
+# name: Crumbs
+# about: An offline-first sticky note app with attachments, a SQLite database and optional OAuth or SSO sign-in.
+# docs: https://github.com/bretzel-app/crumbs/blob/main/docs/DEPLOYMENT.md
+# website: https://github.com/bretzel-app/crumbs
+# categories: docs
+# source: musdash
+services:
+  crumbs:
+    image: ghcr.io/bretzel-app/crumbs:latest
+    environment:
+      - SERVICE_FQDN_CRUMBS_3000
+      - NODE_ENV=production
+      - DATA_DIR=/data
+      - DATABASE_URL=/data/crumbs.db
+      - ORIGIN=${SERVICE_URL_CRUMBS}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+    volumes:
+      - crumbs-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+volumes:
+  crumbs-data:

@@ -1,0 +1,57 @@
+# name: Manifest
+# about: A gateway that routes the requests of AI agents to the model that fits each one, with cost tracking.
+# docs: https://manifest.build/llm-gateway/docs/self-hosted/
+# website: https://manifest.build/
+# categories: ai, devtools
+# source: musdash
+services:
+  manifest:
+    image: manifestdotbuild/manifest:latest
+    environment:
+      - SERVICE_FQDN_MANIFEST_2099
+      - PORT=2099
+      - DATABASE_URL=postgresql://manifest:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/manifest
+      - BETTER_AUTH_SECRET=${SERVICE_HEX_64_AUTH}
+      - MANIFEST_ENCRYPTION_KEY=${SERVICE_HEX_64_ENCRYPTION}
+      - BETTER_AUTH_URL=${SERVICE_URL_MANIFEST}
+      - MANIFEST_MODE=selfhosted
+      - NODE_ENV=production
+      - SEED_DATA=false
+      - REQUEST_RECORDING_FILESYSTEM_PATH=/data/request-recordings
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      - EMAIL_PROVIDER=${EMAIL_PROVIDER:-}
+      - EMAIL_API_KEY=${EMAIL_API_KEY:-}
+      - EMAIL_DOMAIN=${EMAIL_DOMAIN:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - MANIFEST_TELEMETRY_DISABLED=${MANIFEST_TELEMETRY_DISABLED:-0}
+    volumes:
+      - manifest-recordings:/data/request-recordings
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "const p=process.env.PORT||'2099';fetch(`http://127.0.0.1:$${p}/api/v1/health`).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      start_period: 90s
+      retries: 30
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=manifest
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=manifest
+    volumes:
+      - manifest-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+volumes:
+  manifest-postgres:
+  manifest-recordings:

@@ -1,0 +1,37 @@
+# name: Sync-in
+# about: A file storage, sharing and sync server with spaces, public links, full-text search and optional document editors.
+# docs: https://sync-in.com/docs/setup-guide/docker
+# website: https://sync-in.com/
+# categories: storage, productivity
+services:
+  sync-in:
+    image: syncin/server:2
+    environment:
+      - SERVICE_FQDN_SYNC_IN_8080
+      - INIT_ADMIN=true
+      - INIT_ADMIN_LOGIN=${SERVICE_USER_ADMIN}
+      - INIT_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - SYNCIN_SERVER_PUBLICURL=${SERVICE_URL_SYNC_IN}
+      - SYNCIN_MYSQL_URL=mysql://root:${SERVICE_PASSWORD_ROOT}@mariadb:3306/sync_in
+      - SYNCIN_AUTH_ENCRYPTIONKEY=${SERVICE_PASSWORD_64_ENCRYPTION}
+      - SYNCIN_AUTH_TOKEN_ACCESS_SECRET=${SERVICE_PASSWORD_64_ACCESS}
+      - SYNCIN_AUTH_TOKEN_REFRESH_SECRET=${SERVICE_PASSWORD_64_REFRESH}
+    volumes:
+      - sync-in-data:/app/data
+    depends_on:
+      mariadb:
+        condition: service_healthy
+  mariadb:
+    image: mariadb:11
+    command: --innodb_ft_cache_size=16000000 --max-allowed-packet=1G
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=sync_in
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s

@@ -1,0 +1,29 @@
+# name: Materialious
+# about: A Material Design frontend for YouTube through Invidious, with its own accounts, subscriptions, watch history and built-in CORS proxy.
+# docs: https://github.com/Materialious/Materialious/blob/main/docs/DOCKER-FULL.md
+# website: https://github.com/Materialious/Materialious
+# categories: media
+# source: musdash
+services:
+  materialious:
+    image: wardpearce/materialious-full:latest
+    environment:
+      - SERVICE_FQDN_MATERIALIOUS_3000
+      - COOKIE_SECRET=${SERVICE_PASSWORD_64_COOKIE}
+      - DATABASE_CONNECTION_URI=sqlite:///materialious-data/materialious.db
+      - PUBLIC_INTERNAL_AUTH=true
+      - PUBLIC_REQUIRE_AUTH=true
+      - PUBLIC_REGISTRATION_ALLOWED=${REGISTRATION_ALLOWED:-true}
+      - PUBLIC_ADMIN_USERNAMES=${ADMIN_USERNAMES:-}
+      - PUBLIC_CAPTCHA_DISABLED=${CAPTCHA_DISABLED:-false}
+      - PUBLIC_DEFAULT_INVIDIOUS_INSTANCE=${INVIDIOUS_INSTANCE:-}
+    volumes:
+      - materialious-data:/materialious-data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+volumes:
+  materialious-data:

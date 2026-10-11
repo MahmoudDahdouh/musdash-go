@@ -1,0 +1,25 @@
+# name: Imagor Studio
+# about: An image gallery with live editing, built on the imagor image server, that stores files on disk or in S3.
+# docs: https://docs.studio.imagor.net/getting-started/docker-deployment
+# website: https://studio.imagor.net/
+# categories: media, storage
+# source: musdash
+services:
+  imagor-studio:
+    image: shumc/imagor-studio:latest
+    environment:
+      - SERVICE_FQDN_IMAGOR_STUDIO_8000
+      - PORT=8000
+      - DATABASE_URL=sqlite:///app/data/imagor-studio.db
+      - JWT_SECRET=${SERVICE_HEX_64_JWT}
+      - FILE_STORAGE_BASE_DIR=/app/data/gallery
+    volumes:
+      - imagor-studio-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+volumes:
+  imagor-studio-data:

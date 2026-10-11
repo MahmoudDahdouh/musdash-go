@@ -1,0 +1,16 @@
+# name: TubeSync
+# about: Keeps YouTube channels and playlists downloaded to the server, like a video recorder for subscriptions.
+# docs: https://github.com/meeb/tubesync#installation
+# website: https://github.com/meeb/tubesync
+# categories: media
+services:
+  tubesync:
+    image: ghcr.io/meeb/tubesync:latest
+    environment:
+      - SERVICE_FQDN_TUBESYNC_4848
+      - TZ=${TZ:-UTC}
+      - HTTP_USER=${SERVICE_USER_ADMIN}
+      - HTTP_PASS=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - tubesync-config:/config
+      - tubesync-downloads:/downloads

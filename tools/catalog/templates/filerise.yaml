@@ -1,0 +1,26 @@
+# name: FileRise
+# about: A web file manager with uploads, sharing links, per-folder permissions, WebDAV and optional single sign-on.
+# docs: https://github.com/error311/FileRise/wiki/Installation-Setup
+# website: https://filerise.net/
+# categories: storage
+services:
+  filerise:
+    image: error311/filerise-docker:latest
+    environment:
+      - SERVICE_FQDN_FILERISE_80
+      - TIMEZONE=${TZ:-UTC}
+      - TOTAL_UPLOAD_SIZE=${TOTAL_UPLOAD_SIZE:-5G}
+      - SECURE=true
+      - PERSISTENT_TOKENS_KEY=${SERVICE_HEX_64_TOKENS}
+      - SCAN_ON_START=true
+      - FR_PUBLISHED_URL=${SERVICE_URL_FILERISE}
+    volumes:
+      - filerise-uploads:/var/www/uploads
+      - filerise-users:/var/www/users
+      - filerise-metadata:/var/www/metadata
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

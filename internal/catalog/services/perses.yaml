@@ -1,0 +1,68 @@
+# name: Perses
+# about: A dashboard tool for observability data, with dashboards defined as code and Prometheus as its main data source.
+# docs: https://perses.dev/perses/docs/installation/in-a-container/
+# website: https://perses.dev/
+# categories: monitoring
+# source: musdash
+services:
+  perses:
+    image: persesdev/perses:latest
+    environment:
+      - SERVICE_FQDN_PERSES_8080
+    configs:
+      - source: perses-config
+        target: /etc/perses/config.yaml
+      - source: perses-user
+        target: /etc/perses/provisioning/1-user.json
+      - source: perses-role
+        target: /etc/perses/provisioning/2-globalrole.json
+      - source: perses-binding
+        target: /etc/perses/provisioning/3-globalrolebinding.json
+    volumes:
+      - perses-data:/perses
+volumes:
+  perses-data:
+configs:
+  perses-config:
+    content: |
+      security:
+        enable_auth: true
+        encryption_key: "${SERVICE_HEX_PERSES}"
+        authentication:
+          disable_sign_up: true
+          providers:
+            enable_native: true
+      database:
+        file:
+          folder: "/perses"
+          extension: "json"
+      provisioning:
+        folders:
+          - "/etc/perses/provisioning"
+  perses-user:
+    content: |
+      [
+        {
+          "kind": "User",
+          "metadata": { "name": "admin" },
+          "spec": { "nativeProvider": { "password": "${SERVICE_PASSWORD_ADMIN}" } }
+        }
+      ]
+  perses-role:
+    content: |
+      [
+        {
+          "kind": "GlobalRole",
+          "metadata": { "name": "admin" },
+          "spec": { "permissions": [ { "actions": ["*"], "scopes": ["*"] } ] }
+        }
+      ]
+  perses-binding:
+    content: |
+      [
+        {
+          "kind": "GlobalRoleBinding",
+          "metadata": { "name": "admin" },
+          "spec": { "role": "admin", "subjects": [ { "kind": "User", "name": "admin" } ] }
+        }
+      ]

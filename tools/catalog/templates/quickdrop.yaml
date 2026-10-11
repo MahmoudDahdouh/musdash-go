@@ -1,0 +1,22 @@
+# name: QuickDrop
+# about: A self-hosted app for sharing files and text, with password-protected uploads, a pastebin and a link shortener.
+# docs: https://github.com/RoastSlav/quickdrop#installation
+# website: https://github.com/RoastSlav/quickdrop
+# categories: storage, productivity
+services:
+  quickdrop:
+    image: roastslav/quickdrop:latest
+    environment:
+      - SERVICE_FQDN_QUICKDROP_8080
+      - TZ=${TZ:-UTC}
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - quickdrop-db:/app/db
+      - quickdrop-log:/app/log
+      - quickdrop-files:/app/files
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

@@ -1,0 +1,12 @@
+# name: BiblioReads
+# about: A privacy-friendly alternative front end for Goodreads that shows books, authors and lists without ads.
+# docs: https://github.com/nesaku/BiblioReads#docker-installation
+# website: https://biblioreads.eu.org
+# categories: media
+services:
+  biblioreads:
+    image: nesaku/biblioreads:latest
+    environment:
+      - SERVICE_FQDN_BIBLIOREADS_3000
+      - NEXT_PUBLIC_HOST_URL=${SERVICE_URL_BIBLIOREADS}
+      - NEXT_TELEMETRY_DISABLED=1

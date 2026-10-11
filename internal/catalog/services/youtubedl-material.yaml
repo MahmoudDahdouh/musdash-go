@@ -1,0 +1,32 @@
+# name: YoutubeDL-Material
+# about: A Material Design web front end for youtube-dl that downloads video and audio from many sites, with subscriptions and user accounts.
+# docs: https://github.com/Tzahi12345/YoutubeDL-Material#docker
+# website: https://github.com/Tzahi12345/YoutubeDL-Material
+# categories: media
+# source: musdash
+services:
+  ytdl-material:
+    image: tzahi12345/youtubedl-material:latest
+    environment:
+      - SERVICE_FQDN_YTDL_MATERIAL_17442
+      - ytdl_multi_user_mode=true
+      - ytdl_use_local_db=true
+      - write_ytdl_config=true
+    volumes:
+      - ytdl-appdata:/app/appdata
+      - ytdl-audio:/app/audio
+      - ytdl-video:/app/video
+      - ytdl-subscriptions:/app/subscriptions
+      - ytdl-users:/app/users
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -o /dev/null http://127.0.0.1:17442/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+volumes:
+  ytdl-appdata:
+  ytdl-audio:
+  ytdl-subscriptions:
+  ytdl-users:
+  ytdl-video:

@@ -1,0 +1,30 @@
+# name: Memtly
+# about: A photo and video gallery where guests of a wedding or other event upload their pictures through a link or QR code.
+# docs: https://docs.memtly.com/docs/Setup/docker
+# website: https://github.com/Memtly/Memtly.Community
+# categories: media
+# source: musdash
+services:
+  memtly:
+    image: memtly/memtly:latest
+    environment:
+      - SERVICE_FQDN_MEMTLY_5000
+      - TITLE=${TITLE:-Memtly}
+      - BASE_URL=${SERVICE_URL_MEMTLY}
+      - FORCE_HTTPS=false
+      - DATABASE_TYPE=sqlite
+      - ACCOUNT_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - SECURITY_ENCRYPTION_KEY=${SERVICE_PASSWORD_ENCRYPTIONKEY}
+      - SECURITY_ENCRYPTION_SALT=${SERVICE_PASSWORD_ENCRYPTIONSALT}
+      - ENCRYPTION_KEY=${SERVICE_PASSWORD_ENCRYPTIONKEY}
+      - ENCRYPTION_SALT=${SERVICE_PASSWORD_ENCRYPTIONSALT}
+    volumes:
+      - memtly-config:/app/config
+      - memtly-thumbnails:/app/thumbnails
+      - memtly-uploads:/app/uploads
+      - memtly-custom-resources:/app/custom_resources
+volumes:
+  memtly-config:
+  memtly-custom-resources:
+  memtly-thumbnails:
+  memtly-uploads:

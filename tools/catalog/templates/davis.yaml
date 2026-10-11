@@ -1,0 +1,47 @@
+# name: Davis
+# about: A CalDAV, CardDAV and WebDAV server with an admin dashboard for users and calendars, built on sabre/dav.
+# docs: https://github.com/tchapi/davis#-dockerized-installation
+# website: https://github.com/tchapi/davis
+# categories: productivity, home
+services:
+  davis:
+    image: ghcr.io/tchapi/davis-standalone:5.5.0
+    command:
+      - sh
+      - -c
+      - "bin/console doctrine:migrations:migrate --no-interaction && chown -R www-data:www-data var && exec /usr/bin/supervisord -c /etc/supervisord.conf"
+    environment:
+      - SERVICE_FQDN_DAVIS_9000
+      - APP_ENV=prod
+      - APP_SECRET=${SERVICE_HEX_DAVIS}
+      - DATABASE_DRIVER=mysql
+      - DATABASE_URL=mysql://davis:${SERVICE_PASSWORD_MARIADB}@mariadb:3306/davis?serverVersion=mariadb-10.11.0&charset=utf8mb4
+      - ADMIN_LOGIN=${SERVICE_USER_ADMIN}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - AUTH_METHOD=Basic
+      - MAILER_DSN=${MAILER_DSN:-null://null}
+      - INVITE_FROM_ADDRESS=${INVITE_FROM_ADDRESS:-no-reply@example.org}
+      - APP_TIMEZONE=${TZ:-UTC}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:9000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  mariadb:
+    image: mariadb:10.11
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=davis
+      - MYSQL_USER=davis
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_MARIADB}
+    volumes:
+      - davis-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

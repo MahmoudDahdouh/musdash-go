@@ -531,6 +531,9 @@ var logoAlias = map[string][]string{
 	"selfh-st-icons":                {"selfh-st"},
 	"priviblur":                     {"tumblr"},
 	"razzia":                        {"rahoot"},
+	"dashbrr":                       {"autobrr"},
+	"mqtt-web-interface":            {"mqtt"},
+	"youtubedl-material":            {"youtube-dl"},
 }
 
 // logoNames are the file names to look for in an icon collection, the

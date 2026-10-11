@@ -1,0 +1,28 @@
+# name: Pluton
+# about: A backup manager that runs restic and rclone jobs from a web interface, with encrypted snapshots to local or cloud storage.
+# docs: https://github.com/plutonhq/pluton#docker-installation
+# website: https://usepluton.com
+# categories: storage, security
+services:
+  pluton:
+    image: plutonhq/pluton:latest
+    environment:
+      - SERVICE_FQDN_PLUTON_5173
+      - ENCRYPTION_KEY=${SERVICE_PASSWORD_64_ENCRYPTION}
+      - USER_NAME=${SERVICE_USER_ADMIN}
+      - USER_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - APP_TITLE=${APP_TITLE:-Pluton}
+      - APP_URL=${SERVICE_URL_PLUTON}
+      - SERVER_PORT=5173
+      - TRUST_PROXY=1
+      - MAX_CONCURRENT_BACKUPS=${MAX_CONCURRENT_BACKUPS:-2}
+      - NODE_ENV=production
+      - IS_DOCKER=true
+    volumes:
+      - pluton-data:/data
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget --no-verbose --tries=1 --spider http://127.0.0.1:5173/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s

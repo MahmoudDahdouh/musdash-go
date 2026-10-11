@@ -1,0 +1,15 @@
+# name: Profilarr
+# about: Manages quality profiles and custom formats for Radarr and Sonarr and syncs them to your instances.
+# docs: https://github.com/Dictionarry-Hub/profilarr#-getting-started
+# website: https://dictionarry.dev/
+# categories: media, automation
+services:
+  profilarr:
+    image: ghcr.io/dictionarry-hub/profilarr:latest
+    environment:
+      - SERVICE_FQDN_PROFILARR_6868
+      - ORIGIN=${SERVICE_URL_PROFILARR}
+      - TZ=${TZ:-UTC}
+      - AUTH=on
+    volumes:
+      - profilarr-config:/config

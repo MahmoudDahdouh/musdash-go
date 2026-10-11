@@ -1,0 +1,59 @@
+# name: 4ga Boards
+# about: A kanban board app with real-time updates, projects, boards, cards and file attachments.
+# docs: https://docs.4gaboards.com/docs/dev/install/docker-install
+# website: https://4gaboards.com
+# categories: productivity
+# source: musdash
+services:
+  4gaboards:
+    image: ghcr.io/rargames/4gaboards:latest
+    environment:
+      - SERVICE_FQDN_4GABOARDS_1337
+      - BASE_URL=${SERVICE_URL_4GABOARDS}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRET}
+      - DATABASE_URL=postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@db/4gaBoards
+      - NODE_ENV=production
+      - UPLOAD_RATE_LIMIT_STORE=redis
+      - UPLOAD_RATE_LIMIT_REDIS_URL=redis://:${SERVICE_PASSWORD_REDIS}@redis:6379/0
+      - DEFAULT_ADMIN_USERNAME=admin
+      - DEFAULT_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - user-avatars:/app/public/user-avatars
+      - project-background-images:/app/public/project-background-images
+      - attachments:/app/private/attachments
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  db:
+    image: postgres:18-alpine
+    environment:
+      - POSTGRES_DB=4gaBoards
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_INITDB_ARGS=-A scram-sha-256
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d 4gaBoards"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass ${SERVICE_PASSWORD_REDIS}
+    environment:
+      - REDISCLI_AUTH=${SERVICE_PASSWORD_REDIS}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  attachments:
+  db-data:
+  project-background-images:
+  redis-data:
+  user-avatars:

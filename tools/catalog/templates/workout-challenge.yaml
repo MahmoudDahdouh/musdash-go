@@ -1,0 +1,52 @@
+# name: Workout Challenge
+# about: A web app for running workout competitions between friends or colleagues, with optional Strava import.
+# docs: https://github.com/vanalmsick/workout_challenge#full-production-deployment
+# website: https://github.com/vanalmsick/workout_challenge
+# categories: home
+services:
+  workoutchallenge:
+    image: vanalmsick/workout_challenge:latest
+    environment:
+      - SERVICE_FQDN_WORKOUTCHALLENGE_80
+      - POSTGRES_HOST=database
+      - POSTGRES_DB=workoutchallenge
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - MAIN_HOST=${SERVICE_URL_WORKOUTCHALLENGE}
+      - HOSTS=${SERVICE_URL_WORKOUTCHALLENGE}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRET}
+      - TIME_ZONE=${TZ:-Europe/London}
+      - STRAVA_CLIENT_ID=${STRAVA_CLIENT_ID:-1234321}
+      - STRAVA_CLIENT_SECRET=${STRAVA_CLIENT_SECRET:-ReplaceWithClientSecret}
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-465}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - EMAIL_USE_SSL=${EMAIL_USE_SSL:-True}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-False}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - django-data:/workout_challenge/src-backend/data
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+  database:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=workoutchallenge
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

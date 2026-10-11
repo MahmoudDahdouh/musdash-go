@@ -1,0 +1,42 @@
+# name: Faridoon
+# about: A site for saving and sharing favourite chat quotes, with voting, moderation and its own MySQL database.
+# docs: https://jamesread.github.io/Faridoon/installation/docker-compose/
+# website: https://jamesread.github.io/Faridoon/
+# categories: productivity
+# source: musdash
+services:
+  faridoon:
+    image: ghcr.io/jamesread/faridoon:latest
+    environment:
+      - SERVICE_FQDN_FARIDOON_8080
+      - DB_HOST=mysql
+      - DB_NAME=faridoon
+      - DB_USER=${SERVICE_USER_FARIDOON}
+      - DB_PASS=${SERVICE_PASSWORD_FARIDOON}
+    volumes:
+      - faridoon-config:/config
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  mysql:
+    image: mysql:8.4
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=faridoon
+      - MYSQL_USER=${SERVICE_USER_FARIDOON}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_FARIDOON}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+volumes:
+  faridoon-config:
+  mysql-data:

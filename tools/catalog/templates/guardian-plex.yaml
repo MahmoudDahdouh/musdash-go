@@ -1,0 +1,20 @@
+# name: Guardian
+# about: Controls which devices and how many streams may use a Plex Media Server, with approvals, schedules and notifications.
+# docs: https://github.com/HydroshieldMKII/Guardian#installation
+# website: https://github.com/HydroshieldMKII/Guardian
+# categories: media, security
+services:
+  guardian:
+    image: hydroshieldmkii/guardian:latest
+    environment:
+      - SERVICE_FQDN_GUARDIAN_3000
+      - TRUST_PROXY_HOPS=1
+      - APP_URL=${SERVICE_URL_GUARDIAN}
+    volumes:
+      - guardian-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5

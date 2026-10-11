@@ -1,0 +1,20 @@
+# name: Pelican Panel
+# about: A web panel for creating and managing game servers, which run in Docker containers through its Wings daemon.
+# docs: https://pelican.dev/docs/panel/advanced/docker
+# website: https://pelican.dev/
+# categories: games, devtools
+services:
+  panel:
+    image: ghcr.io/pelican/panel:latest
+    environment:
+      - SERVICE_FQDN_PANEL_80
+      - XDG_DATA_HOME=/pelican-data
+      - APP_URL=${SERVICE_URL_PANEL}
+      - APP_KEY=base64:${SERVICE_BASE64_APPKEY}
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - BEHIND_PROXY=true
+      - MAIL_DRIVER=${MAIL_DRIVER:-log}
+    volumes:
+      - pelican-data:/pelican-data
+      - pelican-logs:/var/www/html/storage/logs

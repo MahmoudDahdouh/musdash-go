@@ -1,0 +1,28 @@
+# name: Tamari
+# about: A recipe manager with meal planning, shopping lists, recipe sharing and an explore catalogue of imported recipes.
+# docs: https://tamariapp.com/docs/
+# website: https://tamariapp.com/
+# categories: home
+# source: musdash
+services:
+  tamari:
+    image: ghcr.io/alexbates/tamari:latest
+    environment:
+      - SERVICE_FQDN_TAMARI_4888
+      - PUBLIC_URL=${SERVICE_URL_TAMARI}
+      - USE_PROXY_FIX=True
+      - REG_DISABLED=${REG_DISABLED:-False}
+      - MAIL_SERVER=${MAIL_SERVER:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+    volumes:
+      - tamari-appdata:/app/appdata
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4888/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+volumes:
+  tamari-appdata:

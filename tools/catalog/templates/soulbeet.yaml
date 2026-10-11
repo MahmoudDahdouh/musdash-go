@@ -1,0 +1,51 @@
+# name: Soulbeet
+# about: Finds albums on Soulseek, downloads them through slskd, tags them with beets and files them into a Navidrome library.
+# docs: https://github.com/terry90/soulbeet#self-hosting-with-docker
+# website: https://github.com/terry90/soulbeet
+# categories: media
+services:
+  soulbeet:
+    image: docker.io/docccccc/soulbeet:latest
+    environment:
+      - SERVICE_FQDN_SOULBEET_9765
+      - DATABASE_URL=sqlite:/data/soulbeet.db
+      - DOWNLOAD_PATH=/downloads
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRET}
+      - NAVIDROME_URL=http://navidrome:4533
+    volumes:
+      - soulbeet-data:/data
+      - slskd-downloads:/downloads
+      - music:/music
+    depends_on:
+      - slskd
+      - navidrome
+  navidrome:
+    image: deluan/navidrome:latest
+    environment:
+      - SERVICE_FQDN_NAVIDROME_4533
+      - ND_MUSICFOLDER=/music
+      - ND_BASEURL=${SERVICE_URL_NAVIDROME}
+      - ND_DEVAUTOCREATEADMINPASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - ND_ENABLEINSIGHTSCOLLECTOR=false
+    volumes:
+      - navidrome-data:/data
+      - music:/music
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:4533/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  slskd:
+    image: slskd/slskd:latest
+    environment:
+      - SLSKD_REMOTE_CONFIGURATION=true
+      - SLSKD_USERNAME=${SERVICE_USER_SLSKD}
+      - SLSKD_PASSWORD=${SERVICE_PASSWORD_SLSKD}
+      - SLSKD_API_KEY=${SERVICE_PASSWORD_SLSKDKEY}
+      - SLSKD_SLSK_USERNAME=${SERVICE_USER_SOULSEEK}
+      - SLSKD_SLSK_PASSWORD=${SERVICE_PASSWORD_SOULSEEK}
+    volumes:
+      - slskd-data:/app
+      - slskd-downloads:/app/downloads
+    ports:
+      - "50300:50300"

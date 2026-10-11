@@ -1,0 +1,48 @@
+# name: MQTT Web Interface
+# about: A web interface for watching, filtering and publishing MQTT messages, with rules, alerts and message history, bundled with a Mosquitto broker.
+# docs: https://github.com/terdia/mqttui#quick-start
+# website: https://github.com/terdia/mqttui
+# categories: home, devtools, monitoring
+# source: musdash
+services:
+  mqttui:
+    image: terdia07/mqttui:latest
+    environment:
+      - SERVICE_FQDN_MQTTUI_5000
+      - PORT=5000
+      - DEBUG=False
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+      - MQTT_TOPICS=${MQTT_TOPICS:-#}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRET}
+      - MQTTUI_ADMIN_USER=${SERVICE_USER_ADMIN}
+      - MQTTUI_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - DB_ENABLED=True
+      - DB_PATH=/app/data/mqtt_messages.db
+    volumes:
+      - mqttui-data:/app/data
+    depends_on:
+      mosquitto:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/login', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+  mosquitto:
+    image: eclipse-mosquitto:2
+    configs:
+      - source: mosquitto-config
+        target: /mosquitto/config/mosquitto.conf
+    volumes:
+      - mosquitto-data:/mosquitto/data
+volumes:
+  mosquitto-data:
+  mqttui-data:
+configs:
+  mosquitto-config:
+    content: |
+      listener 1883
+      allow_anonymous true
+      persistence false

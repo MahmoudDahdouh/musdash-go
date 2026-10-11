@@ -1,0 +1,33 @@
+# name: Dashbrr
+# about: A dashboard that shows the status of media server services such as Plex, Sonarr, Radarr and Prowlarr in one place.
+# docs: https://github.com/autobrr/dashbrr#docker-installation
+# website: https://github.com/autobrr/dashbrr
+# categories: media, monitoring
+services:
+  dashbrr:
+    image: ghcr.io/autobrr/dashbrr:latest
+    environment:
+      - SERVICE_FQDN_DASHBRR_8080
+      - DASHBRR__LISTEN_ADDR=0.0.0.0:8080
+      - DASHBRR__DB_TYPE=postgres
+      - DASHBRR__DB_HOST=postgres
+      - DASHBRR__DB_PORT=5432
+      - DASHBRR__DB_USER=${SERVICE_USER_POSTGRES}
+      - DASHBRR__DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - DASHBRR__DB_NAME=dashbrr
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=dashbrr
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

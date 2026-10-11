@@ -1,0 +1,26 @@
+# name: PlikShare
+# about: A file sharing server with encrypted storage, workspaces, share links and a choice of local disk or cloud storage.
+# docs: https://plikshare.com/download/manual-configuration
+# website: https://plikshare.com/
+# categories: storage
+# source: musdash
+services:
+  plikshare:
+    image: damiankrychowski/plikshare:latest
+    user: "0:0"
+    environment:
+      - SERVICE_FQDN_PLIKSHARE_8080
+      - ASPNETCORE_URLS=http://+:8080
+      - PlikShare_AppUrl=${SERVICE_URL_PLIKSHARE}
+      - PlikShare_AppOwners=${ADMIN_EMAIL:?}
+      - PlikShare_AppOwnersInitialPassword=${SERVICE_BASE64_ADMIN}
+      - PlikShare_EncryptionPasswords=${SERVICE_PASSWORD_64_ENCRYPTION}
+      - PlikShare_Volumes__Path=volumes
+      - PlikShare_Volumes__Main__Path=main
+      - PlikShare_Volumes__Other__0__Path=files
+    volumes:
+      - plikshare-main:/app/volumes/main
+      - plikshare-files:/app/volumes/files
+volumes:
+  plikshare-files:
+  plikshare-main:

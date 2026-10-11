@@ -1,0 +1,31 @@
+# name: Petio
+# about: A request and discovery companion for Plex where users ask for movies and shows and review what is on the server.
+# docs: https://docs.petio.tv/install-guides/docker
+# website: https://petio.tv/
+# categories: media
+# source: musdash
+services:
+  petio:
+    image: ghcr.io/petio-team/petio:latest
+    environment:
+      - SERVICE_FQDN_PETIO_7777
+      - TZ=${TZ:-Etc/UTC}
+    volumes:
+      - petio-config:/app/api/config
+      - petio-logs:/app/logs
+    depends_on:
+      mongo:
+        condition: service_healthy
+  mongo:
+    image: mongo:4.4
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongo", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+volumes:
+  mongo-data:
+  petio-config:
+  petio-logs:

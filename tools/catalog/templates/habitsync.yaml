@@ -1,0 +1,26 @@
+# name: HabitSync
+# about: A habit tracker with streaks, challenges and shared habits that works as a web app and on mobile.
+# docs: https://github.com/jofoerster/habitsync#docker-compose-recommended-for-production-use
+# website: https://github.com/jofoerster/habitsync
+# categories: productivity, home
+services:
+  habitsync:
+    image: ghcr.io/jofoerster/habitsync:latest
+    environment:
+      - SERVICE_FQDN_HABITSYNC_6842
+      - BASE_URL=${SERVICE_URL_HABITSYNC}
+      - APP_SECURITY_BASIC-AUTH-USERS_admin=${HABITSYNC_PASSWORD_HASH:?Paste a bcrypt hash of the password for the user admin}
+      - JWT_SECRET=${SERVICE_BASE64_64_JWT}
+      - SPRING_MAIL_ENABLED=${HABITSYNC_MAIL_ENABLED:-false}
+      - SPRING_MAIL_HOST=${HABITSYNC_MAIL_HOST:-}
+      - SPRING_MAIL_PORT=${HABITSYNC_MAIL_PORT:-587}
+      - SPRING_MAIL_USERNAME=${HABITSYNC_MAIL_USERNAME:-}
+      - SPRING_MAIL_PASSWORD=${HABITSYNC_MAIL_PASSWORD:-}
+    volumes:
+      - habitsync-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:6842/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 40s

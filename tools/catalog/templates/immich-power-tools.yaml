@@ -1,0 +1,26 @@
+# name: Immich Power Tools
+# about: Extra tools for an Immich photo library: merge people, bulk album changes, missing locations and statistics.
+# docs: https://github.com/immich-power-tools/immich-power-tools#-getting-started
+# website: https://immich-power-tools.featureos.app/
+# categories: media, home
+services:
+  immich-power-tools:
+    image: ghcr.io/immich-power-tools/immich-power-tools:latest
+    environment:
+      - SERVICE_FQDN_IMMICH_POWER_TOOLS_3000
+      - IMMICH_URL=${IMMICH_URL:?}
+      - EXTERNAL_IMMICH_URL=${EXTERNAL_IMMICH_URL:-}
+      - IMMICH_API_KEY=${IMMICH_API_KEY:?}
+      - DB_HOST=${IMMICH_DB_HOST:?}
+      - DB_PORT=${IMMICH_DB_PORT:-5432}
+      - DB_USERNAME=${IMMICH_DB_USERNAME:-postgres}
+      - DB_PASSWORD=${IMMICH_DB_PASSWORD:?}
+      - DB_DATABASE_NAME=${IMMICH_DB_NAME:-immich}
+      - SECURE_COOKIE=true
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - POWER_TOOLS_ENDPOINT_URL=${SERVICE_URL_IMMICH_POWER_TOOLS}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_BASE_URL=${AI_BASE_URL:-https://api.openai.com/v1}
+      - AI_MODEL=${AI_MODEL:-gpt-4o-mini}
+    volumes:
+      - immich-power-tools-data:/app/data

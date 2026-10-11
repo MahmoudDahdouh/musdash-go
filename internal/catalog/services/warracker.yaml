@@ -1,0 +1,47 @@
+# name: Warracker
+# about: Keeps track of product warranties, purchase receipts and expiry dates for one or more users.
+# docs: https://github.com/sassanix/Warracker#setup
+# website: https://warracker.com
+# categories: home, productivity
+# source: musdash
+services:
+  warracker:
+    image: ghcr.io/sassanix/warracker/main:latest
+    environment:
+      - SERVICE_FQDN_WARRACKER_80
+      - DB_HOST=warrackerdb
+      - DB_PORT=5432
+      - DB_NAME=warranty_db
+      - DB_USER=warranty_user
+      - DB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_SECRET}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - FRONTEND_URL=${SERVICE_URL_WARRACKER}
+      - APP_BASE_URL=${SERVICE_URL_WARRACKER}
+      - MAX_UPLOAD_MB=32
+      - NGINX_MAX_BODY_SIZE_VALUE=32M
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - warracker-uploads:/data/uploads
+    depends_on:
+      warrackerdb:
+        condition: service_healthy
+  warrackerdb:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=warranty_db
+      - POSTGRES_USER=warranty_user
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  postgres-data:
+  warracker-uploads:

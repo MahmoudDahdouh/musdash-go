@@ -1,0 +1,19 @@
+# name: YT-DLP Web Player
+# about: A web video player that plays links from any site yt-dlp supports, with quality choice, playlists and livestreams.
+# docs: https://github.com/Matszwe02/ytdlp_web_player#docker
+# website: https://github.com/Matszwe02/ytdlp_web_player
+# categories: media
+# source: musdash
+services:
+  ytdlp-web-player:
+    image: matszwe02/ytdlp_web_player:stable
+    environment:
+      - SERVICE_FQDN_YTDLP_WEB_PLAYER_5000
+      - APP_TITLE=${APP_TITLE:-YT-DLP Player}
+      - DEFAULT_QUALITY=${DEFAULT_QUALITY:-720}
+      - MAX_QUALITY=${MAX_QUALITY:-2160}
+      - MAX_PROCESSES=${MAX_PROCESSES:-5}
+    volumes:
+      - player-data:/app/data
+volumes:
+  player-data:

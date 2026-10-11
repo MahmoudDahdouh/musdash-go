@@ -1,0 +1,17 @@
+# name: Dim
+# about: A self-hosted media manager that organises movie and TV libraries with posters and metadata and streams them in a browser.
+# docs: https://github.com/Dusk-Labs/dim#running-with-docker
+# website: https://github.com/Dusk-Labs/dim
+# categories: media
+# source: musdash
+services:
+  dim:
+    image: ghcr.io/dusk-labs/dim:dev
+    environment:
+      - SERVICE_FQDN_DIM_8000
+    volumes:
+      - dim-config:/opt/dim/config
+      - dim-media:/media
+volumes:
+  dim-config:
+  dim-media:

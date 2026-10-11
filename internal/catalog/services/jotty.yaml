@@ -1,0 +1,28 @@
+# name: Jotty
+# about: A notes and checklists app with sharing, user accounts, an admin panel and an API, stored as plain files.
+# docs: https://github.com/fccview/jotty/blob/main/howto/DOCKER.md
+# website: https://github.com/fccview/jotty
+# categories: docs, productivity
+# source: musdash
+services:
+  jotty:
+    image: ghcr.io/fccview/jotty:latest
+    environment:
+      - SERVICE_FQDN_JOTTY_3000
+      - NODE_ENV=production
+      - HTTPS=true
+      - APP_URL=${SERVICE_URL_JOTTY}
+    volumes:
+      - jotty-data:/app/data
+      - jotty-config:/app/config
+      - jotty-cache:/app/.next/cache
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 40s
+volumes:
+  jotty-cache:
+  jotty-config:
+  jotty-data:

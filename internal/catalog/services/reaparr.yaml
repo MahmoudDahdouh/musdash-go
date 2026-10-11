@@ -1,0 +1,25 @@
+# name: Reaparr
+# about: Downloads movies and TV shows from the Plex servers a Plex account can reach, into folders of your own.
+# docs: https://www.reaparr.rocks/docs/installation/docker
+# website: https://www.reaparr.rocks/
+# categories: media, automation
+# source: musdash
+services:
+  reaparr:
+    image: reaparr/reaparr:latest
+    environment:
+      - SERVICE_FQDN_REAPARR_7000
+      - PUID=1000
+      - PGID=1000
+      - UMASK=002
+      - TZ=${TZ:-UTC}
+    volumes:
+      - reaparr-config:/Config
+      - reaparr-downloads:/Downloads
+      - reaparr-movies:/Movies
+      - reaparr-tvshows:/TvShows
+volumes:
+  reaparr-config:
+  reaparr-downloads:
+  reaparr-movies:
+  reaparr-tvshows:

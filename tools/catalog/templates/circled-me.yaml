@@ -1,0 +1,17 @@
+# name: circled.me
+# about: A server for backing up and sharing photos and videos, with albums, chat and video calls, used through its mobile app.
+# docs: https://github.com/circled-me/server#compiling-and-running-the-server
+# website: https://circled.me
+# categories: media, communication
+services:
+  circled-server:
+    image: gubble/circled-server:latest
+    environment:
+      - SERVICE_FQDN_CIRCLED_SERVER_8080
+      - SQLITE_FILE=/mnt/data1/circled.db
+      - BIND_ADDRESS=0.0.0.0:8080
+      - DEFAULT_BUCKET_DIR=/mnt/data1
+      - DEFAULT_ASSET_PATH_PATTERN=<year>/<month>/<id>
+      - FACE_DETECT=${FACE_DETECT:-yes}
+    volumes:
+      - circled-data:/mnt/data1

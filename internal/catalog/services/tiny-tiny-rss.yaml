@@ -1,0 +1,65 @@
+# name: Tiny Tiny RSS
+# about: A self-hosted web feed reader and aggregator with plugins, filters, labels and a mobile-friendly API.
+# docs: https://tt-rss.org/docs/Installation-Guide.html
+# website: https://tt-rss.org
+# categories: rss
+# source: musdash
+services:
+  web-nginx:
+    image: ghcr.io/tt-rss/tt-rss-web-nginx:latest
+    environment:
+      - SERVICE_FQDN_WEB_NGINX_80
+      - APP_WEB_ROOT=/var/www/html/tt-rss
+      - APP_BASE=
+    volumes:
+      - tt-rss-app:/var/www/html:ro
+    depends_on:
+      app:
+        condition: service_healthy
+  app:
+    image: ghcr.io/tt-rss/tt-rss:latest
+    environment:
+      - TTRSS_DB_USER=${SERVICE_USER_TTRSS}
+      - TTRSS_DB_NAME=ttrss
+      - TTRSS_DB_PASS=${SERVICE_PASSWORD_DB}
+      - TTRSS_SELF_URL_PATH=${SERVICE_URL_WEB_NGINX}
+      - ADMIN_USER_PASS=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - tt-rss-app:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /var/www/html/tt-rss/.app_is_ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+  updater:
+    image: ghcr.io/tt-rss/tt-rss:latest
+    command: /opt/tt-rss/updater.sh
+    environment:
+      - TTRSS_DB_USER=${SERVICE_USER_TTRSS}
+      - TTRSS_DB_NAME=ttrss
+      - TTRSS_DB_PASS=${SERVICE_PASSWORD_DB}
+      - TTRSS_SELF_URL_PATH=${SERVICE_URL_WEB_NGINX}
+    volumes:
+      - tt-rss-app:/var/www/html
+    depends_on:
+      app:
+        condition: service_healthy
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_TTRSS}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_DB}
+      - POSTGRES_DB=ttrss
+    volumes:
+      - tt-rss-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+volumes:
+  tt-rss-app:
+  tt-rss-db:

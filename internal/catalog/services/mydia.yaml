@@ -1,0 +1,32 @@
+# name: Mydia
+# about: A media manager for movies and TV shows with metadata, monitored downloads, quality profiles and a built-in player.
+# docs: https://docs.mydia.dev/latest/using/how-to/install-docker-compose/
+# website: https://github.com/getmydia/mydia
+# categories: media
+# source: musdash
+services:
+  mydia:
+    image: ghcr.io/getmydia/mydia:latest
+    environment:
+      - SERVICE_FQDN_MYDIA_4000
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+      - SECRET_KEY_BASE=${SERVICE_PASSWORD_64_SECRET}
+      - GUARDIAN_SECRET_KEY=${SERVICE_PASSWORD_64_GUARDIAN}
+      - PHX_HOST=${SERVICE_FQDN_MYDIA}
+      - PORT=4000
+      - MOVIES_PATH=/media/library/movies
+      - TV_PATH=/media/library/tv
+    volumes:
+      - mydia-config:/config
+      - mydia-media:/media
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:4000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+volumes:
+  mydia-config:
+  mydia-media:

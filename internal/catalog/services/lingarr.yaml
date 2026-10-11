@@ -1,0 +1,44 @@
+# name: Lingarr
+# about: Translates subtitle files for movies and TV shows, working with Sonarr and Radarr and a choice of translation services.
+# docs: https://github.com/lingarr-translate/lingarr/blob/main/Lingarr.Docs/getting-started/installation.md
+# website: https://lingarr.com
+# categories: media, automation
+# source: musdash
+services:
+  lingarr:
+    image: ghcr.io/lingarr-translate/lingarr:latest
+    environment:
+      - SERVICE_FQDN_LINGARR_9876
+      - ASPNETCORE_URLS=http://+:9876
+      - DB_CONNECTION=mysql
+      - DB_HOST=lingarr-db
+      - DB_PORT=3306
+      - DB_DATABASE=lingarr
+      - DB_USERNAME=${SERVICE_USER_LINGARR}
+      - DB_PASSWORD=${SERVICE_PASSWORD_LINGARR}
+    volumes:
+      - lingarr-config:/app/config
+      - lingarr-movies:/movies
+      - lingarr-tv:/tv
+    depends_on:
+      lingarr-db:
+        condition: service_healthy
+  lingarr-db:
+    image: mariadb:11
+    environment:
+      - MYSQL_DATABASE=lingarr
+      - MYSQL_USER=${SERVICE_USER_LINGARR}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_LINGARR}
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+    volumes:
+      - lingarr-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  lingarr-config:
+  lingarr-db-data:
+  lingarr-movies:
+  lingarr-tv:
