@@ -59,7 +59,7 @@ templ DatabaseTerminal(s ui.Shell, v DatabaseView) {
 }
 
 // ServiceTerminal offers a terminal in one of a service's containers.
-templ ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen string) {
+templ ServiceTerminal(s ui.Shell, v ServiceView, containers []TerminalChoice, chosen string) {
 	@serviceFrame(s, v, "terminal") {
 		if chosen == "" {
 			@ui.EmptyState(ui.EmptyProps{Icon: "terminal", Title: "Nothing is running", Text: "A terminal opens in one of the service's running containers. Deploy the service first."})
@@ -68,14 +68,14 @@ templ ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen str
 				<p class="muted text-sm">A shell in one of the service's containers. It ends when you leave this page.</p>
 				if len(containers) > 1 {
 					<nav class="flex flex-wrap gap-1" aria-label="Container">
-						for _, name := range containers {
+						for _, c := range containers {
 							<a
-								class={ "btn btn-sm", templ.KV("btn-secondary", name == chosen), templ.KV("btn-ghost", name != chosen) }
-								href={ templ.SafeURL(v.Path() + "/terminal?container=" + name) }
-								if name == chosen {
+								class={ "btn btn-sm", templ.KV("btn-secondary", c.Container == chosen), templ.KV("btn-ghost", c.Container != chosen) }
+								href={ templ.SafeURL(v.Path() + "/terminal?container=" + c.Container) }
+								if c.Container == chosen {
 									aria-current="true"
 								}
-							>{ name }</a>
+							>{ c.Label }</a>
 						}
 					</nav>
 				}

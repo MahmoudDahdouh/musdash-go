@@ -187,7 +187,7 @@ templ DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connectio
 						if v.DB.Container != "" {
 							<p>Its container is still there: the Logs tab shows what it is doing, and Stop removes it.</p>
 						}
-						<p class="break-words">{ v.DB.LastError }</p>
+						<p class="break-words">{ Said(v.DB.LastError) }</p>
 					}
 				</div>
 			}

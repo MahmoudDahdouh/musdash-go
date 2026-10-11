@@ -217,7 +217,7 @@ func DatabaseTerminal(s ui.Shell, v DatabaseView) templ.Component {
 }
 
 // ServiceTerminal offers a terminal in one of a service's containers.
-func ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen string) templ.Component {
+func ServiceTerminal(s ui.Shell, v ServiceView, containers []TerminalChoice, chosen string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -265,8 +265,8 @@ func ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen stri
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					for _, name := range containers {
-						var templ_7745c5c3_Var11 = []any{"btn btn-sm", templ.KV("btn-secondary", name == chosen), templ.KV("btn-ghost", name != chosen)}
+					for _, c := range containers {
+						var templ_7745c5c3_Var11 = []any{"btn btn-sm", templ.KV("btn-secondary", c.Container == chosen), templ.KV("btn-ghost", c.Container != chosen)}
 						templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var11...)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
@@ -289,9 +289,9 @@ func ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen stri
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var13 templ.SafeURL
-						templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/terminal?container=" + name))
+						templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(v.Path() + "/terminal?container=" + c.Container))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/terminal.templ`, Line: 74, Col: 70}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/terminal.templ`, Line: 74, Col: 77}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 						if templ_7745c5c3_Err != nil {
@@ -301,7 +301,7 @@ func ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen stri
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						if name == chosen {
+						if c.Container == chosen {
 							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, " aria-current=\"true\"")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
@@ -312,9 +312,9 @@ func ServiceTerminal(s ui.Shell, v ServiceView, containers []string, chosen stri
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var14 string
-						templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(name)
+						templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(c.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/terminal.templ`, Line: 78, Col: 14}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/terminal.templ`, Line: 78, Col: 17}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 						if templ_7745c5c3_Err != nil {

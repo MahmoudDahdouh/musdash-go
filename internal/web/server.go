@@ -281,6 +281,7 @@ func (s *Server) Handler() http.Handler {
 	service("POST", "/stop", member, s.serviceStop)
 	service("GET", "/deploy-log/stream", member, s.serviceDeployLog)
 	service("GET", "/containers", member, s.serviceContainersNow)
+	service("POST", "/containers/restart", member, s.serviceContainerRestart)
 	service("GET", "/logs", member, s.serviceLogs)
 	service("GET", "/logs/stream", member, s.serviceLogsStream)
 	service("GET", "/compose", member, s.serviceCompose)

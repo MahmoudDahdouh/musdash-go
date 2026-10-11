@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -83,7 +84,7 @@ templ serviceHeaderBody(csrf, base string, s db.Service) {
 			<h1 class="text-xl font-semibold tracking-tight">{ s.Name }</h1>
 			@ui.StatusPill(serviceState(s))
 		</div>
-		<p class="mt-0.5 truncate text-ink-mute">{ templateName(s.Template) }</p>
+		<p class={ "mt-0.5 truncate text-ink-mute", templ.KV("fact", s.FromGit()) }>{ stackSource(s) }</p>
 	</div>
 	if s.Status != db.AppDeploying {
 		<div class="flex flex-wrap items-center gap-2">
@@ -347,21 +348,21 @@ type Generated struct {
 	Value string
 }
 
-templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing []string) {
+templ ServiceOverview(s ui.Shell, v ServiceView, server string, generated []Generated, missing []string) {
 	@serviceFrame(s, v, "overview") {
 		<div class="grid gap-6 lg:grid-cols-2">
-			if v.Service.LastError != "" && v.Service.Status == db.AppFailed {
+			if v.Service.LastError != "" && (v.Service.Status == db.AppFailed || v.Service.Members == "" && v.Service.Status != db.AppDeploying) {
 				<div class="lg:col-span-2">
 					@ui.Notice(ui.ToneDanger) {
 						<p class="font-semibold">The last deployment failed</p>
-						<p class="whitespace-pre-wrap break-words">{ v.Service.LastError }</p>
+						<p class="whitespace-pre-wrap break-words">{ Said(v.Service.LastError) }</p>
 					}
 				</div>
 			} else if v.Service.LastError != "" && v.Service.Status != db.AppDeploying {
 				<div class="lg:col-span-2">
 					@ui.Notice(ui.ToneWarn) {
 						<p class="font-semibold">The last deployment failed. What was running before it still is.</p>
-						<p class="whitespace-pre-wrap break-words">{ v.Service.LastError }</p>
+						<p class="whitespace-pre-wrap break-words">{ Said(v.Service.LastError) }</p>
 					}
 				</div>
 			}
@@ -422,11 +423,7 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 					<h2 class="card-title">Stack</h2>
 				</div>
 				<div class="card-body">
-					@ui.KeyValue([]ui.KVItem{
-						{Key: "From", Value: stackSource(v.Service)},
-						{Key: "Services", Value: stackCount(v.Service)},
-						{Key: "Network", Value: serviceNetwork(v)},
-					})
+					@ui.KeyValue(stackFacts(v, server))
 				</div>
 			</section>
 			<section class="card lg:col-span-2">
@@ -491,6 +488,19 @@ templ ServiceOverview(s ui.Shell, v ServiceView, generated []Generated, missing 
 			</section>
 		</div>
 	}
+}
+
+// stackFacts are the rows of the Overview's Stack card. The server is left
+// out when it could not be read.
+func stackFacts(v ServiceView, server string) []ui.KVItem {
+	facts := []ui.KVItem{
+		{Key: "From", Value: stackSource(v.Service), Mono: v.Service.FromGit()},
+		{Key: "Services", Value: stackCount(v.Service)},
+	}
+	if server != "" {
+		facts = append(facts, ui.KVItem{Key: "Server", Value: server})
+	}
+	return append(facts, ui.KVItem{Key: "Network", Value: serviceNetwork(v)})
 }
 
 func serviceNetwork(v ServiceView) string {
@@ -563,8 +573,61 @@ type StackRow struct {
 	// words and Status Docker's own sentence.
 	State, Label, Status string
 	Published            []string
-	// Running says a terminal can be opened in it.
-	Running bool
+	// Running says a terminal can be opened in it, and Restarts that it
+	// can be restarted.
+	Running, Restarts bool
+}
+
+// TerminalChoice is one container a stack's terminal can be opened in.
+type TerminalChoice struct {
+	Container string
+	Label     string
+}
+
+// ContainerLabel is what a container of a stack is called on its pages:
+// what Compose named it within the stack, such as web-1. One named by the
+// file itself (container_name) keeps its name.
+func ContainerLabel(serviceID, container string) string {
+	return strings.TrimPrefix(container, "musdash-"+serviceID+"-")
+}
+
+// TerminalChoices names a stack's containers the way its Logs tab names
+// its services, and in that order: the service alone where it has one
+// container, with Compose's number where it has several.
+func TerminalChoices(serviceID string, containers []string) []TerminalChoice {
+	base := func(label string) (string, bool) {
+		i := strings.LastIndexByte(label, '-')
+		if i <= 0 || i == len(label)-1 || strings.Trim(label[i+1:], "0123456789") != "" {
+			return label, false
+		}
+		return label[:i], true
+	}
+	count := map[string]int{}
+	for _, name := range containers {
+		b, _ := base(ContainerLabel(serviceID, name))
+		count[b]++
+	}
+	out := make([]TerminalChoice, 0, len(containers))
+	for _, name := range containers {
+		label := ContainerLabel(serviceID, name)
+		// Only what Compose named: a name of the file's own is kept whole.
+		if b, numbered := base(label); numbered && count[b] == 1 && label != name {
+			label = b
+		}
+		out = append(out, TerminalChoice{Container: name, Label: label})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Label < out[j].Label })
+	return out
+}
+
+// Said is a stored failure as a notice shows it. It was put together as
+// the end of a sentence ("the health check did not pass…"); alone in a
+// notice it is the whole sentence, and starts like one.
+func Said(text string) string {
+	if text != "" && text[0] >= 'a' && text[0] <= 'z' {
+		return string(text[0]-'a'+'A') + text[1:]
+	}
+	return text
 }
 
 // stackSource says where a stack's Compose file comes from.
@@ -594,13 +657,13 @@ func stackCount(s db.Service) string {
 // asks again when the header says the stack's state has changed, and when
 // Refresh is pressed: not on a timer, because each answer is a command run
 // on the server.
-templ StackContainers(v ServiceView, rows []StackRow, problem string) {
+templ StackContainers(csrf string, v ServiceView, rows []StackRow, problem string) {
 	<div id="stack-containers" hx-get={ v.Path() + "/containers" } hx-trigger="stack-changed from:body" hx-swap="outerHTML">
-		@stackContainersBody(v, rows, problem)
+		@stackContainersBody(csrf, v, rows, problem)
 	</div>
 }
 
-templ stackContainersBody(v ServiceView, rows []StackRow, problem string) {
+templ stackContainersBody(csrf string, v ServiceView, rows []StackRow, problem string) {
 	if problem != "" {
 		<p class="muted card-body text-sm" role="status">{ problem }</p>
 	} else if len(rows) == 0 {
@@ -634,26 +697,40 @@ templ stackContainersBody(v ServiceView, rows []StackRow, problem string) {
 							<span class="fact text-sm">{ strings.Join(row.Published, ", ") }</span>
 						}
 					</td>
-					<td>
+					<td class="text-right">
 						if row.Container != "" {
-							<div class="flex items-center justify-end gap-2">
-								if row.Service != "" {
-									@ui.LinkButton(v.Path()+"/logs?service="+row.Service, ui.ButtonProps{Variant: ui.Ghost, Small: true, Icon: "file"}) {
-										Logs
-									}
-								}
-								if row.Running {
-									@ui.LinkButton(v.Path()+"/terminal?container="+row.Container, ui.ButtonProps{Variant: ui.Ghost, Small: true, Icon: "terminal"}) {
-										Terminal
-									}
-								}
-							</div>
+							@stackRowMenu(csrf, v, row)
 						}
 					</td>
 				</tr>
 			}
 		}
 	}
+}
+
+// stackRowMenu is what can be done with one container of a stack: its
+// output, a shell in it, and a restart. They are a menu, since a stack of
+// twelve has thirty-six of them and the table's width is the image's. The
+// menu is in the form the restart sends; the other two are links.
+templ stackRowMenu(csrf string, v ServiceView, row StackRow) {
+	<form class="inline-block" method="post" action={ templ.SafeURL(v.Path() + "/containers/restart") }>
+		@ui.CSRF(csrf)
+		<input type="hidden" name="container" value={ row.Container }/>
+		@ui.Menu(ui.MenuProps{ID: "actions-" + row.Container, Label: "Actions for " + orDefault(row.Service, row.Container), Class: "btn btn-ghost btn-sm btn-icon", End: true, Button: ui.Icon("more")}) {
+			if row.Service != "" {
+				@ui.MenuItem(ui.MenuItemProps{Href: v.Path() + "/logs?service=" + row.Service, Icon: "file", Label: "Logs"})
+			}
+			if row.Running {
+				@ui.MenuItem(ui.MenuItemProps{Href: v.Path() + "/terminal?container=" + row.Container, Icon: "terminal", Label: "Terminal"})
+			}
+			if row.Restarts {
+				if row.Service != "" || row.Running {
+					@ui.MenuSep()
+				}
+				@ui.MenuItem(ui.MenuItemProps{Icon: "refresh", Label: "Restart", Attrs: ui.Ask("Restart "+orDefault(row.Service, row.Container)+"?", "The container is stopped and started again as it is, and does not answer in between. A change to the file or its variables is not applied by this: redeploy for that.", "Restart", false)})
+			}
+		}
+	</form>
 }
 
 func shortCommit(c string) string {

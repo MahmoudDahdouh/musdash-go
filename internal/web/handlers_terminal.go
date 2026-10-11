@@ -401,6 +401,9 @@ func (s *Server) serviceTerminal(w http.ResponseWriter, r *http.Request) {
 		// The page still opens; it says there is nothing to connect to.
 		s.Log.Warn("list a service's containers", "service", v.Service.ID, "err", err)
 	}
+	// In the order the page lists them, so the one it starts with is its
+	// first.
+	choices := pages.TerminalChoices(v.Service.ID, names)
 	chosen := r.URL.Query().Get("container")
 	found := false
 	for _, name := range names {
@@ -408,11 +411,11 @@ func (s *Server) serviceTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 	if !found {
 		chosen = ""
-		if len(names) > 0 {
-			chosen = names[0]
+		if len(choices) > 0 {
+			chosen = choices[0].Container
 		}
 	}
-	s.render(w, r, http.StatusOK, pages.ServiceTerminal(s.serviceShell(w, r, v), v, names, chosen))
+	s.render(w, r, http.StatusOK, pages.ServiceTerminal(s.serviceShell(w, r, v), v, choices, chosen))
 }
 
 // serviceTerminalWS opens a terminal in one container of a service. The

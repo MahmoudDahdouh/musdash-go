@@ -844,6 +844,58 @@ func (d *Deployer) StopService(ctx context.Context, id string) error {
 	return d.composeDown(ctx, r, s, "stop", "--timeout", strconv.Itoa(int(d.dbStopGrace.Seconds())))
 }
 
+// ErrNoSuchContainer says a container that was named is not one of the
+// stack's, as its server lists them now.
+var ErrNoSuchContainer = errors.New("the stack has no such container")
+
+// ErrStopped says a stack is stopped: nothing of it is to be started alone.
+var ErrStopped = errors.New("the stack is stopped")
+
+// RestartServiceContainer restarts one container of a stack, as it was
+// made: no change is applied, which is what a deployment is for. The name
+// is only a choice among the containers the server lists for this stack,
+// and the stack's lock is held, so it cannot run into a deployment or a
+// stop.
+func (d *Deployer) RestartServiceContainer(ctx context.Context, id, container string) error {
+	mu := d.lockFor(id)
+	if !lockSoon(mu) {
+		return ErrBusy
+	}
+	defer mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), d.dbStopGrace+time.Minute)
+	defer cancel()
+	s, err := d.DB.ServiceByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	switch s.Status {
+	case db.AppDeploying:
+		// Queued, and waiting for the lock this holds.
+		return ErrBusy
+	case db.AppStopped:
+		return ErrStopped
+	}
+	server, err := d.DB.ServerByID(ctx, s.ServerID)
+	if err != nil {
+		return err
+	}
+	r, err := d.Runners.Runner(ctx, server)
+	if err != nil {
+		return err
+	}
+	dk := docker.Client{R: r}
+	list, err := dk.StackContainers(ctx, s.ID)
+	if err != nil {
+		return err
+	}
+	for _, c := range list {
+		if c.Name == container {
+			return dk.Restart(ctx, container, d.dbStopGrace)
+		}
+	}
+	return ErrNoSuchContainer
+}
+
 // composeDown runs a Compose command that winds a project down. A project
 // that was never started has no resolved file; then there is nothing to do.
 func (d *Deployer) composeDown(ctx context.Context, r runner.Runner, s db.Service, args ...string) error {

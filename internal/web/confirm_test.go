@@ -17,7 +17,7 @@ import (
 // ui.Confirm and ui.FormDialog are dialogs already and are not written out
 // as a <form> in a page.
 func TestCriticalFormsAsk(t *testing.T) {
-	critical := regexp.MustCompile(`/(delete|stop|rollback|restore|forget-host-key|two-step-off|role|reset|proxy|logout|deploy-token|webhook-secret)"`)
+	critical := regexp.MustCompile(`/(delete|stop|restart|rollback|restore|forget-host-key|two-step-off|role|reset|proxy|logout|deploy-token|webhook-secret)"`)
 	form := regexp.MustCompile(`(?s)<form\b.*?</form>`)
 	action := regexp.MustCompile(`action=(\{[^\n]*\}|"[^"]*")`)
 	// Not critical, though the address says delete: the row of a backup

@@ -152,6 +152,13 @@ func (c Client) Stop(ctx context.Context, container string, grace time.Duration)
 	return ignoreMissing(err)
 }
 
+// Restart stops a container, killing it after the grace period, and starts
+// it again as it was made.
+func (c Client) Restart(ctx context.Context, container string, grace time.Duration) error {
+	_, err := c.R.Output(ctx, cmd("restart", "--time", strconv.Itoa(int(grace.Seconds())), container))
+	return err
+}
+
 // Remove deletes a container, running or not. A container that is already
 // gone is not an error.
 func (c Client) Remove(ctx context.Context, container string) error {

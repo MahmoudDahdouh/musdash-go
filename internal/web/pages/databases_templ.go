@@ -686,9 +686,9 @@ func DatabaseOverview(s ui.Shell, v DatabaseView, server db.Server, c Connection
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var25 string
-					templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(v.DB.LastError)
+					templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(Said(v.DB.LastError))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 190, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/databases.templ`, Line: 190, Col: 51}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 					if templ_7745c5c3_Err != nil {

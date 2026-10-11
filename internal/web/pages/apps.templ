@@ -613,7 +613,7 @@ templ AppOverview(s ui.Shell, v AppView, server db.Server, last *db.Deployment) 
 							<p class="fact truncate">{ orDefault(last.Image, "building") }</p>
 							<p class="muted text-sm">{ ui.Ago(last.CreatedAt) }</p>
 							if last.Error != "" {
-								<p class="mt-1 whitespace-pre-line break-words text-sm text-danger">{ last.Error }</p>
+								<p class="mt-1 whitespace-pre-line break-words text-sm text-danger">{ Said(last.Error) }</p>
 							}
 						</div>
 						@ui.JobPill(last.Status)
@@ -712,7 +712,7 @@ templ deploymentStatusBody(d db.Deployment) {
 	</div>
 	if d.Error != "" {
 		@ui.Notice(ui.ToneDanger) {
-			<p class="whitespace-pre-line break-words">{ d.Error }</p>
+			<p class="whitespace-pre-line break-words">{ Said(d.Error) }</p>
 		}
 	}
 }

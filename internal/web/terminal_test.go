@@ -697,8 +697,9 @@ func TestServiceTerminalIsOnlyInItsOwnContainers(t *testing.T) {
 			t.Errorf("the page offers %q", not)
 		}
 	}
-	// A name that is not on the list falls back to the first that is.
-	if _, page := a.get(base + "?container=" + app.Container); !strings.Contains(page, `ws?container=stack-web-1"`) {
+	// A name that is not on the list falls back to the first the page
+	// lists, which is in the order of the names.
+	if _, page := a.get(base + "?container=" + app.Container); !strings.Contains(page, `ws?container=stack-db-1"`) {
 		t.Error("an unknown container was not replaced by the first of the service's own")
 	}
 	for _, name := range []string{app.Container, "stack-init-1", "--privileged", "", "nosuch"} {

@@ -513,7 +513,9 @@ func (s *Server) serviceOverview(w http.ResponseWriter, r *http.Request) {
 			v.Service.Status, v.Service.LastError = db.AppFailed, sentence(err)
 		}
 	}
-	s.render(w, r, http.StatusOK, pages.ServiceOverview(s.serviceShell(w, r, v), v, generated, missing))
+	// Named on the page; a server that cannot be read leaves the row out.
+	server, _ := s.DB.ServerByID(r.Context(), v.Service.ServerID)
+	s.render(w, r, http.StatusOK, pages.ServiceOverview(s.serviceShell(w, r, v), v, server.Name, generated, missing))
 }
 
 // refreshWhenSettled tells a page whose header was polling a deployment
@@ -588,6 +590,32 @@ func (s *Server) serviceStop(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, v.Path())
 }
 
+// serviceContainerRestart restarts one container of a stack. Which one is
+// a choice among the stack's own, made by the deployer against the
+// server's list; the form's value is never part of anything else.
+func (s *Server) serviceContainerRestart(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.loadService(w, r)
+	if !ok {
+		return
+	}
+	name := r.PostFormValue("container")
+	err := s.Deploy.RestartServiceContainer(r.Context(), v.Service.ID, name)
+	switch {
+	case errors.Is(err, deploy.ErrBusy):
+		setFlash(w, r, ui.ToneWarn, "The service is being deployed. Restart the container once that has finished.")
+	case errors.Is(err, deploy.ErrStopped):
+		setFlash(w, r, ui.ToneWarn, "The service is stopped. Deploy it to start its containers.")
+	case errors.Is(err, deploy.ErrNoSuchContainer):
+		setFlash(w, r, ui.ToneWarn, "The stack has no such container any more. Refresh the list.")
+	case err != nil:
+		s.Log.Error("restart a service's container", "service", v.Service.ID, "err", err)
+		setFlash(w, r, ui.ToneDanger, "The container could not be restarted: "+err.Error())
+	default:
+		setFlash(w, r, ui.ToneOK, pages.ContainerLabel(v.Service.ID, name)+" was restarted.")
+	}
+	redirect(w, r, v.Path())
+}
+
 // serviceDeployLog streams the output of the service's latest deployment:
 // all of it at once when the deployment is over, as it is written while it
 // runs.
@@ -643,7 +671,7 @@ func (s *Server) serviceContainersNow(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		// The page does not ask again by itself, so it is told why it has
 		// no list and how to get one.
-		s.render(w, r, http.StatusOK, pages.StackContainers(v, nil, "The dashboard is busy asking servers other questions. Choose Refresh to ask again."))
+		s.render(w, r, http.StatusOK, pages.StackContainers(sessionFrom(r).CSRFToken, v, nil, "The dashboard is busy asking servers other questions. Choose Refresh to ask again."))
 		return
 	}
 	defer release()
@@ -668,7 +696,7 @@ func (s *Server) serviceContainersNow(w http.ResponseWriter, r *http.Request) {
 		s.Log.Warn("list a service's containers", "service", v.Service.ID, "err", err)
 		problem = "The server did not answer the question. Choose Refresh to ask again."
 	}
-	s.render(w, r, http.StatusOK, pages.StackContainers(v, stackRows(v.Service, list), problem))
+	s.render(w, r, http.StatusOK, pages.StackContainers(sessionFrom(r).CSRFToken, v, stackRows(v.Service, list), problem))
 }
 
 // stackRows lines up what the server reports with what the file holds: a
@@ -704,6 +732,9 @@ func stackRows(svc db.Service, list []docker.StackContainer) []pages.StackRow {
 		if row.State == "unhealthy" || row.State == "starting" {
 			row.Running = true
 		}
+		// One that did its job is not run a second time by a button, and
+		// one of a stopped stack is started by a deployment.
+		row.Restarts = row.Label != "Finished" && svc.Status != db.AppStopped && svc.Status != db.AppDeploying
 		rows = append(rows, row)
 	}
 	names := svc.MemberNames()
