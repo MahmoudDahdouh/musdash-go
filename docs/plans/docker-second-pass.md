@@ -24,6 +24,9 @@ A fresh install in a container of its own (Docker in Docker), four Docker image 
 | 12 | A failure is shown as it was wrapped: "the health check did not pass…", "the Compose file could not be read…", lower case at the start of a notice | Notices |
 | 13 | The new-service form from Git is one ungrouped list with the name first, where the app's Git form has three groups and takes the name from the repository | New service from Git |
 | 14 | A private image fails with the registry's "denied" and nothing about what to do | Docker image app |
+| 15 | A file that names its containers (`container_name`) is refused. Found when stacks from public repositories were tried, after the plan was written: one of five failed on it | Deployment of a stack |
+| 16 | Several stacks made together are deployed one after another, and each one waiting shows "Deploying" over an empty log | Stack overview |
+| 17 | Compose prints a line of progress for every megabyte of a layer: a pull of Postgres is hundreds of lines | Deployment log |
 
 What was looked at and left: the Docker image form, the Domains dialogs of both kinds, Storage, Tasks, Environment, Metrics, the delete dialogs, the Compose reads list, logs by service, containers with their states. They do what the first pass meant them to.
 
@@ -43,6 +46,10 @@ What was looked at and left: the Docker image form, the Domains dialogs of both 
 | 10 | A line of a stack's pull or start that repeats the one before it is written once | The log is read by a person |
 | 11 | A stored failure is shown with a capital first letter | It is a sentence in a notice |
 | 12 | A pull that the registry refused says what to do, if signing in on the server is found to work when tried: `docker login` there, as the account musdash runs as | The store of registry credentials is still the next thing missing; until then the way that works is said where the failure is |
+| 13 | A `container_name` is taken out as the proxy's ports are, and said in the log: containers keep Compose's names under the stack's project. The name becomes an alias of the service on the stack's own networks | The reason for refusing it stands (two stacks could claim one name), and the file is often not the person's. A container answers to its name on its networks, which is all the rest of a file can rely on, and an alias on the stack's own networks is already something a stack may have |
+| 14 | A stack's actions for one container (logs, terminal, restart) are a menu at the end of its row | Three buttons a row left the image column of a stack of twelve the width of five letters |
+| 15 | A first deployment that waits its turn says so where its log will be | "Deploying" over an empty box for the minutes the stacks before it take reads as stuck |
+| 16 | Of a layer's progress a line is written every five seconds | Enough to see that it moves |
 
 **Not in this piece.** A store of registry credentials with a page of its own. A history of a stack's deployments (a stack has its latest log). A banner for a Compose file saved and not yet deployed. A view of the resolved Compose document (it holds every secret). Restart for an app (its Redeploy replaces the container without a gap). The header's buttons, which another piece of work (cancelling a deployment) is changing.
 

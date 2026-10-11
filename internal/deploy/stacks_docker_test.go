@@ -47,15 +47,25 @@ func publicPort(t *testing.T) int {
 	return 0
 }
 
-func httpGet(port int) (string, error) {
-	client := http.Client{Timeout: 5 * time.Second}
-	res, err := client.Get("http://127.0.0.1:" + strconv.Itoa(port) + "/")
-	if err != nil {
-		return "", err
+func httpGet(port int) (string, error) { return httpGetPath(port, "/") }
+
+// httpGetPath asks a loopback port for a path. A container that has only
+// just been started may not listen yet: it is asked again for a while.
+func httpGetPath(port int, path string) (body string, err error) {
+	if path == "" {
+		path = "/"
 	}
-	defer res.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
-	return string(body), nil
+	client := http.Client{Timeout: 5 * time.Second}
+	for range 20 {
+		var res *http.Response
+		if res, err = client.Get("http://127.0.0.1:" + strconv.Itoa(port) + path); err == nil {
+			raw, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+			res.Body.Close()
+			return string(raw), nil
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return "", err
 }
 
 // TestStacksWithDocker deploys a small, a medium and a large stack on the

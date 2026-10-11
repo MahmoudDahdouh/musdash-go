@@ -1,0 +1,9 @@
+# A small project as it is written for `docker compose up` on a machine of
+# one's own: one service, built from the repository, on port 80 of the
+# machine. On a musdash server port 80 is the proxy's: the stack comes up
+# without that line, and web is given a domain instead.
+services:
+  web:
+    build: ./web
+    ports:
+      - "80:8080"

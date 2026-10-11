@@ -1,0 +1,94 @@
+# A larger project as it is written for `docker compose up`: a gateway in
+# front, an API built with an argument, a database with a password, a job
+# that runs once before the API starts, and five small services that share
+# their settings through an extension field.
+#
+# What a musdash server makes of it: ports 80 and 443 are the proxy's, so
+# the gateway comes up without them and is given a domain; the password is
+# generated (SERVICE_PASSWORD_DB); GREETING has to be given a value.
+
+x-site: &site
+  image: busybox:1.36
+  command: ["sh", "-c", "mkdir -p /www && hostname > /www/index.html && exec httpd -f -p 8080 -h /www"]
+  expose:
+    - "8080"
+  restart: unless-stopped
+
+services:
+  gateway:
+    build: ./gateway
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - ./gateway/extra.html:/www/extra.html:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  api:
+    build:
+      context: ./api
+      args:
+        GREETING: ${GREETING:?say what the api greets with}
+    environment:
+      DATABASE_URL: redis://:${SERVICE_PASSWORD_DB}@db:6379
+      REGION: ${REGION:-eu}
+    expose:
+      - "3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  db:
+    image: redis:7-alpine
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${SERVICE_PASSWORD_DB}
+    volumes:
+      - dbdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  migrate:
+    image: busybox:1.36
+    command: ["sh", "-c", "echo migrated"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    image: busybox:1.36
+    command: ["sh", "-c", "while true; do echo working; sleep 30; done"]
+    depends_on:
+      - db
+
+  admin:
+    <<: *site
+  docs:
+    <<: *site
+  search:
+    <<: *site
+  mailer:
+    <<: *site
+  metrics:
+    <<: *site
+
+volumes:
+  dbdata:

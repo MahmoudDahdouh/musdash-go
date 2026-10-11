@@ -31,6 +31,7 @@ What to know about the templates made from Coolify's and Dokploy's:
 Paste the file as you would run it with `docker compose`. The form lists what the text reads while you type: the variables that need a value from you, the ones the file has a default for, the values musdash generates and the services that get a domain. Nothing is started until the service is deployed, and the first deployment says what Docker made of the file.
 
 - Any `${NAME}` in the file is yours to set, in the Variables box (one `NAME=value` a line, stored encrypted). One the file gives no default for (`${NAME}` or `${NAME:?message}`) is listed under "Needs a value".
+- A stack is not deployed while a variable its file insists on (`${NAME:?message}`) has no value: the form says which when "Deploy as soon as the service is created" is ticked, and **Deploy** leads to the Compose tab with a note. Untick the box to create the service first and give the values afterwards.
 - `SERVICE_PASSWORD_<ID>`, `SERVICE_USER_<ID>`, `SERVICE_BASE64_<ID>` and `SERVICE_HEX_<ID>` are filled with values generated once per service. They are listed on the service's Overview page.
 - A template written for Coolify can be pasted as it is: `SERVICE_FQDN_<NAME>_<PORT>` in a service's environment gets that service a domain on that port (a generated one at first), `SERVICE_URL_<NAME>` is the same address with its scheme, and `SERVICE_HTTPS_<NAME>` is `true` or `false`.
 
@@ -48,7 +49,9 @@ A service of the stack is given a domain on the stack's **Domains** tab, whateve
 
 The Overview lists the stack's containers one by one as the server reports them: each service's state (running, unhealthy, starting, exited, or finished for one that ran once and ended well, as a migration does), its image, and the ports its file publishes on the server itself. A service the file has and the server has no container for is named too. The list is read when the page opens and when the stack's state changes; **Refresh** asks again.
 
-**Logs** shows every container's output together, or one service's: the stack's services are above the log. **Terminal** opens a shell in the container you choose.
+Each row has a menu: the container's logs, a terminal in it, and **Restart**, which stops that one container and starts it again as it is. Redeploy leaves a container alone whose settings did not change, so Restart is the way back for one that hangs; it applies no change to the file or its variables, which is what Redeploy is for. A container that did its job and ended, and the containers of a stopped stack, are not offered it.
+
+**Logs** shows every container's output together, or one service's: the stack's services are above the log. **Terminal** opens a shell in the container you choose, named as Logs names them.
 
 A stack is held to the same limits as an app. Its file is read inside a container that has no network and sees nothing of the server, then checked: privileged mode, the host's network or process namespaces, devices, extra capabilities, mounts of system directories, of the Docker socket or of the stack's own directory, networks with a subnet of their own, and volumes or networks that belong to something else are refused, with a message naming the line. Files the Compose file names (`env_file`, `include`, `extends`) are not read: a stack is one file plus its variables. The first deployment on a server downloads the `docker:<version>-cli` image used for that check.
 
@@ -56,13 +59,18 @@ A stack runs on its own network. Tick "Connect to the environment's network" if 
 
 To publish a port that is not HTTP (a mail server, a game server), use an ordinary `ports:` entry with a host port from 1024 to 65535, outside 20000 to 29999.
 
+**Ports 80 and 443.** A file written for plain `docker compose` usually publishes its web server on port 80 or 443 of the machine (`"80:80"`). On a musdash server those two are the proxy's. Such a stack is deployed without those lines: the deployment's log names each one, and the service is reached through a domain instead, which the Domains tab offers for the same container port. Nothing in the file has to change. Any other port a stack may not have (below 1024, or in the range musdash uses itself) stops the deployment with a message that names it.
+
+**Container names.** A file that names its containers (`container_name: shop-api`) is deployed with the names Compose gives them under the stack's own project: a name could otherwise be claimed by two stacks, or be one that something else on the server is known by. The log says so. Inside the stack the service still answers to the name the file gave it, beside its service name, so a file whose services call each other by container name works as it is.
+
 ## Stacks from a Git repository
 
-A service also takes a Compose file that lives in a repository ("Compose file in a Git repository"), read through the same GitHub Apps, GitLab sources and deploy keys as apps. At every deployment musdash clones the branch, reads the file in the sandbox with only the checkout in view, and applies the same checks as to a pasted file. Differences from a pasted stack:
+A service also takes a Compose file that lives in a repository, read through the same GitHub Apps, GitLab sources and deploy keys as apps. There are two ways in, and they make the same thing: the card "Compose file in a Git repository" on **Add resource**, and **Docker Compose** under Build with on the form a new app is made with from a repository, which is chosen for you where the repository has a Compose file and no Dockerfile. At every deployment musdash clones the branch, reads the file in the sandbox with only the checkout in view, and applies the same checks as to a pasted file. Differences from a pasted stack:
 
 - `build:` is allowed for contexts inside the repository. Images are built with `docker compose build`, one build at a time per server, and named by musdash.
 - Files of the repository can be mounted into containers (`./nginx.conf:/etc/nginx/nginx.conf`). They are mounted read-only, and a path that is a symbolic link in the repository is refused. Data that a container writes belongs in a named volume.
 - `include`, `extends` and `env_file` may name files of the repository.
 - A push to the branch redeploys it, through the GitHub App or through a webhook you add to the repository; a deploy token does the same for a CI pipeline. Both are made on the Keys & tokens page, under API Tokens.
 - Only the Compose file itself is scanned for `SERVICE_…` variables, not files it includes.
+- A stack from Git is not held back for a variable that has no value: its file is read by the deployment, which says what is missing in the file's own words.
 - Domains are given on the Domains tab as for a pasted file. The services it offers are those of the file as it was last deployed: deploy first when the repository has a new one.

@@ -15,6 +15,8 @@ What happens when an app is deployed, and what you can do around a deployment: r
 
 If any step before 5 fails, the new container is removed and the previous one keeps serving.
 
+**Private images.** musdash keeps no registry passwords. An image that needs a sign-in is pulled with the sign-in of the account that runs Docker's commands on the server, which is where Docker itself looks: on the machine musdash is installed on, `sudo -H -u musdash docker login ghcr.io` (or your registry's name; none for Docker Hub), and on a remote server `docker login` as the user musdash connects as. A pull that a registry refused says so in the deployment's error, with this as what to do. The same sign-in serves the images of a Compose stack.
+
 Apps in one environment reach each other by name (`web:80`) on that network. From outside, the only way in is the proxy.
 
 ## Rolling back
@@ -48,10 +50,11 @@ An app can be built from a repository instead of pulling an image. Step 1 above 
 
 Through a GitHub App or a GitLab token the form asks the host what there is: the repository is chosen from the ones the source can read (one the list does not show is named by typing `owner/name` into the menu's field), and the branch from the repository's own, starting at its default branch. With a public repository or a deploy key there is nobody to ask, and the address and the branch are typed.
 
-Four build packs. Through a source, the form looks at the folder the app is built from and chooses one, naming the file that decided: a `Dockerfile` is the Dockerfile build, a `railpack.json` Railpack and a `nixpacks.toml` Nixpacks, a file of a language Railpack builds (`package.json`, `go.mod`, `requirements.txt`, …) Railpack, and an `index.html` with nothing to build a static site. It looks again when the repository, the branch or the base directory changes; what you choose yourself stays until then. Only the names of the files are read.
+Four build packs, and Docker Compose. Through a source, the form looks at the folder the app is built from and chooses one, naming the file that decided: a `Dockerfile` is the Dockerfile build, a `railpack.json` Railpack and a `nixpacks.toml` Nixpacks, a Compose file with none of those beside it Docker Compose, a file of a language Railpack builds (`package.json`, `go.mod`, `requirements.txt`, …) Railpack, and an `index.html` with nothing to build a static site. It looks again when the repository, the branch or the base directory changes; what you choose yourself stays until then. Only the names of the files are read.
 
 - **Dockerfile**: a path inside the repository.
 - **Static site**: a directory served by nginx, with an optional single-page-app fallback.
+- **Docker Compose**: the repository's Compose file is deployed as a stack of containers. The form then asks for the file's path from the base directory (`docker-compose.yml`, or the name that was found), its variables and whether it joins the environment's network, in place of a port and a domain. What it makes is a service, with a service's page, and each of its containers is given a domain on its Domains tab: see [Stacks from a Git repository](services.md#stacks-from-a-git-repository). An app that exists does not become a stack; its Source settings do not offer it.
 - **Nixpacks** and **Railpack**: for a repository without a Dockerfile. The builder reads the code, works out how to build it, and the app listens on the port you gave it, which it is told as `PORT`. Their own settings go in as build-time variables (`NIXPACKS_START_CMD`, `RAILPACK_BUILD_CMD`, …) or in the repository's `nixpacks.toml` / `railpack.json`.
 
 Variables marked build-time on the Environment tab are passed as build arguments (with Railpack, as build secrets). The tab lists variables by name: their values are sent to the page only when you choose **Show values**, and are changed in the tab's editor. Shared variables and a service's variables are kept the same way.
