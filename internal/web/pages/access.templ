@@ -167,7 +167,7 @@ templ twoStepCard(s ui.Shell, v AccountView, f ui.Form) {
 						<p class="font-semibold">Turn off</p>
 						<p class="muted text-sm">Signing in then needs your password only.</p>
 					</div>
-					@ui.Button(ui.ButtonProps{Small: true, Variant: ui.DangerQuiet, Opens: "two-step-off"}) {
+					@ui.Button(ui.ButtonProps{Small: true, Variant: ui.DangerQuiet, Icon: "lock", Opens: "two-step-off"}) {
 						Turn off
 					}
 				</div>
@@ -181,10 +181,10 @@ templ twoStepCard(s ui.Shell, v AccountView, f ui.Form) {
 		}
 	</section>
 	if v.TwoStep {
-		@ui.FormDialog(ui.DialogProps{ID: "new-codes", Title: "Make new recovery codes", Description: "The codes you have now stop working. The new ones are shown once, right after they are made.", Action: "/account/two-step/codes", CSRF: s.CSRF, Submit: "Make new codes", Open: !twoStepForm(f, "codes").OK()}) {
+		@ui.FormDialog(ui.DialogProps{ID: "new-codes", Title: "Make new recovery codes", Description: "The codes you have now stop working. The new ones are shown once, right after they are made.", Action: "/account/two-step/codes", CSRF: s.CSRF, Submit: "Make new codes", Open: !twoStepForm(f, "codes").OK(), Danger: true, Icon: "refresh"}) {
 			@ui.TextField(twoStepForm(f, "codes"), "Code from your app", "", ui.InputProps{ID: "codes_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: codeAttrs})
 		}
-		@ui.FormDialog(ui.DialogProps{ID: "two-step-off", Title: "Turn off two-step sign-in", Description: "Your password alone signs you in from then on, and your recovery codes are deleted.", Action: "/account/two-step/off", CSRF: s.CSRF, Submit: "Turn off two-step sign-in", Danger: true, Open: !twoStepForm(f, "off").OK()}) {
+		@ui.FormDialog(ui.DialogProps{ID: "two-step-off", Title: "Turn off two-step sign-in", Description: "Your password alone signs you in from then on, and your recovery codes are deleted.", Action: "/account/two-step/off", CSRF: s.CSRF, Submit: "Turn off two-step sign-in", Danger: true, Open: !twoStepForm(f, "off").OK(), Icon: "lock"}) {
 			@ui.TextField(twoStepForm(f, "off"), "Current password", "", ui.InputProps{ID: "off_password", Type: "password", Autocomplete: "current-password", Required: true})
 			@ui.TextField(twoStepForm(f, "off"), "Code from your app, or a recovery code", "", ui.InputProps{ID: "off_code", Name: "code", Mono: true, Autocomplete: "one-time-code", Required: true, Attrs: anyCodeAttrs})
 		}

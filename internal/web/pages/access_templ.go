@@ -246,7 +246,7 @@ func twoStepCard(s ui.Shell, v AccountView, f ui.Form) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Variant: ui.DangerQuiet, Opens: "two-step-off"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Variant: ui.DangerQuiet, Icon: "lock", Opens: "two-step-off"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -309,7 +309,7 @@ func twoStepCard(s ui.Shell, v AccountView, f ui.Form) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "new-codes", Title: "Make new recovery codes", Description: "The codes you have now stop working. The new ones are shown once, right after they are made.", Action: "/account/two-step/codes", CSRF: s.CSRF, Submit: "Make new codes", Open: !twoStepForm(f, "codes").OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "new-codes", Title: "Make new recovery codes", Description: "The codes you have now stop working. The new ones are shown once, right after they are made.", Action: "/account/two-step/codes", CSRF: s.CSRF, Submit: "Make new codes", Open: !twoStepForm(f, "codes").OK(), Danger: true, Icon: "refresh"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -335,7 +335,7 @@ func twoStepCard(s ui.Shell, v AccountView, f ui.Form) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "two-step-off", Title: "Turn off two-step sign-in", Description: "Your password alone signs you in from then on, and your recovery codes are deleted.", Action: "/account/two-step/off", CSRF: s.CSRF, Submit: "Turn off two-step sign-in", Danger: true, Open: !twoStepForm(f, "off").OK()}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.FormDialog(ui.DialogProps{ID: "two-step-off", Title: "Turn off two-step sign-in", Description: "Your password alone signs you in from then on, and your recovery codes are deleted.", Action: "/account/two-step/off", CSRF: s.CSRF, Submit: "Turn off two-step sign-in", Danger: true, Open: !twoStepForm(f, "off").OK(), Icon: "lock"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

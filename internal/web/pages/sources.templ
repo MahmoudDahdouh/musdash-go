@@ -132,7 +132,7 @@ templ Sources(s ui.Shell, sources []db.GitSource, appForm, gitlabForm ui.Form) {
 										}
 										<form method="post" action={ templ.SafeURL(removeSourcePath(g)) }>
 											@ui.CSRF(s.CSRF)
-											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: removeSourceAsk(g)}) {
+											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: removeSourceAsk(g)}) {
 												Remove
 											}
 										</form>

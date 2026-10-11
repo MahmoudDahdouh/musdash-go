@@ -135,7 +135,7 @@ templ Team(s ui.Shell, v TeamView, rename ui.Form) {
 										@ui.CSRF(s.CSRF)
 										<label class="sr-only" for={ "role-" + m.UserID }>Role of { m.Name }</label>
 										@ui.SelectNamed("role-"+m.UserID, "role", roleOptions, m.Role, nil)
-										@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Attrs: ui.Ask("Change the role of "+m.Name+"?", "A higher role signs them out everywhere and ends their reset links and API tokens. A lower one withdraws the invitations they made.", "Change role", false)}) {
+										@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "users", Attrs: ui.Ask("Change the role of "+m.Name+"?", "A higher role signs them out everywhere and ends their reset links and API tokens. A lower one withdraws the invitations they made.", "Change role", true)}) {
 											Save
 										}
 									</form>
@@ -220,7 +220,7 @@ templ TeamInvitations(s ui.Shell, v TeamView, invite ui.Form) {
 									if s.Admin {
 										<form method="post" action={ templ.SafeURL("/team/invitations/" + inv.ID + "/delete") }>
 											@ui.CSRF(s.CSRF)
-											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Cancel the invitation of "+inv.Email+"?", "The link stops working at once.", "Cancel invitation", true)}) {
+											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "x", Attrs: ui.Ask("Cancel the invitation of "+inv.Email+"?", "The link stops working at once.", "Cancel invitation", true)}) {
 												Cancel
 											}
 										</form>

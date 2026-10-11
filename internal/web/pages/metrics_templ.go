@@ -735,7 +735,7 @@ func historyCard(h History) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Type: "submit", Attrs: ui.Ask("Switch sampling off?", "This server is no longer asked what it uses, and the samples that were kept are removed. The charts of everything that runs on it start empty when sampling is switched on again.", "Switch sampling off", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var29), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "stop", Attrs: ui.Ask("Switch sampling off?", "This server is no longer asked what it uses, and the samples that were kept are removed. The charts of everything that runs on it start empty when sampling is switched on again.", "Switch sampling off", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var29), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

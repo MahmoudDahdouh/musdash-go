@@ -247,7 +247,7 @@ func serviceHeaderBody(csrf, base string, s db.Service) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+s.Name+"?", "Every container of the service is stopped and its endpoints stop answering. Its volumes and settings are kept.", "Stop service", false)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+s.Name+"?", "Every container of the service is stopped and its endpoints stop answering. Its volumes and settings are kept.", "Stop service", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2319,7 +2319,7 @@ func stackRowMenu(csrf string, v ServiceView, row StackRow) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = ui.MenuItem(ui.MenuItemProps{Icon: "refresh", Label: "Restart", Attrs: ui.Merge(ui.Ask("Restart "+row.name()+"?", restartQuestion, "Restart", false), sendsContainer(row))}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.MenuItem(ui.MenuItemProps{Icon: "refresh", Label: "Restart", Attrs: ui.Merge(ui.Ask("Restart "+row.name()+"?", restartQuestion, "Restart", true), sendsContainer(row))}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3177,7 +3177,7 @@ func ServiceDomains(s ui.Shell, v ServiceView, d ServiceDomainForms, at DomainTa
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove "+e.Host+"?", v.Service.Name+" stops answering at this address at once.", "Remove domain", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var108), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove "+e.Host+"?", v.Service.Name+" stops answering at this address at once.", "Remove domain", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var108), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}

@@ -124,8 +124,12 @@
     asking = { el, action: el.form.getAttribute("action"), name: el.name, value: el.value };
     dialog.querySelector("#confirm-title").textContent = el.dataset.confirmTitle || "Are you sure?";
     dialog.querySelector("#confirm-text").textContent = el.dataset.confirm;
+    // The button that confirms says what it does as the button that asked
+    // did: by that button's icon, and in red for what takes something away.
     const ok = dialog.querySelector("#confirm-ok");
-    ok.textContent = el.dataset.confirmSubmit || "Confirm";
+    const icon = el.querySelector(":scope > svg.icon")?.cloneNode(true);
+    icon?.setAttribute("class", "icon");
+    ok.replaceChildren(...(icon ? [icon] : []), el.dataset.confirmSubmit || "Confirm");
     ok.className = el.dataset.confirmTone === "danger" ? "btn btn-danger" : "btn btn-primary";
     // A dialog gives the focus back to what had it when it opened, and a
     // button in a menu is not there to take it once the menu has shut. Its

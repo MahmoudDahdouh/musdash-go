@@ -497,7 +497,7 @@ func tokenRows(s ui.Shell, v KeysView) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Revoke the token "+t.Name+"?", "Calls that use it are refused from now on. This cannot be undone.", "Revoke token", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Revoke the token "+t.Name+"?", "Calls that use it are refused from now on. This cannot be undone.", "Revoke token", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -596,7 +596,7 @@ func tokenRows(s ui.Shell, v KeysView) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh", Attrs: ui.Ask("Replace the deploy token of "+o.Name+"?", "The token in use now stops working at once. A pipeline that has it must be given the new one.", "Replace token", false)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var23), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh", Attrs: ui.Ask("Replace the deploy token of "+o.Name+"?", "The token in use now stops working at once. A pipeline that has it must be given the new one.", "Replace token", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var23), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -618,7 +618,7 @@ func tokenRows(s ui.Shell, v KeysView) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Variant: ui.DangerQuiet, Type: "submit", Attrs: ui.Merge(ui.Ask("Revoke the deploy token of "+o.Name+"?", "A pipeline that uses it can no longer deploy.", "Revoke token", true), templ.Attributes{"name": "revoke", "value": "1"})}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Variant: ui.DangerQuiet, Type: "submit", Icon: "trash", Attrs: ui.Merge(ui.Ask("Revoke the deploy token of "+o.Name+"?", "A pipeline that uses it can no longer deploy.", "Revoke token", true), templ.Attributes{"name": "revoke", "value": "1"})}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -732,7 +732,7 @@ func tokenRows(s ui.Shell, v KeysView) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh", Attrs: ui.Ask("Replace the webhook secret of "+o.Name+"?", "Pushes are refused until the repository's webhook is given the new secret.", "Replace secret", false)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var28), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh", Attrs: ui.Ask("Replace the webhook secret of "+o.Name+"?", "Pushes are refused until the repository's webhook is given the new secret.", "Replace secret", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var28), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1565,7 +1565,7 @@ func keysTab(s ui.Shell, v KeysView) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Delete the key "+k.Name+"?", "A repository or a server that trusts it can no longer be reached with it. A key that is still in use is not deleted.", "Delete key", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var64), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Delete the key "+k.Name+"?", "A repository or a server that trusts it can no longer be reached with it. A key that is still in use is not deleted.", "Delete key", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var64), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}

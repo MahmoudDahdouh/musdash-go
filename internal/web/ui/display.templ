@@ -584,6 +584,9 @@ type DialogProps struct {
 	Wide bool
 	// Danger draws the submit button red: the form takes something away.
 	Danger bool
+	// Icon is the icon of the submit button. A form that takes something
+	// away says what with one, as the button of a question does (Ask).
+	Icon string
 }
 
 // FormDialog is a short form in a dialog: what creating or changing
@@ -608,7 +611,7 @@ templ FormDialog(p DialogProps) {
 				@Button(ButtonProps{Attrs: templ.Attributes{"data-close": true}}) {
 					Cancel
 				}
-				@Button(ButtonProps{Variant: dialogSubmit(p), Type: "submit"}) {
+				@Button(ButtonProps{Variant: dialogSubmit(p), Type: "submit", Icon: p.Icon}) {
 					{ p.Submit }
 				}
 			</div>
@@ -625,8 +628,11 @@ func dialogSubmit(p DialogProps) string {
 
 // Ask marks a submit button as critical: pressing it opens the page's
 // confirm dialog with this question, and only its confirm button sends the
-// form. submit is the confirm button's label; danger draws it red. Without
-// script the form is sent as any other.
+// form. submit is the confirm button's label; danger draws it red, which is
+// for whatever takes something away or interrupts something that runs:
+// every question but the few that only add (TestCriticalFormsAsk names
+// them). The confirm button shows the icon of the button that asked, so a
+// button that asks has one. Without script the form is sent as any other.
 func Ask(title, question, submit string, danger bool) templ.Attributes {
 	a := templ.Attributes{"data-confirm": question, "data-confirm-title": title, "data-confirm-submit": submit}
 	if danger {
@@ -662,7 +668,8 @@ type ConfirmProps struct {
 }
 
 // Confirm renders a quiet danger button and the dialog it opens. The dialog's
-// submit button stays disabled until Match has been typed. Its children
+// submit button, red and with the bin as the opener has, stays disabled
+// until Match has been typed. Its children
 // explain what will be lost.
 templ Confirm(p ConfirmProps) {
 	@Button(ButtonProps{Variant: DangerQuiet, Icon: "trash", Attrs: templ.Attributes{"data-open": p.ID}}) {
@@ -683,7 +690,7 @@ templ Confirm(p ConfirmProps) {
 				@Button(ButtonProps{Attrs: templ.Attributes{"data-close": true}}) {
 					Cancel
 				}
-				@Button(ButtonProps{Variant: Danger, Type: "submit", Disabled: true}) {
+				@Button(ButtonProps{Variant: Danger, Type: "submit", Icon: "trash", Disabled: true}) {
 					{ p.Submit }
 				}
 			</div>

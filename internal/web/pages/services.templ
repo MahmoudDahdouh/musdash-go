@@ -92,7 +92,7 @@ templ serviceHeaderBody(csrf, base string, s db.Service) {
 			if serviceDeployed(s) {
 				<form method="post" action={ templ.SafeURL(base + "/stop") }>
 					@ui.CSRF(csrf)
-					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+s.Name+"?", "Every container of the service is stopped and its endpoints stop answering. Its volumes and settings are kept.", "Stop service", false)}) {
+					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+s.Name+"?", "Every container of the service is stopped and its endpoints stop answering. Its volumes and settings are kept.", "Stop service", true)}) {
 						Stop
 					}
 				</form>
@@ -731,7 +731,7 @@ templ stackRowMenu(csrf string, v ServiceView, row StackRow) {
 				if row.Service != "" || row.Running {
 					@ui.MenuSep()
 				}
-				@ui.MenuItem(ui.MenuItemProps{Icon: "refresh", Label: "Restart", Attrs: ui.Merge(ui.Ask("Restart "+row.name()+"?", restartQuestion, "Restart", false), sendsContainer(row))})
+				@ui.MenuItem(ui.MenuItemProps{Icon: "refresh", Label: "Restart", Attrs: ui.Merge(ui.Ask("Restart "+row.name()+"?", restartQuestion, "Restart", true), sendsContainer(row))})
 			}
 		}
 	</form>
@@ -995,7 +995,7 @@ templ ServiceDomains(s ui.Shell, v ServiceView, d ServiceDomainForms, at DomainT
 										if e.Manual {
 											<form method="post" action={ templ.SafeURL(v.Path() + "/domains/" + e.ID + "/delete") }>
 												@ui.CSRF(s.CSRF)
-												@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove "+e.Host+"?", v.Service.Name+" stops answering at this address at once.", "Remove domain", true)}) {
+												@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove "+e.Host+"?", v.Service.Name+" stops answering at this address at once.", "Remove domain", true)}) {
 													Remove
 												}
 											</form>

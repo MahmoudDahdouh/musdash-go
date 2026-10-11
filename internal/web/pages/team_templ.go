@@ -530,7 +530,7 @@ func Team(s ui.Shell, v TeamView, rename ui.Form) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Type: "submit", Attrs: ui.Ask("Change the role of "+m.Name+"?", "A higher role signs them out everywhere and ends their reset links and API tokens. A lower one withdraws the invitations they made.", "Change role", false)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var22), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "users", Attrs: ui.Ask("Change the role of "+m.Name+"?", "A higher role signs them out everywhere and ends their reset links and API tokens. A lower one withdraws the invitations they made.", "Change role", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var22), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -971,7 +971,7 @@ func TeamInvitations(s ui.Shell, v TeamView, invite ui.Form) templ.Component {
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Cancel the invitation of "+inv.Email+"?", "The link stops working at once.", "Cancel invitation", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var41), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "x", Attrs: ui.Ask("Cancel the invitation of "+inv.Email+"?", "The link stops working at once.", "Cancel invitation", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var41), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}

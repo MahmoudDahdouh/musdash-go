@@ -180,7 +180,7 @@ templ tokenRows(s ui.Shell, v KeysView) {
 			<td>
 				<form class="flex justify-end" method="post" action={ templ.SafeURL("/account/tokens/" + t.ID + "/delete") }>
 					@ui.CSRF(s.CSRF)
-					@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Revoke the token "+t.Name+"?", "Calls that use it are refused from now on. This cannot be undone.", "Revoke token", true)}) {
+					@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Revoke the token "+t.Name+"?", "Calls that use it are refused from now on. This cannot be undone.", "Revoke token", true)}) {
 						Revoke
 					}
 				</form>
@@ -204,10 +204,10 @@ templ tokenRows(s ui.Shell, v KeysView) {
 						@ui.Icon("copy")
 						<span data-copy-label>Copy address</span>
 					</button>
-					@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh", Attrs: ui.Ask("Replace the deploy token of "+o.Name+"?", "The token in use now stops working at once. A pipeline that has it must be given the new one.", "Replace token", false)}) {
+					@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh", Attrs: ui.Ask("Replace the deploy token of "+o.Name+"?", "The token in use now stops working at once. A pipeline that has it must be given the new one.", "Replace token", true)}) {
 						Replace
 					}
-					@ui.Button(ui.ButtonProps{Small: true, Variant: ui.DangerQuiet, Type: "submit", Attrs: ui.Merge(ui.Ask("Revoke the deploy token of "+o.Name+"?", "A pipeline that uses it can no longer deploy.", "Revoke token", true), templ.Attributes{"name": "revoke", "value": "1"})}) {
+					@ui.Button(ui.ButtonProps{Small: true, Variant: ui.DangerQuiet, Type: "submit", Icon: "trash", Attrs: ui.Merge(ui.Ask("Revoke the deploy token of "+o.Name+"?", "A pipeline that uses it can no longer deploy.", "Revoke token", true), templ.Attributes{"name": "revoke", "value": "1"})}) {
 						Revoke
 					}
 				</form>
@@ -238,7 +238,7 @@ templ tokenRows(s ui.Shell, v KeysView) {
 					</button>
 					<form method="post" action={ templ.SafeURL(o.Path + "/webhook-secret") }>
 						@ui.CSRF(s.CSRF)
-						@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh", Attrs: ui.Ask("Replace the webhook secret of "+o.Name+"?", "Pushes are refused until the repository's webhook is given the new secret.", "Replace secret", false)}) {
+						@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh", Attrs: ui.Ask("Replace the webhook secret of "+o.Name+"?", "Pushes are refused until the repository's webhook is given the new secret.", "Replace secret", true)}) {
 							Replace
 						}
 					</form>
@@ -426,7 +426,7 @@ templ keysTab(s ui.Shell, v KeysView) {
 								if s.Admin {
 									<form method="post" action={ templ.SafeURL("/sources/keys/" + k.ID + "/delete") }>
 										@ui.CSRF(s.CSRF)
-										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Delete the key "+k.Name+"?", "A repository or a server that trusts it can no longer be reached with it. A key that is still in use is not deleted.", "Delete key", true)}) {
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Delete the key "+k.Name+"?", "A repository or a server that trusts it can no longer be reached with it. A key that is still in use is not deleted.", "Delete key", true)}) {
 										Delete
 									}
 									</form>

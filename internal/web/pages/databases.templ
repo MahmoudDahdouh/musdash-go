@@ -83,13 +83,13 @@ templ databaseHeaderBody(csrf, base string, m db.Database) {
 			if m.Container != "" {
 				<form method="post" action={ templ.SafeURL(base + "/stop") }>
 					@ui.CSRF(csrf)
-					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+m.Name+"?", "Apps that use the database get errors until it is started again. Its data is kept.", "Stop database", false)}) {
+					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+m.Name+"?", "Apps that use the database get errors until it is started again. Its data is kept.", "Stop database", true)}) {
 						Stop
 					}
 				</form>
 				<form method="post" action={ templ.SafeURL(base + "/start") }>
 					@ui.CSRF(csrf)
-					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh", Attrs: ui.Ask("Restart "+m.Name+"?", "The database does not answer for a few seconds. Apps that use it may see errors meanwhile.", "Restart database", false)}) {
+					@ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh", Attrs: ui.Ask("Restart "+m.Name+"?", "The database does not answer for a few seconds. Apps that use it may see errors meanwhile.", "Restart database", true)}) {
 						Restart
 					}
 				</form>

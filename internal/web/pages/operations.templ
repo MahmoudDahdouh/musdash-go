@@ -235,13 +235,13 @@ templ backupListBody(csrf string, v DatabaseView, b BackupsView) {
 									Download
 								}
 								if v.Engine.RestoreCmd != "" {
-									@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Attrs: templ.Attributes{"data-open": "restore-" + m.ID}}) {
+									@ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Icon: "undo", Attrs: templ.Attributes{"data-open": "restore-" + m.ID}}) {
 										Restore
 									}
 								}
 								<form method="post" action={ templ.SafeURL(v.Path() + "/backups/" + m.ID + "/delete") }>
 									@ui.CSRF(csrf)
-									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Delete this backup?", "The backup made "+ui.Ago(m.StartedAt)+" is deleted from this server and from the bucket it was uploaded to. This cannot be undone.", "Delete backup", true)}) {
+									@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Delete this backup?", "The backup made "+ui.Ago(m.StartedAt)+" is deleted from this server and from the bucket it was uploaded to. This cannot be undone.", "Delete backup", true)}) {
 										Delete
 									}
 								</form>
@@ -277,7 +277,7 @@ templ backupListBody(csrf string, v DatabaseView, b BackupsView) {
 						@ui.Button(ui.ButtonProps{Attrs: templ.Attributes{"data-close": true}}) {
 							Cancel
 						}
-						@ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Disabled: true}) {
+						@ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Icon: "undo", Disabled: true}) {
 							Restore backup
 						}
 					</div>
@@ -570,7 +570,7 @@ templ Storages(s ui.Shell, list []db.S3Storage, f ui.Form) {
 										</form>
 										<form method="post" action={ templ.SafeURL("/settings/storages/" + m.ID + "/delete") }>
 											@ui.CSRF(s.CSRF)
-											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the bucket "+m.Name+"?", "musdash forgets the bucket and its keys. Backups already uploaded stay in the bucket, where musdash no longer reaches them.", "Remove bucket", true)}) {
+											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove the bucket "+m.Name+"?", "musdash forgets the bucket and its keys. Backups already uploaded stay in the bucket, where musdash no longer reaches them.", "Remove bucket", true)}) {
 												Remove
 											}
 										</form>
@@ -710,7 +710,7 @@ templ Notifications(s ui.Shell, list []db.Channel, kind notify.KindInfo, f ui.Fo
 									}
 									<form method="post" action={ templ.SafeURL("/notifications/" + c.ID + "/delete") }>
 										@ui.CSRF(s.CSRF)
-										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the channel "+c.Name+"?", "Nothing is sent to it any more.", "Remove channel", true)}) {
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove the channel "+c.Name+"?", "Nothing is sent to it any more.", "Remove channel", true)}) {
 											Remove
 										}
 									</form>

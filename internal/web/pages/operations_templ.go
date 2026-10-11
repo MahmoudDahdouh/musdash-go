@@ -714,7 +714,7 @@ func backupListBody(csrf string, v DatabaseView, b BackupsView) templ.Component 
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Attrs: templ.Attributes{"data-open": "restore-" + m.ID}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var25), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.Ghost, Small: true, Icon: "undo", Attrs: templ.Attributes{"data-open": "restore-" + m.ID}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var25), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -758,7 +758,7 @@ func backupListBody(csrf string, v DatabaseView, b BackupsView) templ.Component 
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Delete this backup?", "The backup made "+ui.Ago(m.StartedAt)+" is deleted from this server and from the bucket it was uploaded to. This cannot be undone.", "Delete backup", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Delete this backup?", "The backup made "+ui.Ago(m.StartedAt)+" is deleted from this server and from the bucket it was uploaded to. This cannot be undone.", "Delete backup", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -958,7 +958,7 @@ func backupListBody(csrf string, v DatabaseView, b BackupsView) templ.Component 
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Disabled: true}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var36), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.Danger, Type: "submit", Icon: "undo", Disabled: true}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var36), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -2199,7 +2199,7 @@ func Storages(s ui.Shell, list []db.S3Storage, f ui.Form) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the bucket "+m.Name+"?", "musdash forgets the bucket and its keys. Backups already uploaded stay in the bucket, where musdash no longer reaches them.", "Remove bucket", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var89), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove the bucket "+m.Name+"?", "musdash forgets the bucket and its keys. Backups already uploaded stay in the bucket, where musdash no longer reaches them.", "Remove bucket", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var89), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -2718,7 +2718,7 @@ func Notifications(s ui.Shell, list []db.Channel, kind notify.KindInfo, f ui.For
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the channel "+c.Name+"?", "Nothing is sent to it any more.", "Remove channel", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var106), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove the channel "+c.Name+"?", "Nothing is sent to it any more.", "Remove channel", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var106), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}

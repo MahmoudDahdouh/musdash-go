@@ -229,7 +229,7 @@ func databaseHeaderBody(csrf, base string, m db.Database) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+m.Name+"?", "Apps that use the database get errors until it is started again. Its data is kept.", "Stop database", false)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+m.Name+"?", "Apps that use the database get errors until it is started again. Its data is kept.", "Stop database", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -272,7 +272,7 @@ func databaseHeaderBody(csrf, base string, m db.Database) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh", Attrs: ui.Ask("Restart "+m.Name+"?", "The database does not answer for a few seconds. Apps that use it may see errors meanwhile.", "Restart database", false)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "refresh", Attrs: ui.Ask("Restart "+m.Name+"?", "The database does not answer for a few seconds. Apps that use it may see errors meanwhile.", "Restart database", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

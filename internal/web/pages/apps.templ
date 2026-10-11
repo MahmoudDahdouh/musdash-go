@@ -118,7 +118,7 @@ templ appHeaderBody(csrf, base string, app db.App) {
 		if app.Container != "" {
 			<form method="post" action={ templ.SafeURL(base + "/stop") }>
 				@ui.CSRF(csrf)
-				@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+app.Name+"?", "The app stops answering until it is deployed again. Its settings, variables and storage are kept.", "Stop app", false)}) {
+				@ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+app.Name+"?", "The app stops answering until it is deployed again. Its settings, variables and storage are kept.", "Stop app", true)}) {
 					Stop
 				}
 			</form>
@@ -745,7 +745,7 @@ templ AppDeployment(s ui.Shell, v AppView, d db.Deployment) {
 						</div>
 						<form method="post" action={ templ.SafeURL(v.Path() + "/deployments/" + d.ID + "/rollback") }>
 							@ui.CSRF(s.CSRF)
-							@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Secondary, Icon: "refresh", Attrs: ui.Ask("Roll back "+v.App.Name+"?", "The image of this deployment runs again in place of the one serving now. Nothing is built or pulled, and settings and variables stay as they are today.", "Roll back", false)}) {
+							@ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Secondary, Icon: "undo", Attrs: ui.Ask("Roll back "+v.App.Name+"?", "The image of this deployment runs again in place of the one serving now. Nothing is built or pulled, and settings and variables stay as they are today.", "Roll back", true)}) {
 								Roll back
 							}
 						</form>
@@ -834,7 +834,7 @@ templ AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) {
 								<td class="text-right">
 									<form method="post" action={ templ.SafeURL(v.Path() + "/storage/" + st.ID + "/delete") }>
 										@ui.CSRF(s.CSRF)
-										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove this storage?", st.Target+" is no longer mounted from the next deploy on. A volume and a server folder keep their data; a file's content is deleted.", "Remove storage", true)}) {
+										@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove this storage?", st.Target+" is no longer mounted from the next deploy on. A volume and a server folder keep their data; a file's content is deleted.", "Remove storage", true)}) {
 											Remove
 										}
 									</form>
@@ -954,7 +954,7 @@ templ previewsCard(csrf string, v AppView, f ui.Form) {
 						@ui.StatusPill(p.App.Status)
 						<form method="post" action={ templ.SafeURL(v.Path() + "/previews/" + strconv.Itoa(p.App.PRNumber) + "/delete") }>
 							@ui.CSRF(csrf)
-							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the preview of #"+strconv.Itoa(p.App.PRNumber)+"?", "The preview is stopped and removed with its address. A new push to the pull request makes it again.", "Remove preview", true)}) {
+							@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove the preview of #"+strconv.Itoa(p.App.PRNumber)+"?", "The preview is stopped and removed with its address. A new push to the pull request makes it again.", "Remove preview", true)}) {
 								Remove
 							}
 						</form>
@@ -1191,7 +1191,7 @@ templ AppDomains(s ui.Shell, v AppView, f ui.Form, at DomainTarget) {
 										}
 										<form method="post" action={ templ.SafeURL(v.Path() + "/domains/" + d.ID + "/delete") }>
 											@ui.CSRF(s.CSRF)
-											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove "+d.Host+d.Path+"?", v.App.Name+" stops answering at this address at once.", "Remove domain", true)}) {
+											@ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove "+d.Host+d.Path+"?", v.App.Name+" stops answering at this address at once.", "Remove domain", true)}) {
 												Remove
 											}
 										</form>

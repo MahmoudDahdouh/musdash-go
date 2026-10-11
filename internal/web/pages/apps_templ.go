@@ -247,7 +247,7 @@ func appHeaderBody(csrf, base string, app db.App) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+app.Name+"?", "The app stops answering until it is deployed again. Its settings, variables and storage are kept.", "Stop app", false)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Icon: "stop", Attrs: ui.Ask("Stop "+app.Name+"?", "The app stops answering until it is deployed again. Its settings, variables and storage are kept.", "Stop app", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2420,7 +2420,7 @@ func AppDeployment(s ui.Shell, v AppView, d db.Deployment) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Secondary, Icon: "refresh", Attrs: ui.Ask("Roll back "+v.App.Name+"?", "The image of this deployment runs again in place of the one serving now. Nothing is built or pulled, and settings and variables stay as they are today.", "Roll back", false)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var77), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: "submit", Variant: ui.Secondary, Icon: "undo", Attrs: ui.Ask("Roll back "+v.App.Name+"?", "The image of this deployment runs again in place of the one serving now. Nothing is built or pulled, and settings and variables stay as they are today.", "Roll back", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var77), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2733,7 +2733,7 @@ func AppStorage(s ui.Shell, v AppView, list []db.Storage, f ui.Form) templ.Compo
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove this storage?", st.Target+" is no longer mounted from the next deploy on. A volume and a server folder keep their data; a file's content is deleted.", "Remove storage", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var89), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove this storage?", st.Target+" is no longer mounted from the next deploy on. A volume and a server folder keep their data; a file's content is deleted.", "Remove storage", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var89), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -3203,7 +3203,7 @@ func previewsCard(csrf string, v AppView, f ui.Form) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove the preview of #"+strconv.Itoa(p.App.PRNumber)+"?", "The preview is stopped and removed with its address. A new push to the pull request makes it again.", "Remove preview", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var109), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove the preview of #"+strconv.Itoa(p.App.PRNumber)+"?", "The preview is stopped and removed with its address. A new push to the pull request makes it again.", "Remove preview", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var109), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -4010,7 +4010,7 @@ func AppDomains(s ui.Shell, v AppView, f ui.Form, at DomainTarget) templ.Compone
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Attrs: ui.Ask("Remove "+d.Host+d.Path+"?", v.App.Name+" stops answering at this address at once.", "Remove domain", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var136), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Variant: ui.DangerQuiet, Small: true, Type: "submit", Icon: "trash", Attrs: ui.Ask("Remove "+d.Host+d.Path+"?", v.App.Name+" stops answering at this address at once.", "Remove domain", true)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var136), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
