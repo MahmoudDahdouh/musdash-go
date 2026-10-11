@@ -1,0 +1,18 @@
+# name: Ombi
+# about: A request portal where users ask for movies and shows, linked to Plex, Emby or Jellyfin and to Sonarr and Radarr.
+# docs: https://docs.linuxserver.io/images/docker-ombi/
+# website: https://ombi.io
+# categories: media
+# source: musdash
+services:
+  ombi:
+    image: ghcr.io/linuxserver/ombi:latest
+    environment:
+      - SERVICE_FQDN_OMBI_3579
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ombi-config:/config
+volumes:
+  ombi-config:

@@ -1,0 +1,13 @@
+# name: Fenrus
+# about: A personal home page with groups of links, apps with live details, search engines and several dashboards.
+# docs: https://github.com/revenz/Fenrus#installation
+# website: https://github.com/revenz/Fenrus
+# categories: home, productivity
+services:
+  fenrus:
+    image: revenz/fenrus:latest
+    environment:
+      - SERVICE_FQDN_FENRUS_3000
+      - TZ=${TZ:-UTC}
+    volumes:
+      - fenrus-data:/app/data

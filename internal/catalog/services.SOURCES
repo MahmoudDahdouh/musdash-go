@@ -6,6 +6,7 @@
 2fauth musdash selfhst:2fauth.svg
 9router coolify selfhst:9router.svg
 ackee dokploy selfhst:ackee.svg
+ackify musdash selfhst:ackify.svg
 activepieces coolify selfhst:activepieces.svg
 actualbudget coolify selfhst:actual-budget.svg
 adguardhome dokploy selfhst:adguard-home.svg
@@ -43,6 +44,7 @@ atuin musdash selfhst:atuin-dark.svg
 audiobookrequest musdash selfhst:audiobookrequest.svg
 audiobookshelf coolify selfhst:audiobookshelf.svg
 authorizer dokploy dokploy:logo.png
+authportal musdash selfhst:authportal.svg
 auto-mcs musdash selfhst:auto-mcs.webp
 autobrr musdash selfhst:autobrr.svg
 automatisch dokploy dokploy:logo.png
@@ -105,6 +107,7 @@ chiyogami musdash -
 christmas-community musdash selfhst:christmas-community.webp
 chroma coolify coolify:chroma.svg
 chromium dokploy selfhst:chromium.svg
+chronoframe musdash selfhst:chronoframe.webp
 classicpress dokploy dokploy:logo.png
 classicpress-with-mariadb coolify dashboard:classicpress.webp
 classicpress-with-mysql coolify dashboard:classicpress.webp
@@ -118,6 +121,7 @@ codex-docs dokploy dokploy:logo.svg
 codimd coolify coolify:codimd.png
 colanode dokploy selfhst:colanode.svg
 collabora-office dokploy dokploy:logo.svg
+comentario musdash selfhst:comentario.svg
 comicopds musdash selfhst:comicopds.webp
 commafeed dokploy selfhst:commafeed.svg
 conduit dokploy selfhst:conduit.svg
@@ -207,6 +211,7 @@ explo musdash -
 ezbookkeeping dokploy selfhst:ezbookkeeping.webp
 falkordb dokploy dokploy:falkordb.svg
 faraday coolify coolify:faraday.png
+fenrus musdash selfhst:fenrus.svg
 ferron musdash selfhst:ferron.svg
 fider coolify selfhst:fider.svg
 filebrowser coolify selfhst:file-browser.svg
@@ -494,6 +499,7 @@ odoo coolify selfhst:odoo.svg
 ojs dokploy dokploy:ojs.svg
 ollama-chat-tone dokploy dokploy:ollama-chat-tone.svg
 ollama-with-open-webui coolify selfhst:ollama-dark.svg
+ombi musdash selfhst:ombi.svg
 omni-tools dokploy selfhst:omnitools.webp
 omniroute dokploy selfhst:omniroute.svg
 once-campfire coolify coolify:once-campfire.png
@@ -510,6 +516,7 @@ open-webui coolify selfhst:open-webui.svg
 openanalytics dokploy dokploy:logo.svg
 openchangelog musdash selfhst:openchangelog.svg
 openclaw coolify selfhst:openclaw.svg
+opencloud musdash selfhst:opencloud.svg
 opengist dokploy selfhst:opengist.svg
 openhabittracker dokploy dokploy:openhabittracker.png
 openinary dokploy dokploy:openinary.svg
@@ -619,6 +626,7 @@ rimgo musdash selfhst:rimgo.svg
 rivet-engine coolify coolify:rivet.svg
 rocketchat coolify selfhst:rocket-chat.svg
 rote dokploy dokploy:rote.png
+rotki musdash selfhst:rotki.svg
 roundcube dokploy selfhst:roundcube.svg
 rss-bridge dokploy selfhst:rss-bridge.svg
 rss-danbrown musdash selfhst:rss-danbrown.webp
@@ -735,6 +743,7 @@ typecho dokploy dokploy:typecho.png
 typesense coolify svgl:typesense.svg
 umami coolify selfhst:umami.svg
 unifi dokploy dashboard:unifi.svg
+unifi-voucher-site musdash selfhst:unifi-voucher-site.svg
 unleash dokploy coolify:unleash.svg
 unleash-with-postgresql coolify coolify:unleash.svg
 unleash-without-database coolify coolify:unleash.svg
@@ -783,6 +792,7 @@ wordpress-with-mariadb coolify selfhst:wordpress.svg
 wordpress-with-mysql coolify selfhst:wordpress.svg
 wordpress-without-database coolify coolify:wordpress.svg
 workout-cool musdash selfhst:workout-cool.webp
+writefreely musdash selfhst:writefreely.svg
 wupnext dokploy dokploy:logo.svg
 wuzapi dokploy dokploy:wuzapi.png
 yamtrack coolify selfhst:yamtrack.svg

@@ -1,0 +1,30 @@
+# name: OpenCloud
+# about: A file sync and share server with spaces, public links and a web interface, which needs no database.
+# docs: https://docs.opencloud.eu/docs/admin/getting-started/container/docker-compose/docker-compose-base
+# website: https://opencloud.eu/
+# categories: storage, productivity
+# source: musdash
+services:
+  opencloud:
+    image: opencloudeu/opencloud-rolling:8.1.0
+    entrypoint:
+      - /bin/sh
+    command: ["-c", "opencloud init || true; opencloud server"]
+    environment:
+      - SERVICE_FQDN_OPENCLOUD_9200
+      - OC_URL=https://${SERVICE_FQDN_OPENCLOUD}
+      - OC_LOG_LEVEL=${LOG_LEVEL:-info}
+      - PROXY_TLS=false
+      - PROXY_HTTP_ADDR=0.0.0.0:9200
+      - OC_INSECURE=${INSECURE:-false}
+      - PROXY_ENABLE_BASIC_AUTH=${PROXY_ENABLE_BASIC_AUTH:-false}
+      - IDM_CREATE_DEMO_USERS=false
+      - IDM_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - FRONTEND_ARCHIVER_MAX_SIZE=10000000000
+      - OC_DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-en}
+    volumes:
+      - opencloud-config:/etc/opencloud
+      - opencloud-data:/var/lib/opencloud
+volumes:
+  opencloud-config:
+  opencloud-data:

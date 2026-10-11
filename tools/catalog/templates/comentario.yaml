@@ -1,0 +1,42 @@
+# name: Comentario
+# about: A comment server for web pages and blogs, with moderation, threaded replies and an embeddable widget.
+# docs: https://docs.comentario.app/en/installation/docker-image/
+# website: https://comentario.app/
+# categories: communication, cms
+services:
+  comentario:
+    image: registry.gitlab.com/comentario/comentario:latest
+    environment:
+      - SERVICE_FQDN_COMENTARIO_80
+      - BASE_URL=${SERVICE_URL_COMENTARIO}/
+      - COMENTARIO_POSTGRES_HOST=postgres
+      - COMENTARIO_POSTGRES_PORT=5432
+      - COMENTARIO_POSTGRES_DATABASE=comentario
+      - COMENTARIO_POSTGRES_USERNAME=${SERVICE_USER_POSTGRES}
+      - COMENTARIO_POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - COMENTARIO_SMTP_HOST=${SMTP_HOST:-}
+      - COMENTARIO_SMTP_PORT=${SMTP_PORT:-587}
+      - COMENTARIO_SMTP_USERNAME=${SMTP_USERNAME:-}
+      - COMENTARIO_SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - COMENTARIO_SMTP_EMAIL_FROM=${SMTP_FROM:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1/api/user || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=comentario
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - comentario-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

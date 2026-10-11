@@ -1,0 +1,26 @@
+# name: UniFi Voucher Site
+# about: A web page for creating, listing and printing guest WiFi vouchers on your own UniFi network.
+# docs: https://github.com/glenndehaan/unifi-voucher-site#installation
+# website: https://github.com/glenndehaan/unifi-voucher-site
+# categories: networking
+services:
+  unifi-voucher-site:
+    image: glenndehaan/unifi-voucher-site:latest
+    environment:
+      - SERVICE_FQDN_UNIFI_VOUCHER_SITE_3000
+      - UNIFI_IP=${UNIFI_IP:-192.168.1.1}
+      - UNIFI_PORT=${UNIFI_PORT:-443}
+      - UNIFI_TOKEN=${UNIFI_TOKEN:?}
+      - UNIFI_SITE_ID=${UNIFI_SITE_ID:-default}
+      - UNIFI_SSID=${UNIFI_SSID:-}
+      - UNIFI_SSID_PASSWORD=${UNIFI_SSID_PASSWORD:-}
+      - AUTH_INTERNAL_ENABLED=true
+      - AUTH_INTERNAL_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - AUTH_INTERNAL_BEARER_TOKEN=${SERVICE_PASSWORD_APITOKEN}
+      - AUTH_DISABLE=false
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-25}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}

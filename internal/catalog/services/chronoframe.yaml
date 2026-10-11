@@ -1,0 +1,25 @@
+# name: ChronoFrame
+# about: A photo gallery for photographers with a map view, EXIF details and an admin dashboard for uploads.
+# docs: https://chronoframe.bh8.ga/guide/getting-started.html
+# website: https://chronoframe.bh8.ga/
+# categories: media
+# source: musdash
+services:
+  chronoframe:
+    image: ghcr.io/hoshinosuzumi/chronoframe:latest
+    environment:
+      - SERVICE_FQDN_CHRONOFRAME_3000
+      - CFRAME_ADMIN_EMAIL=${CFRAME_ADMIN_EMAIL:-admin@example.com}
+      - CFRAME_ADMIN_NAME=${SERVICE_USER_ADMIN}
+      - CFRAME_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - NUXT_SESSION_PASSWORD=${SERVICE_PASSWORD_SESSION}
+      - NUXT_STORAGE_PROVIDER=local
+      - NUXT_PROVIDER_LOCAL_PATH=/app/data/storage
+      - NUXT_TRUST_PROXY=true
+      - NUXT_PUBLIC_APP_TITLE=${CFRAME_APP_TITLE:-ChronoFrame}
+      - NUXT_PUBLIC_MAP_PROVIDER=maplibre
+      - NUXT_PUBLIC_MAP_MAPLIBRE_TOKEN=${MAPTILER_TOKEN:-}
+    volumes:
+      - chronoframe-data:/app/data
+volumes:
+  chronoframe-data:

@@ -1,0 +1,46 @@
+# name: AuthPortal
+# about: A login gateway that signs people in with their Plex, Jellyfin or Emby account, with MFA, roles and an OIDC provider.
+# docs: https://github.com/modom-ofn/auth-portal#quick-start
+# website: https://github.com/modom-ofn/auth-portal
+# categories: auth, media
+services:
+  auth-portal:
+    image: modomofn/auth-portal:latest
+    environment:
+      - SERVICE_FQDN_AUTH_PORTAL_8080
+      - APP_BASE_URL=${SERVICE_URL_AUTH_PORTAL}
+      - OIDC_ISSUER=${SERVICE_URL_AUTH_PORTAL}
+      - SESSION_COOKIE_DOMAIN=${SERVICE_FQDN_AUTH_PORTAL}
+      - SESSION_SECRET=${SERVICE_PASSWORD_64_SESSION}
+      - DATA_KEY=${SERVICE_BASE64_DATAKEY}
+      - FORCE_SECURE_COOKIE=1
+      - FORCE_HSTS=1
+      - TZ=${TZ:-UTC}
+      - APP_TIMEZONE=${TZ:-UTC}
+      - ADMIN_BOOTSTRAP_USERS=${ADMIN_BOOTSTRAP_USERS:?}
+      - DATABASE_URL=postgres://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/authportaldb?sslmode=disable
+      - MEDIA_SERVER=${MEDIA_SERVER:-jellyfin}
+      - MFA_ENABLE=1
+      - PLEX_OWNER_TOKEN=${PLEX_OWNER_TOKEN:-}
+      - PLEX_SERVER_MACHINE_ID=${PLEX_SERVER_MACHINE_ID:-}
+      - PLEX_SERVER_NAME=${PLEX_SERVER_NAME:-}
+      - JELLYFIN_SERVER_URL=${JELLYFIN_SERVER_URL:-http://localhost:8096}
+      - JELLYFIN_API_KEY=${JELLYFIN_API_KEY:-}
+      - EMBY_SERVER_URL=${EMBY_SERVER_URL:-http://localhost:8096}
+      - EMBY_API_KEY=${EMBY_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=authportaldb
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - authportal-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

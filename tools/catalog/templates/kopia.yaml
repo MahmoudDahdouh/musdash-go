@@ -10,7 +10,6 @@ services:
     command:
       - server
       - start
-      - --disable-csrf-token-checks
       - --insecure
       - --address=0.0.0.0:51515
       - --server-username=${SERVICE_USER_KOPIA}

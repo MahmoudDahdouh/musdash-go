@@ -1,0 +1,16 @@
+# name: Rotki
+# about: A portfolio tracker for crypto and other assets that keeps its encrypted data on your own server and reports profit and tax figures.
+# docs: https://docs.rotki.com/requirement-and-installation/docker.html
+# website: https://rotki.com
+# categories: finance
+services:
+  rotki:
+    image: rotki/rotki:latest
+    environment:
+      - SERVICE_FQDN_ROTKI_80
+      - ROTKI_SESSION_KEY=${SERVICE_HEX_64_SESSION}
+      - ROTKI_SESSION_COOKIE_SECURE=forwarded
+      - TZ=${TZ:-UTC}
+    volumes:
+      - rotki-data:/data
+      - rotki-logs:/logs
