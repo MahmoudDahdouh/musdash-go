@@ -1,0 +1,20 @@
+# name: Manyfold
+# about: A manager for 3D print model files that scans libraries, previews models and tracks creators and collections.
+# docs: https://manyfold.app/get-started/docker
+# website: https://manyfold.app
+# categories: media, home
+# source: musdash
+services:
+  manyfold:
+    image: ghcr.io/manyfold3d/manyfold-solo:latest
+    environment:
+      - SERVICE_FQDN_MANYFOLD_3214
+      - SECRET_KEY_BASE=${SERVICE_PASSWORD_64_MANYFOLD}
+      - PUBLIC_HOSTNAME=${SERVICE_FQDN_MANYFOLD}
+      - MULTIUSER=enabled
+    volumes:
+      - manyfold-config:/config
+      - manyfold-models:/models
+volumes:
+  manyfold-config:
+  manyfold-models:

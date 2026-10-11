@@ -1,0 +1,28 @@
+# name: BookLogr
+# about: Tracks the books you own, are reading or want to read, with a web interface and a separate API service.
+# docs: https://booklogr.app/docs/Install/Docker
+# website: https://booklogr.app
+# categories: media, home
+# source: musdash
+services:
+  booklogr-web:
+    image: mozzo/booklogr-web:v1.12.0
+    environment:
+      - SERVICE_FQDN_BOOKLOGR_WEB_80
+      - BL_API_ENDPOINT=${SERVICE_URL_BOOKLOGR_API}/
+      - BL_GOOGLE_ID=
+      - BL_DEMO_MODE=false
+      - BL_ALLOW_REGISTRATION=${BL_ALLOW_REGISTRATION:-true}
+    depends_on:
+      - booklogr-api
+  booklogr-api:
+    image: mozzo/booklogr:v1.12.0
+    environment:
+      - SERVICE_FQDN_BOOKLOGR_API_5000
+      - DATABASE_URL=sqlite:///books.db
+      - AUTH_SECRET_KEY=${SERVICE_PASSWORD_64_AUTH}
+      - AUTH_ALLOW_REGISTRATION=${AUTH_ALLOW_REGISTRATION:-True}
+    volumes:
+      - booklogr-data:/app/instance
+volumes:
+  booklogr-data:

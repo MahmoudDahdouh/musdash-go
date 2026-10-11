@@ -1,0 +1,68 @@
+# name: BookHaven
+# about: A web library for EPUB ebooks that reads them in the browser, edits their metadata and serves them over OPDS.
+# docs: https://github.com/HrBingR/BookHaven#docker
+# website: https://github.com/HrBingR/BookHaven
+# categories: media, rss
+# source: musdash
+services:
+  bookhaven:
+    image: hrbingr/bookhaven:latest
+    environment:
+      - SERVICE_FQDN_BOOKHAVEN_5000
+      - APP_PORT=5000
+      - BASE_URL=${SERVICE_URL_BOOKHAVEN}
+      - BASE_DIRECTORY=/ebooks
+      - COVER_BASE_DIRECTORY=/cover_img
+      - UPLOADS_ENABLED=true
+      - UPLOADS_DIRECTORY=/uploads
+      - SECRET_KEY=${SERVICE_HEX_64_SECRET}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_PASS=${SERVICE_PASSWORD_ADMIN}!
+      - DB_TYPE=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=epub_library
+      - DB_USER=${SERVICE_USER_MYSQL}
+      - DB_PASSWORD=${SERVICE_PASSWORD_MYSQL}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - bookhaven-ebooks:/ebooks
+      - bookhaven-covers:/cover_img
+      - bookhaven-uploads:/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 40
+  mysql:
+    image: mysql:8.4
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=epub_library
+      - MYSQL_USER=${SERVICE_USER_MYSQL}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_MYSQL}
+    volumes:
+      - bookhaven-mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+volumes:
+  bookhaven-covers:
+  bookhaven-ebooks:
+  bookhaven-mysql:
+  bookhaven-uploads:

@@ -1,0 +1,54 @@
+# name: MyFin
+# about: A personal finance app for budgets, accounts, transactions and investments, with a web page and its own MySQL database.
+# docs: https://myfinbudget.com/docs/getting-started/docker
+# website: https://myfinbudget.com/
+# categories: finance
+# source: musdash
+services:
+  myfin-frontend:
+    image: ghcr.io/afaneca/myfin:latest
+    environment:
+      - SERVICE_FQDN_MYFIN_FRONTEND_80
+      - VITE_MYFIN_BASE_API_URL=${SERVICE_URL_MYFIN_API}
+    depends_on:
+      myfin-api:
+        condition: service_healthy
+  myfin-api:
+    image: ghcr.io/afaneca/myfin-api:latest
+    environment:
+      - SERVICE_FQDN_MYFIN_API_3001
+      - DB_NAME=myfin
+      - DB_USER=${SERVICE_USER_MYFIN}
+      - DB_PW=${SERVICE_PASSWORD_MYFIN}
+      - DB_PORT=3306
+      - DB_HOST=db
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-465}
+      - SMTP_SECURE=${SMTP_SECURE:-true}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - PORT=3001
+      - LOGGING=false
+      - BYPASS_SESSION_CHECK=false
+      - ENABLE_USER_SIGNUP=${ENABLE_USER_SIGNUP:-true}
+      - TRUST_PROXY=1
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: mysql:8.4
+    environment:
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=myfin
+      - MYSQL_USER=${SERVICE_USER_MYFIN}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_MYFIN}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+volumes:
+  db-data:

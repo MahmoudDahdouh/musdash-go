@@ -1,0 +1,54 @@
+# name: Streamystats
+# about: Statistics and analytics for a Jellyfin server, with watch history, charts and recommendations kept in its own database.
+# docs: https://github.com/fredrikburmester/streamystats#installation
+# website: https://github.com/fredrikburmester/streamystats
+# categories: media, analytics
+# source: musdash
+services:
+  nextjs-app:
+    image: ghcr.io/fredrikburmester/streamystats-nextjs:latest
+    environment:
+      - SERVICE_FQDN_NEXTJS_APP_3000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@vectorchord:5432/streamystats
+      - JOB_SERVER_URL=http://job-server:3005
+      - HOSTNAME=0.0.0.0
+      - SESSION_SECRET=${SERVICE_PASSWORD_64_SESSION}
+      - INTERNAL_API_KEY=${SERVICE_PASSWORD_INTERNAL}
+      - NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${SERVICE_BASE64_ACTIONS}
+    depends_on:
+      vectorchord:
+        condition: service_healthy
+      job-server:
+        condition: service_healthy
+  job-server:
+    image: ghcr.io/fredrikburmester/streamystats-job-server:latest
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@vectorchord:5432/streamystats
+      - PORT=3005
+      - HOST=0.0.0.0
+      - NEXTJS_URL=http://nextjs-app:3000
+      - INTERNAL_API_KEY=${SERVICE_PASSWORD_INTERNAL}
+    depends_on:
+      vectorchord:
+        condition: service_healthy
+  vectorchord:
+    image: tensorchord/vchord-postgres:pg17-v1.1.1
+    stop_signal: SIGINT
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=streamystats
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - vectorchord-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+volumes:
+  vectorchord-data:

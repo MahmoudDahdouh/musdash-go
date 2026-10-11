@@ -1,0 +1,26 @@
+# name: Gameyfin
+# about: A library for your video game collection that scans folders, fetches metadata and covers, and lets friends download games.
+# docs: https://gameyfin.org/installation/docker/
+# website: https://gameyfin.org/
+# categories: games, media
+# source: musdash
+services:
+  gameyfin:
+    image: ghcr.io/gameyfin/gameyfin:2
+    environment:
+      - SERVICE_FQDN_GAMEYFIN_8080
+      - APP_KEY=${SERVICE_BASE64_APPKEY}
+      - APP_URL=${SERVICE_URL_GAMEYFIN}
+      - JAVA_OPTS=-XX:AOTMode=off
+    volumes:
+      - gameyfin-db:/opt/gameyfin/db
+      - gameyfin-data:/opt/gameyfin/data
+      - gameyfin-plugindata:/opt/gameyfin/plugindata
+      - gameyfin-logs:/opt/gameyfin/logs
+      - gameyfin-library:/games
+volumes:
+  gameyfin-data:
+  gameyfin-db:
+  gameyfin-library:
+  gameyfin-logs:
+  gameyfin-plugindata:

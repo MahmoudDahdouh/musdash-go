@@ -1,0 +1,51 @@
+# name: webtrees
+# about: A collaborative genealogy application for building and sharing family trees online, with media, sources and GEDCOM import.
+# docs: https://github.com/NathanVaughn/webtrees-docker#usage
+# website: https://webtrees.net
+# categories: home, docs
+# source: musdash
+services:
+  webtrees:
+    image: ghcr.io/nathanvaughn/webtrees:latest
+    environment:
+      - SERVICE_FQDN_WEBTREES_80
+      - PRETTY_URLS=1
+      - HTTPS=0
+      - HTTPS_REDIRECT=0
+      - LANG=${LANG:-en-US}
+      - BASE_URL=${SERVICE_URL_WEBTREES}
+      - DB_TYPE=mysql
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=${SERVICE_USER_WEBTREES}
+      - DB_PASS=${SERVICE_PASSWORD_DB}
+      - DB_NAME=webtrees
+      - DB_PREFIX=wt_
+      - WT_USER=${SERVICE_USER_ADMIN}
+      - WT_NAME=${WT_NAME:-Administrator}
+      - WT_PASS=${SERVICE_PASSWORD_ADMIN}
+      - WT_EMAIL=${WT_EMAIL:-admin@example.com}
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - webtrees-data:/var/www/webtrees/data
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: mariadb:12
+    environment:
+      - MARIADB_DATABASE=webtrees
+      - MARIADB_USER=${SERVICE_USER_WEBTREES}
+      - MARIADB_PASSWORD=${SERVICE_PASSWORD_DB}
+      - MARIADB_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+    volumes:
+      - webtrees-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  webtrees-data:
+  webtrees-db:

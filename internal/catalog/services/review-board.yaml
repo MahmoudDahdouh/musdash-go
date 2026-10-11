@@ -110,6 +110,15 @@ configs:
               proxy_temp_file_write_size  64k;
           }
 
+          location /media/uploaded/ {
+              alias /var/www/reviewboard/htdocs/media/uploaded/;
+              types { }
+              default_type application/octet-stream;
+              add_header Content-Disposition attachment;
+              add_header X-Content-Type-Options nosniff;
+              add_header Content-Security-Policy "sandbox; default-src 'none'";
+          }
+
           location /media/ {
               alias /var/www/reviewboard/htdocs/media/;
               expires max;

@@ -1,0 +1,14 @@
+# name: YTPTube
+# about: A web interface for yt-dlp that queues video and audio downloads, with presets, schedules and a built-in player.
+# docs: https://github.com/arabcoders/ytptube#quick-start
+# website: https://github.com/arabcoders/ytptube
+# categories: media, automation
+services:
+  ytptube:
+    image: ghcr.io/arabcoders/ytptube:latest
+    environment:
+      - SERVICE_FQDN_YTPTUBE_8081
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ytptube-config:/config
+      - ytptube-downloads:/downloads

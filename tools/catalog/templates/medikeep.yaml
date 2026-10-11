@@ -1,0 +1,44 @@
+# name: MediKeep
+# about: A personal health record keeper for medications, visits, lab results and documents, with its own PostgreSQL database.
+# docs: https://github.com/afairgiant/MediKeep/wiki/Installation-Guide
+# website: https://github.com/afairgiant/MediKeep
+# categories: home, productivity
+services:
+  medikeep:
+    image: ghcr.io/afairgiant/medikeep:latest
+    environment:
+      - SERVICE_FQDN_MEDIKEEP_8000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=medical_records
+      - DB_USER=${SERVICE_USER_MEDIKEEP}
+      - DB_PASSWORD=${SERVICE_PASSWORD_MEDIKEEP}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_MEDIKEEP}
+      - ADMIN_DEFAULT_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - medikeep-uploads:/app/uploads
+      - medikeep-logs:/app/logs
+      - medikeep-backups:/app/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 15s
+      retries: 30
+      start_period: 30s
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=medical_records
+      - POSTGRES_USER=${SERVICE_USER_MEDIKEEP}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_MEDIKEEP}
+    volumes:
+      - medikeep-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

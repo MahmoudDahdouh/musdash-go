@@ -71,6 +71,8 @@ blogfactory dokploy dokploy:blogfactory.svg
 bluesky-pds coolify coolify:bluesky.svg
 bolt-diy dokploy selfhst:bolt-diy.svg
 bonfire dokploy dokploy:bonfire.svg
+bookhaven musdash selfhst:bookhaven.svg
+booklogr musdash selfhst:booklogr.svg
 booklore dokploy selfhst:booklore.svg
 bookstack coolify selfhst:bookstack.svg
 borg-ui musdash selfhst:borg-ui.svg
@@ -127,6 +129,7 @@ classicpress-without-database coolify dokploy:classicpress/logo.png
 cleanuparr musdash selfhst:cleanuparr.webp
 cloudbeaver coolify selfhst:cloudbeaver.svg
 cloudreve coolify selfhst:cloudreve.svg
+cmintey-wishlist musdash selfhst:cmintey-wishlist.webp
 cobalt musdash selfhst:cobalt.svg
 cockpit coolify selfhst:cockpit.svg
 code-server coolify selfhst:coder.svg
@@ -298,6 +301,7 @@ friendica musdash selfhst:friendica.svg
 frigate musdash selfhst:frigate.svg
 fusionauth musdash selfhst:fusionauth.svg
 gamevault musdash selfhst:gamevault.webp
+gameyfin musdash selfhst:gameyfin.svg
 gancio musdash -
 garage coolify selfhst:garage.svg
 garage-with-ui dokploy selfhst:garage.svg
@@ -484,6 +488,7 @@ maloja musdash selfhst:maloja.svg
 manage-my-damn-life musdash selfhst:manage-my-damn-life.webp
 manifest musdash selfhst:manifest-dark.svg
 many-notes musdash selfhst:many-notes.svg
+manyfold musdash selfhst:manyfold.webp
 markup dokploy dokploy:markup.svg
 marreta musdash selfhst:marreta.svg
 martin coolify coolify:martin.png
@@ -500,6 +505,7 @@ mealie coolify selfhst:mealie.svg
 mediacms dokploy dokploy:mediacms.svg
 mediafetch dokploy dokploy:mediafetch.svg
 mediawiki coolify dashboard:mediawiki.svg
+medikeep musdash selfhst:medikeep.svg
 meerkat-crm musdash selfhst:meerkat-crm.webp
 meilisearch coolify selfhst:meilisearch.svg
 memos coolify selfhst:memos.webp
@@ -533,6 +539,7 @@ mqtt-web-interface musdash selfhst:mqtt.svg
 mumble dokploy selfhst:mumble.svg
 my-links dokploy dokploy:my-links.svg
 mydia musdash musdash:mydia.svg
+myfin musdash selfhst:myfin.webp
 n8n-queue dokploy selfhst:n8n.svg
 n8n-runner-postgres-ollama dokploy selfhst:n8n.svg
 n8n-with-postgres-and-worker coolify selfhst:n8n.svg
@@ -815,6 +822,7 @@ step-ca musdash selfhst:step-ca.svg
 stirling-pdf coolify selfhst:stirling-pdf.svg
 storyden dokploy selfhst:storyden.svg
 strapi coolify selfhst:strapi.svg
+streamystats musdash selfhst:streamystats.svg
 struxa dokploy dokploy:struxa.svg
 stump musdash selfhst:stump-dark.svg
 suggestarr musdash selfhst:suggestarr.svg
@@ -919,6 +927,7 @@ weaviate coolify selfhst:weaviate.svg
 web-check coolify selfhst:web-check-dark.svg
 webhook-tester musdash selfhst:webhook-tester.svg
 weblate coolify selfhst:weblate.svg
+webtrees musdash selfhst:webtrees.svg
 whatomate dokploy dokploy:whatomate.svg
 whodb musdash selfhst:whodb.svg
 wikidocs musdash selfhst:wikidocs.svg
@@ -942,6 +951,7 @@ yourls dokploy selfhst:yourls.svg
 youtubedl-material musdash selfhst:youtube-dl.svg
 yt-dlp-web-player musdash selfhst:yt-dlp-web-player.svg
 yt-zero musdash selfhst:yt-zero.svg
+ytptube musdash musdash:ytptube.png
 yuvomi dokploy selfhst:yuvomi.svg
 zabbix dokploy selfhst:zabbix.svg
 zennotes musdash selfhst:zennotes.webp

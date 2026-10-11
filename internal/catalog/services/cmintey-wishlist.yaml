@@ -1,0 +1,26 @@
+# name: Wishlist
+# about: Shared wishlists for family and friends, where others can mark gifts as claimed without the owner seeing.
+# docs: https://github.com/cmintey/wishlist#getting-started
+# website: https://github.com/cmintey/wishlist
+# categories: home, productivity
+# source: musdash
+services:
+  wishlist:
+    image: ghcr.io/cmintey/wishlist:latest
+    environment:
+      - SERVICE_FQDN_WISHLIST_3280
+      - ORIGIN=${SERVICE_URL_WISHLIST}
+      - TOKEN_TIME=72
+      - DEFAULT_CURRENCY=${DEFAULT_CURRENCY:-USD}
+    volumes:
+      - wishlist-uploads:/usr/src/app/uploads
+      - wishlist-data:/usr/src/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3280/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+volumes:
+  wishlist-data:
+  wishlist-uploads:
