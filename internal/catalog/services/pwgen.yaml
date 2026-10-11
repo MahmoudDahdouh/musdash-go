@@ -1,0 +1,17 @@
+# name: PWgen
+# about: A web page that generates random passwords and passphrases, with an optional check against known breaches.
+# docs: https://github.com/jocxfin/pwgen#how-to-use
+# website: https://github.com/jocxfin/pwgen
+# categories: security
+# source: musdash
+services:
+  pwgen:
+    image: jocxfin/pwgen:latest
+    environment:
+      - SERVICE_FQDN_PWGEN_5069
+      - NO_API_CHECK=${NO_API_CHECK:-false}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:5069/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

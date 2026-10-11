@@ -1,0 +1,13 @@
+# name: Wizarr
+# about: Sends invitation links that add people to a Plex, Jellyfin or Emby server and walk them through setup.
+# docs: https://docs.wizarr.dev/getting-started/installation
+# website: https://github.com/wizarrrr/wizarr
+# categories: media, auth
+services:
+  wizarr:
+    image: ghcr.io/wizarrrr/wizarr:latest
+    environment:
+      - SERVICE_FQDN_WIZARR_5690
+      - TZ=${TZ:-UTC}
+    volumes:
+      - wizarr-data:/data

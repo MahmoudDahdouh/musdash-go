@@ -1,0 +1,20 @@
+# name: VoidAuth
+# about: An SSO and user management server with OIDC, passkeys, invitations and proxy authentication for your other apps.
+# docs: https://voidauth.app/#/Getting-Started
+# website: https://voidauth.app/
+# categories: auth, security
+# source: musdash
+services:
+  voidauth:
+    image: voidauth/voidauth:latest
+    environment:
+      - SERVICE_FQDN_VOIDAUTH_3000
+      - APP_URL=${SERVICE_URL_VOIDAUTH}
+      - STORAGE_KEY=${SERVICE_BASE64_STORAGEKEY}
+      - DB_ADAPTER=sqlite
+    volumes:
+      - voidauth-config:/app/config
+      - voidauth-db:/app/db
+volumes:
+  voidauth-config:
+  voidauth-db:

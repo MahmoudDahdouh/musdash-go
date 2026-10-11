@@ -1,0 +1,25 @@
+# name: BrickTracker
+# about: A web app for keeping track of LEGO sets, parts and minifigures, with data from Rebrickable.
+# docs: https://gitea.baerentsen.space/FrederikBaerentsen/BrickTracker/src/branch/master/docs/quickstart.md
+# website: https://gitea.baerentsen.space/FrederikBaerentsen/BrickTracker
+# categories: home
+# source: musdash
+services:
+  bricktracker:
+    image: gitea.baerentsen.space/frederikbaerentsen/bricktracker:latest
+    environment:
+      - SERVICE_FQDN_BRICKTRACKER_3333
+      - BK_REBRICKABLE_API_KEY=${BK_REBRICKABLE_API_KEY:-}
+      - BK_AUTHENTICATION_PASSWORD=${SERVICE_PASSWORD_BRICKTRACKER}
+      - BK_AUTHENTICATION_KEY=${SERVICE_PASSWORD_64_BRICKTRACKER}
+      - BK_TIMEZONE=${TZ:-Etc/UTC}
+    volumes:
+      - bricktracker-data:/app/data
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; socket.create_connection(('127.0.0.1', 3333), 3).close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+volumes:
+  bricktracker-data:

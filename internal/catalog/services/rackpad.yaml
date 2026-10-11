@@ -1,0 +1,29 @@
+# name: Rackpad
+# about: An inventory workspace for racks, devices, ports, VLANs and IP addresses, with discovery scans and controller imports.
+# docs: https://github.com/Kobii-git/rackpad/blob/main/INSTALL.md
+# website: https://rackpad.net
+# categories: home, monitoring
+# source: musdash
+services:
+  rackpad:
+    image: ghcr.io/kobii-git/rackpad:latest
+    environment:
+      - SERVICE_FQDN_RACKPAD_3000
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3000
+      - DATABASE_PATH=/data/rackpad.db
+      - TRUST_PROXY=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - TRUSTED_HOSTS=${SERVICE_FQDN_RACKPAD}
+      - TRUSTED_ORIGINS=${SERVICE_URL_RACKPAD}
+      - RACKPAD_SECRET_KEY=${SERVICE_HEX_64_SECRET}
+    volumes:
+      - rackpad-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+volumes:
+  rackpad-data:

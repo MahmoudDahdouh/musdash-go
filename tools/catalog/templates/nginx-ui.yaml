@@ -1,0 +1,29 @@
+# name: Nginx UI
+# about: A web interface for an Nginx server that comes in the same container: sites, certificates, logs and a config editor.
+# docs: https://nginxui.com/guide/getting-started.html
+# website: https://nginxui.com
+# categories: networking, devtools
+services:
+  nginx-ui:
+    image: uozi/nginx-ui:latest
+    environment:
+      - SERVICE_FQDN_NGINX_UI_80
+      - TZ=${TZ:-UTC}
+      - NGINX_UI_NODE_SKIP_INSTALLATION=true
+      - NGINX_UI_PREDEFINED_USER_NAME=${SERVICE_USER_ADMIN}
+      - NGINX_UI_PREDEFINED_USER_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - NGINX_UI_APP_JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - NGINX_UI_NODE_SECRET=${SERVICE_PASSWORD_NODE}
+    volumes:
+      - type: volume
+        source: nginx-ui-nginx
+        target: /etc/nginx
+        volume:
+          nocopy: true
+      - nginx-ui-config:/etc/nginx-ui
+      - nginx-ui-www:/var/www
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

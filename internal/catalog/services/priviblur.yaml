@@ -1,0 +1,22 @@
+# name: Priviblur
+# about: A privacy-friendly alternative front end for Tumblr that browses blogs and posts without scripts or tracking.
+# docs: https://github.com/syeopite/priviblur#docker
+# website: https://github.com/syeopite/priviblur
+# categories: media
+# source: musdash
+services:
+  priviblur:
+    image: quay.io/syeopite/priviblur:latest
+    environment:
+      - SERVICE_FQDN_PRIVIBLUR_8000
+    configs:
+      - source: priviblur-config
+        target: /priviblur/config.toml
+configs:
+  priviblur-config:
+    content: |
+      [deployment]
+      host = "0.0.0.0"
+      port = 8000
+      domain = "${SERVICE_FQDN_PRIVIBLUR}"
+      https = true

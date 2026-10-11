@@ -1,0 +1,22 @@
+# name: Shaarli
+# about: A small bookmarking and link-sharing site that needs no database, with tags, search and a REST API.
+# docs: https://shaarli.readthedocs.io/en/master/Docker.html
+# website: https://shaarli.readthedocs.io/
+# categories: productivity, rss
+# source: musdash
+services:
+  shaarli:
+    image: ghcr.io/shaarli/shaarli:latest
+    environment:
+      - SERVICE_FQDN_SHAARLI_80
+    volumes:
+      - shaarli-data:/var/www/shaarli/data
+      - shaarli-cache:/var/www/shaarli/cache
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  shaarli-cache:
+  shaarli-data:

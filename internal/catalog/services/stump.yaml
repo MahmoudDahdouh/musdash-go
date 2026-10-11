@@ -1,0 +1,17 @@
+# name: Stump
+# about: A server for comics, manga and e-books with a web reader and OPDS feeds for reading apps.
+# docs: https://stumpapp.dev/docs/getting-started/installation/docker
+# website: https://stumpapp.dev/
+# categories: media
+# source: musdash
+services:
+  stump:
+    image: aaronleopold/stump:latest
+    environment:
+      - SERVICE_FQDN_STUMP_10801
+    volumes:
+      - stump-config:/config
+      - stump-data:/data
+volumes:
+  stump-config:
+  stump-data:

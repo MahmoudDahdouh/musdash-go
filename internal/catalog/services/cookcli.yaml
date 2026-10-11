@@ -1,0 +1,35 @@
+# name: CookCLI
+# about: A web server for browsing and editing recipes written in the Cooklang format, with a shopping list and pantry.
+# docs: https://github.com/cooklang/cookcli/blob/main/docs/server.md
+# website: https://cooklang.org/cli/
+# categories: home
+# source: musdash
+services:
+  cookcli:
+    image: ghcr.io/cooklang/cookcli:latest
+    command:
+      - sh
+      - -c
+      - printf '%s\n' "$$COOK_ADMIN_PASSWORD" | cook server user add "$$COOK_ADMIN_USER" || printf '%s\n' "$$COOK_ADMIN_PASSWORD" | cook server user passwd "$$COOK_ADMIN_USER"; exec cook server /recipes --host
+    environment:
+      - SERVICE_FQDN_COOKCLI_9080
+      - COOK_CORS_ORIGIN=${SERVICE_URL_COOKCLI}
+      - COOK_CONFIG_DIR=/config
+      - COOK_ADMIN_USER=${SERVICE_USER_ADMIN}
+      - COOK_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - cookcli-recipes:/recipes
+      - cookcli-config:/config
+    depends_on:
+      cookcli-init:
+        condition: service_completed_successfully
+  cookcli-init:
+    image: ghcr.io/cooklang/cookcli:latest
+    user: "0:0"
+    entrypoint: ["sh", "-c", "chown 1000:1000 /config"]
+    restart: "no"
+    volumes:
+      - cookcli-config:/config
+volumes:
+  cookcli-config:
+  cookcli-recipes:

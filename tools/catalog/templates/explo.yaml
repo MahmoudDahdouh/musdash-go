@@ -1,0 +1,18 @@
+# name: Explo
+# about: Fetches personalised ListenBrainz recommendations and playlists, downloads the tracks and adds them to a self-hosted music system.
+# docs: https://github.com/LumePart/Explo/wiki/2.-Quick-Start
+# website: https://github.com/LumePart/Explo
+# categories: media
+services:
+  explo:
+    image: ghcr.io/lumepart/explo:latest
+    environment:
+      - SERVICE_FQDN_EXPLO_7288
+      - WEB_UI=true
+      - WEB_ENV_PATH=/opt/explo/config
+      - TZ=${TZ:-UTC}
+      - UI_USERNAME=${SERVICE_USER_ADMIN}
+      - UI_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - explo-config:/opt/explo/config
+      - explo-music:/data

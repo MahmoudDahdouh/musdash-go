@@ -1,0 +1,12 @@
+# name: Watcharr
+# about: A shared watch list for films and series, with ratings, status tracking and Jellyfin, Plex and Sonarr/Radarr sync.
+# docs: https://watcharr.app/docs/installation/docker-compose
+# website: https://watcharr.app
+# categories: media, home
+services:
+  watcharr:
+    image: ghcr.io/sbondco/watcharr:latest
+    environment:
+      - SERVICE_FQDN_WATCHARR_3080
+    volumes:
+      - watcharr-data:/data

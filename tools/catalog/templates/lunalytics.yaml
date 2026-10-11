@@ -1,0 +1,18 @@
+# name: Lunalytics
+# about: An uptime monitor with status pages and incident notices, kept in a single SQLite file.
+# docs: https://lunalytics.xyz/docs/getting-started
+# website: https://lunalytics.xyz
+# categories: monitoring
+services:
+  lunalytics:
+    image: ksjaay/lunalytics:latest
+    environment:
+      - SERVICE_FQDN_LUNALYTICS_2308
+    volumes:
+      - lunalytics-data:/app/data
+      - lunalytics-logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:2308/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

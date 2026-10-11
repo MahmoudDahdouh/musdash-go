@@ -1,0 +1,21 @@
+# name: VaulTLS
+# about: A certificate authority with a web interface for issuing and revoking mTLS client, server and SSH certificates.
+# docs: https://github.com/7ritn/VaulTLS#installation
+# website: https://github.com/7ritn/VaulTLS
+# categories: security, networking
+services:
+  vaultls:
+    image: ghcr.io/7ritn/vaultls:latest
+    environment:
+      - SERVICE_FQDN_VAULTLS_80
+      - VAULTLS_API_SECRET=${SERVICE_BASE64_API}
+      - VAULTLS_DB_SECRET=${SERVICE_PASSWORD_DB}
+      - VAULTLS_URL=${SERVICE_URL_VAULTLS}/
+      - VAULTLS_INSECURE=${VAULTLS_INSECURE:-true}
+    volumes:
+      - vaultls-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null --max-time 5 http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30

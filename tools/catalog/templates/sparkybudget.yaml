@@ -1,0 +1,24 @@
+# name: SparkyBudget
+# about: A personal budgeting app that tracks accounts, monthly budgets and spending trends, with optional SimpleFIN bank sync.
+# docs: https://github.com/CodeWithCJ/SparkyBudget/wiki
+# website: https://github.com/CodeWithCJ/SparkyBudget
+# categories: finance
+services:
+  sparkybudget:
+    image: codewithcj/sparkybudget:latest
+    environment:
+      - SERVICE_FQDN_SPARKYBUDGET_5000
+      - SPARKY_USER=${SERVICE_USER_ADMIN}
+      - SPARKY_PASS=${SERVICE_PASSWORD_ADMIN}
+      - FLASK_SECRET_KEY=${SERVICE_PASSWORD_64_SPARKY}
+      - SIMPLEFIN_TOKEN=${SIMPLEFIN_TOKEN:-}
+      - SPARKY_DEMO=${SPARKY_DEMO:-No}
+      - USE_SECURE_SESSION_COOKIE=1
+      - TZ=${TZ:-UTC}
+    volumes:
+      - sparkybudget-data:/private
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/login', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 30

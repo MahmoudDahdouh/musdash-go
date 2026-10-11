@@ -1,0 +1,22 @@
+# name: Razzia
+# about: A live quiz game where a host runs a game and players join from their own devices to answer questions.
+# docs: https://github.com/Ralex91/Razzia/blob/main/docs/configuration.md
+# website: https://github.com/Ralex91/Razzia
+# categories: games
+# source: musdash
+services:
+  razzia:
+    image: ghcr.io/ralex91/razzia:latest
+    environment:
+      - SERVICE_FQDN_RAZZIA_3000
+      - MANAGER_PASSWORD=${SERVICE_PASSWORD_MANAGER}
+      - JWT_SECRET=${SERVICE_HEX_64_JWT}
+    volumes:
+      - razzia-config:/app/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  razzia-config:

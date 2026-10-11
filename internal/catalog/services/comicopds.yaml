@@ -1,0 +1,27 @@
+# name: ComicOPDS
+# about: An OPDS server for comic libraries in CBZ format, with a dashboard for indexing and covers.
+# docs: https://gitea.baerentsen.space/FrederikBaerentsen/ComicOPDS/src/branch/master/docs/quickstart.md
+# website: https://gitea.baerentsen.space/FrederikBaerentsen/ComicOPDS
+# categories: media
+# source: musdash
+services:
+  comicopds:
+    image: gitea.baerentsen.space/frederikbaerentsen/comicopds:latest
+    environment:
+      - SERVICE_FQDN_COMICOPDS_8080
+      - CONTENT_BASE_DIR=/library
+      - SERVER_BASE=${SERVICE_URL_COMICOPDS}
+      - OPDS_BASIC_USER=${SERVICE_USER_COMICOPDS}
+      - OPDS_BASIC_PASS=${SERVICE_PASSWORD_COMICOPDS}
+      - PRECACHE_THUMBS=${PRECACHE_THUMBS:-true}
+    volumes:
+      - comics:/library
+      - comicopds-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  comicopds-data:
+  comics:

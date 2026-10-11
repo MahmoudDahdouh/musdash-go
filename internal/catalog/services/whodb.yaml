@@ -1,0 +1,18 @@
+# name: WhoDB
+# about: A lightweight web explorer for databases such as PostgreSQL, MySQL, SQLite and MongoDB, with a table view and a query editor.
+# docs: https://docs.whodb.com/installation
+# website: https://whodb.com/
+# categories: database, devtools
+# source: musdash
+services:
+  whodb:
+    image: clidey/whodb:latest
+    environment:
+      - SERVICE_FQDN_WHODB_8080
+      - PORT=8080
+      - WHODB_ENCRYPTION_KEY=${SERVICE_HEX_64_WHODB}
+      - WHODB_SECURE=${WHODB_SECURE:-true}
+    volumes:
+      - whodb-data:/data
+volumes:
+  whodb-data:

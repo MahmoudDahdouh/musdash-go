@@ -1,0 +1,25 @@
+# name: Sonobarr
+# about: Finds new artists similar to the ones in your Lidarr library through Last.fm and ListenBrainz, and adds the ones you pick.
+# docs: https://github.com/Dodelidoo-Labs/sonobarr#quick-start-docker
+# website: https://github.com/Dodelidoo-Labs/sonobarr
+# categories: media, automation
+services:
+  sonobarr:
+    image: ghcr.io/dodelidoo-labs/sonobarr:latest
+    environment:
+      - SERVICE_FQDN_SONOBARR_5000
+      - secret_key=${SERVICE_PASSWORD_64_SECRET}
+      - sonobarr_superadmin_username=${SERVICE_USER_ADMIN}
+      - sonobarr_superadmin_password=${SERVICE_PASSWORD_ADMIN}
+      - lidarr_address=${LIDARR_ADDRESS:-http://lidarr:8686}
+      - lidarr_api_key=${LIDARR_API_KEY:-}
+      - last_fm_api_key=${LAST_FM_API_KEY:-}
+      - last_fm_api_secret=${LAST_FM_API_SECRET:-}
+    volumes:
+      - sonobarr-config:/sonobarr/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:5000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

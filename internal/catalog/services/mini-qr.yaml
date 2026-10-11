@@ -1,0 +1,11 @@
+# name: Mini QR
+# about: A web page for making customised QR codes, with colours, logos and shapes, and for reading them.
+# docs: https://github.com/lyqht/mini-qr/blob/main/SELF_HOSTING.md
+# website: https://github.com/lyqht/mini-qr
+# categories: productivity
+# source: musdash
+services:
+  mini-qr:
+    image: ghcr.io/lyqht/mini-qr:latest
+    environment:
+      - SERVICE_FQDN_MINI_QR_8080

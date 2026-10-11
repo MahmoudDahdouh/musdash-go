@@ -529,6 +529,8 @@ var logoAlias = map[string][]string{
 	"sure":                          {"sure-finance"},
 	"jellyfin-rewind":               {"jellyfin"},
 	"selfh-st-icons":                {"selfh-st"},
+	"priviblur":                     {"tumblr"},
+	"razzia":                        {"rahoot"},
 }
 
 // logoNames are the file names to look for in an icon collection, the

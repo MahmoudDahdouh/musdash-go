@@ -1,0 +1,24 @@
+# name: Tracktor
+# about: A vehicle manager for logging fuel, maintenance, insurance and other records, with reminders and charts.
+# docs: https://github.com/javedh-dev/tracktor/blob/main/docs/installation.md
+# website: https://github.com/javedh-dev/tracktor
+# categories: home, finance
+# source: musdash
+services:
+  tracktor:
+    image: ghcr.io/javedh-dev/tracktor:latest
+    environment:
+      - SERVICE_FQDN_TRACKTOR_3000
+      - TRACKTOR_DEMO_MODE=false
+      - HTTP_MODE=https
+      - CORS_ORIGINS=${SERVICE_URL_TRACKTOR}
+      - APP_SECRET=${SERVICE_HEX_64_APPSECRET}
+    volumes:
+      - tracktor-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  tracktor-data:

@@ -1,0 +1,26 @@
+# name: SerpBear
+# about: Tracks where your site ranks in search results for chosen keywords, with a keyword research tool and email reports.
+# docs: https://docs.serpbear.com/deployment/running-locally-with-docker
+# website: https://docs.serpbear.com/
+# categories: analytics, search
+services:
+  serpbear:
+    image: towfiqi/serpbear:latest
+    environment:
+      - SERVICE_FQDN_SERPBEAR_3000
+      - USER_NAME=${SERVICE_USER_ADMIN}
+      - PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - SECRET=${SERVICE_PASSWORD_64_SERPBEAR}
+      - APIKEY=${SERVICE_PASSWORD_APIKEY}
+      - SESSION_DURATION=${SESSION_DURATION:-24}
+      - NEXT_PUBLIC_APP_URL=${SERVICE_URL_SERPBEAR}
+      - SEARCH_CONSOLE_CLIENT_EMAIL=${SEARCH_CONSOLE_CLIENT_EMAIL:-}
+      - SEARCH_CONSOLE_PRIVATE_KEY=${SEARCH_CONSOLE_PRIVATE_KEY:-}
+    volumes:
+      - serpbear-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 15s

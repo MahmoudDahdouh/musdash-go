@@ -1,0 +1,57 @@
+# name: FolderHost
+# about: A web file manager with users, permissions, sharing links, a recovery bin and live editing.
+# docs: https://github.com/MertJSX/folderhost#docker
+# website: https://folderhost.org
+# categories: storage
+# source: musdash
+services:
+  folderhost:
+    image: mertjsx/folderhost:latest
+    entrypoint: ["/bin/sh", "-c", "mkdir -p host; [ -f config.yml ] || cp /etc/folderhost/config.yml config.yml; exec ./folderhost"]
+    environment:
+      - SERVICE_FQDN_FOLDERHOST_5000
+    volumes:
+      - folderhost-data:/app
+    configs:
+      - source: folderhost-config
+        target: /etc/folderhost/config.yml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:5000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  folderhost-data:
+configs:
+  folderhost-config:
+    content: |
+      version: "v26.10.0"
+      port: 5000
+      folder: "./host"
+      storage_limit: "${FOLDERHOST_STORAGE_LIMIT:-10 GB}"
+      secret_jwt_key: "${SERVICE_PASSWORD_64_JWT}"
+      admin:
+        username: "${SERVICE_USER_ADMIN}"
+        password: "${SERVICE_PASSWORD_ADMIN}"
+        email: "admin@example.com"
+        scope: ""
+        permissions:
+          read_directories: true
+          read_files: true
+          create: true
+          change: true
+          delete: true
+          move: true
+          download: true
+          upload: true
+          rename: true
+          extract: true
+          archive: true
+          copy: true
+          read_recovery: true
+          use_recovery: true
+          read_users: true
+          edit_users: true
+          read_logs: true
+      recovery_bin: true
+      log_activities: true

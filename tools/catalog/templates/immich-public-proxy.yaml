@@ -1,0 +1,18 @@
+# name: Immich Public Proxy
+# about: A small public front for Immich that serves shared albums and photos without exposing the Immich server itself.
+# docs: https://docs.ipp.nz/installation
+# website: https://docs.ipp.nz/
+# categories: media, home
+services:
+  immich-public-proxy:
+    image: ghcr.io/alangrainger/immich-public-proxy:latest
+    environment:
+      - SERVICE_FQDN_IMMICH_PUBLIC_PROXY_3000
+      - PUBLIC_BASE_URL=${SERVICE_URL_IMMICH_PUBLIC_PROXY}
+      - IMMICH_URL=${IMMICH_URL:?}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -m 4 http://127.0.0.1:3000/share/healthcheck -o /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s

@@ -1,0 +1,16 @@
+# name: It's MyTabs
+# about: A web player for guitar and bass tablature files that syncs tabs with audio files or YouTube videos.
+# docs: https://github.com/louislam/its-mytabs#installation
+# website: https://github.com/louislam/its-mytabs
+# categories: media
+# source: musdash
+services:
+  app:
+    image: louislam/its-mytabs:1
+    environment:
+      - SERVICE_FQDN_APP_47777
+      - AUTH_SECRET=${SERVICE_PASSWORD_64_AUTH}
+    volumes:
+      - mytabs-data:/app/data
+volumes:
+  mytabs-data:

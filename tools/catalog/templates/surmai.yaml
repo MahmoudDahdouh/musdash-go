@@ -1,0 +1,20 @@
+# name: Surmai
+# about: A travel organizer for trips, bookings, itineraries and expenses that a family or group plans together.
+# docs: https://surmai.app/documentation/installation
+# website: https://surmai.app/
+# categories: productivity, home
+services:
+  surmai:
+    image: ghcr.io/rohitkumbhar/surmai:latest
+    environment:
+      - SERVICE_FQDN_SURMAI_8080
+      - SURMAI_ADMIN_EMAIL=${SURMAI_ADMIN_EMAIL:-admin@example.com}
+      - SURMAI_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}Aa1!
+      - PB_DATA_DIRECTORY=/pb_data
+    volumes:
+      - surmai-data:/pb_data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

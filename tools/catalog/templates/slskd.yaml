@@ -1,0 +1,20 @@
+# name: slskd
+# about: A web client and server for the Soulseek file-sharing network, with search, downloads and shared folders.
+# docs: https://github.com/slskd/slskd/blob/master/docs/docker.md
+# website: https://slskd.org
+# categories: media, storage
+services:
+  slskd:
+    image: slskd/slskd:latest
+    ports:
+      - "50300:50300"
+    environment:
+      - SERVICE_FQDN_SLSKD_5030
+      - SLSKD_USERNAME=${SERVICE_USER_SLSKD}
+      - SLSKD_PASSWORD=${SERVICE_PASSWORD_SLSKD}
+      - SLSKD_JWT_KEY=${SERVICE_PASSWORD_64_JWT}
+      - SLSKD_SLSK_USERNAME=${SLSKD_SLSK_USERNAME:-}
+      - SLSKD_SLSK_PASSWORD=${SLSKD_SLSK_PASSWORD:-}
+      - SLSKD_REMOTE_CONFIGURATION=${SLSKD_REMOTE_CONFIGURATION:-true}
+    volumes:
+      - slskd-app:/app

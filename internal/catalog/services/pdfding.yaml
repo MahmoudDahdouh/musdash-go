@@ -1,0 +1,28 @@
+# name: PdfDing
+# about: A PDF manager and viewer with highlights, comments and sharing links, kept on your own server.
+# docs: https://docs.pdfding.com/getting_started/docker/
+# website: https://www.pdfding.com/
+# categories: docs, productivity
+# source: musdash
+services:
+  pdfding:
+    image: mrmn/pdfding:latest
+    environment:
+      - SERVICE_FQDN_PDFDING_8000
+      - HOST_NAME=${SERVICE_FQDN_PDFDING}
+      - SECRET_KEY=${SERVICE_PASSWORD_64_PDFDING}
+      - DEFAULT_THEME=${DEFAULT_THEME:-dark}
+      - CSRF_COOKIE_SECURE=TRUE
+      - SESSION_COOKIE_SECURE=TRUE
+    volumes:
+      - pdfding-db:/home/nonroot/pdfding/db
+      - pdfding-media:/home/nonroot/pdfding/media
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+volumes:
+  pdfding-db:
+  pdfding-media:

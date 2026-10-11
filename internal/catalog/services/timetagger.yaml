@@ -1,0 +1,19 @@
+# name: TimeTagger
+# about: A web-based time tracker where you record time against tags and see it in a timeline and reports.
+# docs: https://timetagger.app/articles/selfhost/
+# website: https://timetagger.app/
+# categories: productivity
+# source: musdash
+services:
+  timetagger:
+    image: ghcr.io/almarklein/timetagger:latest
+    environment:
+      - SERVICE_FQDN_TIMETAGGER_80
+      - TIMETAGGER_BIND=0.0.0.0:80
+      - TIMETAGGER_DATADIR=/root/_timetagger
+      - TIMETAGGER_LOG_LEVEL=info
+      - TIMETAGGER_CREDENTIALS=${TIMETAGGER_CREDENTIALS:?}
+    volumes:
+      - timetagger-data:/root/_timetagger
+volumes:
+  timetagger-data:

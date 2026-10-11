@@ -1,0 +1,18 @@
+# name: Koito
+# about: A music scrobbler that records your listening history and shows statistics, accepting ListenBrainz and Last.fm style submissions.
+# docs: https://koito.io/guides/installation/
+# website: https://koito.io/
+# categories: media
+# source: musdash
+services:
+  koito:
+    image: gabehf/koito:latest
+    environment:
+      - SERVICE_FQDN_KOITO_4110
+      - KOITO_DEFAULT_USERNAME=${SERVICE_USER_ADMIN}
+      - KOITO_DEFAULT_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - koito-config:/etc/koito
+volumes:
+  koito-config:

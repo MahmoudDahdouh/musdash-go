@@ -1,0 +1,40 @@
+# name: Send
+# about: A file sharing service that encrypts files in the browser and gives out a link that expires after a time or a number of downloads.
+# docs: https://gitlab.com/timvisee/send/-/blob/master/docs/docker.md
+# website: https://gitlab.com/timvisee/send
+# categories: storage
+# source: musdash
+services:
+  send:
+    image: registry.gitlab.com/timvisee/send:latest
+    environment:
+      - SERVICE_FQDN_SEND_1443
+      - BASE_URL=${SERVICE_URL_SEND}
+      - PORT=1443
+      - REDIS_HOST=redis
+      - FILE_DIR=/app/.config/configstore/uploads
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-2147483648}
+      - MAX_EXPIRE_SECONDS=${MAX_EXPIRE_SECONDS:-604800}
+      - MAX_DOWNLOADS=${MAX_DOWNLOADS:-100}
+    volumes:
+      - send-uploads:/app/.config/configstore
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:1443/__lbheartbeat__ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  redis-data:
+  send-uploads:

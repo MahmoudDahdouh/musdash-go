@@ -1,0 +1,22 @@
+# name: Lidarr
+# about: A music collection manager that watches for new releases from your artists and sends them to a download client.
+# docs: https://wiki.servarr.com/lidarr/installation/docker
+# website: https://lidarr.audio/
+# categories: media
+services:
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    environment:
+      - SERVICE_FQDN_LIDARR_8686
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+    volumes:
+      - lidarr-config:/config
+      - lidarr-music:/music
+      - lidarr-downloads:/downloads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8686/ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 30

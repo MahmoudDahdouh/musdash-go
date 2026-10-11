@@ -1,0 +1,24 @@
+# name: Upvote RSS
+# about: Builds RSS feeds from Reddit, Hacker News, Lemmy, Lobsters and similar sites, filtered by score or comment count.
+# docs: https://github.com/johnwarne/upvote-rss#docker
+# website: https://www.upvote-rss.com/
+# categories: rss
+# source: musdash
+services:
+  upvote-rss:
+    image: ghcr.io/johnwarne/upvote-rss:latest
+    environment:
+      - SERVICE_FQDN_UPVOTE_RSS_80
+      - REDDIT_USER=${REDDIT_USER:-}
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID:-}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET:-}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - upvote-rss-cache:/app/cache
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail -s -o /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+volumes:
+  upvote-rss-cache:

@@ -1,0 +1,16 @@
+# name: Fladder
+# about: A web frontend for Jellyfin, served as a small static site that you point at your own Jellyfin server.
+# docs: https://github.com/DonutWare/Fladder/blob/develop/INSTALL.md#docker
+# website: https://github.com/DonutWare/Fladder
+# categories: media
+services:
+  fladder:
+    image: ghcr.io/donutware/fladder:latest
+    environment:
+      - SERVICE_FQDN_FLADDER_80
+      - BASE_URL=${JELLYFIN_URL:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

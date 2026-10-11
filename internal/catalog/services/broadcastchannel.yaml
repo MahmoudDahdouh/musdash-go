@@ -1,0 +1,17 @@
+# name: BroadcastChannel
+# about: Turns a public Telegram channel into a microblog site with its own pages, tags, search and RSS feed.
+# docs: https://github.com/miantiao-me/BroadcastChannel#deployment
+# website: https://github.com/miantiao-me/BroadcastChannel
+# categories: cms
+# source: musdash
+services:
+  broadcastchannel:
+    image: ghcr.io/miantiao-me/broadcastchannel:main
+    environment:
+      - SERVICE_FQDN_BROADCASTCHANNEL_4321
+      - CHANNEL=${CHANNEL:?}
+      - LOCALE=${LOCALE:-en}
+      - TIMEZONE=${TZ:-UTC}
+      - TELEGRAM=${TELEGRAM:-}
+      - TWITTER=${TWITTER:-}
+      - GITHUB=${GITHUB:-}

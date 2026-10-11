@@ -1,0 +1,24 @@
+# name: RapidForge
+# about: A self-hosted builder for internal tools, webhooks, scheduled scripts and pages, written as Bash, Lua or Python scripts.
+# docs: https://github.com/rapidforge-io/rapidforge#-installation
+# website: https://rapidforge.io/
+# categories: automation, devtools
+# source: musdash
+services:
+  rapidforge:
+    image: celdem/rapidforge:latest
+    environment:
+      - SERVICE_FQDN_RAPIDFORGE_8080
+      - RF_PORT=:8080
+      - RF_DOMAIN=${SERVICE_FQDN_RAPIDFORGE}
+      - RF_DATABASE_URL=/data/rapidforge.sqlite3
+      - RF_KV_URL=/data/rapidforgekv.sqlite3
+    volumes:
+      - rapidforge-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  rapidforge-data:

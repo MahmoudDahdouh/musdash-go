@@ -1,0 +1,25 @@
+# name: NoteDiscovery
+# about: A note-taking app that keeps Markdown files in a folder, with search, tags, graph view and a password.
+# docs: https://github.com/gamosoft/NoteDiscovery#-quick-start
+# website: https://www.notediscovery.com/
+# categories: docs, productivity
+# source: musdash
+services:
+  notediscovery:
+    image: ghcr.io/gamosoft/notediscovery:latest
+    environment:
+      - SERVICE_FQDN_NOTEDISCOVERY_8000
+      - TZ=${TZ:-UTC}
+      - AUTHENTICATION_ENABLED=true
+      - AUTHENTICATION_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - AUTHENTICATION_SECRET_KEY=${SERVICE_HEX_64_SESSION}
+    volumes:
+      - notediscovery-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+volumes:
+  notediscovery-data:

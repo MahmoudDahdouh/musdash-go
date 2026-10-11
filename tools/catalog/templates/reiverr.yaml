@@ -1,0 +1,16 @@
+# name: Reiverr
+# about: A media interface that browses TMDB and plays from sources such as Jellyfin or torrent streams.
+# docs: https://github.com/aleksilassila/reiverr#installation
+# website: https://github.com/aleksilassila/reiverr
+# categories: media
+services:
+  reiverr:
+    image: ghcr.io/aleksilassila/reiverr:latest
+    environment:
+      - SERVICE_FQDN_REIVERR_9494
+      - SECRET=${SERVICE_PASSWORD_64_SECRET}
+      - ADMIN_USERNAME=${SERVICE_USER_ADMIN}
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - reiverr-config:/config
+      - reiverr-plugins:/plugins

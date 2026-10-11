@@ -1,0 +1,16 @@
+# name: TRIP
+# about: A map tracker and trip planner for saving places of interest and planning trips, with its own user accounts.
+# docs: https://itskovacs.github.io/trip/docs/getting-started/deploy
+# website: https://itskovacs-trip.netlify.app/
+# categories: home, productivity
+# source: musdash
+services:
+  trip:
+    image: ghcr.io/itskovacs/trip:1
+    command: ["fastapi", "run", "/app/trip/main.py", "--host", "0.0.0.0"]
+    environment:
+      - SERVICE_FQDN_TRIP_8000
+    volumes:
+      - trip-storage:/app/storage
+volumes:
+  trip-storage:

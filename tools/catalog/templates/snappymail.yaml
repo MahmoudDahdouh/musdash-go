@@ -1,0 +1,20 @@
+# name: SnappyMail
+# about: A fast web-based email client that signs in with the user's own IMAP account and keeps its settings in a local data directory.
+# docs: https://github.com/the-djmaze/snappymail/wiki/Installation-instructions
+# website: https://snappymail.eu/
+# categories: email
+services:
+  snappymail:
+    image: ghcr.io/the-djmaze/snappymail:latest
+    environment:
+      - SERVICE_FQDN_SNAPPYMAIL_8888
+      - UPLOAD_MAX_SIZE=${UPLOAD_MAX_SIZE:-25M}
+      - MEMORY_LIMIT=${MEMORY_LIMIT:-128M}
+    volumes:
+      - snappymail-data:/var/lib/snappymail
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8888/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 30

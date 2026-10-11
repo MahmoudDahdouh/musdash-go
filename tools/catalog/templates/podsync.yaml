@@ -1,0 +1,36 @@
+# name: Podsync
+# about: Turns YouTube, Vimeo and other channels into podcast feeds that any podcast app can follow.
+# docs: https://github.com/mxpv/podsync#-run-via-docker
+# website: https://github.com/mxpv/podsync
+# categories: media, rss
+services:
+  podsync:
+    image: ghcr.io/mxpv/podsync:latest
+    environment:
+      - SERVICE_FQDN_PODSYNC_8080
+      - PODSYNC_YOUTUBE_API_KEY=${PODSYNC_YOUTUBE_API_KEY:?}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - podsync-data:/app/data
+      - podsync-db:/app/db
+    configs:
+      - source: podsync-config
+        target: /app/config.toml
+configs:
+  podsync-config:
+    content: |
+      [server]
+      port = 8080
+      hostname = "${SERVICE_URL_PODSYNC}"
+
+      [storage]
+        [storage.local]
+        data_dir = "/app/data"
+
+      [feeds]
+        [feeds.main]
+        url = "${PODSYNC_FEED_URL:?}"
+        update_period = "12h"
+        format = "video"
+        quality = "high"
+        clean = { keep_last = 10 }

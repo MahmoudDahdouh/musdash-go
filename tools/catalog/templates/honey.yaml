@@ -1,0 +1,17 @@
+# name: Honey
+# about: A static dashboard of links to self-hosted services, configured by a JSON file and optionally showing which are up.
+# docs: https://github.com/dani3l0/honey#-installation
+# website: https://github.com/dani3l0/honey
+# categories: home
+services:
+  honey:
+    image: ghcr.io/dani3l0/honey:latest
+    environment:
+      - SERVICE_FQDN_HONEY_4173
+    volumes:
+      - honey-config:/app/dist/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:4173/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

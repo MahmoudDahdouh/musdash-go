@@ -1,0 +1,63 @@
+# name: Zot
+# about: An OCI container image registry with a web interface, sign-in by user name and password.
+# docs: https://zotregistry.dev/latest/
+# website: https://zotregistry.dev/
+# categories: devtools, git
+services:
+  zot-auth:
+    image: httpd:2.4-alpine
+    restart: "no"
+    environment:
+      - ZOT_USER=${SERVICE_USER_ZOT}
+      - ZOT_PASSWORD=${SERVICE_PASSWORD_ZOT}
+    command: ["sh", "-c", "htpasswd -nbB \"$$ZOT_USER\" \"$$ZOT_PASSWORD\" > /auth/htpasswd"]
+    volumes:
+      - zot-auth:/auth
+  zot-registry:
+    image: ghcr.io/project-zot/zot:v2.1.22
+    environment:
+      - SERVICE_FQDN_ZOT_REGISTRY_5000
+    configs:
+      - source: zot-config
+        target: /etc/zot/config.json
+    volumes:
+      - zot-auth:/auth
+      - zot-data:/var/lib/registry
+    depends_on:
+      zot-auth:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/usr/bin/zot", "healthcheck", "--insecure-skip-verify", "/etc/zot/config.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+configs:
+  zot-config:
+    content: |
+      {
+        "distSpecVersion": "1.1.0",
+        "storage": {
+          "rootDirectory": "/var/lib/registry"
+        },
+        "http": {
+          "address": "0.0.0.0",
+          "port": "5000",
+          "compat": ["docker2s2"],
+          "auth": {
+            "htpasswd": {
+              "path": "/auth/htpasswd"
+            }
+          }
+        },
+        "log": {
+          "level": "info"
+        },
+        "extensions": {
+          "search": {
+            "enable": true
+          },
+          "ui": {
+            "enable": true
+          }
+        }
+      }

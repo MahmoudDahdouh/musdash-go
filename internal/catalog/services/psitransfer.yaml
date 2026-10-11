@@ -1,0 +1,22 @@
+# name: PsiTransfer
+# about: A file sharing service where people upload files and send a download link, with no accounts needed to download.
+# docs: https://github.com/psi-4ward/psitransfer/blob/master/docs/deployment-docker.md
+# website: https://github.com/psi-4ward/psitransfer
+# categories: storage
+# source: musdash
+services:
+  psitransfer:
+    image: psitrax/psitransfer:latest
+    environment:
+      - SERVICE_FQDN_PSITRANSFER_3000
+      - PSITRANSFER_ADMIN_PASS=${SERVICE_PASSWORD_ADMIN}
+      - PSITRANSFER_UPLOAD_PASS=${SERVICE_PASSWORD_UPLOAD}
+    volumes:
+      - psitransfer-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  psitransfer-data:

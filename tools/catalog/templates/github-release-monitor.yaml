@@ -1,0 +1,33 @@
+# name: GitHub Release Monitor
+# about: Watches GitHub, GitLab, Codeberg and Forgejo repositories for new releases and sends notifications by email or Apprise.
+# docs: https://github.com/iamspido/github-release-monitor#-docker-compose-setup-recommended
+# website: https://github.com/iamspido/github-release-monitor
+# categories: monitoring, devtools
+services:
+  github-release-monitor:
+    image: ghcr.io/iamspido/github-release-monitor:latest
+    user: "0:0"
+    environment:
+      - SERVICE_FQDN_GITHUB_RELEASE_MONITOR_3000
+      - AUTHENTICATION_METHOD=Basic
+      - BETTER_AUTH_SECRET=${SERVICE_PASSWORD_64_AUTH}
+      - BETTER_AUTH_URL=${SERVICE_URL_GITHUB_RELEASE_MONITOR}
+      - AUTH_SETUP_TOKEN=${SERVICE_PASSWORD_64_SETUP}
+      - AUTH_ENABLE_SIGNUP=false
+      - AUTH_TRUST_PROXY_HEADERS=true
+      - HTTPS=true
+      - TZ=${TZ:-UTC}
+      - GITHUB_ACCESS_TOKEN=${GITHUB_ACCESS_TOKEN:-}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-}
+      - MAIL_TO_ADDRESS=${MAIL_TO_ADDRESS:-}
+    volumes:
+      - github-release-monitor-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

@@ -1,0 +1,22 @@
+# name: docker-staticmaps
+# about: An API that renders static map images with markers, shapes and text, with tile caching and rate limiting.
+# docs: https://github.com/dietrichmax/docker-staticmaps#quickstart
+# website: https://github.com/dietrichmax/docker-staticmaps
+# categories: devtools
+# source: musdash
+services:
+  docker-staticmaps:
+    image: mxdcodes/docker-staticmaps:latest
+    environment:
+      - SERVICE_FQDN_DOCKER_STATICMAPS_3000
+      - API_KEY=${SERVICE_PASSWORD_APIKEY}
+      - LOG_LEVEL=INFO
+      - TILE_CACHE_TTL=${TILE_CACHE_TTL:-3600}
+      - RATE_LIMIT_MS=${RATE_LIMIT_MS:-60000}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-60}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

@@ -1,0 +1,29 @@
+# name: mkcert Web UI
+# about: A web interface for creating and managing local development certificates with mkcert, with its own certificate authority.
+# docs: https://github.com/jeffcaldwellca/mkcertWeb/blob/HEAD/docs/DOCKER.md
+# website: https://github.com/jeffcaldwellca/mkcertWeb
+# categories: devtools, security
+services:
+  mkcert-web-ui:
+    image: jeffcaldwellca/mkcertweb:latest
+    environment:
+      - SERVICE_FQDN_MKCERT_WEB_UI_3000
+      - PORT=3000
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - ENABLE_AUTH=true
+      - AUTH_USERNAME=${SERVICE_USER_ADMIN}
+      - AUTH_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - SESSION_SECRET=${SERVICE_PASSWORD_64_SESSION}
+      - THEME_MODE=${THEME_MODE:-dark}
+    volumes:
+      - mkcert-certificates:/app/certificates
+      - mkcert-data:/app/data
+      - mkcert-config:/app/config
+      - mkcert-ca:/home/nodejs/.local/share/mkcert
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s

@@ -9,5 +9,7 @@ services:
     environment:
       - SERVICE_FQDN_AUDIOBOOKREQUEST_8000
       - ABR_APP__FORWARDED_ALLOW_IPS=*
+      - ABR_APP__INIT_ROOT_USERNAME=${SERVICE_USER_ADMIN}
+      - ABR_APP__INIT_ROOT_PASSWORD=${SERVICE_PASSWORD_ADMIN}
     volumes:
       - audiobookrequest-config:/config

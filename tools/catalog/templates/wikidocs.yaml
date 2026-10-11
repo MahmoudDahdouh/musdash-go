@@ -1,0 +1,20 @@
+# name: WikiDocs
+# about: A Markdown wiki that keeps its pages as plain files, with no database, and a browser editor.
+# docs: https://github.com/Zavy86/WikiDocs#self-hosted
+# website: https://www.wikidocs.app
+# categories: docs
+services:
+  wikidocs:
+    image: zavy86/wikidocs:2
+    environment:
+      - SERVICE_FQDN_WIKIDOCS_3210
+      - MODE=${MODE:-private}
+      - SECRET=${SERVICE_PASSWORD_64_WIKIDOCS}
+    volumes:
+      - wikidocs-datasets:/var/lib/wikidocs/datasets
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3210/api/health || exit 1"]
+      interval: 10s
+      timeout: 9s
+      retries: 30
+      start_period: 20s

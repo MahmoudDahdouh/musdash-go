@@ -1,0 +1,18 @@
+# name: Flood
+# about: A web interface for rTorrent, qBittorrent, Transmission and Deluge, with its own sign-in.
+# docs: https://github.com/jesec/flood#docker
+# website: https://flood.js.org/
+# categories: media
+services:
+  flood:
+    image: jesec/flood:latest
+    environment:
+      - SERVICE_FQDN_FLOOD_3000
+      - FLOOD_OPTION_secret=${SERVICE_PASSWORD_64_FLOOD}
+    volumes:
+      - flood-home:/home/download
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

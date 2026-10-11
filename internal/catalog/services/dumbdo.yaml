@@ -1,0 +1,24 @@
+# name: DumbDo
+# about: A plain to-do list kept in a JSON file, with an optional single-list view and a PIN to open it.
+# docs: https://github.com/DumbWareio/DumbDo#using-docker
+# website: https://dumbware.io/DumbDo
+# categories: productivity
+# source: musdash
+services:
+  dumbdo:
+    image: dumbwareio/dumbdo:latest
+    environment:
+      - SERVICE_FQDN_DUMBDO_3000
+      - DUMBDO_PIN=${DUMBDO_PIN:?}
+      - DUMBDO_SITE_TITLE=DumbDo
+      - SINGLE_LIST=${SINGLE_LIST:-false}
+    volumes:
+      - dumbdo-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3000 || exit 1"]
+      start_period: 20s
+      interval: 20s
+      timeout: 5s
+      retries: 5
+volumes:
+  dumbdo-data:

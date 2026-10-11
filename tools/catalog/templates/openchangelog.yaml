@@ -1,0 +1,38 @@
+# name: Openchangelog
+# about: A public changelog website built from release notes in a GitHub repository or a folder.
+# docs: https://openchangelog.com/docs/getting-started/self-hosting/
+# website: https://openchangelog.com
+# categories: docs, devtools
+services:
+  openchangelog:
+    image: ghcr.io/jonashiltl/openchangelog:0.8.2
+    environment:
+      - SERVICE_FQDN_OPENCHANGELOG_6001
+    volumes:
+      - openchangelog-data:/data
+    configs:
+      - source: openchangelog-config
+        target: /etc/openchangelog.yml
+configs:
+  openchangelog-config:
+    content: |
+      addr: 0.0.0.0:6001
+      github:
+        owner: ${OPENCHANGELOG_GITHUB_OWNER:-jonashiltl}
+        repo: ${OPENCHANGELOG_GITHUB_REPO:-openchangelog}
+        path: ${OPENCHANGELOG_GITHUB_PATH:-.testdata}
+        auth:
+          accessToken: ${OPENCHANGELOG_GITHUB_TOKEN:-}
+      cache:
+        type: disk
+        disk:
+          location: /data/cache
+          maxSize: 1073741824
+      search:
+        type: disk
+        disk:
+          path: /data/search
+      page:
+        title: ${OPENCHANGELOG_TITLE:-Changelog}
+        subtitle: ${OPENCHANGELOG_SUBTITLE:-The latest product updates}
+        colorScheme: system

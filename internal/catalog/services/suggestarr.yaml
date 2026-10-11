@@ -1,0 +1,19 @@
+# name: SuggestArr
+# about: Reads watch history from Plex, Jellyfin or Emby and sends recommended titles to Seerr as requests.
+# docs: https://github.com/giuseppe99barchetta/SuggestArr/blob/main/docs/INSTALLATION.md
+# website: https://github.com/giuseppe99barchetta/SuggestArr
+# categories: media, automation
+# source: musdash
+services:
+  suggestarr:
+    image: ghcr.io/giuseppe99barchetta/suggestarr:latest
+    environment:
+      - SERVICE_FQDN_SUGGESTARR_5000
+      - SUGGESTARR_PORT=5000
+      - SUGGESTARR_ALLOWED_ORIGINS=${SERVICE_URL_SUGGESTARR}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - suggestarr-config:/app/config/config_files
+volumes:
+  suggestarr-config:

@@ -1,0 +1,23 @@
+# name: Beaver Habit Tracker
+# about: A habit tracker without goals, with a calendar-style grid of days and per-user accounts.
+# docs: https://github.com/daya0576/beaverhabits#ship-with-docker
+# website: https://github.com/daya0576/beaverhabits
+# categories: productivity, home
+# source: musdash
+services:
+  beaverhabits:
+    image: daya0576/beaverhabits:latest
+    user: "0:0"
+    environment:
+      - SERVICE_FQDN_BEAVERHABITS_8080
+      - HABITS_STORAGE=USER_DISK
+      - MAX_USER_COUNT=${MAX_USER_COUNT:-1}
+    volumes:
+      - beaverhabits-data:/app/.user
+    healthcheck:
+      test: ["CMD", "python", "healthcheck.py"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  beaverhabits-data:

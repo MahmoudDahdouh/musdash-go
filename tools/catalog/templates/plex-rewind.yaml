@@ -1,0 +1,20 @@
+# name: Plex Rewind
+# about: Shows Plex users their viewing statistics in a yearly recap and a shared dashboard, using data from Tautulli.
+# docs: https://github.com/RaunoT/plex-rewind#getting-started
+# website: https://github.com/RaunoT/plex-rewind
+# categories: media, analytics
+services:
+  plex-rewind:
+    image: ghcr.io/raunot/plex-rewind:latest
+    environment:
+      - SERVICE_FQDN_PLEX_REWIND_8383
+      - NEXTAUTH_SECRET=${SERVICE_BASE64_NEXTAUTH}
+      - NEXTAUTH_URL=${SERVICE_URL_PLEX_REWIND}
+      - NEXT_PUBLIC_SITE_URL=${SERVICE_URL_PLEX_REWIND}
+    volumes:
+      - plex-rewind-config:/app/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8383/api/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

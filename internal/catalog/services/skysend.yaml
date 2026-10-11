@@ -1,0 +1,26 @@
+# name: SkySend
+# about: An end-to-end encrypted service for sharing files and notes through links that expire, with no accounts needed.
+# docs: https://docs.skysend.app/user-guide/installation
+# website: https://skysend.app
+# categories: storage, security
+# source: musdash
+services:
+  skysend:
+    image: ghcr.io/skyfay/skysend:latest
+    environment:
+      - SERVICE_FQDN_SKYSEND_3000
+      - BASE_URL=${SERVICE_URL_SKYSEND}
+      - TRUST_PROXY=true
+      - FILE_MAX_SIZE=${FILE_MAX_SIZE:-2GB}
+      - FILE_UPLOAD_QUOTA_BYTES=${FILE_UPLOAD_QUOTA_BYTES:-10GB}
+    volumes:
+      - skysend-data:/data
+      - skysend-uploads:/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)throw r;process.exit(0)}).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+volumes:
+  skysend-data:
+  skysend-uploads:

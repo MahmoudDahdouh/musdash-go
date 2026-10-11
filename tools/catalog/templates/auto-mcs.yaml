@@ -1,0 +1,20 @@
+# name: auto-mcs
+# about: A manager for Minecraft servers (Paper, Fabric, Forge and more) that runs in a web terminal and offers the Telepath remote API.
+# docs: https://hub.docker.com/r/macarooniman/auto-mcs
+# website: https://www.auto-mcs.com
+# categories: games
+services:
+  auto-mcs:
+    image: macarooniman/auto-mcs:latest
+    stdin_open: true
+    tty: true
+    environment:
+      - SERVICE_FQDN_AUTO_MCS_8080
+      - WEB_PORT=8080
+      - WEB_USERNAME=${SERVICE_USER_ADMIN}
+      - WEB_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    ports:
+      - "25565:25565"
+      - "7001:7001"
+    volumes:
+      - auto-mcs-data:/root/.auto-mcs

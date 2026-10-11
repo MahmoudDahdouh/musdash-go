@@ -1,0 +1,38 @@
+# name: Rackula
+# about: A drag-and-drop designer for server racks, with layouts saved as YAML on the server behind a single sign-in.
+# docs: https://github.com/RackulaLives/Rackula/blob/main/docs/deployment/SELF-HOSTING.md
+# website: https://racku.la/
+# categories: home, monitoring
+services:
+  rackula:
+    image: ghcr.io/rackulalives/rackula:persist
+    environment:
+      - SERVICE_FQDN_RACKULA_8080
+      - API_HOST=rackula-api
+      - API_PORT=3001
+      - RACKULA_LISTEN_PORT=8080
+      - RACKULA_AUTH_MODE=local
+      - RACKULA_STORAGE_MODE=server
+      - RACKULA_TRUST_PROXY=1
+    depends_on:
+      rackula-api:
+        condition: service_healthy
+  rackula-api:
+    image: ghcr.io/rackulalives/rackula-api:latest
+    environment:
+      - DATA_DIR=/data
+      - RACKULA_API_PORT=3001
+      - CORS_ORIGIN=${SERVICE_URL_RACKULA}
+      - RACKULA_TRUST_PROXY=true
+      - RACKULA_AUTH_MODE=local
+      - RACKULA_AUTH_SESSION_SECRET=${SERVICE_PASSWORD_64_SESSION}
+      - RACKULA_LOCAL_USERNAME=${SERVICE_USER_ADMIN}
+      - RACKULA_LOCAL_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - rackula-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3001/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      start_period: 5s
+      retries: 30

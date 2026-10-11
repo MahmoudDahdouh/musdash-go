@@ -1,0 +1,10 @@
+# name: Haptic
+# about: A local-first Markdown notes app that runs in the browser and keeps notes in the browser's own storage, not on the server.
+# docs: https://github.com/chroxify/haptic#docker
+# website: https://haptic.md/
+# categories: docs, productivity
+services:
+  haptic:
+    image: chroxify/haptic-web:latest
+    environment:
+      - SERVICE_FQDN_HAPTIC_80

@@ -1,0 +1,25 @@
+# name: ImmichFrame
+# about: Shows the photos of an Immich library as a slideshow, for a digital photo frame in a browser.
+# docs: https://immichframe.dev/docs/getting-started/installation/docker
+# website: https://immichframe.dev/
+# categories: media, home
+services:
+  immichframe:
+    image: ghcr.io/immichframe/immichframe:latest
+    environment:
+      - SERVICE_FQDN_IMMICHFRAME_8080
+      - IMMICHFRAME_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - immichframe-config:/app/Config
+    configs:
+      - source: immichframe-settings
+        target: /app/Config/Settings.yml
+configs:
+  immichframe-settings:
+    content: |
+      General:
+        AuthenticationSecret: "${SERVICE_PASSWORD_FRAME}"
+      Accounts:
+        - ImmichServerUrl: "${IMMICH_SERVER_URL:?}"
+          ApiKey: "${IMMICH_API_KEY:?}"

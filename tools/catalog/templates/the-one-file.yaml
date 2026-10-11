@@ -1,0 +1,23 @@
+# name: The One File
+# about: A collaborative network and infrastructure diagramming tool (TheOneFile_Verse) with shared rooms and live status checks.
+# docs: https://github.com/gelatinescreams/The-One-File/tree/main/theonefile_verse
+# website: https://therecanonlybe.one/The-One-File/
+# categories: networking, productivity
+services:
+  theonefile-verse:
+    image: ghcr.io/gelatinescreams/theonefile_verse:latest
+    environment:
+      - SERVICE_FQDN_THEONEFILE_VERSE_10101
+      - PORT=10101
+      - DATA_DIR=/app/data
+      - UPDATE_INTERVAL=24
+      - TRUSTED_PROXY_COUNT=1
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - theonefile-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:10101/api/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s

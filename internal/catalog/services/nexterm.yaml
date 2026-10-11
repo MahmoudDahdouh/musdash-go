@@ -1,0 +1,17 @@
+# name: Nexterm
+# about: A web-based remote access manager for SSH, VNC, RDP and Telnet connections, with a file browser and session recording.
+# docs: https://docs.nexterm.dev/installation
+# website: https://nexterm.dev/
+# categories: networking, devtools
+# source: musdash
+services:
+  nexterm:
+    image: nexterm/aio:latest
+    environment:
+      - SERVICE_FQDN_NEXTERM_6989
+      - ENCRYPTION_KEY=${SERVICE_HEX_64_ENCRYPTION}
+      - TRUST_PROXY=1
+    volumes:
+      - nexterm-data:/app/data
+volumes:
+  nexterm-data:

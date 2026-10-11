@@ -1,0 +1,72 @@
+# name: Raneto
+# about: A knowledge base that serves a folder of Markdown files as a searchable site, with a web editor behind a sign-in.
+# docs: https://docs.raneto.com/install/installing-raneto
+# website: https://raneto.com/
+# categories: docs
+services:
+  raneto:
+    image: raneto/raneto:0.18.1
+    environment:
+      - SERVICE_FQDN_RANETO_8080
+      - SESSION_SECRET=${SERVICE_PASSWORD_64_SESSION}
+    volumes:
+      - raneto-content:/opt/raneto/content
+    configs:
+      - source: raneto-config
+        target: /opt/raneto/config/config.js
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+configs:
+  raneto-config:
+    content: |
+      import path from 'node:path';
+
+      const __dirname = import.meta.dirname;
+      const theme_dir = path.join(__dirname, '..', 'node_modules', '@raneto/theme-default');
+      const theme_name = 'dist';
+
+      const config = {
+        site_title: '${SITE_TITLE:-Raneto}',
+        base_url: '',
+        nowrap: true,
+        path_prefix: '',
+        support_email: '',
+        copyright: '',
+        excerpt_length: 400,
+        page_sort_meta: 'sort',
+        category_sort: true,
+        show_on_home_default: true,
+        show_on_menu_default: true,
+        theme_dir,
+        theme_name,
+        content_dir: path.join(__dirname, '..', 'content', 'pages'),
+        public_dir: path.join(theme_dir, theme_name, 'public'),
+        image_url: '/images',
+        analytics: '',
+        allow_editing: true,
+        authentication: true,
+        authentication_for_edit: true,
+        authentication_for_read: false,
+        googleoauth: false,
+        secret: process.env.SESSION_SECRET,
+        credentials: [
+          {
+            username: '${SERVICE_USER_ADMIN}',
+            password: '${SERVICE_PASSWORD_ADMIN}',
+          },
+        ],
+        locale: 'en',
+        searchExtraLanguages: ['ru'],
+        datetime_format: 'Do MMM YYYY',
+        rtl_layout: false,
+        home_meta: {},
+        table_of_contents: false,
+        table_of_contents_options: {},
+        menu_on_pages: true,
+        menu_on_page_collapsible: true,
+      };
+
+      export default config;

@@ -1,0 +1,16 @@
+# name: Zerobyte
+# about: Backup automation built on Restic, with schedules, retention and local or cloud storage.
+# docs: https://zerobyte.app/docs/installation
+# website: https://zerobyte.app/
+# categories: storage
+services:
+  zerobyte:
+    image: ghcr.io/nicotsx/zerobyte:v0.43
+    environment:
+      - SERVICE_FQDN_ZEROBYTE_4096
+      - TZ=${TZ:-UTC}
+      - BASE_URL=${SERVICE_URL_ZEROBYTE}
+      - TRUST_PROXY=true
+      - APP_SECRET=${SERVICE_HEX_64_ZEROBYTE}
+    volumes:
+      - zerobyte-data:/var/lib/zerobyte

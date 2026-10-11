@@ -1,0 +1,24 @@
+# name: Pulsarr
+# about: Watches Plex watchlists and sends the shows and films on them to Sonarr and Radarr, with routing rules and notifications.
+# docs: https://jamcalli.github.io/Pulsarr/docs/installation/quick-start
+# website: https://github.com/jamcalli/Pulsarr
+# categories: media, automation
+# source: musdash
+services:
+  pulsarr:
+    image: lakker/pulsarr:latest
+    environment:
+      - SERVICE_FQDN_PULSARR_3003
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+    volumes:
+      - pulsarr-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3003/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+volumes:
+  pulsarr-data:

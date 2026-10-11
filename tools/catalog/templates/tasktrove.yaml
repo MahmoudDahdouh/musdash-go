@@ -1,0 +1,13 @@
+# name: TaskTrove
+# about: A self-hosted task manager with projects, labels, due dates, recurring tasks and a calendar view.
+# docs: https://docs.tasktrove.io/installation
+# website: https://tasktrove.io/
+# categories: productivity
+services:
+  tasktrove:
+    image: ghcr.io/dohsimpson/tasktrove:latest
+    environment:
+      - SERVICE_FQDN_TASKTROVE_3000
+      - AUTH_SECRET=${SERVICE_HEX_64_AUTH}
+    volumes:
+      - tasktrove-data:/app/data

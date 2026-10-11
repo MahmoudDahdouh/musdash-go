@@ -1,0 +1,33 @@
+# name: Kopia
+# about: A backup tool with encrypted, deduplicated snapshots, run here as a server with its web interface.
+# docs: https://kopia.io/docs/installation/#docker-images
+# website: https://kopia.io
+# categories: storage
+services:
+  kopia:
+    image: kopia/kopia:latest
+    hostname: kopia
+    command:
+      - server
+      - start
+      - --disable-csrf-token-checks
+      - --insecure
+      - --address=0.0.0.0:51515
+      - --server-username=${SERVICE_USER_KOPIA}
+      - --server-password=${SERVICE_PASSWORD_KOPIA}
+    environment:
+      - SERVICE_FQDN_KOPIA_51515
+      - KOPIA_PASSWORD=${SERVICE_PASSWORD_REPOSITORY}
+      - USER=${KOPIA_USER:-kopia}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - kopia-config:/app/config
+      - kopia-cache:/app/cache
+      - kopia-logs:/app/logs
+      - kopia-data:/data
+      - kopia-repository:/repository
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sS -o /dev/null http://127.0.0.1:51515/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

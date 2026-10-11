@@ -1,0 +1,22 @@
+# name: Christmas Community
+# about: A web app for families to share Christmas wish lists and mark gifts as bought, so nobody gives the same present twice.
+# docs: https://github.com/Wingysam/Christmas-Community#docker-compose
+# website: https://github.com/Wingysam/Christmas-Community
+# categories: home
+services:
+  christmas-community:
+    image: wingysam/christmas-community:latest
+    environment:
+      - SERVICE_FQDN_CHRISTMAS_COMMUNITY_80
+      - SECRET=${SERVICE_PASSWORD_64_SECRET}
+      - TRUST_PROXY=uniquelocal
+      - SITE_TITLE=${SITE_TITLE:-Christmas Community}
+      - SINGLE_LIST=${SINGLE_LIST:-false}
+      - TABLE=true
+    volumes:
+      - christmas-community-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

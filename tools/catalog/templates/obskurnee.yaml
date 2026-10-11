@@ -1,0 +1,22 @@
+# name: Obskurnee
+# about: A book club companion where members suggest books, vote on the next read, and review what they have read.
+# docs: https://github.com/zblesk/obskurnee#docker-compose
+# website: https://github.com/zblesk/obskurnee
+# categories: media, productivity
+services:
+  obskurnee:
+    image: zblesk/obskurnee:latest
+    environment:
+      - SERVICE_FQDN_OBSKURNEE_8080
+      - BaseUrl=${SERVICE_URL_OBSKURNEE}
+      - SiteName=${SITE_NAME:-Book club}
+      - DefaultCulture=${DEFAULT_CULTURE:-en}
+      - SymmetricSecurityKey=${SERVICE_PASSWORD_64_OBSKURNEE}
+    volumes:
+      - obskurnee-data:/obskurnee/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

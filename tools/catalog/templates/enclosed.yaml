@@ -1,0 +1,12 @@
+# name: Enclosed
+# about: Sends private notes that are encrypted in the browser and can burn after reading or expire, with optional file attachments.
+# docs: https://docs.enclosed.cc/self-hosting/docker
+# website: https://enclosed.cc
+# categories: security, storage
+services:
+  enclosed:
+    image: ghcr.io/corentinth/enclosed:latest
+    environment:
+      - SERVICE_FQDN_ENCLOSED_8787
+    volumes:
+      - enclosed-data:/app/.data

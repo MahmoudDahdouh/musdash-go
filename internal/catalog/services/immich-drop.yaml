@@ -1,0 +1,30 @@
+# name: Immich Drop
+# about: A small upload page that lets other people send photos and videos into an Immich server through invite links.
+# docs: https://github.com/Nasogaa/immich-drop#quick-start
+# website: https://github.com/Nasogaa/immich-drop
+# categories: media, storage
+# source: musdash
+services:
+  immich-drop:
+    image: ghcr.io/nasogaa/immich-drop:latest
+    environment:
+      - SERVICE_FQDN_IMMICH_DROP_8080
+      - PORT=8080
+      - PUBLIC_BASE_URL=${SERVICE_URL_IMMICH_DROP}
+      - IMMICH_BASE_URL=${IMMICH_BASE_URL:?}
+      - IMMICH_API_KEY=${IMMICH_API_KEY:-}
+      - IMMICH_ALBUM_NAME=${IMMICH_ALBUM_NAME:-dead-drop}
+      - PUBLIC_UPLOAD_PAGE_ENABLED=false
+      - CHUNKED_UPLOADS_ENABLED=${CHUNKED_UPLOADS_ENABLED:-false}
+      - CHUNK_SIZE_MB=95
+      - SESSION_SECRET=${SERVICE_PASSWORD_64_SESSION}
+    volumes:
+      - immich-drop-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport os,urllib.request,sys; url=f\"http://127.0.0.1:{os.getenv('PORT','8080')}/\";\ntry: urllib.request.urlopen(url, timeout=3); sys.exit(0)\nexcept Exception: sys.exit(1)\nPY"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+volumes:
+  immich-drop-data:

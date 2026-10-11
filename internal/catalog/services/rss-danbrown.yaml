@@ -1,0 +1,27 @@
+# name: DanB/RSS
+# about: A small feed reader that shows many RSS and Atom feeds as one social-style timeline, with the feed list kept in a text file.
+# docs: https://codeberg.org/danb/rss#docker-usage
+# website: https://codeberg.org/danb/rss
+# categories: rss
+# source: musdash
+services:
+  rss:
+    image: codeberg.org/danb/rss:latest
+    environment:
+      - SERVICE_FQDN_RSS_80
+      - APP_NAME=${APP_NAME:-RSS}
+      - APP_CONFIG_FILE=/etc/rss/feeds.txt
+      - APP_FEED_UPDATE_FREQUENCY=${APP_FEED_UPDATE_FREQUENCY:-60}
+    volumes:
+      - rss-storage:/app/storage
+    configs:
+      - source: rss-feeds
+        target: /etc/rss/feeds.txt
+volumes:
+  rss-storage:
+configs:
+  rss-feeds:
+    content: |
+      # One feed a line: URL name #tag
+      https://danb.me/blog/index.xml DanB #blog
+      https://selfh.st/rss/ selfh.st #selfhosting

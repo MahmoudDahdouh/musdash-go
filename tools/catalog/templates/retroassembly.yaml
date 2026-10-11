@@ -1,0 +1,12 @@
+# name: RetroAssembly
+# about: A browser-based retro game library where you upload your own ROMs, play them with emulators and keep save states.
+# docs: https://hub.docker.com/r/arianrhodsandlot/retroassembly#quick-start
+# website: https://retroassembly.com/
+# categories: games, media
+services:
+  retroassembly:
+    image: arianrhodsandlot/retroassembly:latest
+    environment:
+      - SERVICE_FQDN_RETROASSEMBLY_8000
+    volumes:
+      - retroassembly-data:/app/data

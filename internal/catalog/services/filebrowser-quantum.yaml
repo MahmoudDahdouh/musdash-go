@@ -1,0 +1,24 @@
+# name: FileBrowser Quantum
+# about: A web file manager with indexed search, sharing links, previews and several users.
+# docs: https://filebrowserquantum.com/en/docs/getting-started/docker/
+# website: https://filebrowserquantum.com
+# categories: storage
+# source: musdash
+services:
+  filebrowser:
+    image: ghcr.io/gtsteffaniak/filebrowser:latest
+    user: "0:0"
+    environment:
+      - SERVICE_FQDN_FILEBROWSER_80
+      - FILEBROWSER_ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    volumes:
+      - filebrowser-data:/home/filebrowser/data
+      - filebrowser-files:/srv
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+volumes:
+  filebrowser-data:
+  filebrowser-files:
