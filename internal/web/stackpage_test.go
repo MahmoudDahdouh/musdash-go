@@ -88,8 +88,37 @@ func TestRestartOneContainerOfAStack(t *testing.T) {
 	if err := a.db.SetServiceState(ctx, s.ID, db.AppDeploying, ""); err != nil {
 		t.Fatal(err)
 	}
-	if page := restart(front); !strings.Contains(page, "being deployed") || len(restarts) != 0 {
+	if page := restart(front); !strings.Contains(page, "busy with a deployment") || len(restarts) != 0 {
 		t.Errorf("a container was restarted during a deployment: %v", restarts)
+	}
+	if err := a.db.SetServiceState(ctx, s.ID, db.AppRunning, ""); err != nil {
+		t.Fatal(err)
+	}
+	// What the menu does not offer is not done for a request that asks
+	// anyway: a container that did its job is run again by a deployment.
+	if page := restart("musdash-" + s.ID + "-job-1"); !strings.Contains(page, "did its job and ended") || len(restarts) != 0 {
+		t.Errorf("a finished container was run again: %v", restarts)
+	}
+
+	// Another team's stack is not found, and nothing is run on its server.
+	a.db.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('otherteam', 'Other', 1)`)
+	a.db.Exec(`INSERT INTO servers (id, team_id, name, kind, created_at) VALUES ('othersrv', 'otherteam', 'theirs', 'ssh', 1)`)
+	p, _ := a.db.CreateProject(ctx, "otherteam", "Secret", "")
+	envs, _ := a.db.ListEnvironments(ctx, p.ID)
+	other, err := a.db.CreateService(ctx, "otherteam", db.Service{EnvironmentID: envs[0].ID, ServerID: "othersrv", Name: "theirs", Template: db.TemplateCustom, Compose: ownCompose})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		"/projects/" + p.ID + "/env/" + envs[0].ID + "/service/" + other.ID + "/containers/restart",
+		// Under our own project's address too.
+		strings.Replace(base, s.ID, other.ID, 1) + "/containers/restart",
+	} {
+		res, _ := a.post(base, path, url.Values{"container": {"musdash-" + other.ID + "-front-1"}})
+		wantStatus(t, res, http.StatusNotFound)
+	}
+	if len(restarts) != 0 {
+		t.Errorf("a restart ran for another team's stack: %v", restarts)
 	}
 }
 

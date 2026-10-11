@@ -31,7 +31,7 @@ What to know about the templates made from Coolify's and Dokploy's:
 Paste the file as you would run it with `docker compose`. The form lists what the text reads while you type: the variables that need a value from you, the ones the file has a default for, the values musdash generates and the services that get a domain. Nothing is started until the service is deployed, and the first deployment says what Docker made of the file.
 
 - Any `${NAME}` in the file is yours to set, in the Variables box (one `NAME=value` a line, stored encrypted). One the file gives no default for (`${NAME}` or `${NAME:?message}`) is listed under "Needs a value".
-- A stack is not deployed while a variable its file insists on (`${NAME:?message}`) has no value: the form says which when "Deploy as soon as the service is created" is ticked, and **Deploy** leads to the Compose tab with a note. Untick the box to create the service first and give the values afterwards.
+- A stack is not deployed while a variable its file insists on (`${NAME:?message}`, or `${NAME?message}` for one that is not set at all) has no value: the form says which when "Deploy as soon as the service is created" is ticked, and **Deploy** leads to the Compose tab with a note. Untick the box to create the service first and give the values afterwards.
 - `SERVICE_PASSWORD_<ID>`, `SERVICE_USER_<ID>`, `SERVICE_BASE64_<ID>` and `SERVICE_HEX_<ID>` are filled with values generated once per service. They are listed on the service's Overview page.
 - A template written for Coolify can be pasted as it is: `SERVICE_FQDN_<NAME>_<PORT>` in a service's environment gets that service a domain on that port (a generated one at first), `SERVICE_URL_<NAME>` is the same address with its scheme, and `SERVICE_HTTPS_<NAME>` is `true` or `false`.
 
@@ -57,7 +57,7 @@ A stack is held to the same limits as an app. Its file is read inside a containe
 
 A stack runs on its own network. Tick "Connect to the environment's network" if its containers and the apps and databases of the environment need to reach each other by name; names must then be unique across them.
 
-To publish a port that is not HTTP (a mail server, a game server), use an ordinary `ports:` entry with a host port from 1024 to 65535, outside 20000 to 29999.
+To publish a port that is not HTTP (a mail server, a game server), use an ordinary `ports:` entry with a host port from 1024 to 65535, outside 20000 to 29999. A port that something else on the server already holds stops the deployment with the port and the service named: the dashboard's own, 8000 unless it was changed, is the usual one for a file that publishes `8000:8000`. Publish another, or take the line out and give the service a domain.
 
 **Ports 80 and 443.** A file written for plain `docker compose` usually publishes its web server on port 80 or 443 of the machine (`"80:80"`). On a musdash server those two are the proxy's. Such a stack is deployed without those lines: the deployment's log names each one, and the service is reached through a domain instead, which the Domains tab offers for the same container port. Nothing in the file has to change. Any other port a stack may not have (below 1024, or in the range musdash uses itself) stops the deployment with a message that names it.
 

@@ -5,9 +5,13 @@ import "strings"
 // refusals are the words a registry, or Docker on its behalf, refuses a
 // pull with when it wants to know who is asking. The same words are the
 // answer for an image that does not exist: a registry does not say which.
+//
+// They are whole phrases: "denied" alone is also how Docker says that its
+// own socket may not be used, which no sign-in to a registry helps.
 var refusals = []string{
-	"pull access denied", "may require authorization", "requires authorization",
-	"no basic auth credentials", "authentication required", "unauthorized", "denied",
+	"pull access denied", "error from registry: denied", "access to the resource is denied",
+	"may require authorization", "requires authorization", "authorization failed",
+	"no basic auth credentials", "authentication required", "unauthorized:",
 }
 
 // signInHint is what a pull that was refused is told to do about it.

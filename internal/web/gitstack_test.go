@@ -101,13 +101,17 @@ func TestGitFormMakesAStack(t *testing.T) {
 		change url.Values
 		want   string
 	}{
-		"a path out of the repository": {url.Values{"compose_path": {"../compose.yaml"}}, "Enter the file&#39;s path from the base directory"},
-		"no path":                      {url.Values{"compose_path": {""}}, "Enter the file&#39;s path from the base directory"},
-		"a base directory out of it":   {url.Values{"base_dir": {"../.."}}, "Enter a path inside the repository"},
-		"no repository":                {url.Values{"repo": {"not a repository"}}, `id="repo-error"`},
-		"a taken name":                 {url.Values{"name": {"shop"}}, "already has an app, database or service called shop"},
-		"a generated variable":         {url.Values{"variables": {"SERVICE_PASSWORD_DB=mine"}}, "is filled in by musdash"},
-		"a source that is not ours":    {url.Values{"access": {"source:nobodys"}}, "Choose how the repository is read"},
+		"a path out of the repository":    {url.Values{"compose_path": {"../compose.yaml"}}, "Enter the file&#39;s path from the base directory"},
+		"no path":                         {url.Values{"compose_path": {""}}, "Enter the file&#39;s path from the base directory"},
+		"a base directory out of it":      {url.Values{"base_dir": {"../.."}}, "Enter a path inside the repository"},
+		"no repository":                   {url.Values{"repo": {"not a repository"}}, `id="repo-error"`},
+		"a taken name":                    {url.Values{"name": {"shop"}}, "already has an app, database or service called shop"},
+		"a generated variable":            {url.Values{"variables": {"SERVICE_PASSWORD_DB=mine"}}, "is filled in by musdash"},
+		"a source the form did not offer": {url.Values{"access": {"source:nobodys"}}, "Choose how the repository is read"},
+		// Each part is a path; together they must still be one, and name a
+		// file.
+		"a path that is the folder itself": {url.Values{"compose_path": {"."}}, "Enter the file&#39;s path from the base directory"},
+		"two parts too long together":      {url.Values{"base_dir": {strings.Repeat("a", 250)}, "compose_path": {strings.Repeat("b", 250)}}, "Enter the file&#39;s path from the base directory"},
 	} {
 		res, body := a.post(page, envPath+"/app", stack("other", c.change))
 		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, c.want) {

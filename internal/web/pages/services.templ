@@ -566,7 +566,10 @@ templ logsChoice(href, label string, current bool) {
 // StackRow is one container of a stack on its Overview, or a service of
 // the file that has none.
 type StackRow struct {
-	Service   string
+	Service string
+	// Title, when set, is what the row is called in place of its service:
+	// one of several containers a service has.
+	Title     string
 	Container string // "" for a service with no container
 	Image     string
 	// State is what the pill is drawn for ("" for a neutral one), Label its
@@ -673,7 +676,7 @@ templ stackContainersBody(csrf string, v ServiceView, rows []StackRow, problem s
 			for _, row := range rows {
 				<tr>
 					<td>
-						<span class="fact">{ orDefault(row.Service, row.Container) }</span>
+						<span class="fact">{ row.name() }</span>
 					</td>
 					<td>
 						<span class="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -708,6 +711,24 @@ templ stackContainersBody(csrf string, v ServiceView, rows []StackRow, problem s
 	}
 }
 
+// name is what a row is called: its service, or the container itself where
+// a service has several (Title) or the file named it.
+func (r StackRow) name() string {
+	return orDefault(r.Title, orDefault(r.Service, r.Container))
+}
+
+// restartQuestion is what Restart asks before it does anything.
+const restartQuestion = "The container is stopped and started again as it is, and does not answer in between. A change to the file or its variables is not applied by this: redeploy for that."
+
+// sendsContainer makes a button send which container it is for. That is
+// the button's own name and value, not a field of the form: every row's
+// form has the same address, and the list is replaced while a question is
+// open. The question's dialog then looks for the button again by what it
+// sends, and finds this row's or none.
+func sendsContainer(row StackRow) templ.Attributes {
+	return templ.Attributes{"name": "container", "value": row.Container}
+}
+
 // stackRowMenu is what can be done with one container of a stack: its
 // output, a shell in it, and a restart. They are a menu, since a stack of
 // twelve has thirty-six of them and the table's width is the image's. The
@@ -715,8 +736,7 @@ templ stackContainersBody(csrf string, v ServiceView, rows []StackRow, problem s
 templ stackRowMenu(csrf string, v ServiceView, row StackRow) {
 	<form class="inline-block" method="post" action={ templ.SafeURL(v.Path() + "/containers/restart") }>
 		@ui.CSRF(csrf)
-		<input type="hidden" name="container" value={ row.Container }/>
-		@ui.Menu(ui.MenuProps{ID: "actions-" + row.Container, Label: "Actions for " + orDefault(row.Service, row.Container), Class: "btn btn-ghost btn-sm btn-icon", End: true, Button: ui.Icon("more")}) {
+		@ui.Menu(ui.MenuProps{ID: "actions-" + row.Container, Label: "Actions for " + row.name(), Class: "btn btn-ghost btn-sm btn-icon", End: true, Button: ui.Icon("more")}) {
 			if row.Service != "" {
 				@ui.MenuItem(ui.MenuItemProps{Href: v.Path() + "/logs?service=" + row.Service, Icon: "file", Label: "Logs"})
 			}
@@ -727,7 +747,7 @@ templ stackRowMenu(csrf string, v ServiceView, row StackRow) {
 				if row.Service != "" || row.Running {
 					@ui.MenuSep()
 				}
-				@ui.MenuItem(ui.MenuItemProps{Icon: "refresh", Label: "Restart", Attrs: ui.Ask("Restart "+orDefault(row.Service, row.Container)+"?", "The container is stopped and started again as it is, and does not answer in between. A change to the file or its variables is not applied by this: redeploy for that.", "Restart", false)})
+				@ui.MenuItem(ui.MenuItemProps{Icon: "refresh", Label: "Restart", Attrs: ui.Merge(ui.Ask("Restart "+row.name()+"?", restartQuestion, "Restart", false), sendsContainer(row))})
 			}
 		}
 	</form>

@@ -7,9 +7,10 @@ func TestRefusedHint(t *testing.T) {
 		"Error response from daemon: pull access denied for acme/shop, repository does not exist or may require 'docker login'":     true,
 		"Error response from daemon: error from registry: denied\ndenied":                                                           true,
 		`failed to resolve reference "localhost:5000/private/nginx:1": authorization failed: no basic auth credentials`:             true,
-		"Head \"https://ghcr.io/v2/acme/shop/manifests/1\": unauthorized":                                                           true,
+		"Head \"https://ghcr.io/v2/acme/shop/manifests/1\": unauthorized: authentication required":                                  true,
 		"Error response from daemon: Get \"https://registry.example.com/v2/\": dial tcp: lookup registry.example.com: no such host": false,
 		"write /var/lib/docker/tmp/x: no space left on device":                                                                      false,
+		"permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock":                      false,
 		"": false,
 	} {
 		if got := refusedHint(said) != ""; got != hinted {

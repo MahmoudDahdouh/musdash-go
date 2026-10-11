@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -300,6 +301,22 @@ func portTaken(output string) bool {
 	return strings.Contains(msg, "port is already allocated") || strings.Contains(msg, "address already in use")
 }
 
+// takenPortRE finds the port of the server that Docker could not have, in
+// the ways its versions say so: "failed to bind host port 0.0.0.0:8000/tcp",
+// "Bind for 0.0.0.0:8000 failed", "listen tcp4 0.0.0.0:8000: bind".
+var takenPortRE = regexp.MustCompile(`(?i)(?:bind host port|bind for|listen (?:tcp|udp)[46]?)\s+(?:\[[0-9a-f:]*\]|[0-9.]*):(\d{1,5})\b`)
+
+// takenPort is the port a failed start names as in use, or 0 when the
+// output names none that can be read.
+func takenPort(output string) int {
+	m := takenPortRE.FindStringSubmatch(output)
+	if m == nil {
+		return 0
+	}
+	port, _ := strconv.Atoi(m[1])
+	return port
+}
+
 // deployService loads, checks and starts a service's stack. The caller
 // holds the service's lock.
 func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) error {
@@ -404,6 +421,12 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 	// is reached instead. Leaving a publication out exposes less, never
 	// more; every other port a stack may not have is refused below.
 	for _, u := range resolved.Unpublish(proxyPorts...) {
+		if u.UDP {
+			// HTTP/3, usually. The proxy carries no UDP, and a domain is
+			// no way to it.
+			log.Step("Port %d of the server is the proxy's, so %s is not published on it over UDP either.", u.Published, u.Service)
+			continue
+		}
 		log.Step("Port %d of the server is the proxy's, so %s is not published on it. To reach port %d of %s from outside, give it a domain on the Domains tab.", u.Published, u.Service, u.Target, u.Service)
 	}
 	// A container name the file asks for is not given: Compose names the
@@ -411,10 +434,12 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 	// claim one name. The name stays what the service answers to inside
 	// the stack, which is what the file's other services rely on.
 	for _, u := range resolved.Unname() {
+		// Only a name that became an alias is known to be a plain name:
+		// any other is the file's text, and is not written into the log.
 		if u.Alias {
 			log.Step("The container of %s is named by musdash, not %s as the file asks: no two stacks may claim one name. Inside the stack it still answers to %s.", u.Service, u.Name, u.Name)
 		} else {
-			log.Step("The container of %s is named by musdash, not %s as the file asks: no two stacks may claim one name.", u.Service, u.Name)
+			log.Step("The container of %s is named by musdash, not as the file asks: no two stacks may claim one name.", u.Service)
 		}
 	}
 	if err := resolved.Validate(compose.ValidateOptions{Dir: dir, BuildDir: checkout, Protected: []string{d.at(r).DataDir}, ValidPort: ValidPublicPort}); err != nil {
@@ -645,9 +670,33 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 		if ctx.Err() != nil {
 			return err
 		}
-		if portTaken(upOut.String()) && attempt < tries {
-			log.Step("A port of the server was in use by something else; trying others")
-			continue
+		if portTaken(upOut.String()) {
+			// Whose port it was. A loopback port chosen here: another will
+			// do. One the file publishes: no other will, and
+			// starting again does worse than fail, since Docker then
+			// starts the container it could not give the port, without
+			// it, and the stack would be called deployed.
+			// The loopback range is musdash's alone: no file may publish a
+			// port in it, so a port taken there is one of those chosen here
+			// or for something else musdash runs.
+			port := takenPort(upOut.String())
+			if ours := port == 0 || port >= portMin && port <= portMax; !ours {
+				// The container that was made and not started goes, so
+				// that the next deployment does not start it as it is.
+				rm := d.composeCmd(r, s.ID, "rm", "--force")
+				rmCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+				r.Run(rmCtx, rm)
+				cancel()
+				what := "the Compose file publishes"
+				if service := resolved.PublishedBy(port); service != "" {
+					what += " for " + service
+				}
+				return fmt.Errorf("port %d of the server, which %s, is in use by something else on the server. Publish another port in the file, or take the line out and give the service a domain on the Domains tab", port, what)
+			}
+			if attempt < tries {
+				log.Step("A port of the server was in use by something else; trying others")
+				continue
+			}
 		}
 		// What the containers said is what explains a stack that did not
 		// come up.
@@ -881,6 +930,10 @@ var ErrNoSuchContainer = errors.New("the stack has no such container")
 // ErrStopped says a stack is stopped: nothing of it is to be started alone.
 var ErrStopped = errors.New("the stack is stopped")
 
+// ErrFinished says a container did its job and ended, as a migration does:
+// it is run again by a deployment, not by a restart.
+var ErrFinished = errors.New("the container finished")
+
 // RestartServiceContainer restarts one container of a stack, as it was
 // made: no change is applied, which is what a deployment is for. The name
 // is only a choice among the containers the server lists for this stack,
@@ -919,9 +972,13 @@ func (d *Deployer) RestartServiceContainer(ctx context.Context, id, container st
 		return err
 	}
 	for _, c := range list {
-		if c.Name == container {
-			return dk.Restart(ctx, container, d.dbStopGrace)
+		if c.Name != container {
+			continue
 		}
+		if c.State == "exited" && strings.HasPrefix(c.Status, "Exited (0)") {
+			return ErrFinished
+		}
+		return dk.Restart(ctx, container, d.dbStopGrace)
 	}
 	return ErrNoSuchContainer
 }

@@ -626,6 +626,53 @@ func TestAContainerNameIsNotGiven(t *testing.T) {
 	}
 }
 
+// TestAPortOfTheFilesThatIsTaken: a port the file itself publishes that
+// something else on the server holds (the dashboard's own 8000, for one)
+// is not helped by another try with other loopback ports. A second start
+// would do worse than fail: Docker starts the container it could not give
+// the port without it, and the stack would be called deployed. The
+// deployment ends there, says which port, and removes what was made.
+func TestAPortOfTheFilesThatIsTaken(t *testing.T) {
+	for _, said := range []string{
+		"Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint x (abc): failed to bind host port 0.0.0.0:8000/tcp: address already in use",
+		"Error response from daemon: driver failed programming external connectivity on endpoint x (abc): Bind for 0.0.0.0:8000 failed: port is already allocated",
+		"Error starting userland proxy: listen tcp4 0.0.0.0:8000: bind: address already in use",
+		"failed to bind host port [::]:8000/tcp: address already in use",
+	} {
+		e := newEnv(t)
+		s, st := e.scriptedService(false)
+		e.fake.Handle = func(line string, c runner.Cmd) (string, error) {
+			switch {
+			case strings.Contains(line, "config --format json") && !strings.Contains(line, "--no-interpolate"):
+				return `{"name":"` + st.project + `","networks":{"default":{"name":"` + st.project + `_default"}},"services":{
+					"front":{"image":"nginx:alpine","networks":{"default":null},"ports":[{"mode":"ingress","target":8000,"published":"8000","protocol":"tcp"}]},
+					"cache":{"image":"redis:7-alpine","networks":{"default":null}}}}`, nil
+			case strings.Contains(line, " up --detach"):
+				if c.Stderr != nil {
+					io.WriteString(c.Stderr, said+"\n")
+				}
+				return "", &runner.ExitError{Name: "docker", Code: 1}
+			}
+			return st.handle(line, c)
+		}
+		got := e.deployService(s, 10*time.Second)
+		if got.Status == db.AppRunning || !strings.Contains(got.LastError, "port 8000 of the server, which the Compose file publishes for front, is in use") {
+			t.Fatalf("%q:\n%s: %q", said, got.Status, got.LastError)
+		}
+		calls := e.fake.Calls()
+		if n := countCalls(calls, " up --detach"); n != 1 {
+			t.Errorf("%q: the stack was started %d times", said, n)
+		}
+		if countCalls(calls, " rm --force") != 1 {
+			t.Errorf("%q: the container that was made and not started is left", said)
+		}
+	}
+	// What cannot be read as a port is tried again, as before.
+	if takenPort("port is already allocated") != 0 || takenPort("Bind for 127.0.0.1:20001 failed") != 20001 {
+		t.Error("takenPort")
+	}
+}
+
 func TestServiceFailuresAreExplained(t *testing.T) {
 	e := newEnv(t)
 	s, st := e.scriptedService(false)

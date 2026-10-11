@@ -87,7 +87,10 @@ func (u *unrepeated) Write(p []byte) (int, error) {
 // pass hands a line on unless it is the one before it again, or one more
 // report of a layer's progress so soon after the last.
 func (u *unrepeated) pass(line []byte) error {
-	if u.any && bytes.Equal(line, u.last) {
+	// A piece with no line end is part of a longer line, passed on for
+	// its length: two that are alike are not a line said twice.
+	whole := len(line) > 0 && line[len(line)-1] == '\n'
+	if whole && u.any && bytes.Equal(line, u.last) {
 		return nil
 	}
 	if layer := progressOf(line); layer != "" {

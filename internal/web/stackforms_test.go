@@ -18,6 +18,8 @@ const needsGreeting = `services:
       GREETING: ${GREETING:?say what the page greets with}
       TOKEN: ${TOKEN:?the token}
       REGION: ${REGION:-eu}
+      SENTRY_DSN: ${SENTRY_DSN}
+      MODE: ${MODE?set it, to nothing if need be}
 `
 
 // A stack whose pasted file requires a variable that has no value is not
@@ -36,7 +38,7 @@ func TestAStackIsNotDeployedWithoutItsVariables(t *testing.T) {
 		return n
 	}
 	form := func(change url.Values) url.Values {
-		f := url.Values{"template": {db.TemplateCustom}, "name": {"greeter"}, "compose": {needsGreeting}, "variables": {"GREETING=hello"}, "deploy": {"1"}}
+		f := url.Values{"template": {db.TemplateCustom}, "name": {"greeter"}, "compose": {needsGreeting}, "variables": {"GREETING=hello\nMODE="}, "deploy": {"1"}}
 		for k, v := range change {
 			f[k] = v
 		}
@@ -48,9 +50,16 @@ func TestAStackIsNotDeployedWithoutItsVariables(t *testing.T) {
 	res, body := a.post(page, envPath+"/service", form(nil))
 	wantStatus(t, res, http.StatusUnprocessableEntity)
 	wantAll(t, "the refusal", body, "The file needs a value for TOKEN.", "untick Deploy", "GREETING=hello", "say what the page greets with")
+	// Only what the file insists on holds it back. SENTRY_DSN has no value
+	// and no default either: Compose reads the file with nothing in its
+	// place, so it is a warning's business. MODE has to be set, and set to
+	// nothing is set.
+	if strings.Contains(body, "SENTRY_DSN.") || strings.Contains(body, "value for MODE") {
+		t.Error("a variable the file does not insist on holds the stack back")
+	}
 	res, body = a.post(page, envPath+"/service", form(url.Values{"variables": {""}}))
 	wantStatus(t, res, http.StatusUnprocessableEntity)
-	wantAll(t, "the refusal of two", body, "The file needs a value for GREETING and TOKEN.")
+	wantAll(t, "the refusal of three", body, "The file needs a value for GREETING, MODE and TOKEN.")
 	if queued() != 0 {
 		t.Fatal("a refused form queued a deployment")
 	}
@@ -72,13 +81,13 @@ func TestAStackIsNotDeployedWithoutItsVariables(t *testing.T) {
 		t.Fatal("Deploy queued a deployment that can only fail")
 	}
 	// Save and deploy saves, and does the same.
-	res, _ = a.post(base+"/compose", base+"/compose", url.Values{"compose": {needsGreeting}, "variables": {"GREETING=hi"}, "deploy": {"1"}})
+	res, _ = a.post(base+"/compose", base+"/compose", url.Values{"compose": {needsGreeting}, "variables": {"GREETING=hi\nMODE="}, "deploy": {"1"}})
 	wantStatus(t, res, http.StatusSeeOther)
 	if got := res.Header.Get("Location"); got != base+"/compose" || queued() != 0 {
 		t.Errorf("Save and deploy led to %s with %d queued", got, queued())
 	}
 	// With every value it is deployed.
-	res, _ = a.post(base+"/compose", base+"/compose", url.Values{"compose": {needsGreeting}, "variables": {"GREETING=hi\nTOKEN=t"}, "deploy": {"1"}})
+	res, _ = a.post(base+"/compose", base+"/compose", url.Values{"compose": {needsGreeting}, "variables": {"GREETING=hi\nTOKEN=t\nMODE="}, "deploy": {"1"}})
 	wantStatus(t, res, http.StatusSeeOther)
 	if got := res.Header.Get("Location"); got != base || queued() != 1 {
 		t.Errorf("with its values: led to %s with %d queued", got, queued())

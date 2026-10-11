@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"encoding/base64"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -131,17 +132,34 @@ services:
       - DASH=${WITH_DEFAULT-x}
       - ALT=${ALT:+yes}
       - PASS=${SERVICE_PASSWORD_DB}
+      - SET=${ONLY_SET?must be set}
+      - TWICE=${TWICE?must be set} and ${TWICE:?must have a value}
     healthcheck:
       test: mysqladmin -p"$$MYSQL_ROOT_PASSWORD" ping
 `
 	got := map[string]bool{}
+	// What the file refuses to be read without, and whether set to nothing
+	// is enough: only the two forms with a question mark insist.
+	insists := map[string]string{}
 	for _, v := range ScanVariables(compose) {
 		got[v.Name] = v.Required
+		switch {
+		case v.Insists && v.EmptyOK:
+			insists[v.Name] = "set"
+		case v.Insists:
+			insists[v.Name] = "value"
+		case v.EmptyOK:
+			t.Errorf("%s does not insist and is content with nothing", v.Name)
+		}
+	}
+	if want := map[string]string{"TUNNEL_TOKEN": "value", "ONLY_SET": "set", "TWICE": "value"}; !reflect.DeepEqual(insists, want) {
+		t.Errorf("the file insists on %v, want %v", insists, want)
 	}
 	want := map[string]bool{
 		"TUNNEL_TOKEN": true, "PLAIN_ONE": true, "BRACED": true, "ALT": true,
 		"TZ":           true, // one use has no default
 		"WITH_DEFAULT": false,
+		"ONLY_SET":     true, "TWICE": true,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("found %v, want %v", got, want)

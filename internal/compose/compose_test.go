@@ -619,7 +619,7 @@ func TestUnpublish(t *testing.T) {
 		{Service: "api", Published: 80, Target: 80},
 		{Service: "proxy", Published: 80, Target: 80},
 		{Service: "proxy", Published: 443, Target: 8443},
-		{Service: "proxy", Published: 443, Target: 443},
+		{Service: "proxy", Published: 443, Target: 443, UDP: true},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unpublished:\n got %+v\nwant %+v", got, want)

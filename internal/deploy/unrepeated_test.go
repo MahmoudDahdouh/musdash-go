@@ -86,4 +86,15 @@ func TestUnrepeated(t *testing.T) {
 	if out.String() != long {
 		t.Errorf("%d of %d bytes came through", out.Len(), len(long))
 	}
+	// Also when the pieces are alike: a long line written in equal parts
+	// is not a line said twice.
+	out.Reset()
+	u = &unrepeated{w: &out}
+	part := strings.Repeat("y", unrepeatedLimit+1)
+	u.Write([]byte(part))
+	u.Write([]byte(part))
+	u.Flush()
+	if out.String() != part+part {
+		t.Errorf("%d of %d bytes of a line in equal parts came through", out.Len(), 2*len(part))
+	}
 }

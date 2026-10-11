@@ -235,14 +235,17 @@ type Unpublished struct {
 	Service   string
 	Published int // the port of the server
 	Target    int // the container's
+	// UDP says the publication was not TCP: nothing a domain leads to.
+	UDP bool
 }
 
 // Unpublish takes the publications of the given ports of the server out of
-// every service, and reports them by service. They are ports a stack
-// cannot have, because the proxy holds them. The container port stays
-// among the ones the service names (as expose), so that it is still what a
-// domain is offered for; that is for TCP only, which is what the proxy
-// speaks. Call it before Validate, which refuses what is left.
+// every service, over TCP and UDP alike, and reports them by service. They
+// are ports a stack cannot have, because the proxy holds them. The
+// container port stays among the ones the service names (as expose), so
+// that it is still what a domain is offered for; that is for TCP only,
+// which is what the proxy speaks. Call it before Validate, which refuses
+// what is left.
 func (p Project) Unpublish(ports ...int) []Unpublished {
 	taken := map[int]bool{}
 	for _, n := range ports {
@@ -260,8 +263,10 @@ func (p Project) Unpublish(ports ...int) []Unpublished {
 				continue
 			}
 			target := toInt(port["target"])
-			out = append(out, Unpublished{Service: name, Published: published, Target: target})
-			if proto, _ := port["protocol"].(string); (proto == "" || proto == "tcp") && !exposed(svc, target) {
+			proto, _ := port["protocol"].(string)
+			tcp := proto == "" || proto == "tcp"
+			out = append(out, Unpublished{Service: name, Published: published, Target: target, UDP: !tcp})
+			if tcp && !exposed(svc, target) {
 				svc["expose"] = append(asList(svc["expose"]), strconv.Itoa(target))
 			}
 		}
@@ -292,6 +297,19 @@ func exposed(svc map[string]any, port int) bool {
 		}
 	}
 	return false
+}
+
+// PublishedBy names the service whose file publishes a port of the server,
+// or "".
+func (p Project) PublishedBy(port int) string {
+	for _, name := range p.Services() {
+		for _, entry := range asList(p.service(name)["ports"]) {
+			if published := toInt(asMap(entry)["published"]); published != 0 && published == port {
+				return name
+			}
+		}
+	}
+	return ""
 }
 
 // Unnamed is a container name a file asked for that Unname took out.

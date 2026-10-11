@@ -160,6 +160,11 @@ type VarRef struct {
 	Name string
 	// Required is set when the file gives no default for it.
 	Required bool
+	// Insists is set when the file refuses to be read without it: ${X:?…}
+	// or ${X?…}. Compose reads any other reference with no value as empty
+	// and goes on. EmptyOK says that every such reference is the second
+	// form, which is content with a variable that is set to nothing.
+	Insists, EmptyOK bool
 }
 
 var varRefRE = regexp.MustCompile(`\$(\$|\{([A-Za-z_][A-Za-z0-9_]*)([^}]*)\}|([A-Za-z_][A-Za-z0-9_]*))`)
@@ -169,6 +174,9 @@ var varRefRE = regexp.MustCompile(`\$(\$|\{([A-Za-z_][A-Za-z0-9_]*)([^}]*)\}|([A
 // sign and is skipped.
 func ScanVariables(compose string) []VarRef {
 	required := map[string]bool{}
+	// Which names the file insists on, and which of those it wants more
+	// than set.
+	insists, nonEmpty := map[string]bool{}, map[string]bool{}
 	for _, m := range varRefRE.FindAllStringSubmatch(compose, -1) {
 		name, modifier := m[2], m[3]
 		if name == "" {
@@ -183,6 +191,12 @@ func ScanVariables(compose string) []VarRef {
 		// ${X:-default} and ${X-default} supply a value; everything else
 		// (plain, ${X:?message}, ${X:+alternative}) needs one to be useful.
 		hasDefault := strings.HasPrefix(modifier, ":-") || strings.HasPrefix(modifier, "-")
+		switch {
+		case strings.HasPrefix(modifier, ":?"):
+			insists[name], nonEmpty[name] = true, true
+		case strings.HasPrefix(modifier, "?"):
+			insists[name] = true
+		}
 		if prev, seen := required[name]; !seen {
 			required[name] = !hasDefault
 		} else {
@@ -191,7 +205,7 @@ func ScanVariables(compose string) []VarRef {
 	}
 	out := make([]VarRef, 0, len(required))
 	for name, req := range required {
-		out = append(out, VarRef{Name: name, Required: req})
+		out = append(out, VarRef{Name: name, Required: req, Insists: insists[name], EmptyOK: insists[name] && !nonEmpty[name]})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

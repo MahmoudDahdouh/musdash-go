@@ -314,7 +314,7 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 		vars = parseServiceVariables(&f, r.PostFormValue("variables"))
 		// A deployment of a file whose required variable has no value can
 		// only fail: said here, where the value is given.
-		if missing := missingValues(svc.Compose, vars); len(missing) > 0 && f.OK() && r.PostFormValue("deploy") == "1" {
+		if missing := insistedOn(svc.Compose, vars); len(missing) > 0 && f.OK() && r.PostFormValue("deploy") == "1" {
 			f.Fail("variables", "The file needs a value for "+listed(missing)+". Give it here as NAME=value, or untick Deploy to give it later.")
 		}
 	} else {
@@ -424,7 +424,11 @@ func (s *Server) stackFromGitForm(w http.ResponseWriter, r *http.Request, p db.P
 	if file == "" || !source.ValidRelPath(file) {
 		f.Fail("compose_path", "Enter the file's path from the base directory, such as docker-compose.yml.")
 	}
-	svc.ComposePath = path.Join(baseDir, file)
+	// Checked once more as what is stored: the two parts together may be
+	// longer than a path may be, and "." names no file.
+	if svc.ComposePath = path.Join(baseDir, file); f.E("compose_path") == "" && (file == "." || !source.ValidRelPath(svc.ComposePath)) {
+		f.Fail("compose_path", "Enter the file's path from the base directory, such as docker-compose.yml.")
+	}
 	f.Set("variables", r.PostFormValue("variables"))
 	vars := parseServiceVariables(&f, r.PostFormValue("variables"))
 
@@ -445,8 +449,9 @@ func (s *Server) stackFromGitForm(w http.ResponseWriter, r *http.Request, p db.P
 	}
 }
 
-// missingValues names the variables a Compose text requires (${NAME:?…})
-// that vars gives no value to.
+// missingValues names the variables a Compose text gives no default for
+// that vars gives no value to. The file is read without them, with
+// nothing in their place: it is what a page warns of.
 func missingValues(composeText string, vars map[string]string) []string {
 	var missing []string
 	for _, v := range requiredVars(composeText) {
@@ -455,6 +460,20 @@ func missingValues(composeText string, vars map[string]string) []string {
 		}
 	}
 	return missing
+}
+
+// insistedOn names the variables a Compose text refuses to be read without
+// (${NAME:?…}, ${NAME?…}) that vars does not satisfy: a deployment of that
+// file can only fail. ${NAME?…} is content with a variable set to nothing.
+func insistedOn(composeText string, vars map[string]string) []string {
+	var unmet []string
+	for _, v := range catalog.ScanVariables(composeText) {
+		value, set := vars[v.Name]
+		if v.Insists && (!set || value == "" && !v.EmptyOK) {
+			unmet = append(unmet, v.Name)
+		}
+	}
+	return unmet
 }
 
 // listed joins names as a sentence has them: "A", "A and B", "A, B and C".
@@ -466,14 +485,14 @@ func listed(names []string) string {
 }
 
 // heldBack reports whether a stack must not be deployed yet, and says so
-// in a note: its pasted file requires a variable that has no value. A
+// in a note: its pasted file insists on a variable that has no value. A
 // stack from Git is never held back: its file is read by the deployment,
 // and the one stored may be older than the repository's.
 func (s *Server) heldBack(w http.ResponseWriter, r *http.Request, svc db.Service, vars map[string]string) bool {
 	if svc.FromGit() {
 		return false
 	}
-	missing := missingValues(svc.Compose, vars)
+	missing := insistedOn(svc.Compose, vars)
 	if len(missing) == 0 {
 		return false
 	}
@@ -603,7 +622,9 @@ func (s *Server) serviceContainerRestart(w http.ResponseWriter, r *http.Request)
 	err := s.Deploy.RestartServiceContainer(r.Context(), v.Service.ID, name)
 	switch {
 	case errors.Is(err, deploy.ErrBusy):
-		setFlash(w, r, ui.ToneWarn, "The service is being deployed. Restart the container once that has finished.")
+		setFlash(w, r, ui.ToneWarn, "The service is busy with a deployment or another restart. Try again once that has finished.")
+	case errors.Is(err, deploy.ErrFinished):
+		setFlash(w, r, ui.ToneWarn, "That container did its job and ended. A deployment runs it again.")
 	case errors.Is(err, deploy.ErrStopped):
 		setFlash(w, r, ui.ToneWarn, "The service is stopped. Deploy it to start its containers.")
 	case errors.Is(err, deploy.ErrNoSuchContainer):
@@ -637,11 +658,12 @@ func (s *Server) serviceDeployLog(w http.ResponseWriter, r *http.Request) {
 		cur, err := s.DB.ServiceByID(ctx, v.Service.ID)
 		return err != nil || cur.Status != db.AppDeploying
 	}
-	// A first deployment that waits its turn has no log yet (one stack is
-	// read and built at a time on a server): the page says so, where it
-	// would show an empty box for as long as the ones before it take.
+	// A first deployment that waits its turn has no log yet: the page
+	// says so, where it would show an empty box for as long as the ones
+	// before it take (the queue's workers are few, and a server builds
+	// one stack from Git at a time).
 	if _, err := os.Stat(s.Cfg.ServiceLogPath(v.Service.ID)); err != nil && !finished() {
-		io.WriteString(out, "Waiting for its turn: one deployment at a time is read and built on a server.\n")
+		io.WriteString(out, "Waiting for its turn.\n")
 	}
 	if err := deploy.FollowWhenReady(ctx, s.Cfg.ServiceLogPath(v.Service.ID), out, finished); err == nil {
 		out.finish()
@@ -743,6 +765,17 @@ func stackRows(svc db.Service, list []docker.StackContainer) []pages.StackRow {
 		// one of a stopped stack is started by a deployment.
 		row.Restarts = row.Label != "Finished" && svc.Status != db.AppStopped && svc.Status != db.AppDeploying
 		rows = append(rows, row)
+	}
+	// A service with several containers has a row each: they are told
+	// apart by what Compose named them.
+	several := map[string]int{}
+	for _, row := range rows {
+		several[row.Service]++
+	}
+	for i, row := range rows {
+		if row.Service != "" && several[row.Service] > 1 {
+			rows[i].Title = pages.ContainerLabel(svc.ID, row.Container)
+		}
 	}
 	names := svc.MemberNames()
 	if members := svc.StackMembers(); len(members) > 0 {

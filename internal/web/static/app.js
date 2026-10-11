@@ -102,9 +102,13 @@
     if (!el.isConnected) {
       // The page replaced the form while the dialog was open: a header that
       // refreshes itself does. The same button of the form that took its
-      // place is the one that was meant.
-      const form = [...document.forms].find((f) => f.getAttribute("action") === asked.action);
-      el = [...(form?.querySelectorAll("[data-confirm]") || [])].find((b) => b.name === asked.name && b.value === asked.value);
+      // place is the one that was meant. Several forms can have one
+      // address (a row each of a list): the button's name and value say
+      // which, and where none has them nothing is sent.
+      el = [...document.forms]
+        .filter((f) => f.getAttribute("action") === asked.action)
+        .flatMap((f) => [...f.querySelectorAll("[data-confirm]")])
+        .find((b) => b.name === asked.name && b.value === asked.value);
     }
     el?.form.requestSubmit(el);
   });
