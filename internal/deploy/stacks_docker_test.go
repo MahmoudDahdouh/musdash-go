@@ -185,6 +185,52 @@ func TestStacksWithDocker(t *testing.T) {
 		}
 	})
 
+	t.Run("a file that publishes the proxy's ports", func(t *testing.T) {
+		outside := publicPort(t)
+		s := e.newServiceWith(db.TemplateCustom, "edge", readStack(t, "proxy-ports.yaml"), false, map[string]string{"WORKER_PORT": strconv.Itoa(outside)})
+		down(s)
+		got := e.deployService(s, 5*time.Minute)
+		if got.Status != db.AppRunning || got.Members != "web,worker" {
+			t.Fatalf("%s %s\n%s", got.Status, got.LastError, e.serviceLog(s))
+		}
+		// Said once for each line that was left out.
+		log := e.serviceLog(s)
+		if n := strings.Count(log, "is the proxy's, so web is not published on it"); n != 3 {
+			t.Fatalf("the log names %d publications that were left out, want 3:\n%s", n, log)
+		}
+		list, err := dk.StackContainers(ctx, s.ID)
+		if err != nil || len(list) != 2 {
+			t.Fatalf("containers: %+v %v", list, err)
+		}
+		for _, c := range list {
+			switch c.Service {
+			case "web":
+				if len(c.Published) != 0 {
+					t.Errorf("web is published on the server: %v", c.Published)
+				}
+			case "worker":
+				if len(c.Published) != 1 || c.Published[0] != strconv.Itoa(outside)+" → 8080" {
+					t.Errorf("worker's own port: %v", c.Published)
+				}
+			}
+		}
+		// The ports are still what web names, so the dialog offers them,
+		// and a domain reaches the one the file meant for the web.
+		for _, m := range got.StackMembers() {
+			if m.Name == "web" && (len(m.Ports) != 2 || m.Ports[0] != 80 || m.Ports[1] != 443) {
+				t.Fatalf("web names the ports %v", m.Ports)
+			}
+		}
+		add(got, "web", 80, "edge.example.test")
+		if got = e.deployService(got, 5*time.Minute); got.Status != db.AppRunning {
+			t.Fatalf("%s %s\n%s", got.Status, got.LastError, e.serviceLog(s))
+		}
+		ep := endpoint(got, "edge.example.test")
+		if body, err := httpGet(ep.HostPort); err != nil || !strings.Contains(body, "Hostname:") {
+			t.Fatalf("web on 127.0.0.1:%d: %q %v", ep.HostPort, body, err)
+		}
+	})
+
 	t.Run("twelve services", func(t *testing.T) {
 		s := e.newService(db.TemplateCustom, "big", readStack(t, "twelve.yaml"), false)
 		down(s)

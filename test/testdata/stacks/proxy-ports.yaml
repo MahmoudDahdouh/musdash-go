@@ -1,0 +1,20 @@
+# A file as it is written for plain `docker compose` on a machine of one's
+# own: the web server publishes ports 80 and 443 of the server, over TCP
+# and, for HTTP/3, UDP. On a musdash server those are the proxy's, so the
+# stack is deployed without those lines and the web server is given a
+# domain instead. The worker's port is one a stack may publish.
+services:
+  web:
+    image: traefik/whoami:v1.10
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    depends_on:
+      - worker
+
+  worker:
+    image: busybox:1.36
+    command: ["sh", "-c", "mkdir -p /www && echo worker > /www/index.html && exec httpd -f -p 8080 -h /www"]
+    ports:
+      - "${WORKER_PORT:-8089}:8080"

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -528,6 +529,68 @@ func TestServiceThatAsksForTooMuchIsRefused(t *testing.T) {
 	}
 	if _, _, ok := e.fake.File(e.cfg.AppDir(s.ID) + "/compose.resolved.json"); ok {
 		t.Fatal("a refused document was written as the file to start from")
+	}
+}
+
+// TestProxyPortsAreNotPublished: a file that publishes port 80 or 443 of
+// the server, as files written for plain `docker compose` do, is deployed
+// without those publications. The log says so, and the service still
+// names the port, so a domain can be given to it. A port that is refused
+// for another reason still is.
+func TestProxyPortsAreNotPublished(t *testing.T) {
+	e := newEnv(t)
+	s, st := e.scriptedService(false)
+	resolved := func(extra string) func(line string, c runner.Cmd) (string, error) {
+		return func(line string, c runner.Cmd) (string, error) {
+			if strings.Contains(line, "config --format json") && !strings.Contains(line, "--no-interpolate") {
+				return `{"name":"` + st.project + `","networks":{"default":{"name":"` + st.project + `_default"}},"services":{
+					"front":{"image":"nginx:alpine","networks":{"default":null},"ports":[
+						{"mode":"ingress","target":80,"published":"80","protocol":"tcp"},
+						{"mode":"ingress","target":443,"published":"443","protocol":"tcp"},
+						{"mode":"ingress","target":9000,"published":"9000","protocol":"tcp"}` + extra + `]},
+					"cache":{"image":"redis:7-alpine","networks":{"default":null}}}}`, nil
+			}
+			return st.handle(line, c)
+		}
+	}
+	e.fake.Handle = resolved("")
+	got := e.deployService(s, 10*time.Second)
+	if got.Status != db.AppRunning {
+		t.Fatalf("the stack did not come up: %+v\n%s", got, e.serviceLog(s))
+	}
+	log := e.serviceLog(s)
+	for _, want := range []string{
+		"Port 80 of the server is the proxy's, so front is not published on it.",
+		"Port 443 of the server is the proxy's",
+		"give it a domain on the Domains tab",
+	} {
+		if !strings.Contains(log, want) {
+			t.Errorf("the log does not say %q:\n%s", want, log)
+		}
+	}
+	file, _, ok := e.fake.File(e.cfg.AppDir(s.ID) + "/compose.resolved.json")
+	if !ok {
+		t.Fatal("no resolved file was written")
+	}
+	flat := strings.NewReplacer(" ", "", "\n", "", "\t", "").Replace(file)
+	if strings.Contains(flat, `"published":"80"`) || strings.Contains(flat, `"published":"443"`) {
+		t.Errorf("the proxy's ports are in what Compose starts:\n%s", file)
+	}
+	if !strings.Contains(flat, `"published":"9000"`) {
+		t.Errorf("a port the stack may have was taken out:\n%s", file)
+	}
+	// What the Domains dialog offers for front.
+	for _, m := range got.StackMembers() {
+		if m.Name == "front" && !reflect.DeepEqual(m.Ports, []int{9000, 80, 443}) {
+			t.Errorf("front names the ports %v", m.Ports)
+		}
+	}
+
+	// Port 22 is nobody's to give away: refused, as before.
+	e.fake.Handle = resolved(`,{"mode":"ingress","target":22,"published":"22","protocol":"tcp"}`)
+	got = e.deployService(s, 10*time.Second)
+	if !strings.Contains(got.LastError, "the port 22 of the server may not be published") || strings.Contains(got.LastError, "port 80") {
+		t.Errorf("a stack that publishes port 22: %q", got.LastError)
 	}
 }
 

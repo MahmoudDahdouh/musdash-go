@@ -596,3 +596,68 @@ func TestLayout(t *testing.T) {
 		t.Fatal("which service has a network of its own")
 	}
 }
+
+// TestUnpublish: the publications of the proxy's ports are taken out of a
+// document, whichever way they are written, and the container port stays
+// among the ones the service names. Everything else is left as it is.
+func TestUnpublish(t *testing.T) {
+	p, err := Parse([]byte(`{"name":"musdash-x","services":{
+		"proxy":{"image":"nginx:alpine","ports":[
+			{"mode":"ingress","target":80,"published":"80","protocol":"tcp"},
+			{"mode":"ingress","host_ip":"0.0.0.0","target":8443,"published":"443","protocol":"tcp"},
+			{"mode":"ingress","target":443,"published":"443","protocol":"udp"},
+			{"mode":"ingress","target":9000,"published":"9000","protocol":"tcp"}]},
+		"api":{"image":"api:1","expose":["80"],"ports":[
+			{"mode":"ingress","host_ip":"127.0.0.1","target":80,"published":"80","protocol":"tcp"}]},
+		"db":{"image":"db:1","ports":[{"mode":"ingress","target":5432,"published":"5432","protocol":"tcp"}]},
+		"worker":{"image":"busybox"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := p.Unpublish(80, 443)
+	want := []Unpublished{
+		{Service: "api", Published: 80, Target: 80},
+		{Service: "proxy", Published: 80, Target: 80},
+		{Service: "proxy", Published: 443, Target: 8443},
+		{Service: "proxy", Published: 443, Target: 443},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unpublished:\n got %+v\nwant %+v", got, want)
+	}
+	// As one line, whatever Marshal's layout is.
+	flat := func() string {
+		out, _ := p.Marshal()
+		return strings.NewReplacer(" ", "", "\n", "", "\t", "").Replace(string(out))
+	}
+	out := flat()
+	for _, gone := range []string{`"published":"80"`, `"published":"443"`} {
+		if strings.Contains(string(out), gone) {
+			t.Errorf("the document still has %s:\n%s", gone, out)
+		}
+	}
+	for _, kept := range []string{`"published":"9000"`, `"published":"5432"`} {
+		if !strings.Contains(string(out), kept) {
+			t.Errorf("the document lost %s:\n%s", kept, out)
+		}
+	}
+	// The ports are still what the services name, so a domain can be given
+	// to them: the TCP ones, each once. A service left with no publication
+	// has no empty list for Compose to read.
+	layout := map[string][]int{}
+	for _, m := range p.Layout() {
+		layout[m.Name] = m.Ports
+	}
+	if !reflect.DeepEqual(layout, map[string][]int{"api": {80}, "db": {5432}, "proxy": {9000, 80, 8443}, "worker": nil}) {
+		t.Errorf("the layout after: %v", layout)
+	}
+	if strings.Contains(string(out), `"ports":[]`) || strings.Contains(string(out), `"ports":null`) {
+		t.Errorf("an empty ports list was left:\n%s", out)
+	}
+	// Nothing to take out: nothing said, nothing changed.
+	if again := p.Unpublish(80, 443); len(again) != 0 {
+		t.Errorf("a second pass took out %+v", again)
+	}
+	if after := flat(); after != out {
+		t.Error("a second pass changed the document")
+	}
+}

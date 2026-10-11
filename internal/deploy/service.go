@@ -397,6 +397,15 @@ func (d *Deployer) deployService(ctx context.Context, s db.Service, log *Log) er
 	if err != nil {
 		return fmt.Errorf("the Compose file could not be read: %w", err)
 	}
+	// Ports 80 and 443 of the server are the proxy's. A file written for
+	// plain `docker compose` usually publishes its web server there, and
+	// it is often a repository's file, which cannot be changed here: the
+	// stack is deployed without that publication, and told how the port
+	// is reached instead. Leaving a publication out exposes less, never
+	// more; every other port a stack may not have is refused below.
+	for _, u := range resolved.Unpublish(proxyPorts...) {
+		log.Step("Port %d of the server is the proxy's, so %s is not published on it. To reach port %d of %s from outside, give it a domain on the Domains tab.", u.Published, u.Service, u.Target, u.Service)
+	}
 	if err := resolved.Validate(compose.ValidateOptions{Dir: dir, BuildDir: checkout, Protected: []string{d.at(r).DataDir}, ValidPort: ValidPublicPort}); err != nil {
 		return fmt.Errorf("the Compose file asks for things a service may not do:\n%w", err)
 	}
@@ -843,6 +852,10 @@ func (d *Deployer) StopService(ctx context.Context, id string) error {
 	}
 	return d.composeDown(ctx, r, s, "stop", "--timeout", strconv.Itoa(int(d.dbStopGrace.Seconds())))
 }
+
+// proxyPorts are the ports of a server that the proxy answers on. No stack
+// is published there.
+var proxyPorts = []int{80, 443}
 
 // ErrNoSuchContainer says a container that was named is not one of the
 // stack's, as its server lists them now.

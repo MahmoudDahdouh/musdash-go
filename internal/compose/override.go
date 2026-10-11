@@ -228,6 +228,71 @@ func (p Project) Apply(o Override) {
 	}
 }
 
+// Unpublished is a publication of a port of the server that Unpublish took
+// out of a stack.
+type Unpublished struct {
+	Service   string
+	Published int // the port of the server
+	Target    int // the container's
+}
+
+// Unpublish takes the publications of the given ports of the server out of
+// every service, and reports them by service. They are ports a stack
+// cannot have, because the proxy holds them. The container port stays
+// among the ones the service names (as expose), so that it is still what a
+// domain is offered for; that is for TCP only, which is what the proxy
+// speaks. Call it before Validate, which refuses what is left.
+func (p Project) Unpublish(ports ...int) []Unpublished {
+	taken := map[int]bool{}
+	for _, n := range ports {
+		taken[n] = true
+	}
+	var out []Unpublished
+	for _, name := range p.Services() {
+		svc := p.service(name)
+		var kept []any
+		for _, entry := range asList(svc["ports"]) {
+			port := asMap(entry)
+			published := toInt(port["published"])
+			if port == nil || !taken[published] {
+				kept = append(kept, entry)
+				continue
+			}
+			target := toInt(port["target"])
+			out = append(out, Unpublished{Service: name, Published: published, Target: target})
+			if proto, _ := port["protocol"].(string); (proto == "" || proto == "tcp") && !exposed(svc, target) {
+				svc["expose"] = append(asList(svc["expose"]), strconv.Itoa(target))
+			}
+		}
+		switch {
+		case len(kept) == len(asList(svc["ports"])):
+		case len(kept) == 0:
+			delete(svc, "ports")
+		default:
+			svc["ports"] = kept
+		}
+	}
+	return out
+}
+
+// exposed reports whether a service's expose list names a TCP port.
+func exposed(svc map[string]any, port int) bool {
+	for _, e := range asList(svc["expose"]) {
+		spec, _ := e.(string)
+		if spec == "" {
+			if toInt(e) == port {
+				return true
+			}
+			continue
+		}
+		number, proto, _ := strings.Cut(spec, "/")
+		if (proto == "" || proto == "tcp") && toInt(number) == port {
+			return true
+		}
+	}
+	return false
+}
+
 // CheckoutPaths returns every path inside the checkout that the stack reads
 // from the server: bind-mount sources, build contexts and Dockerfiles, and
 // the files of secrets and configs. The caller makes sure none of them is,
