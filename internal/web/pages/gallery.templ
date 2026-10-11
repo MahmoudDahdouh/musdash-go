@@ -267,6 +267,14 @@ templ Gallery(s ui.Shell) {
 					@ui.Offer(ui.OfferProps{Href: "#", Icon: "key", Title: "Private repository, with a deploy key", Text: "No logo of its own: its icon, in the brand's blue.", Action: "Add key"})
 				}
 			}
+			@gallerySection("Figures: the numbers a page opens with") {
+				@ui.Figures("Examples") {
+					@ui.Figure(ui.FigureProps{Label: "Running", Icon: "play", Value: "12", Of: "of 14", Flag: "2 down", FlagTone: ui.ToneDanger, Detail: "Apps, databases and services", Href: "#"})
+					@ui.Figure(ui.FigureProps{Label: "Deployments", Icon: "rocket", Value: "8", Flag: "2 in progress", FlagTone: ui.ToneBusy, Detail: "In the last 24 hours", Href: "#"})
+					@ui.Figure(ui.FigureProps{Label: "Servers ready", Icon: "server", Value: "2", Of: "of 2", Flag: "Disk filling up", FlagTone: ui.ToneWarn, Detail: "Fullest disk: 81%, edge", Href: "#"})
+					@ui.Figure(ui.FigureProps{Label: "Last backup", Icon: "archive", Value: "–", Detail: "No databases to back up"})
+				}
+			}
 			@gallerySection("Figures: a strip, and the cells before a reading") {
 				<div class="grid gap-4">
 					<section class="card">

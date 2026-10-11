@@ -123,9 +123,10 @@ func (d *DB) ActiveProjects(ctx context.Context, teamID string, limit int) ([]Ac
 // Totals is how much a team has.
 type Totals struct {
 	Projects int
-	// Resources is its apps, databases and services, and Running how many
-	// of them run.
-	Resources, Running int
+	// Resources is its apps, databases and services; Running, how many of
+	// them run; and Down, how many failed, exited or are degraded. The rest
+	// were stopped, or never deployed.
+	Resources, Running, Down int
 	// Sources is the Git sources that are connected.
 	Sources int
 }
@@ -136,9 +137,77 @@ func (d *DB) TeamTotals(ctx context.Context, teamID string) (Totals, error) {
 		SELECT (SELECT count(*) FROM projects WHERE team_id = ?1),
 		       (SELECT count(*) FROM `+placed+` r JOIN projects p ON p.id = r.project_id WHERE p.team_id = ?1),
 		       (SELECT count(*) FROM `+placed+` r JOIN projects p ON p.id = r.project_id WHERE p.team_id = ?1 AND r.status = ?2),
-		       (SELECT count(*) FROM git_sources WHERE team_id = ?1 AND `+gitSourceReady+`)`, teamID, AppRunning).
-		Scan(&t.Projects, &t.Resources, &t.Running, &t.Sources)
+		       (SELECT count(*) FROM `+placed+` r JOIN projects p ON p.id = r.project_id WHERE p.team_id = ?1 AND r.status IN (?3, ?4, ?5)),
+		       (SELECT count(*) FROM git_sources WHERE team_id = ?1 AND `+gitSourceReady+`)`, teamID, AppRunning, AppFailed, AppExited, AppDegraded).
+		Scan(&t.Projects, &t.Resources, &t.Running, &t.Down, &t.Sources)
 	return t, err
+}
+
+// DeployCount is how the deployments of a stretch of time went.
+type DeployCount struct {
+	// Total is how many were asked for; Failed and InProgress, how many of
+	// them failed and how many are queued or running still.
+	Total, Failed, InProgress int
+}
+
+// DeploymentsSince counts the deployments of the team's apps and services
+// that were asked for at since or later. Each arm starts from the team's
+// own apps and services and reads their deployments through the index on
+// (owner, created_at): a count of a day costs a day's rows, however many
+// the tables hold.
+func (d *DB) DeploymentsSince(ctx context.Context, teamID string, since int64) (DeployCount, error) {
+	var c DeployCount
+	err := d.QueryRowContext(ctx, `
+		SELECT count(*), coalesce(sum(status = ?3), 0), coalesce(sum(status IN (?4, ?5)), 0) FROM (
+			SELECT d.status AS status FROM projects p JOIN environments e ON e.project_id = p.id JOIN apps a ON a.environment_id = e.id
+			JOIN deployments d ON d.app_id = a.id AND d.created_at >= ?2 WHERE p.team_id = ?1
+			UNION ALL
+			SELECT d.status FROM projects p JOIN environments e ON e.project_id = p.id JOIN services s ON s.environment_id = e.id
+			JOIN service_deployments d ON d.service_id = s.id AND d.created_at >= ?2 WHERE p.team_id = ?1)`,
+		teamID, since, DeployFailed, DeployQueued, DeployRunning).Scan(&c.Total, &c.Failed, &c.InProgress)
+	return c, err
+}
+
+// BackupState is how the backups of a team's databases stand.
+type BackupState struct {
+	// Databases is how many databases the team has, and Scheduled how many
+	// of them are backed up on a schedule that is switched on.
+	Databases, Scheduled int
+	// Failed is how many databases have a latest backup that failed.
+	Failed int
+	// LastSuccess is when a backup last succeeded, 0 if none ever did.
+	LastSuccess int64
+	// BrokenID is one database whose latest backup failed, the first by
+	// name, when Failed is not 0, and the two after it where that database
+	// is: where a person is sent to look.
+	BrokenID, BrokenProjectID, BrokenEnvironmentID string
+}
+
+// latestBackupFailed is true of the database m whose newest backup failed.
+// A status is a word of ours and is written out.
+const latestBackupFailed = `(SELECT status FROM backups b WHERE b.database_id = m.id ORDER BY b.started_at DESC, b.rowid DESC LIMIT 1) = '` + RunFailed + `'`
+
+// BackupsOf says how the backups of the team's databases stand. Each
+// database's backups are read through the index on (database, started_at),
+// and no more of them are kept than its schedule says.
+func (d *DB) BackupsOf(ctx context.Context, teamID string) (BackupState, error) {
+	var b BackupState
+	err := d.QueryRowContext(ctx, `
+		SELECT count(*),
+		       coalesce(sum(EXISTS (SELECT 1 FROM backup_configs c WHERE c.database_id = m.id AND c.enabled = 1)), 0),
+		       coalesce(sum(coalesce(`+latestBackupFailed+`, 0)), 0),
+		       coalesce(max((SELECT max(b.finished_at) FROM backups b WHERE b.database_id = m.id AND b.status = ?2)), 0)
+		FROM projects p JOIN environments e ON e.project_id = p.id JOIN databases m ON m.environment_id = e.id
+		WHERE p.team_id = ?1`, teamID, RunSuccess).Scan(&b.Databases, &b.Scheduled, &b.Failed, &b.LastSuccess)
+	if err != nil || b.Failed == 0 {
+		return b, err
+	}
+	err = d.QueryRowContext(ctx, `
+		SELECT m.id, e.project_id, e.id
+		FROM projects p JOIN environments e ON e.project_id = p.id JOIN databases m ON m.environment_id = e.id
+		WHERE p.team_id = ? AND `+latestBackupFailed+`
+		ORDER BY m.name COLLATE NOCASE, m.id LIMIT 1`, teamID).Scan(&b.BrokenID, &b.BrokenProjectID, &b.BrokenEnvironmentID)
+	return b, err
 }
 
 // LatestServerSamples returns the newest stored reading of each of the

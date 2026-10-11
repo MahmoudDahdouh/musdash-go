@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"math"
 	"strconv"
 
 	"github.com/MahmoudDahdouh/musdash-go/internal/db"
@@ -14,7 +15,12 @@ type HomeView struct {
 	// Admin says the reader may connect a source.
 	Admin    bool
 	Totals   db.Totals
-	Events   []db.Event
+	// Deployments is how the deployments of the last day went, and Backups
+	// how the backups of the team's databases stand: two of the figures
+	// the page opens with. Both are read only once something is deployed.
+	Deployments db.DeployCount
+	Backups     db.BackupState
+	Events      []db.Event
 	Projects []db.ActiveProject
 	Servers  []HomeServer
 	// Next is where the page asks again, and Every how often. Next is
@@ -29,6 +35,108 @@ type HomeServer struct {
 	// Meters is empty when the server's usage is not recorded, or its last
 	// reading is too old to be what it uses now.
 	Meters []ui.MeterProps
+	// Disk is how full its disk was at that reading, 0 to 1, and below
+	// zero when there is none.
+	Disk float64
+}
+
+// The figures Home opens with are the four things a person opens it to
+// find out, in the order they ask: is everything up, did my deployments
+// work, are the servers there and have they room, is my data safe. A count
+// that answers none of these (projects, domains) is not among them. Each
+// says how it stands in a flag, in words as well as colour, and leads to
+// where it is looked into.
+
+// runningFigure: how much of what the team has is running.
+func runningFigure(t db.Totals) ui.FigureProps {
+	f := ui.FigureProps{Label: "Running", Icon: "play", Value: strconv.Itoa(t.Running), Of: "of " + strconv.Itoa(t.Resources), Href: "/projects", Detail: "Apps, databases and services"}
+	switch {
+	case t.Down > 0:
+		f.Flag, f.FlagTone = strconv.Itoa(t.Down)+" down", ui.ToneDanger
+	case t.Running == t.Resources:
+		f.Flag, f.FlagTone = "All running", ui.ToneOK
+	}
+	// The rest is neither running nor down: stopped on purpose, or made
+	// and not deployed yet.
+	if rest := t.Resources - t.Running - t.Down; rest > 0 {
+		f.Detail = strconv.Itoa(rest) + " stopped or not deployed"
+	}
+	return f
+}
+
+// deploymentsFigure: how the deployments of the last day went.
+func deploymentsFigure(c db.DeployCount) ui.FigureProps {
+	f := ui.FigureProps{Label: "Deployments", Icon: "rocket", Value: strconv.Itoa(c.Total), Href: "#home-activity", Detail: "In the last 24 hours"}
+	switch {
+	case c.Failed > 0:
+		f.Flag, f.FlagTone = strconv.Itoa(c.Failed)+" failed", ui.ToneDanger
+		if c.InProgress > 0 {
+			f.Detail = strconv.Itoa(c.InProgress) + " in progress now"
+		}
+	case c.InProgress > 0:
+		f.Flag, f.FlagTone = strconv.Itoa(c.InProgress)+" in progress", ui.ToneBusy
+	case c.Total > 0:
+		f.Flag, f.FlagTone = "All succeeded", ui.ToneOK
+	}
+	return f
+}
+
+// serversFigure: how many servers are there to deploy to, and how full the
+// fullest of them is. This machine is ready: it is where the page comes
+// from. A remote server is as its last check found it.
+func serversFigure(servers []HomeServer) ui.FigureProps {
+	ready, fullest := 0, -1
+	for i, h := range servers {
+		if h.Server.Kind == db.ServerLocal || h.Server.Status == db.ServerOK {
+			ready++
+		}
+		if h.Disk >= 0 && (fullest < 0 || h.Disk > servers[fullest].Disk) {
+			fullest = i
+		}
+	}
+	f := ui.FigureProps{Label: "Servers ready", Icon: "server", Value: strconv.Itoa(ready), Of: "of " + strconv.Itoa(len(servers)), Href: "/servers", Detail: "No recent reading of their disks"}
+	if fullest >= 0 {
+		full := ui.Percent(math.Round(servers[fullest].Disk * 100))
+		f.Detail = "Disk " + full + " full"
+		if len(servers) > 1 {
+			f.Detail = "Fullest disk: " + full + ", " + servers[fullest].Server.Name
+		}
+	}
+	switch {
+	case ready < len(servers):
+		f.Flag, f.FlagTone = strconv.Itoa(len(servers)-ready)+" not ready", ui.ToneDanger
+	case fullest >= 0 && servers[fullest].Disk >= 0.9:
+		f.Flag, f.FlagTone = "Disk nearly full", ui.ToneDanger
+	case fullest >= 0 && servers[fullest].Disk >= 0.75:
+		f.Flag, f.FlagTone = "Disk filling up", ui.ToneWarn
+	default:
+		f.Flag, f.FlagTone = "All ready", ui.ToneOK
+	}
+	return f
+}
+
+// backupsFigure: when a backup last succeeded, and whether every database
+// has one coming. A team without a database has nothing to back up, and
+// the card says so and leads nowhere.
+func backupsFigure(b db.BackupState) ui.FigureProps {
+	f := ui.FigureProps{Label: "Last backup", Icon: "archive", Value: "None yet", Href: "#home-activity"}
+	if b.Databases == 0 {
+		return ui.FigureProps{Label: "Last backup", Icon: "archive", Value: "–", Detail: "No databases to back up"}
+	}
+	if b.LastSuccess > 0 {
+		f.Value = Said(ui.Ago(b.LastSuccess))
+	}
+	f.Detail = strconv.Itoa(b.Scheduled) + " of " + plural(b.Databases, "database", "databases") + " on a schedule"
+	switch {
+	case b.Failed > 0:
+		f.Flag, f.FlagTone = strconv.Itoa(b.Failed)+" failed", ui.ToneDanger
+		f.Href = ResourcePath(b.BrokenProjectID, b.BrokenEnvironmentID, db.KindDatabase, b.BrokenID) + "/backups"
+	case b.Scheduled < b.Databases:
+		f.Flag, f.FlagTone = strconv.Itoa(b.Databases-b.Scheduled)+" not scheduled", ui.ToneWarn
+	default:
+		f.Flag, f.FlagTone = "All scheduled", ui.ToneOK
+	}
+	return f
 }
 
 func eventHref(e db.Event) string {
@@ -117,9 +225,11 @@ templ Home(s ui.Shell, v HomeView) {
 	}
 }
 
-// HomeLive is everything on Home under its title. While a deployment, a
-// backup or a task is in progress it asks for itself again; once nothing
-// is, it stops.
+// HomeLive is everything on Home under its title: the four figures, then
+// what was done lately and where it runs. An install with nothing deployed
+// has the steps that get the first thing running in the figures' place:
+// four noughts say nothing. While a deployment, a backup or a task is in
+// progress it asks for itself again; once nothing is, it stops.
 templ HomeLive(v HomeView) {
 	<div
 		id="home-live"
@@ -132,6 +242,13 @@ templ HomeLive(v HomeView) {
 	>
 		if v.Totals.Resources == 0 {
 			@homeStart(v)
+		} else {
+			@ui.Figures("At a glance") {
+				@ui.Figure(runningFigure(v.Totals))
+				@ui.Figure(deploymentsFigure(v.Deployments))
+				@ui.Figure(serversFigure(v.Servers))
+				@ui.Figure(backupsFigure(v.Backups))
+			}
 		}
 		<div class="grid items-start gap-6 xl:grid-cols-3">
 			<div class="grid min-w-0 gap-6 xl:col-span-2">

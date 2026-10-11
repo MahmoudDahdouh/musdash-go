@@ -211,7 +211,7 @@ func TestActiveProjectsAndTotals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (Totals{Projects: 3, Resources: 3, Running: 1}); tot != want {
+	if want := (Totals{Projects: 3, Resources: 3, Running: 1, Down: 1}); tot != want {
 		t.Fatalf("totals %+v, want %+v", tot, want)
 	}
 	if tot, _ = d.TeamTotals(ctx, h.other); tot != (Totals{Projects: 1, Resources: 1}) {
@@ -314,5 +314,87 @@ func TestLatestServerSamples(t *testing.T) {
 	// A reading from before the given time is too old to be shown as now.
 	if got, _ = d.LatestServerSamples(ctx, h.team, 201); len(got) != 0 {
 		t.Fatalf("a stale reading: %+v", got)
+	}
+}
+
+// What Home's figures count besides the totals: a day's deployments of
+// apps and services, and how the backups of the databases stand. Both are
+// the team's alone.
+func TestDeploymentsSinceAndBackupsOf(t *testing.T) {
+	ctx := context.Background()
+	d := openTest(t)
+	h := newHomeTeams(t, d)
+
+	// Nothing yet.
+	if c, err := d.DeploymentsSince(ctx, h.team, 0); err != nil || c != (DeployCount{}) {
+		t.Fatalf("no deployments: %+v %v", c, err)
+	}
+	if b, err := d.BackupsOf(ctx, h.team); err != nil || b != (BackupState{}) {
+		t.Fatalf("no databases: %+v %v", b, err)
+	}
+
+	deployed(t, d, h.web.ID, DeploySuccess, 1000)
+	deployed(t, d, h.web.ID, DeployFailed, 2000)
+	deployed(t, d, h.web.ID, DeployRunning, 3000)
+	deployed(t, d, h.web.ID, DeployQueued, 3500)
+	deployed(t, d, h.otherApp.ID, DeployFailed, 3000)
+	svc, err := d.CreateService(ctx, h.team, Service{EnvironmentID: h.env.ID, ServerID: h.server.ID, Name: "blog", Template: TemplateCustom, Compose: "services: {}"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dep, err := d.CreateServiceDeployment(ctx, svc.ID, TriggerManual)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Exec(`UPDATE service_deployments SET status = ?, created_at = 2500 WHERE id = ?`, DeployFailed, dep.ID)
+
+	// Everything of the team's, apps' and services' together.
+	if c, _ := d.DeploymentsSince(ctx, h.team, 0); c != (DeployCount{Total: 5, Failed: 2, InProgress: 2}) {
+		t.Errorf("all deployments: %+v", c)
+	}
+	// From a moment on: what was asked for before it is not counted.
+	if c, _ := d.DeploymentsSince(ctx, h.team, 2500); c != (DeployCount{Total: 3, Failed: 1, InProgress: 2}) {
+		t.Errorf("deployments since 2500: %+v", c)
+	}
+	if c, _ := d.DeploymentsSince(ctx, h.other, 0); c != (DeployCount{Total: 1, Failed: 1}) {
+		t.Errorf("the other team's deployments: %+v", c)
+	}
+
+	// Two databases: one on a schedule whose latest backup failed after an
+	// earlier one succeeded, one with neither.
+	alpha, err := d.CreateDatabase(ctx, h.team, Database{EnvironmentID: h.env.ID, ServerID: h.server.ID, Name: "alpha", Engine: "postgres", Image: "postgres:17"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CreateDatabase(ctx, h.team, Database{EnvironmentID: h.env.ID, ServerID: h.server.ID, Name: "beta", Engine: "redis", Image: "redis:7"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO backup_configs (database_id, schedule, enabled) VALUES (?, '0 3 * * *', 1)`, alpha.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range []struct {
+		id, status        string
+		started, finished int64
+	}{{"backupaaaaa1", RunSuccess, 100, 110}, {"backupaaaaa2", RunFailed, 200, 205}} {
+		if _, err := d.Exec(`INSERT INTO backups (id, database_id, status, started_at, finished_at) VALUES (?, ?, ?, ?, ?)`, b.id, alpha.ID, b.status, b.started, b.finished); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := d.BackupsOf(ctx, h.team)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (BackupState{Databases: 2, Scheduled: 1, Failed: 1, LastSuccess: 110, BrokenID: alpha.ID, BrokenProjectID: h.project.ID, BrokenEnvironmentID: h.env.ID}); got != want {
+		t.Errorf("backups: %+v, want %+v", got, want)
+	}
+	// A schedule that is switched off is no schedule, and a newer backup
+	// that succeeded ends the failure.
+	d.Exec(`UPDATE backup_configs SET enabled = 0`)
+	d.Exec(`INSERT INTO backups (id, database_id, status, started_at, finished_at) VALUES ('backupaaaaa3', ?, ?, 300, 320)`, alpha.ID, RunSuccess)
+	if got, _ = d.BackupsOf(ctx, h.team); got != (BackupState{Databases: 2, LastSuccess: 320}) {
+		t.Errorf("after a good backup and with the schedule off: %+v", got)
+	}
+	if got, _ = d.BackupsOf(ctx, h.other); got != (BackupState{}) {
+		t.Errorf("the other team's backups: %+v", got)
 	}
 }

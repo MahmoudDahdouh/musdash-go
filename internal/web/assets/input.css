@@ -807,6 +807,72 @@
     position: relative;
     z-index: 1;
   }
+  /* Figures: the few numbers a page opens with (ui.Figures), each a tile
+     that is one link. One across on a phone, two on a tablet, four once
+     the page beside the sidebar is wide enough for four. */
+  .figures {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  @media (min-width: 30rem) {
+    .figures {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 74rem) {
+    .figures {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  .figure {
+    gap: 4px;
+  }
+  .figure-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 20px;
+  }
+  .figure-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+  .figure-label .tile-link {
+    color: inherit;
+  }
+  .figure-value {
+    margin-block-start: 4px;
+    font-size: var(--text-2xl);
+    line-height: var(--text-2xl--line-height);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .figure-of {
+    font-size: var(--text-base);
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--color-ink-mute);
+  }
+  .figure-detail {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    color: var(--color-ink-mute);
+  }
+  /* At the card's foot, so the flags of a row stand on one line whatever
+     is above them. */
+  .figure-flag {
+    display: flex;
+    margin-block-start: auto;
+    padding-block-start: 8px;
+  }
   /*
    * Offer: one thing that can be added, on the page that lists them all
    * (ui.Offer). A tile's box with the owner's mark on a soft square, the

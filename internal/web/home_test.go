@@ -255,3 +255,153 @@ func TestHomeLeavesOutWhatAMemberCannotDo(t *testing.T) {
 		t.Fatal("a Member's steps are not the ones a Member can take")
 	}
 }
+
+// figureRE is one of the figures Home opens with: its label, where it
+// leads (none for a card that is no link), and all it says.
+var figureRE = regexp.MustCompile(`(?s)<li class="tile figure">.*?<h2 class="figure-label">(?:<a class="tile-link" href="([^"]*)">)?([^<]*).*?</h2>(.*?)</li>`)
+
+// figures reads them from a page: what each says, by its label, and where
+// each leads.
+func figures(page string) (said, leads map[string]string) {
+	said, leads = map[string]string{}, map[string]string{}
+	for _, m := range figureRE.FindAllStringSubmatch(page, -1) {
+		label := strings.TrimSpace(m[2])
+		said[label] = regexp.MustCompile(`\s+`).ReplaceAllString(regexp.MustCompile(`(?s)<svg.*?</svg>|<[^>]*>`).ReplaceAllString(m[3], " "), " ")
+		leads[label] = html.UnescapeString(m[1])
+	}
+	return said, leads
+}
+
+// Home opens with four figures, the four things a person opens it to find
+// out: is everything up, did the deployments work, are the servers there,
+// is the data safe. Each says how it stands and leads to where that is
+// looked into. An install with nothing deployed has the first steps there.
+func TestHomeOpensWithFourFigures(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+
+	_, page := a.get("/")
+	if said, _ := figures(page); len(said) != 0 || !strings.Contains(page, "Getting started") {
+		t.Fatalf("an install with nothing deployed has figures %v, or no first steps", said)
+	}
+
+	projectID, env := a.project("Shop")
+	web := a.newApp(projectID, env, "web", true, nil)
+	_, page = a.get("/")
+	said, leads := figures(page)
+	if len(said) != 4 {
+		t.Fatalf("Home has %d figures, want 4: %v", len(said), said)
+	}
+	for label, want := range map[string][]string{
+		"Running":       {"1 of 1", "All running", "Apps, databases and services"},
+		"Deployments":   {"1 ", "All succeeded", "In the last 24 hours"},
+		"Servers ready": {"1 of 1", "All ready"},
+		"Last backup":   {"–", "No databases to back up"},
+	} {
+		for _, w := range want {
+			if !strings.Contains(said[label], w) {
+				t.Errorf("%s says %q, which lacks %q", label, said[label], w)
+			}
+		}
+	}
+	if leads["Running"] != "/projects" || leads["Deployments"] != "#home-activity" || leads["Servers ready"] != "/servers" || leads["Last backup"] != "" {
+		t.Errorf("the figures lead to %v", leads)
+	}
+	// They are part of what Home asks for again while something runs.
+	if live := between(t, "/", page, `<div id="home-live"`, `<section class="card" aria-labelledby="home-activity"`); !strings.Contains(live, `class="figures"`) {
+		t.Error("the figures are not inside the part of Home that refreshes")
+	}
+
+	// Things go wrong, one of each kind.
+	api := a.newApp(projectID, env, "api", false, nil)
+	a.db.SetAppStatus(ctx, web, db.AppExited)
+	dep, _ := a.db.CreateDeployment(ctx, db.Deployment{AppID: api, Trigger: "manual"})
+	a.db.FinishDeployment(ctx, dep.ID, db.DeployFailed, "")
+	running, _ := a.db.CreateDeployment(ctx, db.Deployment{AppID: api, Trigger: "manual"})
+	a.db.StartDeployment(ctx, running.ID)
+	remote, _ := a.remoteServer("edge")
+	if _, err := a.db.Exec(`UPDATE servers SET status = ? WHERE id = ?`, db.ServerUnreachable, remote.ID); err != nil {
+		t.Fatal(err)
+	}
+	maindb := a.newDatabase(projectID, env, "postgres", "maindb", nil)
+	a.newDatabase(projectID, env, "redis", "cache", nil)
+	backup, _ := a.db.CreateBackup(ctx, maindb.ID, db.TriggerManual)
+	backup.Status = db.RunFailed
+	a.db.FinishBackup(ctx, backup)
+
+	_, page = a.get("/")
+	said, leads = figures(page)
+	for label, want := range map[string][]string{
+		"Running":       {"2 of 4", "1 down", "1 stopped or not deployed"},
+		"Deployments":   {"3 ", "1 failed", "1 in progress now"},
+		"Servers ready": {"1 of 2", "1 not ready"},
+		"Last backup":   {"None yet", "1 failed", "0 of 2 databases on a schedule"},
+	} {
+		for _, w := range want {
+			if !strings.Contains(said[label], w) {
+				t.Errorf("%s says %q, which lacks %q", label, said[label], w)
+			}
+		}
+	}
+	// The failed backup's figure leads to the database it failed for, and
+	// that page is there.
+	if want := a.databasePath(maindb.ID) + "/backups"; leads["Last backup"] != want {
+		t.Errorf("the backups figure leads to %q, want %q", leads["Last backup"], want)
+	} else if res, _ := a.get(want); res.StatusCode != http.StatusOK {
+		t.Errorf("%s: status %d", want, res.StatusCode)
+	}
+	// A flag is a pill: said in words, with an icon, not by colour alone.
+	if !regexp.MustCompile(`<span class="pill pill-danger"><svg[^>]*>.*?</svg>\s*1 down\s*</span>`).MatchString(page) {
+		t.Error("the flag of what is down is not a pill with an icon and words")
+	}
+
+	// A backup that worked, and a schedule: the figure says when, and that
+	// one database still has none.
+	good, _ := a.db.CreateBackup(ctx, maindb.ID, db.TriggerManual)
+	good.Status = db.RunSuccess
+	a.db.FinishBackup(ctx, good)
+	if _, err := a.db.Exec(`INSERT INTO backup_configs (database_id, schedule, enabled) VALUES (?, '0 3 * * *', 1)`, maindb.ID); err != nil {
+		t.Fatal(err)
+	}
+	_, page = a.get("/")
+	said, leads = figures(page)
+	for _, w := range []string{"Just now", "1 not scheduled", "1 of 2 databases on a schedule"} {
+		if !strings.Contains(said["Last backup"], w) {
+			t.Errorf("Last backup says %q, which lacks %q", said["Last backup"], w)
+		}
+	}
+	if leads["Last backup"] != "#home-activity" {
+		t.Errorf("with nothing failed the backups figure leads to %q", leads["Last backup"])
+	}
+}
+
+// How full the fullest disk is, is what the Servers figure says under its
+// count, from the readings Home already has: no server is asked.
+func TestHomeServersFigureSaysTheFullestDisk(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	ctx := context.Background()
+	projectID, env := a.project("Shop")
+	a.newApp(projectID, env, "web", true, nil)
+
+	_, page := a.get("/")
+	if said, _ := figures(page); !strings.Contains(said["Servers ready"], "No recent reading of their disks") {
+		t.Errorf("without a reading the figure says %q", said["Servers ready"])
+	}
+	local := a.localServerID()
+	minute := time.Now().Unix() / 60 * 60
+	if err := a.db.SetServerSampled(ctx, firstTeam(t, a), local, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.db.AddSamples(ctx, local, minute, map[string]db.Sample{"": {CPU: 100, Mem: 1 << 30, MemTotal: 2 << 30, DiskUsed: 92 << 30, DiskTotal: 100 << 30}}); err != nil {
+		t.Fatal(err)
+	}
+	_, page = a.get("/")
+	said, _ := figures(page)
+	for _, w := range []string{"Disk 92% full", "Disk nearly full"} {
+		if !strings.Contains(said["Servers ready"], w) {
+			t.Errorf("Servers ready says %q, which lacks %q", said["Servers ready"], w)
+		}
+	}
+}

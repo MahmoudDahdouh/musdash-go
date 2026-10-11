@@ -21,6 +21,8 @@ const (
 	// be shown as what it uses now. The sampler stores one a minute, so an
 	// older one means the server stopped answering.
 	homeReadingAge = 5 * time.Minute
+	// homeDay is the stretch the Deployments figure counts.
+	homeDay = 24 * time.Hour
 )
 
 // homeView reads what Home shows. It asks the database only: what a
@@ -39,6 +41,16 @@ func (s *Server) homeView(r *http.Request) (pages.HomeView, error) {
 	if v.Projects, err = s.DB.ActiveProjects(ctx, sess.TeamID, homeProjects); err != nil {
 		return v, err
 	}
+	// What only the figures show, which an install with nothing deployed
+	// does not have.
+	if v.Totals.Resources > 0 {
+		if v.Deployments, err = s.DB.DeploymentsSince(ctx, sess.TeamID, time.Now().Add(-homeDay).Unix()); err != nil {
+			return v, err
+		}
+		if v.Backups, err = s.DB.BackupsOf(ctx, sess.TeamID); err != nil {
+			return v, err
+		}
+	}
 	servers, err := s.DB.ListServers(ctx, sess.TeamID)
 	if err != nil {
 		return v, err
@@ -48,9 +60,9 @@ func (s *Server) homeView(r *http.Request) (pages.HomeView, error) {
 		return v, err
 	}
 	for _, server := range servers {
-		h := pages.HomeServer{Server: server}
+		h := pages.HomeServer{Server: server, Disk: -1}
 		if sample, ok := samples[server.ID]; ok {
-			h.Meters = sampleMeters(sample)
+			h.Meters, h.Disk = sampleMeters(sample), share(sample.DiskUsed, sample.DiskTotal)
 		}
 		v.Servers = append(v.Servers, h)
 	}
