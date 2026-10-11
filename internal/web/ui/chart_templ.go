@@ -459,8 +459,8 @@ func Stats() templ.Component {
 
 // Stat is one cell of a strip: what is measured, the figure, a bar when
 // the figure is a share of a whole, and a note. Without a Value it is the
-// cell before its first reading: the same size, with a dash for a figure,
-// so that nothing moves when the reading arrives.
+// cell before its first reading: the same size, with a bar of a skeleton
+// for a figure, so that nothing moves when the reading arrives.
 func Stat(p MeterProps) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -500,7 +500,7 @@ func Stat(p MeterProps) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if p.Value == "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<dd class=\"stat-value stat-pending\" aria-hidden=\"true\">–</dd>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<dd class=\"stat-value\" aria-hidden=\"true\"><span class=\"bone bone-figure\"></span></dd>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

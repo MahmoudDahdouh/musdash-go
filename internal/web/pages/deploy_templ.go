@@ -356,7 +356,7 @@ func Deploy(s ui.Shell, v DeployChoice) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div><div id=\"deploy-env\" hx-get=\"/deploy/environments\" hx-trigger=\"change from:#deploy-project\" hx-include=\"#deploy-project input[type=hidden]\" hx-swap=\"innerHTML\" hx-sync=\"this:replace\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div><div id=\"deploy-env\" class=\"busy-dim\" hx-get=\"/deploy/environments\" hx-trigger=\"change from:#deploy-project\" hx-include=\"#deploy-project input[type=hidden]\" hx-swap=\"innerHTML\" hx-sync=\"this:replace\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

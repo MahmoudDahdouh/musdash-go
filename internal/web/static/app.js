@@ -187,6 +187,42 @@
   // stay inert behind a drawer that is one no more.
   matchMedia("(min-width: 64rem)").addEventListener("change", () => setNav(false));
 
+  // A button that waits says so with a turning ring (.btn[data-busy], and
+  // .htmx-request for a request htmx makes). A form that navigates makes no
+  // such request: its button is marked from the moment the form is sent
+  // until the page is left, which is also what keeps a second press from
+  // sending it twice. The button is the one that sent the form, or the
+  // form's first when Enter did. A form htmx sends is htmx's to mark, and a
+  // form that opens another tab leaves this page as it is.
+  document.addEventListener("submit", (e) => {
+    const form = e.target;
+    if (e.defaultPrevented || !(form instanceof HTMLFormElement) || (form.target && form.target !== "_self")) return;
+    const button = e.submitter ?? form.querySelector("[type=submit]");
+    if (!button?.matches(".btn")) return;
+    button.dataset.busy = "";
+    button.setAttribute("aria-busy", "true");
+  });
+  // A page the browser kept whole and brings back (Back) was left with its
+  // button turning: nothing is being waited for any more.
+  window.addEventListener("pageshow", (e) => {
+    if (!e.persisted) return;
+    document.querySelectorAll("[data-busy]").forEach((b) => {
+      delete b.dataset.busy;
+      b.removeAttribute("aria-busy");
+    });
+  });
+  // What htmx marks for the eye is said to a reader too: the button that
+  // made a request, or the button that sent the form that made it. An
+  // element that asks for itself again is neither.
+  const waiting = (e) => {
+    const elt = e.detail.elt;
+    if (!(elt instanceof Element)) return null;
+    if (elt.matches(".btn")) return elt;
+    return elt instanceof HTMLFormElement ? (e.detail.requestConfig?.triggeringEvent?.submitter ?? elt.querySelector(".btn[type=submit]")) : null;
+  };
+  document.addEventListener("htmx:beforeRequest", (e) => waiting(e)?.setAttribute("aria-busy", "true"));
+  document.addEventListener("htmx:afterRequest", (e) => waiting(e)?.removeAttribute("aria-busy"));
+
   // Typed confirmation: the form's submit button unlocks only when the field
   // holds exactly the expected text.
   on("input", "[data-match]", (el) => {
@@ -271,10 +307,10 @@
     const other = option.dataset.sets && document.getElementById(option.dataset.sets)?.closest("[data-select]");
     if (other) {
       if (option.dataset.setsValue !== undefined) hold(other, option.dataset.setsValue, option.dataset.setsValue);
-      const note = document.createElement("p");
-      note.className = "menu-note";
-      note.textContent = "Loading…";
-      other.querySelector("[role=listbox]").replaceChildren(note);
+      // What a menu holds until its options arrive is in the page once,
+      // as a template (ui.MenuLoading).
+      const loading = document.querySelector("template[data-menu-loading]");
+      other.querySelector("[role=listbox]").replaceChildren(...(loading ? [loading.content.cloneNode(true)] : []));
     }
     // data-suggest on an option is a name for what is being made. The field
     // marked data-suggest-here takes it while it is empty or still holds the

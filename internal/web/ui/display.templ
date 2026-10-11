@@ -95,7 +95,7 @@ templ switcher(id string, c Crumb) {
 				@menuFilter(id+"-list", c.Filter)
 			}
 			<div class="menu-options" id={ id + "-list" } role="listbox" aria-labelledby={ id }>
-				@MenuNote("Loading…", false)
+				@MenuLoading()
 			</div>
 			if c.Filter != "" {
 				@menuNoMatch()

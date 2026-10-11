@@ -445,8 +445,8 @@ templ ServiceOverview(s ui.Shell, v ServiceView, server string, generated []Gene
 				} else if v.Service.Members == "" {
 					@ui.EmptyState(ui.EmptyProps{Icon: "layers", Title: "Not deployed yet", Text: "Choose Deploy to start the stack.", Size: ui.EmptySmall})
 				} else {
-					<div id="stack-containers" hx-get={ v.Path() + "/containers" } hx-trigger="load, stack-changed from:body" hx-swap="outerHTML">
-						<p class="muted card-body text-sm">Asking the server…</p>
+					<div id="stack-containers" aria-busy="true" hx-get={ v.Path() + "/containers" } hx-trigger="load, stack-changed from:body" hx-swap="outerHTML">
+						@ui.Loading(ui.SkeletonRows, 3, "Asking the server…")
 					</div>
 				}
 			</section>

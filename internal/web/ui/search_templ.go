@@ -128,11 +128,11 @@ func searchDialog() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<input type=\"text\" name=\"q\" class=\"search-input\" role=\"combobox\" aria-label=\"Search\" aria-controls=\"search-results\" aria-expanded=\"true\" aria-autocomplete=\"list\" placeholder=\"Search what you run, or a service to deploy…\" maxlength=\"100\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\" enterkeyhint=\"go\" autofocus data-search-field hx-get=\"/search\" hx-trigger=\"input delay:150ms, search-load\" hx-target=\"#search-results\" hx-swap=\"innerHTML\" hx-sync=\"this:replace\"> <button type=\"button\" class=\"kbd\" data-close aria-label=\"Close\">esc</button></div><div class=\"menu-options\" id=\"search-results\" role=\"listbox\" aria-label=\"Results\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<input type=\"text\" name=\"q\" class=\"search-input\" role=\"combobox\" aria-label=\"Search\" aria-controls=\"search-results\" aria-expanded=\"true\" aria-autocomplete=\"list\" placeholder=\"Search what you run, or a service to deploy…\" maxlength=\"100\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\" enterkeyhint=\"go\" autofocus data-search-field hx-get=\"/search\" hx-trigger=\"input delay:150ms, search-load\" hx-target=\"#search-results\" hx-swap=\"innerHTML\" hx-sync=\"this:replace\" hx-indicator=\"#search-results\"> <button type=\"button\" class=\"kbd\" data-close aria-label=\"Close\">esc</button></div><div class=\"menu-options\" id=\"search-results\" role=\"listbox\" aria-label=\"Results\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = MenuNote("Loading…", false).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = MenuLoading().Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

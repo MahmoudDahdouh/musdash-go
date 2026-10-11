@@ -144,6 +144,47 @@ templ Gallery(s ui.Shell) {
 					@ui.Button(ui.ButtonProps{IconOnly: true, Icon: "refresh", Label: "Refresh"})
 					@ui.Button(ui.ButtonProps{Variant: ui.Ghost, IconOnly: true, Icon: "settings", Label: "Settings"})
 				</div>
+				// A button that waits turns a ring: where its icon is, or over
+				// its words, which keep the button's width.
+				<div class="mt-3 flex flex-wrap items-center gap-2">
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "deploy", Attrs: templ.Attributes{"data-busy": true, "aria-busy": "true"}}) {
+						Deploy
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Attrs: templ.Attributes{"data-busy": true, "aria-busy": "true"}}) {
+						Create project
+					}
+					@ui.Button(ui.ButtonProps{Attrs: templ.Attributes{"data-busy": true, "aria-busy": "true"}}) {
+						Save
+					}
+					@ui.Button(ui.ButtonProps{Variant: ui.Danger, Icon: "trash", Attrs: templ.Attributes{"data-busy": true, "aria-busy": "true"}}) {
+						Delete project
+					}
+					@ui.Button(ui.ButtonProps{Small: true, Icon: "refresh", Attrs: templ.Attributes{"data-busy": true, "aria-busy": "true"}}) {
+						Refresh
+					}
+					@ui.Button(ui.ButtonProps{IconOnly: true, Icon: "eye", Label: "Show", Attrs: templ.Attributes{"data-busy": true, "aria-busy": "true"}})
+				</div>
+			}
+			@gallerySection("Skeleton: what stands where something is being fetched") {
+				<div class="grid gap-4 lg:grid-cols-2">
+					<section class="card" aria-busy="true">
+						<div class="card-head">
+							<h3 class="card-title">Rows of a list</h3>
+						</div>
+						@ui.Loading(ui.SkeletonRows, 3, "Loading…")
+					</section>
+					<section class="card" aria-busy="true">
+						<div class="card-head">
+							<h3 class="card-title">Options of a menu</h3>
+						</div>
+						<div class="card-body">
+							@ui.MenuLoading()
+						</div>
+					</section>
+					<div class="lg:col-span-2">
+						@ui.Skeleton(ui.SkeletonCards, 3)
+					</div>
+				</div>
 			}
 			@gallerySection("Form controls") {
 				<div class="card card-body grid max-w-xl gap-4">

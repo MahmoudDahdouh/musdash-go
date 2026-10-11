@@ -209,7 +209,15 @@ templ clearFilters(v NewResource, outOfBand bool) {
 }
 
 // resourceKinds is the list: a group for each kind that has something.
+// Its first element is what the list turns into when an answer to the form
+// is slow in coming (.found-skeleton): cards in the shape of the ones on
+// their way, over the ones that are about to be replaced. It is in the
+// answer too, since the answer replaces everything the list holds.
 templ resourceKinds(v NewResource) {
+	<div class="found-skeleton" aria-hidden="true">
+		<span class="bone bone-title"></span>
+		@ui.Skeleton(ui.SkeletonCards, 6)
+	</div>
 	if len(v.apps) > 0 {
 		@kindGroup("Apps", 0, "Your own code, image or Compose file. musdash builds it, runs it and gives it a domain.") {
 			@ui.Offers("Kinds of app") {

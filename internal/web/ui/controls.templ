@@ -456,7 +456,7 @@ templ Picker(p PickerProps) {
 		>
 			@menuFilter(p.ID+"-list", p.Filter)
 			<div class="menu-options" id={ p.ID + "-list" } role="listbox" aria-labelledby={ p.ID }>
-				@MenuNote("Loading…", false)
+				@MenuLoading()
 			</div>
 			@menuNoMatch()
 		</div>

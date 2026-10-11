@@ -1299,3 +1299,46 @@ func (a *app) localServerID() string {
 	}
 	return local.ID
 }
+
+// What is fetched after the page says so in the shape of what is coming:
+// a menu whose options are asked for when it opens, the search's list, and
+// a stack's containers each hold a skeleton and not a grey "Loading…". The
+// page has one copy of a menu's skeleton for the script, which fills a
+// menu again with it.
+func TestWhatLoadsLaterHoldsASkeleton(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	projectID, env := a.project("Shop")
+	a.stackServer("front", "3000", nil)
+	svc := a.newService(projectID, env, "site", url.Values{"deploy": {"1"}})
+
+	_, body := a.get(a.servicePath(svc.ID))
+	if strings.Contains(body, `class="menu-note">Loading`) || strings.Contains(body, "muted card-body text-sm\">Asking") {
+		t.Error("a grey sentence stands where a skeleton should")
+	}
+	menu := `<p class="sr-only">Loading…</p><div class="skeleton skeleton-menu" aria-hidden="true">`
+	for what, want := range map[string]string{
+		"the trail's switchers":      `role="listbox" aria-labelledby="crumb-0">` + menu,
+		"the search's list":          `id="search-results" role="listbox" aria-label="Results">` + menu,
+		"the script's copy":          `<template data-menu-loading>` + menu,
+		"the containers of a stack":  `<div id="stack-containers" aria-busy="true"`,
+		"the containers' own words":  `<p class="sr-only" role="status">Asking the server…</p><div class="skeleton skeleton-rows" aria-hidden="true">`,
+		"the search's rows that dim": `hx-indicator="#search-results"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("%s: the page lacks %s", what, want)
+		}
+	}
+	// The list of Add resource starts with what it turns into while a
+	// slow answer is on its way, and so does every answer, which replaces
+	// all the list holds.
+	base := "/projects/" + projectID + "/env/" + env.ID + "/new"
+	_, page := a.get(base)
+	_, answer := a.hx(base+"?q=post", "kinds")
+	if !strings.Contains(page, `id="kinds"><div class="found-skeleton" aria-hidden="true">`) {
+		t.Error("the list of the page does not start with its skeleton")
+	}
+	if !strings.HasPrefix(strings.TrimSpace(answer), `<div class="found-skeleton" aria-hidden="true">`) {
+		t.Errorf("the answer does not start with the list's skeleton: %.120s", answer)
+	}
+}

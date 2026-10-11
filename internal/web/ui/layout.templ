@@ -283,6 +283,12 @@ templ Layout(s Shell) {
 			</div>
 			@confirmDialog()
 			@searchDialog()
+			// What a menu holds while its options are fetched again: a
+			// Picker whose list a choice elsewhere has emptied takes a
+			// copy of this (static/app.js).
+			<template data-menu-loading>
+				@MenuLoading()
+			</template>
 			@Toasts(s.Flash) {
 				@Deploying(s.Deploying)
 			}

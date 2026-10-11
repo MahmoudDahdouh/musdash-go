@@ -1,0 +1,78 @@
+package ui
+
+// The shapes a Skeleton can stand for.
+const (
+	// SkeletonMenu is the options of a menu: an icon and a name each.
+	SkeletonMenu = "menu"
+	// SkeletonRows is the rows of a list in a card: an icon, two lines and
+	// a state at the end.
+	SkeletonRows = "rows"
+	// SkeletonCards is offers: a mark, a name and a line, and a foot.
+	SkeletonCards = "cards"
+)
+
+// boneWidth gives the bars of a skeleton lengths that differ from row to
+// row, as names do: three widths, in turn.
+func boneWidth(i int) string {
+	return [...]string{"bone-a", "bone-b", "bone-c"}[i%3]
+}
+
+// Skeleton stands where something will be while it is being fetched: grey
+// bars in the shape of what is coming, n of them, so the place is taken
+// and nothing jumps when the content arrives. It is for a card, a list or
+// a section; a button that waits turns a ring (.btn[data-busy]).
+//
+// It says nothing to a reader who does not see it. The element it is in
+// says that it is loading: aria-busy, and a line of words (Loading).
+templ Skeleton(kind string, n int) {
+	<div class={ "skeleton", "skeleton-" + kind } aria-hidden="true">
+		for i := range n {
+			switch kind {
+				case SkeletonCards:
+					<div class="tile offer">
+						<div class="offer-head">
+							<span class="bone bone-mark"></span>
+							<span class="skeleton-lines">
+								<span class={ "bone", boneWidth(i) }></span>
+								<span class="bone"></span>
+								<span class={ "bone", boneWidth(i + 1) }></span>
+							</span>
+						</div>
+						<div class="offer-foot">
+							<span class="bone bone-pill"></span>
+						</div>
+					</div>
+				case SkeletonRows:
+					<div class="skeleton-row">
+						<span class="bone bone-icon"></span>
+						<span class="skeleton-lines">
+							<span class={ "bone", boneWidth(i) }></span>
+							<span class={ "bone", boneWidth(i + 1) }></span>
+						</span>
+						<span class="bone bone-pill"></span>
+					</div>
+				default:
+					<div class="skeleton-option">
+						<span class="bone bone-icon"></span>
+						<span class={ "bone", boneWidth(i) }></span>
+					</div>
+			}
+		}
+	</div>
+}
+
+// Loading is a Skeleton with the words that say what it stands for, for a
+// reader who does not see it: the content of an element marked aria-busy.
+templ Loading(kind string, n int, text string) {
+	<p class="sr-only" role="status">{ text }</p>
+	@Skeleton(kind, n)
+}
+
+// MenuLoading is what a menu holds until its options have arrived: a
+// Picker's, a switcher's, the search's. A list holds options and nothing
+// else, so the words are plain text for a reader and the bars are hidden
+// from them.
+templ MenuLoading() {
+	<p class="sr-only">Loading…</p>
+	@Skeleton(SkeletonMenu, 4)
+}

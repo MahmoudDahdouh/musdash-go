@@ -88,11 +88,12 @@ templ searchDialog() {
 				hx-target="#search-results"
 				hx-swap="innerHTML"
 				hx-sync="this:replace"
+				hx-indicator="#search-results"
 			/>
 			<button type="button" class="kbd" data-close aria-label="Close">esc</button>
 		</div>
 		<div class="menu-options" id="search-results" role="listbox" aria-label="Results">
-			@MenuNote("Loading…", false)
+			@MenuLoading()
 		</div>
 		<p class="sr-only" id="search-status" role="status"></p>
 		<p class="menu-note text-danger" data-search-error hidden>Search is not answering. Check the connection and type again.</p>

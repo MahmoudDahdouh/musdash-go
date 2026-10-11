@@ -264,11 +264,138 @@
   .btn-icon.btn-sm {
     width: var(--size-control-sm);
   }
-  /* A request is in flight on this button's form. */
-  .htmx-request.btn,
-  .htmx-request .btn[type="submit"] {
-    opacity: 0.6;
+  /* A button that waits turns a ring: for the request it made, for the
+     request of the form it sends (htmx marks both, .htmx-request), for the
+     next cards of a list, or for the page its form leads to (data-busy,
+     static/app.js). Only a button or a form is asked: an element that asks
+     for itself again (ui.Poll) is marked by htmx for as long as each poll
+     takes, and the buttons in it are not waiting for anything.
+     The ring stands where the button's icon is. A button without one keeps
+     its width: its words are not drawn (their fill, not their colour, which
+     is the ring's) and the ring stands over them. */
+  :is(.btn[data-busy], .btn.htmx-request, form.htmx-request .btn[type="submit"], .offers-more.htmx-request .btn) {
+    position: relative;
     pointer-events: none;
+  }
+  :is(.btn[data-busy], .btn.htmx-request, form.htmx-request .btn[type="submit"], .offers-more.htmx-request .btn)::before {
+    content: "";
+    flex: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-inline-end-color: transparent;
+    border-radius: var(--radius-full);
+    animation: turn 0.7s linear infinite;
+  }
+  :is(.btn[data-busy], .btn.htmx-request, form.htmx-request .btn[type="submit"], .offers-more.htmx-request .btn) > .icon {
+    display: none;
+  }
+  :is(.btn[data-busy], .btn.htmx-request, form.htmx-request .btn[type="submit"], .offers-more.htmx-request .btn):not(:has(> .icon)) {
+    -webkit-text-fill-color: transparent;
+  }
+  :is(.btn[data-busy], .btn.htmx-request, form.htmx-request .btn[type="submit"], .offers-more.htmx-request .btn):not(:has(> .icon))::before {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+  }
+  @keyframes turn {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Skeleton: grey bars in the shape of what is being fetched (ui.Skeleton),
+   * for a card, a list or a section. A bar breathes slowly while it waits,
+   * and stands still for who asked for less motion (the rule in base).
+   */
+  .bone {
+    display: block;
+    flex: none;
+    height: 10px;
+    border-radius: var(--radius-sm);
+    background: var(--color-sunk-press);
+    animation: bone 1.4s ease-in-out infinite;
+  }
+  @keyframes bone {
+    50% {
+      opacity: 0.5;
+    }
+  }
+  .bone-a {
+    width: 62%;
+  }
+  .bone-b {
+    width: 44%;
+  }
+  .bone-c {
+    width: 78%;
+  }
+  .bone-icon {
+    width: 16px;
+    height: 16px;
+  }
+  .bone-pill {
+    width: 64px;
+    height: 20px;
+    border-radius: var(--radius-full);
+  }
+  .bone-mark {
+    width: var(--size-mark);
+    height: var(--size-mark);
+    border-radius: var(--radius-lg);
+  }
+  /* A figure of a strip before its first reading: the figure's own line. */
+  .bone-figure {
+    width: 5rem;
+    height: 14px;
+    margin-block: 5px;
+  }
+  .bone-title {
+    width: 8rem;
+    height: 14px;
+  }
+  .skeleton-lines {
+    display: grid;
+    flex: 1;
+    gap: 8px;
+    min-width: 0;
+    padding-block: 3px;
+  }
+  .skeleton-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 11rem;
+    height: 32px;
+    padding: 0 8px;
+  }
+  .skeleton-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+  .skeleton-row + .skeleton-row {
+    border-block-start: 1px solid var(--color-line);
+  }
+  .skeleton-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+    gap: 16px;
+  }
+  .skeleton-cards .offer-foot {
+    justify-content: flex-end;
+  }
+  /* Something that is asked for again and replaced by the answer keeps what
+     it shows meanwhile, dimmed: the Environment field of the page that asks
+     where a thing goes, the rows of the search. */
+  .busy-dim,
+  .search .menu-options {
+    transition: opacity var(--duration-base);
+  }
+  .busy-dim.htmx-request,
+  .search .menu-options.htmx-request {
+    opacity: 0.6;
   }
 
   /* Form controls ------------------------------------------------------ */
@@ -934,12 +1061,39 @@
   .sticky-bar[data-stuck] {
     border-block-end-color: var(--color-line);
   }
-  /* A list that is being asked for again, while the answer is on its way. */
+  /* A list that is being asked for again, while the answer is on its way:
+     what it shows stays, dimmed, since most answers are there before the
+     eye has moved. An answer that takes longer than 300ms gets cards in
+     the shape of the ones that are coming, laid over the old ones (the
+     list's first element, hidden until then): a skeleton that flashed for
+     every letter typed would be worse than none. */
   .found {
+    position: relative;
+  }
+  .found > * {
     transition: opacity var(--duration-base);
   }
-  .found.htmx-request {
+  .found.htmx-request > :not(.found-skeleton) {
     opacity: 0.6;
+  }
+  .found-skeleton {
+    display: none;
+  }
+  .found.htmx-request > .found-skeleton {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    align-content: start;
+    gap: 24px;
+    background: var(--color-canvas);
+    visibility: hidden;
+    animation: late 1ms linear 300ms forwards;
+  }
+  @keyframes late {
+    to {
+      visibility: visible;
+    }
   }
   .offer-head {
     display: flex;
@@ -1814,9 +1968,6 @@
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     overflow-wrap: anywhere;
-  }
-  .stat-pending {
-    color: var(--color-ink-faint);
   }
   .stat-bar {
     grid-column: 1 / -1;
