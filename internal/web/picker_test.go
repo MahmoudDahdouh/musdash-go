@@ -48,6 +48,10 @@ func fakeGitHubRepos(t *testing.T, repos string) *source.GitHub {
 			io.WriteString(w, `[{"name":"index.html","type":"file"},{"name":"style.css","type":"file"}]`)
 		case shop + "/contents/docs":
 			io.WriteString(w, `[{"name":"README.md","type":"file"}]`)
+		case shop + "/contents/stack":
+			io.WriteString(w, `[{"name":"docker-compose.yml","type":"file"},{"name":"compose.yaml","type":"file"},{"name":"package.json","type":"file"}]`)
+		case shop + "/contents/both":
+			io.WriteString(w, `[{"name":"Dockerfile","type":"file"},{"name":"compose.yaml","type":"file"}]`)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 			io.WriteString(w, `{"message":"Not Found"}`)
@@ -116,7 +120,7 @@ func TestRepositoryPicker(t *testing.T) {
 		`hx-get="/sources/github/`+src.ID+`/branches"`, `hx-include="#repo-`+src.ID+`-value"`, "Find a branch",
 		picker+`>`, typed+` hidden disabled>`,
 		// The folder is looked at when where the code is changes.
-		`hx-get="/sources/detect"`, `hx-include="#git-where"`, `id="build-detected"`,
+		`hx-get="/sources/detect"`, `hx-include="#git-where, #compose_path"`, `id="build-detected"`,
 	)
 	for _, gone := range []string{"Choose from", "data-fill", "<select"} {
 		if strings.Contains(page, gone) {

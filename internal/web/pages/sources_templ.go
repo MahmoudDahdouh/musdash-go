@@ -895,6 +895,10 @@ type Detected struct {
 	// Looked is set when the folder was listed, whatever was found.
 	Looked  bool
 	Problem string
+	// ComposeFile, when set, is the Compose file that was found and that
+	// the form's field is to hold: sent only when the field held no name
+	// of the person's own.
+	ComposeFile string
 }
 
 func (d Detected) says() string {
@@ -907,6 +911,8 @@ func (d Detected) says() string {
 		return " and no Dockerfile: Nixpacks works out the build."
 	case "static":
 		return " and nothing to build: it is served as a static site."
+	case PackCompose:
+		return " and no Dockerfile: the repository is deployed as a stack."
 	}
 	return ""
 }
@@ -950,7 +956,7 @@ func BuildDetected(d Detected) templ.Component {
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(d.Problem)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 325, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 331, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 			if templ_7745c5c3_Err != nil {
@@ -968,7 +974,7 @@ func BuildDetected(d Detected) templ.Component {
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Pack)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 328, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 334, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 			if templ_7745c5c3_Err != nil {
@@ -989,7 +995,7 @@ func BuildDetected(d Detected) templ.Component {
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(d.Found)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 330, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 336, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 			if templ_7745c5c3_Err != nil {
@@ -1002,7 +1008,7 @@ func BuildDetected(d Detected) templ.Component {
 			var templ_7745c5c3_Var34 string
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(d.says())
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 330, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/pages/sources.templ`, Line: 336, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 			if templ_7745c5c3_Err != nil {
@@ -1011,6 +1017,12 @@ func BuildDetected(d Detected) templ.Component {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</span></p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
+			}
+			if d.ComposeFile != "" {
+				templ_7745c5c3_Err = ComposePathFound(d.ComposeFile).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
 		} else if d.Looked {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<p class=\"found-line\">")

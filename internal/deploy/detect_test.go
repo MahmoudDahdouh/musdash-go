@@ -27,3 +27,31 @@ func TestGuessPack(t *testing.T) {
 		}
 	}
 }
+
+func TestGuessStack(t *testing.T) {
+	for _, tc := range []struct {
+		files []string
+		want  string
+	}{
+		{nil, ""},
+		{[]string{"README.md", "package.json"}, ""},
+		{[]string{"docker-compose.yml"}, "docker-compose.yml"},
+		{[]string{"docker-compose.yaml", "README.md"}, "docker-compose.yaml"},
+		{[]string{"compose.yml"}, "compose.yml"},
+		// Compose's own order, whatever the listing's.
+		{[]string{"docker-compose.yml", "compose.yaml", "compose.yml"}, "compose.yaml"},
+		// What builds the stack's images does not make it an app.
+		{[]string{"package.json", "compose.yaml"}, "compose.yaml"},
+		// A Dockerfile, or a builder's own file, is an app's: the Compose
+		// file beside it is usually for the developer's machine.
+		{[]string{"Dockerfile", "docker-compose.yml"}, ""},
+		{[]string{"railpack.json", "compose.yaml"}, ""},
+		{[]string{"nixpacks.toml", "compose.yaml"}, ""},
+		// A name that only looks like one.
+		{[]string{"docker-compose.override.yml", "compose.yaml.example"}, ""},
+	} {
+		if got := GuessStack(tc.files); got != tc.want {
+			t.Errorf("GuessStack(%v) = %q, want %q", tc.files, got, tc.want)
+		}
+	}
+}

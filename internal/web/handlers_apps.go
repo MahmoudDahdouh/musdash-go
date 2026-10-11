@@ -291,6 +291,12 @@ func (s *Server) appCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Docker Compose under Build with makes a stack, not an app.
+	if src == db.SourceGit && r.PostFormValue("build_pack") == pages.PackCompose {
+		s.stackFromGitForm(w, r, p, env, choices, serverList)
+		return
+	}
+
 	var f ui.Form
 	server := targetServer(r, &f, serverList)
 	newApp := db.App{EnvironmentID: env.ID, ServerID: server.ID, Source: src}

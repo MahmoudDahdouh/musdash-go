@@ -474,6 +474,16 @@ func (s *Server) gitDetect(w http.ResponseWriter, r *http.Request) {
 	} else {
 		found.Looked = true
 		found.Pack, found.Found = deploy.GuessPack(files)
+		// Only the form that offers Docker Compose is told of a stack: an
+		// app's Source form has no such build to choose.
+		if name := deploy.GuessStack(files); name != "" && q.Get("stack") == "1" {
+			found.Pack, found.Found = pages.PackCompose, name
+			// The field takes the name that was found, unless it holds one
+			// a person typed.
+			if held := strings.TrimSpace(q.Get("compose_path")); held == "" || deploy.StandardComposeFile(held) {
+				found.ComposeFile = name
+			}
+		}
 	}
 	answer()
 }

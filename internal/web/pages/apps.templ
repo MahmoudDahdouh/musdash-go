@@ -179,6 +179,51 @@ var buildPackOptions = []ui.Option{
 	{Value: "railpack", Label: "Railpack"},
 }
 
+// PackCompose is the choice of Build with that is no build of an app: the
+// repository's Compose file is deployed, as a stack. Only the form a new
+// app is made with offers it, and what it makes is a service from Git.
+const PackCompose = "compose"
+
+// appPacks are the builds of an app, as data-is lists them: the fields of
+// an app are shown for these and not for a stack.
+const appPacks = "dockerfile static nixpacks railpack"
+
+// stackPackOptions are the builds with Docker Compose among them, next to
+// the other way a repository says itself what runs.
+var stackPackOptions = []ui.Option{
+	buildPackOptions[0],
+	{Value: PackCompose, Label: "Docker Compose"},
+	buildPackOptions[1], buildPackOptions[2], buildPackOptions[3],
+}
+
+func packOptions(stack bool) []ui.Option {
+	if stack {
+		return stackPackOptions
+	}
+	return buildPackOptions
+}
+
+const buildHint = "Worked out from the repository where it can be read through a source. Nixpacks and Railpack need no Dockerfile; the app they build must listen on its port, which it is told as PORT."
+
+const stackBuildHint = buildHint + " Docker Compose deploys the repository's Compose file as a stack of containers."
+
+func packHint(stack bool) string {
+	if stack {
+		return stackBuildHint
+	}
+	return buildHint
+}
+
+// whereInclude is what the form sends when it asks what a folder holds: the
+// fields that say where, and on a form that offers a stack the Compose
+// file's field, so that a name a person typed there is left alone.
+func whereInclude(stack bool) string {
+	if stack {
+		return "#git-where, #compose_path"
+	}
+	return "#git-where"
+}
+
 // currentAccess is the way into the repository a Git form shows as chosen:
 // what was sent, else what is stored, else the first there is.
 func currentAccess(f ui.Form, c GitChoices, app db.App) string {
@@ -231,8 +276,8 @@ func buildPack(f ui.Form, app db.App) string {
 // gitSourceFields are the fields describing a repository and how to build
 // it, as the app's Source settings have them.
 templ gitSourceFields(f ui.Form, c GitChoices, app db.App) {
-	@gitWhereFields(f, c, app)
-	@gitBuildFields(f, c, app)
+	@gitWhereFields(f, c, app, false)
+	@gitBuildFields(f, c, app, false)
 }
 
 // gitWhereFields say where the code is: the repository, the branch and the
@@ -241,19 +286,25 @@ templ gitSourceFields(f ui.Form, c GitChoices, app db.App) {
 // moment after the change: the fields of the way in that was just chosen
 // are enabled by then, and the others, which are not sent, disabled. The
 // pickers inside ask their own questions and inherit nothing of this one.
-templ gitWhereFields(f ui.Form, c GitChoices, app db.App) {
+//
+// stack says the form offers Docker Compose under Build with: the folder is
+// then looked at for a Compose file as well.
+templ gitWhereFields(f ui.Form, c GitChoices, app db.App, stack bool) {
 	<div
 		id="git-where"
 		class="grid gap-4"
 		hx-get="/sources/detect"
 		hx-trigger="change delay:150ms"
-		hx-include="#git-where"
+		hx-include={ whereInclude(stack) }
 		hx-target="#build-detected"
 		hx-swap="innerHTML"
 		hx-sync="this:replace"
 		hx-indicator="#build-found"
 		hx-disinherit="*"
 	>
+		if stack {
+			<input type="hidden" name="stack" value="1"/>
+		}
 		@gitRepoFields(f, c, app)
 		@ui.TextField(f, "Base directory", "The folder inside the repository to build from. Empty for the repository root.", ui.InputProps{ID: "base_dir", Mono: true, Value: app.BaseDir, Placeholder: "apps/web"})
 	</div>
@@ -320,10 +371,12 @@ func ifChosen(chosen bool, v string) string {
 
 // gitBuildFields say how the code is built. The fields that belong to one
 // build are shown for that build only (data-when); they are optional, and
-// are sent whether shown or not.
-templ gitBuildFields(f ui.Form, c GitChoices, app db.App) {
-	@ui.Field(ui.FieldProps{Label: "Build with", For: "build_pack", Hint: "Worked out from the repository where it can be read through a source. Nixpacks and Railpack need no Dockerfile; the app they build must listen on its port, which it is told as PORT.", Error: f.E("build_pack")}) {
-		@ui.Select("build_pack", buildPackOptions, buildPack(f, app), templ.Attributes{"aria-describedby": "build_pack-hint"})
+// are sent whether shown or not. With stack, Docker Compose is among the
+// builds, and its one field, the Compose file, is in a fieldset: it is
+// required, and a required field that is only hidden stops the form.
+templ gitBuildFields(f ui.Form, c GitChoices, app db.App, stack bool) {
+	@ui.Field(ui.FieldProps{Label: "Build with", For: "build_pack", Hint: packHint(stack), Error: f.E("build_pack")}) {
+		@ui.Select("build_pack", packOptions(stack), buildPack(f, app), templ.Attributes{"aria-describedby": "build_pack-hint"})
 		<div id="build-found">
 			<p class="found-line busy-line">
 				@ui.Icon("refresh", "animate-spin text-ink-mute")
@@ -335,6 +388,11 @@ templ gitBuildFields(f ui.Form, c GitChoices, app db.App) {
 	<div class="grid gap-4" data-when="build_pack" data-is="dockerfile" hidden?={ buildPack(f, app) != "dockerfile" }>
 		@ui.TextField(f, "Dockerfile", "Where the Dockerfile is, from the base directory.", ui.InputProps{ID: "dockerfile_path", Mono: true, Value: app.DockerfilePath, Placeholder: "Dockerfile"})
 	</div>
+	if stack {
+		<fieldset class="grid min-w-0 gap-4" data-when="build_pack" data-is={ PackCompose } hidden?={ buildPack(f, app) != PackCompose } disabled?={ buildPack(f, app) != PackCompose }>
+			@ui.TextField(f, "Compose file", "Where the Compose file is, from the base directory. Paths in the file are relative to it.", ui.InputProps{ID: "compose_path", Mono: true, Required: true, Value: defaultComposePath, Placeholder: defaultComposePath})
+		</fieldset>
+	}
 	<div class="grid gap-4" data-when="build_pack" data-is="static" hidden?={ buildPack(f, app) != "static" }>
 		@ui.TextField(f, "Folder to serve", "The folder of ready-made files, from the base directory. Empty for the base directory itself.", ui.InputProps{ID: "publish_dir", Mono: true, Value: app.PublishDir, Placeholder: "dist"})
 		@ui.Checkbox("spa_fallback", checked(f, "spa_fallback", app.SPAFallback), nil) {
@@ -344,6 +402,16 @@ templ gitBuildFields(f ui.Form, c GitChoices, app db.App) {
 	@ui.Checkbox("auto_deploy", checked(f, "auto_deploy", app.AutoDeploy), nil) {
 		Deploy automatically when the branch is pushed
 	}
+}
+
+// defaultComposePath is what the Compose file's field starts with.
+const defaultComposePath = "docker-compose.yml"
+
+// ComposePathFound is the Compose file's field with the name that was found
+// in the repository, sent beside the line under Build with to take the
+// place of the field on the page (hx-swap-oob).
+templ ComposePathFound(name string) {
+	@ui.Input(ui.InputProps{ID: "compose_path", Mono: true, Required: true, Value: name, Placeholder: defaultComposePath, Described: true, Attrs: templ.Attributes{"hx-swap-oob": "true"}})
 }
 
 // checked decides a checkbox's state: what was submitted, or the stored
@@ -368,6 +436,11 @@ func appAccess(app db.App) string {
 
 // AppNew is the form a new app is made with. From Git it is three groups,
 // the repository first: the build and the name follow from it.
+//
+// The last group holds what only an app has (its port and domain) and what
+// only a stack has (its variables and network), each in a fieldset. The
+// one that Build with does not choose is disabled, so its required fields
+// neither stop the form nor are sent.
 templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedDomain, source string, choices GitChoices, serverList []db.Server) {
 	@ui.Layout(s) {
 		if source == db.SourceGit {
@@ -382,11 +455,11 @@ templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedD
 				if source == db.SourceGit {
 					<div class="card-body grid gap-4">
 						<h2 class="card-title">Repository</h2>
-						@gitWhereFields(f, choices, db.App{AutoDeploy: true})
+						@gitWhereFields(f, choices, db.App{AutoDeploy: true}, true)
 					</div>
 					<div class="card-body grid gap-4">
 						<h2 class="card-title">Build</h2>
-						@gitBuildFields(f, choices, db.App{AutoDeploy: true})
+						@gitBuildFields(f, choices, db.App{AutoDeploy: true}, true)
 					</div>
 				}
 				<div class="card-body grid gap-4">
@@ -396,12 +469,31 @@ templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedD
 					@ui.TextField(f, "Name", "Lowercase letters, numbers and hyphens. Other containers in this environment reach the app by this name.", ui.InputProps{ID: "name", Mono: true, Required: true, Autofocus: source != db.SourceGit, Placeholder: "web", Attrs: templ.Attributes{"maxlength": "32", "data-suggest-here": source == db.SourceGit}})
 					if source != db.SourceGit {
 						@ui.TextField(f, "Docker image", "For example nginx:alpine or ghcr.io/you/app:1.4.", ui.InputProps{ID: "image", Mono: true, Required: true, Placeholder: "nginx:alpine"})
+						@appAddressFields(f, suggestedDomain)
+					} else {
+						<fieldset class="grid min-w-0 gap-4" data-when="build_pack" data-is={ appPacks } hidden?={ buildPack(f, db.App{}) == PackCompose } disabled?={ buildPack(f, db.App{}) == PackCompose }>
+							@appAddressFields(f, suggestedDomain)
+						</fieldset>
+						<fieldset class="grid min-w-0 gap-4" data-when="build_pack" data-is={ PackCompose } hidden?={ buildPack(f, db.App{}) != PackCompose } disabled?={ buildPack(f, db.App{}) != PackCompose }>
+							@ui.Notice(ui.ToneInfo) {
+								<p>A Compose file makes a stack: its containers are deployed together and listed as one service. Each of them is given a domain afterwards, on the stack's Domains tab.</p>
+							}
+							@ui.Field(ui.FieldProps{Label: "Variables", For: "variables", Hint: "Values for the ${NAME} references in the file. One NAME=value per line. Stored encrypted. Passwords the file asks for with SERVICE_PASSWORD_… are generated.", Error: f.E("variables")}) {
+								@ui.Textarea(ui.InputProps{ID: "variables", Mono: true, Rows: 4, Value: f.V("variables"), Invalid: f.E("variables") != "", Described: true})
+							}
+							<div>
+								@ui.Checkbox("connect_env", f.V("connect_env") == "1", nil) {
+									Connect to the environment's network, so its containers and the apps and databases in { env.Name } reach each other by name
+								}
+								if f.E("connect_env") != "" {
+									<p class="field-error mt-1" role="alert">{ f.E("connect_env") }</p>
+								}
+							</div>
+						</fieldset>
 					}
-					@ui.TextField(f, "Port", "The port the app listens on inside its container. A static site listens on 80.", ui.InputProps{ID: "port", Mono: true, Required: true, Value: "80", Attrs: templ.Attributes{"inputmode": "numeric"}})
 					@ServerChoice(f, serverList)
-					@ui.TextField(f, "Domain", "Leave the generated address, or enter a domain that points at the app's server. Your own domains get HTTPS.", ui.InputProps{ID: "domain", Mono: true, Value: suggestedDomain})
 					@ui.Checkbox("deploy", true, nil) {
-						Deploy as soon as the app is created
+						Deploy as soon as it is created
 					}
 				</div>
 				<div class="card-foot">
@@ -415,6 +507,13 @@ templ AppNew(s ui.Shell, p db.Project, env db.Environment, f ui.Form, suggestedD
 			</form>
 		</div>
 	}
+}
+
+// appAddressFields are where an app is reached: the port it listens on and
+// its first domain.
+templ appAddressFields(f ui.Form, suggestedDomain string) {
+	@ui.TextField(f, "Port", "The port the app listens on inside its container. A static site listens on 80.", ui.InputProps{ID: "port", Mono: true, Required: true, Value: "80", Attrs: templ.Attributes{"inputmode": "numeric"}})
+	@ui.TextField(f, "Domain", "Leave the generated address, or enter a domain that points at the app's server. Your own domains get HTTPS.", ui.InputProps{ID: "domain", Mono: true, Value: suggestedDomain})
 }
 
 // lastCommit is the commit of the latest deployment, shortened, or "none"

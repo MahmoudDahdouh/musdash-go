@@ -47,3 +47,40 @@ func GuessPack(files []string) (pack, found string) {
 	}
 	return "", ""
 }
+
+// ComposeFiles are the names Compose itself looks for in a folder, in the
+// order it takes them.
+var ComposeFiles = []string{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"}
+
+// StandardComposeFile reports whether a path is one of those names, in the
+// folder itself: what a form's field holds before a person names a file of
+// their own.
+func StandardComposeFile(name string) bool {
+	for _, known := range ComposeFiles {
+		if name == known {
+			return true
+		}
+	}
+	return false
+}
+
+// GuessStack names the Compose file of a folder that holds a stack: it has
+// one, and nothing that says how an app is built. A Dockerfile, or a
+// builder's own settings file, beside a Compose file is the usual shape of
+// an app whose Compose file is for the developer's machine, so there the
+// answer is "" and GuessPack's stands.
+func GuessStack(files []string) string {
+	has := make(map[string]bool, len(files))
+	for _, name := range files {
+		has[name] = true
+	}
+	if has["Dockerfile"] || has["railpack.json"] || has["nixpacks.toml"] {
+		return ""
+	}
+	for _, name := range ComposeFiles {
+		if has[name] {
+			return name
+		}
+	}
+	return ""
+}

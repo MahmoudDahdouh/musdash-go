@@ -300,6 +300,10 @@ type Detected struct {
 	// Looked is set when the folder was listed, whatever was found.
 	Looked  bool
 	Problem string
+	// ComposeFile, when set, is the Compose file that was found and that
+	// the form's field is to hold: sent only when the field held no name
+	// of the person's own.
+	ComposeFile string
 }
 
 func (d Detected) says() string {
@@ -312,6 +316,8 @@ func (d Detected) says() string {
 		return " and no Dockerfile: Nixpacks works out the build."
 	case "static":
 		return " and nothing to build: it is served as a static site."
+	case PackCompose:
+		return " and no Dockerfile: the repository is deployed as a stack."
 	}
 	return ""
 }
@@ -329,6 +335,9 @@ templ BuildDetected(d Detected) {
 			@ui.Icon("check", "text-ok")
 			<span>Found <span class="fact">{ d.Found }</span>{ d.says() }</span>
 		</p>
+		if d.ComposeFile != "" {
+			@ComposePathFound(d.ComposeFile)
+		}
 	} else if d.Looked {
 		<p class="found-line">
 			@ui.Icon("info", "text-ink-mute")

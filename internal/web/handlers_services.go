@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -332,31 +333,44 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 		rerender()
 		return
 	}
-	if svc.Variables, err = s.Deploy.SealServiceVariables(vars); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	name := svc.Name
-	svc, err = s.DB.CreateService(ctx, teamID, svc)
-	if errors.Is(err, db.ErrNotFound) {
-		// A GitHub App or key that is not the team's.
-		f.Fail("access", "Choose how the repository is read.")
-		rerender()
-		return
-	}
-	if errors.Is(err, db.ErrNameTaken) || db.IsUnique(err) {
-		f.Fail("name", "This environment already has an app, database or service called "+name+".")
-		rerender()
-		return
-	}
+	stored, err := s.storeService(w, r, p, env, svc, vars, server, &f)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	if !stored {
+		rerender()
+	}
+}
+
+// storeService creates a service a form has read, with its variables, and
+// deploys it when the form asks for that; then it leads to the service's
+// page. A refusal that belongs to a field is put into f and reported as
+// not stored: the caller draws its own form again. The form of a new
+// service and the Git form of a new app, with Docker Compose chosen, both
+// end here.
+func (s *Server) storeService(w http.ResponseWriter, r *http.Request, p db.Project, env db.Environment, svc db.Service, vars map[string]string, server db.Server, f *ui.Form) (stored bool, err error) {
+	ctx := r.Context()
+	if svc.Variables, err = s.Deploy.SealServiceVariables(vars); err != nil {
+		return false, err
+	}
+	name := svc.Name
+	svc, err = s.DB.CreateService(ctx, sessionFrom(r).TeamID, svc)
+	if errors.Is(err, db.ErrNotFound) {
+		// A GitHub App or key that is not the team's.
+		f.Fail("access", "Choose how the repository is read.")
+		return false, nil
+	}
+	if errors.Is(err, db.ErrNameTaken) || db.IsUnique(err) {
+		f.Fail("name", "This environment already has an app, database or service called "+name+".")
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
 	// Generated values, and an address that needs no DNS for each endpoint.
 	if err := s.Deploy.PrepareService(ctx, svc, vars, func(string) (string, bool) { return generatedDomain(server), false }); err != nil {
-		s.fail(w, r, err)
-		return
+		return false, err
 	}
 	if r.PostFormValue("deploy") == "1" {
 		if err := s.Deploy.EnqueueService(ctx, svc, false); err != nil {
@@ -366,6 +380,63 @@ func (s *Server) serviceCreate(w http.ResponseWriter, r *http.Request) {
 		setFlash(w, r, ui.ToneOK, "Service created. Choose Deploy to start it.")
 	}
 	redirect(w, r, pages.ResourcePath(p.ID, env.ID, db.KindService, svc.ID))
+	return true, nil
+}
+
+// stackFromGitForm answers the Git form of a new app when Docker Compose is
+// chosen under Build with: what it makes is a service from Git, read from
+// the Compose file the form names under its base directory. A refusal
+// draws the app's form again, with the fields as they were sent.
+func (s *Server) stackFromGitForm(w http.ResponseWriter, r *http.Request, p db.Project, env db.Environment, choices pages.GitChoices, serverList []db.Server) {
+	var f ui.Form
+	server := targetServer(r, &f, serverList)
+	svc := db.Service{
+		EnvironmentID: env.ID, ServerID: server.ID, Template: db.TemplateGit,
+		Name:       strings.ToLower(strings.TrimSpace(r.PostFormValue("name"))),
+		ConnectEnv: r.PostFormValue("connect_env") == "1",
+	}
+	f.Set("name", svc.Name)
+	f.Set("build_pack", pages.PackCompose)
+	f.Set("connect_env", r.PostFormValue("connect_env"))
+	if !envNameRE.MatchString(svc.Name) {
+		f.Fail("name", appNameRule)
+	}
+	var repo db.App
+	parseRepoForm(r, &f, choices, &repo)
+	svc.RepoURL, svc.RepoName, svc.Branch = repo.RepoURL, repo.RepoName, repo.Branch
+	svc.GitSourceID, svc.SSHKeyID, svc.AutoDeploy = repo.GitSourceID, repo.SSHKeyID, repo.AutoDeploy
+
+	// The file is named from the base directory, and stored from the
+	// repository's root: a service has the one path.
+	baseDir := strings.Trim(strings.TrimSpace(r.PostFormValue("base_dir")), "/")
+	f.Set("base_dir", baseDir)
+	if !source.ValidRelPath(baseDir) {
+		f.Fail("base_dir", insideRepo)
+	}
+	file := strings.Trim(strings.TrimSpace(r.PostFormValue("compose_path")), "/")
+	f.Set("compose_path", file)
+	if file == "" || !source.ValidRelPath(file) {
+		f.Fail("compose_path", "Enter the file's path from the base directory, such as docker-compose.yml.")
+	}
+	svc.ComposePath = path.Join(baseDir, file)
+	f.Set("variables", r.PostFormValue("variables"))
+	vars := parseServiceVariables(&f, r.PostFormValue("variables"))
+
+	rerender := func() {
+		s.render(w, r, http.StatusUnprocessableEntity, pages.AppNew(s.newAppShell(w, r, p, env), p, env, f, generatedDomain(server), db.SourceGit, choices, serverList))
+	}
+	if !f.OK() {
+		rerender()
+		return
+	}
+	stored, err := s.storeService(w, r, p, env, svc, vars, server, &f)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !stored {
+		rerender()
+	}
 }
 
 // serviceValues splits a service's stored variables into the generated
