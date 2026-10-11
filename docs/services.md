@@ -8,6 +8,8 @@ One-click services from the catalogue, a Docker Compose file of your own with a 
 
 A service is a stack of containers described by a Docker Compose file. **Add resource** offers a catalogue of more than 900 services, "Your own Compose file" and a Compose file in a Git repository.
 
+A service of the catalogue can also be found from anywhere with the search in the bar (`/`): type its name, open it under **Deploy something new**, and choose the project and environment it goes into.
+
 Every card has two links: **Website** is the project's own site, and **Docs** is the page to read before you run it, the project's self-hosting or Docker guide where it has one.
 
 The catalogue is sorted into categories (AI, Analytics, Databases, Monitoring, Storage and so on); a service can be in up to three. The **Category** menu above the list narrows it to the categories you tick, and the field beside it finds a service by name or by what it does; several words narrow further (`wordpress mysql`). Both work together, and both are in the page's address, so a narrowed list can be refreshed, bookmarked or sent to somebody. The list shows 48 services at a time and brings the next 48 as you scroll; the heading says how many there are in all, and Back from a service's form returns to where you were in the list.

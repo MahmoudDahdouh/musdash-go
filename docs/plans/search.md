@@ -133,6 +133,10 @@ An independent reading of the diff found nothing in the query (team in every arm
 
 The route walk (`TestRouteTableRefusesByRole`) and the inline-script and duplicate-id test cover the new route and the dialog on every page they list.
 
+## What can be deployed (2026-10-11)
+
+The search also lists the database engines and service templates whose name holds every word (`pages.OfferRows`), at most six, after the team's own rows and under a heading of their own; the plan and its reviews are in `updates-2026-10-11.md`, item 3. A row leads to `/deploy/{kind}/{key}`, the page that asks for the project and the environment.
+
 ## Not verified by tests
 
 How it feels: the keys, the wait before a request, Enter while a request is on its way, focus going back to the button. Checked by hand in a browser at the end, at phone width too.

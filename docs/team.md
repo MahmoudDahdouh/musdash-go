@@ -70,4 +70,6 @@ The bar at the top of every page has a search before your own menu. Press `/` an
 
 It finds what the team has, by name and by what you would know it by: projects (and their descriptions), environments, apps (image, repository, branch), databases (engine, image), services (template, repository), domains, servers (host, address), tags, and the dashboard's own pages. Several words narrow it: `shop web` is the app `web` of the project Shop. A name from the server can be pasted whole (a container, network or volume called `musdash-<id>-…` finds what it belongs to). Variables, Compose files, keys and tokens are not searched, so a search never shows what a secret holds.
 
+It also finds what you could add: under **Deploy something new** are the database engines and the services of the catalogue whose name holds what you typed (`n8n`, `postgres`), at most six, after everything of your own. Opening one asks which project and which of its environments it goes into, starting from the one you searched from, and **Continue** leads to the same form its card on Add resource leads to, where it is named and deployed.
+
 Nothing is indexed or kept in memory for it: each pause in the typing is one query on the database.

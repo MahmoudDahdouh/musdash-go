@@ -16,6 +16,10 @@ const (
 	// searchLimit is how many rows an answer holds. A longer list is not
 	// read; it is narrowed by typing more.
 	searchLimit = 20
+	// searchOffers is how many of them may be things of the catalogue that
+	// could be added. It has several hundred, and the list is first of all
+	// what the team has.
+	searchOffers = 6
 	// maxSearchText is how much of what was typed is looked at, in
 	// characters. The dialog's field takes no more; a request made by hand
 	// is cut to it and answered, not refused.
@@ -37,7 +41,8 @@ func searchWords(text string) []string {
 }
 
 // search answers the dialog with the rows for what was typed: the pages
-// this person can open and what their team has, best first. With nothing
+// this person can open, what their team has, and what the catalogue has
+// that they could add, best first. With nothing
 // typed it is the pages alone, from no query. Whose rows they are is the
 // session's to say. The answer is a 200 whatever happened, as a
 // switcher's is: htmx puts nothing else into the list, and the rows of the
@@ -62,8 +67,14 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		// Pages and hits are each in their order already; by rank alone,
 		// a page stays before a hit that fits as well.
 		sort.SliceStable(v.Rows, func(i, j int) bool { return v.Rows[i].Rank < v.Rows[j].Rank })
-		if len(v.Rows) > searchLimit {
-			v.Rows, v.More = v.Rows[:searchLimit], true
+		// What could be added is a list of its own, after what the team
+		// has, however well a name fits: a database found by its engine is
+		// what "postgres" means before the engine itself is. It has its
+		// few rows of the answer whatever else was found.
+		projectID, envID := searchedFrom(r)
+		v.Offers = pages.OfferRows(v.Words, searchOffers, projectID, envID)
+		if room := searchLimit - len(v.Offers); len(v.Rows) > room {
+			v.Rows, v.More = v.Rows[:room], true
 		}
 	}
 	s.render(w, r, http.StatusOK, pages.SearchOptions(v))

@@ -21,6 +21,19 @@ func LogoFile(name string) string {
 	return "logo-" + name + ".svg"
 }
 
+// HasLogo says whether this build has a logo of this name. A name that
+// comes from data is asked here first: a file that is missing must cost
+// the mark, not the page.
+func HasLogo(name string) bool {
+	return name != "" && static.Has(LogoFile(name))
+}
+
+// LogoURL is the address of a logo's file, for a place that draws it at a
+// size of its own.
+func LogoURL(name string) string {
+	return static.URL(LogoFile(name))
+}
+
 // Logo is the mark of a product in its owner's colours, where an Icon is
 // one colour, the text's. It is a file (static/logo-<name>.svg, or .webp
 // for the few a catalogue has only a picture of), not part of the page:
@@ -57,7 +70,7 @@ func Logo(name string) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(static.URL(LogoFile(name)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/logo.templ`, Line: 25, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/logo.templ`, Line: 38, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {

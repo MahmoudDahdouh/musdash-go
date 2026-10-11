@@ -1,0 +1,158 @@
+package pages
+
+import (
+	"github.com/MahmoudDahdouh/musdash-go/internal/db"
+	"github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+)
+
+// DeployChoice is the page that asks where something of the catalogue
+// goes, for a person who found it in the search and is in no environment:
+// the thing, the team's projects, and the environments of the one chosen.
+// It makes nothing. Continue leads to the form the thing's card on an
+// environment's Add resource page leads to.
+type DeployChoice struct {
+	// Kind is db.KindService for a service template and db.KindDatabase
+	// for an engine; Key is the template's key or the engine's name.
+	Kind, Key string
+	Name      string
+	About     string
+	Docs      string
+	Website   string
+
+	Projects []db.Project
+	// ProjectID is the project chosen and Envs its environments, of which
+	// EnvID is the one chosen.
+	ProjectID string
+	Envs      []db.Environment
+	EnvID     string
+	// Problem is said above the fields: what was sent could not be gone to.
+	Problem string
+}
+
+// Path is the page's own address, which its form asks again with the choice.
+func (v DeployChoice) Path() string { return DeployPath(v.Kind, v.Key, "", "") }
+
+// Form is where the choice leads: the form that makes the thing in an
+// environment, the one its card on Add resource leads to.
+func (v DeployChoice) Form(projectID, envID string) string {
+	if v.Kind == db.KindDatabase {
+		return EnvPath(projectID, envID) + "/database/new?engine=" + v.Key
+	}
+	return EnvPath(projectID, envID) + "/service/new?template=" + v.Key
+}
+
+func (v DeployChoice) what() string {
+	if v.Kind == db.KindDatabase {
+		return "Database engine"
+	}
+	return "Service template"
+}
+
+func (v DeployChoice) projectOptions() []ui.Option {
+	options := make([]ui.Option, 0, len(v.Projects))
+	for _, p := range v.Projects {
+		options = append(options, ui.Option{Value: p.ID, Label: p.Name})
+	}
+	return options
+}
+
+func environmentOptions(envs []db.Environment) []ui.Option {
+	options := make([]ui.Option, 0, len(envs))
+	for _, e := range envs {
+		options = append(options, ui.Option{Value: e.ID, Label: e.Name})
+	}
+	return options
+}
+
+// Deploy is the page. Choosing a project asks for that project's
+// environments (DeployEnvironments), which take the place of the ones
+// listed: the wrapper of the project's menu is what the change is heard
+// on, since a Select's own field has no id.
+templ Deploy(s ui.Shell, v DeployChoice) {
+	@ui.Layout(s) {
+		@ui.PageHeader("Deploy "+v.Name, "Choose where it goes. The next page asks for its name and settings, and deploys it.")
+		<section class="card max-w-xl">
+			<div class="card-body offer-head">
+				<span class="offer-mark">
+					if ui.HasLogo(v.Key) {
+						<img src={ ui.LogoURL(v.Key) } alt="" width="48" height="48"/>
+					} else {
+						@ui.Icon(KindIcon(v.Kind))
+					}
+				</span>
+				<div class="grid min-w-0 gap-1">
+					<h2 class="tile-title">{ v.Name }</h2>
+					<p class="muted text-sm">{ v.what() }</p>
+					if v.About != "" {
+						<p class="text-ink-soft">{ v.About }</p>
+					}
+					if v.Docs != "" || v.Website != "" {
+						<p class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+							if v.Docs != "" {
+								<a href={ templ.SafeURL(v.Docs) } target="_blank" rel="noopener">Docs</a>
+							}
+							if v.Website != "" {
+								<a href={ templ.SafeURL(v.Website) } target="_blank" rel="noopener">Website</a>
+							}
+						</p>
+					}
+				</div>
+			</div>
+			if len(v.Projects) == 0 {
+				@ui.EmptyState(ui.EmptyProps{Icon: "folder", Title: "No projects yet", Text: "A project groups the apps, databases and services of one product. Make one, then add " + v.Name + " to its environment.", Size: ui.EmptySmall}) {
+					@ui.Button(ui.ButtonProps{Variant: ui.Primary, Icon: "plus", Opens: "new-project"}) {
+						New project
+					}
+				}
+			} else {
+				<form method="get" action={ templ.SafeURL(v.Path()) }>
+					<div class="card-body grid gap-4 border-t border-line">
+						if v.Problem != "" {
+							@ui.Notice(ui.ToneDanger) {
+								{ v.Problem }
+							}
+						}
+						<div id="deploy-project">
+							@ui.Field(ui.FieldProps{Label: "Project", For: "project"}) {
+								@ui.Select("project", v.projectOptions(), v.ProjectID, templ.Attributes{"autofocus": true})
+							}
+						</div>
+						<div id="deploy-env" hx-get="/deploy/environments" hx-trigger="change from:#deploy-project" hx-include="#deploy-project input[type=hidden]" hx-swap="innerHTML" hx-sync="this:replace">
+							@DeployEnvironments(v.ProjectID, v.Envs, v.EnvID, "")
+						</div>
+					</div>
+					<div class="card-foot">
+						@ui.Button(ui.ButtonProps{Variant: ui.Primary, Type: "submit", Attrs: templ.Attributes{"name": "go", "value": "1"}}) {
+							Continue
+							@ui.Icon("arrow-right")
+						}
+					</div>
+				</form>
+			}
+		</section>
+		if len(v.Projects) == 0 {
+			@NewProjectDialog(s.CSRF, ui.Form{})
+		}
+	}
+}
+
+// DeployEnvironments is the Environment field of the page: the chosen
+// project's environments. It is what GET /deploy/environments answers when
+// another project is chosen. problem is said in the field's place when the
+// environments could not be listed; a project that has none says so, with
+// the way to where one is added.
+templ DeployEnvironments(projectID string, envs []db.Environment, chosen, problem string) {
+	if problem != "" {
+		@ui.Notice(ui.ToneDanger) {
+			{ problem }
+		}
+	} else if len(envs) == 0 {
+		@ui.Notice(ui.ToneWarn) {
+			This project has no environment. <a href={ templ.SafeURL("/projects/" + projectID) }>Add one on its page</a>, then come back.
+		}
+	} else {
+		@ui.Field(ui.FieldProps{Label: "Environment", For: "env"}) {
+			@ui.Select("env", environmentOptions(envs), chosen, nil)
+		}
+	}
+}

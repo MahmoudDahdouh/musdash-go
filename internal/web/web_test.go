@@ -1031,6 +1031,7 @@ func TestSignedInPagesHaveNoInlineScriptOrStyle(t *testing.T) {
 		a.appPath(appID), a.appPath(appID) + "/environment", a.appPath(appID) + "/environment/edit", a.appPath(appID) + "/domains", a.appPath(appID) + "/storage", a.appPath(appID) + "/settings",
 		"/tags", "/keys", "/keys/tokens", "/servers", "/sources", "/team", "/team/invitations", "/team/variables", "/account",
 		"/settings", "/settings/storages", "/notifications", "/_ui",
+		"/deploy/service/n8n", "/deploy/database/postgres",
 	} {
 		res, body := a.get(page)
 		if res.StatusCode != http.StatusOK {

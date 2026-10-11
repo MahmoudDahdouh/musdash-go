@@ -50,7 +50,7 @@ func (p OfferProps) action() string {
 // hasLogo asks the build: a name can come from the catalogue, and a file
 // that is missing must cost the mark, not the page.
 func (p OfferProps) hasLogo() bool {
-	return p.Logo != "" && static.Has(LogoFile(p.Logo))
+	return HasLogo(p.Logo)
 }
 
 func (p OfferProps) icon(name string) templ.Component {

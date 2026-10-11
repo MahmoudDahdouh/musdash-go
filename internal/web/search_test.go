@@ -2,9 +2,11 @@ package web
 
 import (
 	"context"
+	"html"
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -28,6 +30,18 @@ func found(body string) []string {
 	var out []string
 	for _, m := range optionRE.FindAllStringSubmatch(body, -1) {
 		out = append(out, m[1])
+	}
+	return out
+}
+
+// owned is the rows among hrefs that are the team's own things and pages:
+// without what the catalogue offers to deploy, which is listed after them.
+func owned(hrefs []string) []string {
+	var out []string
+	for _, h := range hrefs {
+		if !strings.HasPrefix(h, "/deploy/") {
+			out = append(out, h)
+		}
 	}
 	return out
 }
@@ -159,7 +173,8 @@ func TestSearchFindsWhatTheTeamHas(t *testing.T) {
 
 	// A count is said for a reader who does not see the list, in the
 	// region the page has, by its content alone.
-	if body := a.find("nginx"); !strings.Contains(body, `<p id="search-status" hx-swap-oob="innerHTML">2 results</p>`) {
+	// (Part of an image's name, which nothing of the catalogue is called.)
+	if body := a.find("nginx:alp"); !strings.Contains(body, `<p id="search-status" hx-swap-oob="innerHTML">2 results</p>`) {
 		t.Errorf("no count of results:\n%s", body)
 	}
 	if body := a.find("maindb"); !strings.Contains(body, `hx-swap-oob="innerHTML">1 result</p>`) {
@@ -276,7 +291,7 @@ func TestSearchAnswersWhateverIsTyped(t *testing.T) {
 	}
 	// Text of any length gets an answer: cut, not refused.
 	long := strings.Repeat("shop ", 400)
-	if got := found(a.find(long)); len(got) != 1 || got[0] != "/projects/"+projectID {
+	if got := owned(found(a.find(long))); len(got) != 1 || got[0] != "/projects/"+projectID {
 		t.Errorf("a long text finds %v", got)
 	}
 	if body = a.find(strings.Repeat("x", 5000)); strings.Contains(body, strings.Repeat("x", 101)) {
@@ -375,5 +390,178 @@ func TestSearchWords(t *testing.T) {
 		if got := strings.Join(searchWords(text), "|"); got != want {
 			t.Errorf("searchWords(%q) = %q, want %q", text, got, want)
 		}
+	}
+}
+
+// The search also finds what the catalogue has to deploy, by its name: a
+// few rows after the team's own, each marked as something to deploy and
+// leading to the page that asks where it goes.
+func TestSearchOffersWhatCanBeDeployed(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+	projectID, env := a.project("Shop")
+	mdb := a.newDatabase(projectID, env, "postgres", "maindb", nil)
+
+	body := a.find("n8n")
+	got := found(body)
+	if len(got) == 0 || got[0] != "/deploy/service/n8n" {
+		t.Fatalf("n8n leads to %v, want the template first", got)
+	}
+	row := rowTo(t, body, "/deploy/service/n8n")
+	for _, want := range []string{"<mark>n8n</mark>", "Service template", `<span class="badge badge-brand">Deploy</span>`, `class="logo"`} {
+		if !strings.Contains(row, want) {
+			t.Errorf("the template's row lacks %q:\n%s", want, row)
+		}
+	}
+	if strings.Contains(row, "pill") {
+		t.Errorf("a template's row has a state, which only something that runs has:\n%s", row)
+	}
+	if !strings.Contains(body, "Deploy something new") {
+		t.Error("what can be deployed is not under a heading of its own")
+	}
+
+	// What the team has comes first, however well a template's name fits:
+	// the database found by its engine, then the engine itself.
+	got = found(a.find("postgres"))
+	if len(got) < 2 || got[0] != a.databasePath(mdb.ID) || got[1] != "/deploy/database/postgres" {
+		t.Errorf("postgres leads to %v, want the team's database and then the engine", got)
+	}
+	// Never more than a few, of a catalogue of hundreds, and the best
+	// fits of those: a name that is the text, then one that starts with it.
+	offers := found(a.find("a"))
+	if n := len(offers) - len(owned(offers)); n != searchOffers {
+		t.Errorf("%d rows of the catalogue for one letter, want %d", n, searchOffers)
+	}
+	if got = found(a.find("redis")); len(got) == 0 || got[0] != "/deploy/database/redis" {
+		t.Errorf("redis leads to %v, want the engine first", got)
+	}
+	// Only a name finds a template: not what it says of itself.
+	if got = found(a.find("workflow")); slices.Contains(got, "/deploy/service/n8n") {
+		t.Errorf("a word of n8n's description finds it: %v", got)
+	}
+	// With nothing typed the list is the pages, and nothing to deploy.
+	if got = found(a.find("")); len(got) != len(owned(got)) {
+		t.Errorf("the catalogue is listed before anything is typed: %v", got)
+	}
+	// Searched from inside an environment, the row carries that place as
+	// the first choice of the page it leads to. It is a hint: an address
+	// that is no environment's is not handed on.
+	req, _ := http.NewRequest(http.MethodGet, a.url+"/search?q=n8n", nil)
+	req.Header.Set("HX-Current-URL", a.url+"/projects/"+projectID+"/env/"+env.ID+"/app/abc")
+	_, body = a.do(a.client, req)
+	if got = found(body); len(got) == 0 || html.UnescapeString(got[0]) != "/deploy/service/n8n?env="+env.ID+"&project="+projectID {
+		t.Errorf("searched from an environment, n8n leads to %v", got)
+	}
+	req.Header.Set("HX-Current-URL", "https://elsewhere.example/projects/../../x?<script>")
+	if _, body = a.do(a.client, req); found(body)[0] != "/deploy/service/n8n" {
+		t.Errorf("a made-up address is handed on: %v", found(body))
+	}
+	// A Member finds them too: adding to a project is a Member's to do.
+	member := a.newPerson("Member", db.RoleMember)
+	if _, body = member.get("/search?q=n8n"); !strings.Contains(body, `href="/deploy/service/n8n"`) {
+		t.Error("a Member is not offered the template")
+	}
+}
+
+// The page a found template leads to asks for the project and then the
+// environment, and leads to the form that makes the thing there. It makes
+// nothing itself, and goes nowhere that is not the team's.
+func TestDeployAsksWhereItGoes(t *testing.T) {
+	a := newApp(t, false)
+	a.setup()
+
+	// No project yet: the page says so and offers to make one.
+	res, body := a.get("/deploy/service/n8n")
+	wantStatus(t, res, http.StatusOK)
+	if !strings.Contains(body, "No projects yet") || !strings.Contains(body, `data-open="new-project"`) || strings.Contains(body, `name="go"`) {
+		t.Error("with no project the page does not offer to make one, or asks to continue")
+	}
+
+	shop, shopEnv := a.project("Shop")
+	blog, blogEnv := a.project("Blog")
+	res, _ = a.post("/projects/"+blog, "/projects/"+blog+"/environments", url.Values{"name": {"staging"}})
+	wantStatus(t, res, http.StatusSeeOther)
+	blogEnvs, _ := a.db.ListEnvironments(context.Background(), blog)
+	if len(blogEnvs) != 2 {
+		t.Fatalf("Blog has %d environments", len(blogEnvs))
+	}
+	// Something deployed in Shop, after Blog was last touched, makes Shop
+	// the likeliest answer.
+	if _, err := a.db.Exec(`UPDATE projects SET created_at = created_at - 100 WHERE id = ?`, blog); err != nil {
+		t.Fatal(err)
+	}
+	a.newApp(shop, shopEnv, "web", true, nil)
+
+	res, body = a.get("/deploy/service/n8n")
+	wantStatus(t, res, http.StatusOK)
+	for _, want := range []string{"Deploy n8n", "Service template", `name="project" value="` + shop + `"`, `name="env" value="` + shopEnv.ID + `"`, `data-value="` + blog + `"`,
+		`hx-get="/deploy/environments"`, `hx-trigger="change from:#deploy-project"`, `name="go" value="1"`, `action="/deploy/service/n8n"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the page lacks %s", want)
+		}
+	}
+	// The place it was found from is the first choice.
+	_, body = a.get("/deploy/service/n8n?project=" + blog + "&env=" + blogEnvs[1].ID)
+	if !strings.Contains(body, `name="project" value="`+blog+`"`) || !strings.Contains(body, `name="env" value="`+blogEnvs[1].ID+`"`) {
+		t.Error("the project and environment in the address are not the ones chosen")
+	}
+	// Another project's environments are asked for when it is chosen.
+	res, body = a.get("/deploy/environments?project=" + blog)
+	wantStatus(t, res, http.StatusOK)
+	if !strings.Contains(body, `data-value="`+blogEnv.ID+`"`) || !strings.Contains(body, `data-value="`+blogEnvs[1].ID+`"`) || strings.Contains(body, shopEnv.ID) || strings.Contains(body, "<html") {
+		t.Errorf("the environments of Blog: %s", body)
+	}
+
+	// Continue leads to the form its card on Add resource leads to.
+	res, _ = a.get("/deploy/service/n8n?project=" + blog + "&env=" + blogEnvs[1].ID + "&go=1")
+	wantRedirect(t, res, "/projects/"+blog+"/env/"+blogEnvs[1].ID+"/service/new?template=n8n")
+	if res, body = a.get(res.Header.Get("Location")); res.StatusCode != http.StatusOK || !strings.Contains(body, "n8n") {
+		t.Errorf("the form Continue leads to: %d", res.StatusCode)
+	}
+	res, _ = a.get("/deploy/database/postgres?project=" + shop + "&env=" + shopEnv.ID + "&go=1")
+	wantRedirect(t, res, "/projects/"+shop+"/env/"+shopEnv.ID+"/database/new?engine=postgres")
+	if res, _ = a.get(res.Header.Get("Location")); res.StatusCode != http.StatusOK {
+		t.Errorf("the database form Continue leads to: %d", res.StatusCode)
+	}
+
+	// An environment of another project is not gone to, nor one that does
+	// not exist: the page comes back and says so.
+	for _, q := range []string{"project=" + shop + "&env=" + blogEnv.ID, "project=" + shop + "&env=nosuchenv123", "project=" + shop, "env=" + shopEnv.ID, "project=nosuchproj12&env=" + shopEnv.ID} {
+		res, body = a.get("/deploy/service/n8n?go=1&" + q)
+		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "Choose a project and one of its environments.") {
+			t.Errorf("%s: status %d, want the page again with what is wrong", q, res.StatusCode)
+		}
+	}
+	// What is no template has no page: a made-up key, a kind that is
+	// neither, and the two keys that are a form's and not the catalogue's.
+	for _, path := range []string{"/deploy/service/nosuchtemplate", "/deploy/app/n8n", "/deploy/service/" + db.TemplateCustom, "/deploy/service/" + db.TemplateGit, "/deploy/database/nosuchengine"} {
+		if res, _ = a.get(path); res.StatusCode != http.StatusNotFound {
+			t.Errorf("%s: status %d, want 404", path, res.StatusCode)
+		}
+	}
+
+	// Another team's project is none of this team's: not listed, not gone
+	// to, and its environments are not told.
+	ctx := context.Background()
+	if _, err := a.db.Exec(`INSERT INTO teams (id, name, created_at) VALUES ('otherteam', 'Other', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := a.db.CreateProject(ctx, "otherteam", "Theirs", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirEnvs, _ := a.db.ListEnvironments(ctx, theirs.ID)
+	if _, body = a.get("/deploy/service/n8n?project=" + theirs.ID + "&env=" + theirEnvs[0].ID); strings.Contains(body, theirs.ID) || strings.Contains(body, "Theirs") {
+		t.Error("another team's project is on the page")
+	}
+	if res, _ = a.get("/deploy/service/n8n?go=1&project=" + theirs.ID + "&env=" + theirEnvs[0].ID); res.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("another team's project: status %d", res.StatusCode)
+	}
+	if _, body = a.get("/deploy/environments?project=" + theirs.ID); strings.Contains(body, theirEnvs[0].ID) || !strings.Contains(body, "The project is gone.") {
+		t.Errorf("another team's environments: %s", body)
+	}
+	// Signed out, there is no page.
+	if res, _ = a.do(a.newClient(), mustGet(a.url+"/deploy/service/n8n")); res.StatusCode != http.StatusSeeOther {
+		t.Errorf("signed out: status %d", res.StatusCode)
 	}
 }

@@ -1,7 +1,7 @@
 package ui
 
 // The search: a button in the bar that opens the one dialog everything a
-// team has is looked for in. The dialog is in every page and holds no
+// team has is looked for in, and what it could add (pages.OfferRows). The dialog is in every page and holds no
 // results: its field asks GET /search as it is typed in, and the answer
 // (pages.SearchOptions) goes into the list. static/app.js opens it, moves
 // the marker through the rows and opens the marked one.
@@ -75,7 +75,7 @@ templ searchDialog() {
 				aria-controls="search-results"
 				aria-expanded="true"
 				aria-autocomplete="list"
-				placeholder="Search projects, apps, domains, servers…"
+				placeholder="Search what you run, or a service to deploy…"
 				maxlength="100"
 				autocomplete="off"
 				autocapitalize="off"

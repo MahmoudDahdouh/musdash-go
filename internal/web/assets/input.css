@@ -2410,7 +2410,9 @@
     color: inherit;
     font-weight: 600;
   }
-  .search-hit .pill {
+  .search-hit .pill,
+  .search-hit .badge {
+    flex: none;
     align-self: center;
   }
   /* The keys, for who has a keyboard. */
