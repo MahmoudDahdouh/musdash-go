@@ -380,6 +380,10 @@ func (s *Server) Handler() http.Handler {
 
 	handle("GET /settings", admin, s.settingsPage)
 	handle("POST /settings", admin, s.settingsSave)
+	// Asking GitHub from this server, and whether it is asked daily, is the
+	// Owner's; what was answered is on the page every Admin reads.
+	handle("POST /settings/updates/check", owner, s.updateCheck)
+	handle("POST /settings/updates/auto", owner, s.updateAuto)
 	handle("GET /settings/storages", admin, s.storagesPage)
 	handle("POST /settings/storages", admin, s.storageCreate)
 	handle("POST /settings/storages/{sid}/test", admin, s.storageTest)
@@ -476,6 +480,7 @@ func (s *Server) shell(w http.ResponseWriter, r *http.Request, title, active str
 		// One small statement more for every page: the note in the corner
 		// is there on the page a person lands on after pressing Deploy.
 		Deploying: s.deploying(r),
+		Update:    s.newerRelease(r),
 	}
 }
 

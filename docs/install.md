@@ -69,6 +69,8 @@ Ports 80 and 443 must be reachable from the internet for certificates to be issu
 
 Run the install command again. It installs the latest release and says which version replaced which.
 
+musdash says when there is something to upgrade to. Once a day it asks GitHub which release is the latest, and while that is newer than the one that runs, the sidebar of every page says **Update available** with the version. **Settings** has the rest under **Updates**: the installed version, the latest release, when it was last looked up, and the install command to copy. An Owner can look it up at once with **Check for updates**, and switch the daily look-up off. The question is one request for the address of the latest release; nothing about the install is sent with it. musdash does not upgrade itself: it runs as a user that cannot replace its own binary.
+
 Apps keep running, and keep serving while the control plane restarts. The proxy is the same binary and is restarted too, so new connections to apps are refused for about a second, and for up to fifteen when a long request (a download, a log stream) is under way, which the proxy lets finish first. Upgrade when that is acceptable. Running the command when there is nothing newer restarts nothing that is running; a service that is down is started. An upgrade that was cut off before the restart (a dropped connection) is finished by running the command again.
 
 To install one release and not the latest, take that release's installer:

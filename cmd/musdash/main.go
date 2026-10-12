@@ -225,6 +225,7 @@ func runServer(args []string) error {
 	deployer := deploy.New(d, box, queue, pool, cfg, log, net.JoinHostPort("127.0.0.1", port))
 	deployer.Register()
 	operations := ops.New(d, box, queue, pool, cfg, log)
+	operations.Version = version
 	operations.Register()
 	deployer.Notify = operations.NotifyEnvironment
 	// Before the queue starts: a requeued backup or task looks at its

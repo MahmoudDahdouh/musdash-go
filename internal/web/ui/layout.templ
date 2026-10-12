@@ -26,6 +26,9 @@ type Shell struct {
 	Dev    bool
 	// Deploying is what is being deployed now, for the note in the corner.
 	Deploying DeployingProps
+	// Update is the tag of a release newer than the one that runs, for the
+	// note at the sidebar's foot; "" when there is none.
+	Update string
 	// Back is where the bar's Back button leads when the page is not the
 	// place its trail ends at but something under it: one deployment of an
 	// app, whose trail ends at the app. Empty for the place above the last
@@ -214,8 +217,28 @@ templ sidebar(s Shell) {
 				</div>
 			}
 		</nav>
+		if s.Update != "" {
+			@updateNote(s)
+		}
 	</aside>
 	<div class="sidebar-backdrop"></div>
+}
+
+// updateNote is at the sidebar's foot while a newer release exists, for
+// everybody: whoever sees it can tell an Owner. It leads to Settings for
+// those who can open it, and is words for the others.
+templ updateNote(s Shell) {
+	if s.Admin {
+		<a class="nav-update" href="/settings#updates">
+			@Badge("Update available", "brand")
+			<span class="fact">{ s.Update }</span>
+		</a>
+	} else {
+		<p class="nav-update">
+			@Badge("Update available", "brand")
+			<span class="fact">{ s.Update }</span>
+		</p>
+	}
 }
 
 // userMenu is the last thing in the bar, after the search: who is signed

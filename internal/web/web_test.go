@@ -113,6 +113,8 @@ func newAppWithLog(t *testing.T, dev bool, logTo io.Writer) *app {
 	operations.S3Lookup = func(context.Context, string) ([]netip.Addr, error) {
 		return []netip.Addr{netip.MustParseAddr("198.51.100.7")}, nil
 	}
+	// No test asks GitHub which release is the latest.
+	operations.Latest = func(context.Context) (string, error) { return "", errors.New("not asked in a test") }
 	operations.Register()
 	s := &Server{Cfg: cfg, DB: d, Box: box, Queue: queue, Deploy: deployer, Ops: operations, Pool: pool, Log: log}
 	srv := httptest.NewServer(s.Handler())

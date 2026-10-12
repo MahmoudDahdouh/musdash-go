@@ -1,0 +1,112 @@
+package pages
+
+import "github.com/MahmoudDahdouh/musdash-go/internal/web/ui"
+
+// Update is what the Settings page says about releases.
+type Update struct {
+	// Current is the version that runs, and Release whether it is a
+	// release's: a build from a checkout is compared with nothing.
+	Current string
+	Release bool
+	// Latest is the newest release that was seen, "" before the first
+	// answer; Checked when it was answered.
+	Latest    string
+	Checked   int64
+	Auto      bool
+	Available bool
+	// Command upgrades the install; Notes is the release's page.
+	Command string
+	Notes   string
+}
+
+func (u Update) rows() []ui.KVItem {
+	current := u.Current
+	if !u.Release {
+		current += " (a development build)"
+	}
+	checked := "Never"
+	if u.Checked > 0 {
+		checked = Said(ui.Ago(u.Checked))
+	}
+	auto := "Once a day"
+	if !u.Auto {
+		auto = "Off"
+	}
+	return []ui.KVItem{
+		{Key: "Installed version", Value: current, Mono: true},
+		{Key: "Latest release", Value: orDefault(u.Latest, "Not looked up yet"), Mono: u.Latest != ""},
+		{Key: "Last checked", Value: checked},
+		{Key: "Automatic check", Value: auto},
+	}
+}
+
+// updatesCard is the Updates section of Settings. Every Admin reads it;
+// the button that asks GitHub now and the switch of the daily check are the
+// Owner's, as their routes are.
+templ updatesCard(s ui.Shell, u Update) {
+	<section class="card" id="updates">
+		<div class="card-head">
+			<div>
+				<h2 class="card-title">Updates</h2>
+				<p class="muted text-sm">The version of musdash that runs here, and the latest release.</p>
+			</div>
+			if s.Owner {
+				<form method="post" action="/settings/updates/check">
+					@ui.CSRF(s.CSRF)
+					@ui.Button(ui.ButtonProps{Small: true, Type: "submit", Icon: "refresh"}) {
+						Check for updates
+					}
+				</form>
+			}
+		</div>
+		<div class="card-body grid gap-4">
+			if u.Available {
+				// A grid's cell is as wide as its longest word unless told
+				// otherwise, and the command is one.
+				<div class="min-w-0">
+					@ui.Notice(ui.ToneInfo) {
+						<p>musdash { u.Latest } is available. To upgrade, run this on the server as root. Apps keep running; the proxy restarts, so new connections to them are refused for about a second.</p>
+						// Not ui.Copyable, which cuts a long value short: a command
+						// that is run as root is read whole first.
+						<p class="mt-2 flex items-start gap-1.5">
+							<span class="code min-w-0">{ u.Command }</span>
+							<button type="button" class="btn btn-ghost btn-sm shrink-0" data-copy={ u.Command }>
+								@ui.Icon("copy")
+								<span data-copy-label>Copy</span>
+							</button>
+						</p>
+						if u.Notes != "" {
+							<p class="mt-2">
+								<a class="link" href={ templ.SafeURL(u.Notes) } target="_blank" rel="noopener">What is new in { u.Latest }</a>
+							</p>
+						}
+					}
+				</div>
+			}
+			@ui.KeyValue(u.rows())
+		</div>
+		<div class="card-foot">
+			if u.Auto {
+				<p class="muted mr-auto text-sm">Once a day musdash asks GitHub which release is the latest. Nothing about this install is sent.</p>
+			} else {
+				<p class="muted mr-auto text-sm">musdash does not look for a new release by itself.</p>
+			}
+			if s.Owner {
+				<form method="post" action="/settings/updates/auto">
+					@ui.CSRF(s.CSRF)
+					if u.Auto {
+						<input type="hidden" name="auto" value="off"/>
+						@ui.Button(ui.ButtonProps{Small: true, Type: "submit"}) {
+							Switch off
+						}
+					} else {
+						<input type="hidden" name="auto" value="on"/>
+						@ui.Button(ui.ButtonProps{Small: true, Type: "submit"}) {
+							Switch on
+						}
+					}
+				</form>
+			}
+		</div>
+	</section>
+}

@@ -4238,7 +4238,7 @@ func AppDomains(s ui.Shell, v AppView, f ui.Form, at DomainTarget) templ.Compone
 }
 
 // ServerInfo is one server with what was learned by asking it.
-func InstanceSettings(s ui.Shell, f ui.Form, domain, email string) templ.Component {
+func InstanceSettings(s ui.Shell, f ui.Form, domain, email string, up Update) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -4271,7 +4271,7 @@ func InstanceSettings(s ui.Shell, f ui.Form, domain, email string) templ.Compone
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 241, "<div class=\"max-w-2xl\"><section class=\"card\"><div class=\"card-head\"><div><h2 class=\"card-title\">Dashboard address</h2><p class=\"muted text-sm\">Reach this dashboard on its own domain, over HTTPS, through the musdash proxy.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 241, "<div class=\"grid max-w-2xl gap-6\"><section class=\"card\"><div class=\"card-head\"><div><h2 class=\"card-title\">Dashboard address</h2><p class=\"muted text-sm\">Reach this dashboard on its own domain, over HTTPS, through the musdash proxy.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -4306,6 +4306,10 @@ func InstanceSettings(s ui.Shell, f ui.Form, domain, email string) templ.Compone
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 244, "</div></section>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = updatesCard(s, up).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

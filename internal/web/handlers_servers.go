@@ -380,7 +380,12 @@ func (s *Server) renderInstanceSettings(w http.ResponseWriter, r *http.Request, 
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, status, pages.InstanceSettings(s.shell(w, r, "Settings", "settings"), f, domain, email))
+	up, err := s.Ops.Update(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, status, pages.InstanceSettings(s.shell(w, r, "Settings", "settings"), f, domain, email, updateView(up)))
 }
 
 func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {

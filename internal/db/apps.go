@@ -333,6 +333,11 @@ func (d *DB) SetSetting(ctx context.Context, key, value string) error {
 const (
 	SettingInstanceDomain = "instance_domain"
 	SettingACMEEmail      = "acme_email"
+	// What is known about releases (ops/update.go): the newest tag seen,
+	// when it was answered, and "off" when nobody is to be asked daily.
+	SettingUpdateLatest  = "update_latest"
+	SettingUpdateChecked = "update_checked"
+	SettingUpdateAuto    = "update_auto"
 )
 
 // CreateApp inserts an app into an environment the team owns. A Git source

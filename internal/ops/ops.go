@@ -43,6 +43,10 @@ type Ops struct {
 	// opened. Tests set them.
 	S3Lookup     func(ctx context.Context, host string) ([]netip.Addr, error)
 	S3AllowLocal bool
+	// Version is the version that runs. Latest asks for the tag of the
+	// latest release; nil asks GitHub. Tests set it.
+	Version string
+	Latest  func(ctx context.Context) (string, error)
 
 	// A dump or a restore of a large database takes hours; a scheduled
 	// command should not.
@@ -208,5 +212,6 @@ func (o *Ops) Tick(ctx context.Context, now time.Time) {
 	}
 
 	o.cleanupIfDue(ctx, now)
+	o.updateIfDue(ctx, now)
 	o.sampleServers(ctx, now)
 }

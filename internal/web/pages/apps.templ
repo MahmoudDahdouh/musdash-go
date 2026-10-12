@@ -1259,9 +1259,9 @@ templ AppDomains(s ui.Shell, v AppView, f ui.Form, at DomainTarget) {
 // ServerInfo is one server with what was learned by asking it.
 
 
-templ InstanceSettings(s ui.Shell, f ui.Form, domain, email string) {
+templ InstanceSettings(s ui.Shell, f ui.Form, domain, email string, up Update) {
 	@settingsFrame(s, "dashboard") {
-		<div class="max-w-2xl">
+		<div class="grid max-w-2xl gap-6">
 			<section class="card">
 				<div class="card-head">
 					<div>
@@ -1276,6 +1276,7 @@ templ InstanceSettings(s ui.Shell, f ui.Form, domain, email string) {
 					@ui.KeyValue([]ui.KVItem{{Key: "Dashboard domain", Value: orDefault(domain, "None: the server's address and port"), Mono: domain != ""}, {Key: "Email for certificates", Value: orDefault(email, "None")}})
 				</div>
 			</section>
+			@updatesCard(s, up)
 			@ui.FormDialog(ui.DialogProps{ID: "edit-address", Title: "Dashboard address", Description: "The domain is where the dashboard is reached and what its links and webhook addresses are built with. After a change, repositories that send webhooks here need the new address.", Action: "/settings", CSRF: s.CSRF, Submit: "Save settings", Open: !f.OK()}) {
 				@ui.TextField(f, "Dashboard domain", "Point the domain's DNS at this server first. Leave empty to keep using the server's address and port.", ui.InputProps{ID: "instance_domain", Mono: true, Value: domain, Placeholder: "musdash.example.com"})
 				@ui.TextField(f, "Email for certificates", "Let's Encrypt sends expiry warnings here. Optional.", ui.InputProps{ID: "acme_email", Type: "email", Value: email, Placeholder: "you@example.com"})
